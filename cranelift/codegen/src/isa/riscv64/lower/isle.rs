@@ -13,6 +13,7 @@ use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
 };
 use crate::isa::riscv64::Riscv64Backend;
+use crate::isa::unwind::UnwindInst;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
