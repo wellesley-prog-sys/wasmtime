@@ -228,6 +228,7 @@ impl Printable for SpecOp {
             SpecOp::Eq => "=",
             SpecOp::And => "and",
             SpecOp::Not => "not",
+            SpecOp::Imp => "=>",
             SpecOp::Or => "or",
             SpecOp::Lte => "<=",
             SpecOp::Lt => "<",

@@ -446,6 +446,24 @@ fn add_annotation_constraints(
                 t,
             )
         }
+        annotation_ir::Expr::Imp(x, y) => {
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+            let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
+            let t = tree.next_type_var;
+
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::Bool));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::Bool));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::Bool));
+
+            tree.next_type_var += 1;
+            (
+                veri_ir::Expr::Binary(veri_ir::BinaryOp::Imp, Box::new(e1), Box::new(e2)),
+                t,
+            )
+        }
         annotation_ir::Expr::Lte(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
@@ -1358,8 +1376,6 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::BVPopcnt(Box::new(e1)), t)
         }
-
-        _ => todo!("expr {:#?} not yet implemented", expr),
     };
     tree.ty_vars.insert(e.clone(), t);
     // let fmt = format!("{}:\t{:?}", t, e);
