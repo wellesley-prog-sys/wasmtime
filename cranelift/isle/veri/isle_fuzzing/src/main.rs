@@ -50,7 +50,7 @@ fn find_any_elements(string: &str, elements: &[String]) -> Vec<String> {
 
     fn main() {
 
-        let file_path = "construct_and_extract.isle"
+        let file_path = "construct_and_extract.isle";
         // let args: Vec<String> = env::args().collect();
         // if args.len() < 2 {
         //     println!("Usage: {} <file_path>", args[0]);

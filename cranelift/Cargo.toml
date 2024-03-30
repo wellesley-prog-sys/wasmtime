@@ -1,4 +1,3 @@
-workspace = { members = ["isle/veri/isle_fuzzing"] }
 [package]
 name = "cranelift-tools"
 authors = ["The Cranelift Project Developers"]

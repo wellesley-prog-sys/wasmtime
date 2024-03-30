@@ -1650,6 +1650,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "isle_fuzzing"
+version = "0.1.0"
+dependencies = [
+ "cranelift-isle",
+]
+
+[[package]]
 name = "islec"
 version = "0.0.0"
 dependencies = [
