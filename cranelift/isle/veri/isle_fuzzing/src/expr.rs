@@ -33,21 +33,28 @@ fn convert_rules(filename: impl AsRef<Path>) -> Vec<cranelift_isle::ast::Rule>{
             None
         }
     }).cloned().collect(); 
-
+    let mut list_Expr = Vec::new(); //Expr
+    for r in &rules{
+        list_Expr.push(convert_pattern(&r.pattern));
+    }
     //dbg!(&defs);
     //println!(defs);
+    println!("{:?}", list_Expr);
     return rules;
 }
 
+fn convert_pattern<Pattern>(pattern: Pattern) -> Pattern{ //Return Expr
+    return pattern; //Return Expr
+}
 
 fn main() {
     let to_print: Vec<cranelift_isle::ast::Rule> = convert_rules("construct_and_extract.isle");
-    println!("{:?}",to_print);
+    //println!("{:?}",to_print);
 
-    // for rule in to_print {
-    //     let pattern = rule.pattern;
-    //     // Now you can use `pattern` as needed
-    //     println!("{:?}", pattern);
-    // }
+    for rule in to_print {
+        let pattern = &rule.pattern;
+        // Now you can use `pattern` as needed
+        println!("{:?}", pattern);
+    }
     // dbg!(&pattern)
 }
