@@ -4,6 +4,8 @@ use isle::sema::{Pattern, TermEnv, TypeEnv, VarId};
 use std::path::Path;
 // use crate::isle::sema;
 use crate::isle::ast;
+// use crate::isle::sema;
+use crate::isle::ast;
 use crate::isle::StableMap;
 use std::collections::HashMap;
 use isle::lexer::Pos;
@@ -16,10 +18,8 @@ pub enum Expr {
   Inst(Inst),
   NotAnInst(Vec<Expr>)
 }
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ident(pub String, pub Pos);
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Inst {
     pub name: Ident,
@@ -64,7 +64,7 @@ fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
         } else {
             None
         }
-    }).cloned().collect(); 
+    }).cloned().collect();
     let mut list_Expr = Vec::new(); //Expr
     // let mut if_Expr = Vec::new(); //Expr
     for r in &rules{
@@ -97,6 +97,7 @@ fn main() {
     let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
     println!("{:?}",to_print);
 
+    println!("{:?}",to_print);
     for rule in to_print {
         // let pattern = &rule.pattern;
         // Now you can use `pattern` as needed
