@@ -4,10 +4,6 @@ use isle::sema::{Pattern, TermEnv, TypeEnv, VarId};
 use std::path::Path;
 // use crate::isle::sema;
 use crate::isle::ast;
-// use crate::isle::sema;
-use crate::isle::ast;
-use crate::isle::StableMap;
-use std::collections::HashMap;
 use isle::lexer::Pos;
 use isle::compile::create_envs;
 
@@ -20,6 +16,7 @@ pub enum Expr {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ident(pub String, pub Pos);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Inst {
     pub name: Ident,
@@ -39,7 +36,7 @@ fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
             Expr::Inst(
                 Inst {
                     name: Ident(sym.0.clone(), Pos::default()), //Pos????
-                    //check against list of instructions vs. name
+                    //check against list of instructions vs. name, if not inst, label notinst
                     args: converted_args,
             })
         }
@@ -83,27 +80,16 @@ fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
 
 fn main() {
 
-    // let typeenv = TypeEnv {
-    //     filenames: Vec::new(),
-    //     file_texts: Vec::new(),
-    //     syms: Vec::new(),
-    //     sym_map: StableMap::default(), // Initialize with StableMap
-    //     types: Vec::new(),
-    //     type_map: StableMap::default(), // Initialize with StableMap
-    //     const_types: StableMap::default(), // Initialize with StableMap
-    //     errors: Vec::new(),
-    // };
-
-    let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
+    // let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
+    let to_print: Vec<Expr> = convert_rules("construct_and_extract.isle");
     println!("{:?}",to_print);
 
-    println!("{:?}",to_print);
-    for rule in to_print {
+    // for rule in to_print {
         // let pattern = &rule.pattern;
         // Now you can use `pattern` as needed
         // println!("{:?}", pattern);
         // println!("{:?}", rule);
-    }
+    // }
     // dbg!(&pattern)
 }
 
