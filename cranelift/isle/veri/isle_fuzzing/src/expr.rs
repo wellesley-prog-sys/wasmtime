@@ -98,3 +98,6 @@ fn main() {
     // not print pos by first converting it into a string
 // 2. convert a expr into valid input (webasm) cranelift IR (do cranelift) code -> operating on exprs (tree traversal)
     // most deeply nested thing gets used first
+
+
+    // cargo run --bin expr
