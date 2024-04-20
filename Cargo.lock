@@ -730,6 +730,12 @@ dependencies = [
 [[package]]
 name = "cranelift-isle-veri"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cranelift-codegen-meta",
+ "env_logger",
+]
 
 [[package]]
 name = "cranelift-jit"
