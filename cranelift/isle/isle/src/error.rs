@@ -5,13 +5,16 @@ use std::sync::Arc;
 use crate::{files::Files, lexer::Pos};
 
 /// A collection of errors from attempting to compile some ISLE source files.
+#[derive(Debug)]
 pub struct Errors {
     /// The individual errors.
     pub errors: Vec<Error>,
     pub(crate) files: Arc<Files>,
 }
 
-impl std::fmt::Debug for Errors {
+impl std::error::Error for Errors {}
+
+impl std::fmt::Display for Errors {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.errors.is_empty() {
             return Ok(());
