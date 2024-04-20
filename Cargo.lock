@@ -728,6 +728,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-isle-veri"
+version = "0.1.0"
+
+[[package]]
 name = "cranelift-jit"
 version = "0.112.0"
 dependencies = [
