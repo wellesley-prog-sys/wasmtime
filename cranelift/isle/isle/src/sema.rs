@@ -189,6 +189,10 @@ pub struct TermEnv {
     /// defined implicit type-converter terms we can try to use to fit
     /// types together.
     pub converters: StableMap<(TypeId, TypeId), TermId>,
+
+    /// Flag for whether to expand internal extractors in the
+    /// translation from the AST to sema.
+    pub expand_internal_extractors: bool,
 }
 
 /// A term.
@@ -1152,12 +1156,17 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &[ast::Def]) -> Result<TermEnv, Vec<Error>> {
+    pub fn from_ast(
+        tyenv: &mut TypeEnv,
+        defs: &[ast::Def],
+        expand_internal_extractors: bool,
+    ) -> Result<TermEnv, Vec<Error>> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
             rules: vec![],
             converters: StableMap::new(),
+            expand_internal_extractors,
         };
 
         env.collect_pragmas(defs);
@@ -2011,13 +2020,15 @@ impl TermEnv {
                         extractor_kind: Some(ExtractorKind::InternalExtractor { ref template }),
                         ..
                     } => {
-                        // Expand the extractor macro! We create a map
-                        // from macro args to AST pattern trees and
-                        // then evaluate the template with these
-                        // substitutions.
-                        log!("internal extractor macro args = {:?}", args);
-                        let pat = template.subst_macro_args(&args)?;
-                        return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
+                        if self.expand_internal_extractors {
+                            // Expand the extractor macro! We create a map
+                            // from macro args to AST pattern trees and
+                            // then evaluate the template with these
+                            // substitutions.
+                            log!("internal extractor macro args = {:?}", args);
+                            let pat = template.subst_macro_args(&args)?;
+                            return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
+                        }
                     }
                     TermKind::Decl {
                         extractor_kind: None,

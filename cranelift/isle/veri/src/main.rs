@@ -110,7 +110,8 @@ impl Program {
         let lexer = lexer::Lexer::from_files(paths)?;
         let defs = parser::parse(lexer)?;
         let mut tyenv = sema::TypeEnv::from_ast(&defs)?;
-        let termenv = sema::TermEnv::from_ast(&mut tyenv, &defs)?;
+        let expand_internal_extractors = false;
+        let termenv = sema::TermEnv::from_ast(&mut tyenv, &defs, expand_internal_extractors)?;
 
         Ok(Self { tyenv, termenv })
     }

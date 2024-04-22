@@ -17,7 +17,11 @@ pub fn compile(
         Ok(type_env) => type_env,
         Err(errs) => return Err(Errors::new(errs, files)),
     };
-    let term_env = match sema::TermEnv::from_ast(&mut type_env, defs) {
+    let term_env = match sema::TermEnv::from_ast(
+        &mut type_env,
+        defs,
+        /*expand_internal_extractors*/ true,
+    ) {
         Ok(term_env) => term_env,
         Err(errs) => return Err(Errors::new(errs, files)),
     };
