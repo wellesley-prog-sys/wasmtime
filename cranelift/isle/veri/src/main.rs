@@ -64,11 +64,15 @@ fn main() -> anyhow::Result<()> {
         total_num_terms += 1;
         total_num_rules += rule_ids.len();
 
-        println!("term = {}", prog.term_name(term.id));
-        println!("\tclass = {class}");
-        println!("\tnum_rules = {}", rule_ids.len());
+        println!(
+            "{}\tclass={}\trules={}",
+            prog.term_name(term.id),
+            class,
+            rule_ids.len()
+        );
     }
 
+    println!("");
     println!("total_num_terms = {total_num_terms}",);
     println!("total_num_rules = {total_num_rules}");
     for (class, count) in term_class_counts {
