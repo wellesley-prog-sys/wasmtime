@@ -31,6 +31,9 @@ pub struct NotAnInst {
     pub args: Vec<Expr>,
 }
 
+pub fn ident_string(varname: Ident) -> String {
+    format!("{} {:?}", varname.0, varname.1)
+}
 
 fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
     match pattern {
@@ -73,18 +76,9 @@ fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
         .collect()
 }
 
-// fn is_instruction(exprs: Vec<Expr>) -> bool {
-//     let instr = lines_from_file("instructions.txt");
-
-// }
-
-
 fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
     let lexer = isle::lexer::Lexer::from_files([&filename]).unwrap();
     let defs = isle::parser::parse(lexer).expect("should parse");
-
-    // Produces environments including terms, rules, and maps from symbols and
-    // names to types
     let (typeenv, termenv) = create_envs(&defs).unwrap();
 
     let rules: Vec<_> = defs.defs.iter().filter_map(|def| {
@@ -109,13 +103,90 @@ fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
     return list_Expr;
 }
 
+fn to_clif_list(
+    e: Expr,
+    index: &mut i32,
+    variables: &mut Vec<String>,
+) -> Vec<(String, String)> {
+    match e {
+        Expr::Inst(i) => {
+            if ident_string(i.name.clone()) == "iconst" {
+                let fresh = format!("v{}", *index);
+                *index += 1;
+                return vec![(fresh, "iconst ?".to_string())];
+            }
+            let mut insts: Vec<(String, String)> = Vec::new();
+            let mut this_inst = ident_string(i.name);
+            for a in i.args {
+                let result = to_clif_list(a, index, variables);
+                insts.extend(result.clone()); 
+                let val_returned = result.last().unwrap().0.clone();
+                this_inst += &format!(" {}", val_returned);
+            }
+            let fresh = format!("v{}", *index);
+            *index += 1;
+            insts.push((fresh.clone(), this_inst));
+            insts
+        }
+        Expr::NotAnInst(i) => { todo!();
+        //     let mut this_inst = ident_string(i.name);
+        //     for a in i.args { // question
+        //         let result = to_clif_list(a, index, variables);
+        //         insts.extend(result.clone()); // Extend instead of append
+        //         let val_returned = result.last().unwrap().0.clone(); // Get the last element
+        //         this_inst += &format!(" {}", val_returned); // Modify this_inst
+        //     }, // Implement this branch as per your requirement
+         }
+        Expr::Var(s) => {
+            variables.push(s.clone());
+            let fresh = format!("v{}", *index);
+            *index += 1;
+            vec![(fresh, s)]
+        }
+        Expr::Int(i) => {
+            let fresh = format!("v{}", *index);
+            *index += 1;
+            vec![(fresh, i.to_string())]
+        }
+    }
+}
+
+// (ineg (iadd (isub x y) (iconst k)))
+/**
+ * [ ("v0", "x"),
+ *   ("v1", "y"),
+ *   ("v2", "isub v0 v1"),
+ *   ("v3", "iconst ?"),
+ *   ("v4", "iadd v2 v3"),
+ *   ("v5", "ineg v4"),
+ * ]
+ * 
+ * 
+ *   block(x: i32, y: i32):
+ *  v0 = x
+ *  v1 = y
+ *  v2 = isub v0 v1
+ * 
+ * 
+ * 
+ *   v5 = ineg v4
+ *   return v5
+ */
 
 
 fn main() {
 
     //let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
-    let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
-    println!("{:?}",to_print);
+    let list_Expr: Vec<Expr> = convert_rules("small.isle");
+    let mut result: Vec<(String, String)> = Vec::new();
+    let variables: &mut Vec<String> = &mut Vec::new();
+    let mut count: i32 = 0;
+
+    for element in list_Expr{
+        result.extend(to_clif_list(element, &mut count, variables));
+    }
+    println!("{:?}", result);
+    //println!("{:?}",to_print);
     }
 
     // for rule in to_print {
