@@ -32,7 +32,7 @@ pub struct NotAnInst {
 }
 
 pub fn ident_string(varname: Ident) -> String {
-    format!("{} {:?}", varname.0, varname.1)
+    format!("{}", varname.0)
 }
 
 fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
@@ -128,14 +128,14 @@ fn to_clif_list(
             insts.push((fresh.clone(), this_inst));
             insts
         }
-        Expr::NotAnInst(i) => { todo!();
-        //     let mut this_inst = ident_string(i.name);
-        //     for a in i.args { // question
-        //         let result = to_clif_list(a, index, variables);
-        //         insts.extend(result.clone()); // Extend instead of append
-        //         let val_returned = result.last().unwrap().0.clone(); // Get the last element
-        //         this_inst += &format!(" {}", val_returned); // Modify this_inst
-        //     }, // Implement this branch as per your requirement
+        Expr::NotAnInst(args) => {
+            let mut insts: Vec<(String, String)> = Vec::new();
+            for a in args {
+                let result = to_clif_list(a, index, variables);
+                insts.extend(result.clone()); 
+            }
+            *index += 1;
+            insts
          }
         Expr::Var(s) => {
             variables.push(s.clone());
@@ -177,7 +177,7 @@ fn to_clif_list(
 fn main() {
 
     //let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
-    let list_Expr: Vec<Expr> = convert_rules("small.isle");
+    let list_Expr: Vec<Expr> = convert_rules("big.isle");
     let mut result: Vec<(String, String)> = Vec::new();
     let variables: &mut Vec<String> = &mut Vec::new();
     let mut count: i32 = 0;
