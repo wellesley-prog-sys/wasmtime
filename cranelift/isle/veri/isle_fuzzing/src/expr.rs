@@ -209,7 +209,7 @@ fn to_clif_list(
         output += &format!("  {} = {}\n", var, expr_with_rand);
     }
     let last_var = &tup[tup.len() - 1].0;
-    output += &format!("return {}", last_var);
+    output += &format!("return {};\n}}", last_var);
 
     println!("{}", output);
 
