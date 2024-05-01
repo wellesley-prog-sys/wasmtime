@@ -164,7 +164,7 @@
 (extern constructor extend_to_gpr extend_to_gpr)
 
 ;; The problematic rule itself
-(rule (amode_add (Amode.ImmReg off (valid_reg base) flags) 
+(rule 2 (amode_add (Amode.ImmReg off (valid_reg base) flags) 
                    (uextend (ishl index (iconst (uimm8 shift)))))
       (if (u32_lteq (u8_as_u32 shift) 3))
       (Amode.ImmRegRegShift off base (extend_to_gpr index $I64 (ExtendKind.Zero)) shift flags))

@@ -94,3 +94,20 @@ fn find_any_elements(string: &str, elements: &[String]) -> Vec<String> {
         }
 
 }
+
+
+//Generate CLIF/Cranelift IR programs
+use rand::Rng;
+
+fn format_output(data: &Vec<(&str, &str)>) -> String {
+    //let mut output = String::from("block(x: i32, y: i32):\n");
+    for (var, expr) in data {
+        let expr_with_rand = if expr.contains("iconst ?") {
+            expr.replace("?", &rand::thread_rng().gen_range(0..=100).to_string())
+        } else {
+            expr.to_string()
+        };
+        output.push_str(&format!("  {} = {}\n", var, expr_with_rand));
+    }
+    output
+}

@@ -8,6 +8,8 @@ use isle::lexer::Pos;
 use isle::compile::create_envs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
+use rand::Rng;
+// use rand::Rng;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
@@ -110,6 +112,7 @@ fn to_clif_list(
 ) -> Vec<(String, String)> {
     match e {
         Expr::Inst(i) => {
+            dbg!("{}", *index);
             if ident_string(i.name.clone()) == "iconst" {
                 let fresh = format!("v{}", *index);
                 *index += 1;
@@ -129,6 +132,7 @@ fn to_clif_list(
             insts
         }
         Expr::NotAnInst(args) => {
+            dbg!("{}", *index);
             let mut insts: Vec<(String, String)> = Vec::new();
             for a in args {
                 let result = to_clif_list(a, index, variables);
@@ -138,12 +142,14 @@ fn to_clif_list(
             insts
          }
         Expr::Var(s) => {
+            dbg!("{}", *index);
             variables.push(s.clone());
             let fresh = format!("v{}", *index);
             *index += 1;
             vec![(fresh, s)]
         }
         Expr::Int(i) => {
+            dbg!("{}", *index);
             let fresh = format!("v{}", *index);
             *index += 1;
             vec![(fresh, i.to_string())]
@@ -173,19 +179,64 @@ fn to_clif_list(
  *   return v5
  */
 
+ fn format_output(tup: Vec<(String, String)>, vars: Vec<String>) -> String {
+    // function %f0(i32, i32) -> i32 {
+    let mut output = format!("function %f0(");
+    for (i, _) in vars.iter().enumerate() {
+        output += if i == vars.len() - 1 { "i32) -> i32 {\n" } else { "i32, " };
+    }
+    output += &format!("block0(");
+    for (i, _) in vars.iter().enumerate() {
+        let block = if i == vars.len() - 1 {
+            format!("{}:i32)\n", vars[i])
+        } else {
+            format!("{}: i32, ", vars[i])
+        };
+        output += &block;
+    }
+    
+    
+
+    for (var, expr) in &tup {
+        let expr_with_rand = if expr.contains("?") {
+            let mut rng = rand::thread_rng();
+            let random_int: i32 = rng.gen_range(0..10);
+            expr.replace("?", &random_int.to_string())
+        } else {
+            expr.clone() // return a copy of `expr`
+        };
+        
+        output += &format!("  {} = {}\n", var, expr_with_rand);
+    }
+    let last_var = &tup[tup.len() - 1].0;
+    output += &format!("return {}", last_var);
+
+    println!("{}", output);
+
+
+    output
+}
+
 
 fn main() {
 
     //let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
     let list_Expr: Vec<Expr> = convert_rules("big.isle");
     let mut result: Vec<(String, String)> = Vec::new();
-    let variables: &mut Vec<String> = &mut Vec::new();
+    let mut variables: Vec<String> = Vec::new();
     let mut count: i32 = 0;
 
     for element in list_Expr{
-        result.extend(to_clif_list(element, &mut count, variables));
+        result.extend(to_clif_list(element, &mut count, &mut variables));
     }
     println!("{:?}", result);
+    println!("{:?}", variables);
+
+
+    let mut program = String::new();
+    program = format_output(result, variables);
+    // program = format_output(result,variables);
+    // println!("{:?}", program);
     //println!("{:?}",to_print);
     }
 
@@ -221,3 +272,15 @@ fn main() {
     filtered_instr
 }
 */
+
+// 5.1 questions
+// function %f0(i32, i32, i32, i32) -> i32 {
+//     block0(off: i32, base: i32, flags: i32, index:i32)
+//       v0 = off
+//       v1 = base       //v2 missing ?????
+//       v3 = flags     // v4 missing????
+//       v5 = index
+//       v6 = iconst 6
+//       v7 = ishl v5 v6
+//       v8 = uextend v7  
+//     return v8

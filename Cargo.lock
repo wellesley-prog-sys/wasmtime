@@ -1654,6 +1654,7 @@ name = "isle_fuzzing"
 version = "0.1.0"
 dependencies = [
  "cranelift-isle",
+ "rand",
 ]
 
 [[package]]
