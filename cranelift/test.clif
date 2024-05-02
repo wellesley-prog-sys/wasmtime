@@ -1,0 +1,11 @@
+function %f0(i32, i32, i32, i32) -> i32 {
+block0(off: i32, base: i32, flags: i32, index:i32)
+  v0 = off
+  v1 = base
+  v2 = flags
+  v3 = index
+  v4 = iconst 5
+  v5 = ishl v3 v4
+  v6 = uextend v5
+return v6;
+}

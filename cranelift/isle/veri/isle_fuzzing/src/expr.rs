@@ -138,7 +138,6 @@ fn to_clif_list(
                 let result = to_clif_list(a, index, variables);
                 insts.extend(result.clone()); 
             }
-            *index += 1;
             insts
          }
         Expr::Var(s) => {
