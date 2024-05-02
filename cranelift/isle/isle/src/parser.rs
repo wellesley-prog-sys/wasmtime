@@ -1,5 +1,7 @@
 //! Parser for ISLE language.
 
+#![allow(missing_docs)]
+
 use crate::ast::*;
 use crate::error::{Error, Errors, Span};
 use crate::lexer::{Lexer, Pos, Token};
@@ -16,8 +18,11 @@ pub fn parse(lexer: Lexer) -> Result<Defs> {
 ///
 /// Takes in a lexer and creates an AST.
 #[derive(Clone, Debug)]
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Lexer<'a>,
+
+    // HACK(mbm): allow positions to be disabled to support testing
+    disable_pos: bool,
 }
 
 /// Used during parsing a `(rule ...)` to encapsulate some form that
@@ -31,7 +36,15 @@ enum IfLetOrExpr {
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
-        Parser { lexer }
+        Parser {
+            lexer,
+            disable_pos: false,
+        }
+    }
+
+    // HACK(mbm): allow positions to be disabled to support testing
+    pub fn disable_pos(&mut self) {
+        self.disable_pos = true;
     }
 
     fn error(&self, pos: Pos, msg: String) -> Errors {
@@ -76,9 +89,13 @@ impl<'a> Parser<'a> {
     }
 
     fn pos(&self) -> Pos {
-        self.lexer
-            .peek()
-            .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
+        if !self.disable_pos {
+            self.lexer
+                .peek()
+                .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
+        } else {
+            Pos::default()
+        }
     }
 
     fn is_lparen(&self) -> bool {
@@ -150,7 +167,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_defs(mut self) -> Result<Defs> {
+    pub fn parse_defs(mut self) -> Result<Defs> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
@@ -457,6 +474,7 @@ impl<'a> Parser<'a> {
             "=" => Ok(SpecOp::Eq),
             "and" => Ok(SpecOp::And),
             "not" => Ok(SpecOp::Not),
+            "=>" => Ok(SpecOp::Imp),
             "or" => Ok(SpecOp::Or),
             "<=" => Ok(SpecOp::Lte),
             "<" => Ok(SpecOp::Lt),

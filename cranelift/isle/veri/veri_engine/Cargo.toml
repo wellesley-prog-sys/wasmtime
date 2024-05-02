@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 cranelift-isle = { path = "../../isle" }
-cranelift-codegen = { path = "../../../codegen" }
+cranelift-codegen = { path = "../../../codegen", features = ["all-arch"] }
 cranelift-codegen-meta = { path = "../../../codegen/meta" }
 veri_ir = { path = "../veri_ir" }
 easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
