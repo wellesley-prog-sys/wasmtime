@@ -11,6 +11,11 @@ use std::io::{self, BufRead, BufReader};
 use rand::Rng;
 // use rand::Rng;
 
+//hello becky! you are so slay!
+// hello carleen! you are slayer
+// aj is slay too
+// no
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
   Var(String),
@@ -112,27 +117,61 @@ fn to_clif_list(
 ) -> Vec<(String, String)> {
     match e {
         Expr::Inst(i) => {
-            dbg!("{}", *index);
-            if ident_string(i.name.clone()) == "iconst" {
-                let fresh = format!("v{}", *index);
-                *index += 1;
-                return vec![(fresh, "iconst ?".to_string())];
+            dbg!("{}", i.clone());
+
+            let mut name = ident_string(i.name.clone());
+            let littledots = vec![".i16", ".i32", ".i64"];
+            if name.clone() == "iconst" {
+                let mut rng = rand::thread_rng();
+                let newname = name + littledots[rng.gen_range(0..2)];
+                name = newname + &" ?".to_string();
+            }
+            if name.clone() == "uextend" {
+                let mut rng = rand::thread_rng();
+                name = name + littledots[rng.gen_range(0..2)];
             }
             let mut insts: Vec<(String, String)> = Vec::new();
-            let mut this_inst = ident_string(i.name);
+            let mut this_inst = name;
+            
+            let mut v_values = Vec::new(); // Store "v" values
+
             for a in i.args {
                 let result = to_clif_list(a, index, variables);
                 insts.extend(result.clone()); 
                 let val_returned = result.last().unwrap().0.clone();
-                this_inst += &format!(" {}", val_returned);
+                dbg!("{}", val_returned.clone());
+                dbg!("{}", result.clone());
+                dbg!("inst: {}", this_inst.clone());                    
+                dbg!("v values: {}", v_values.clone());
+                // this_inst += &format!(" {}", val_returned);
+                v_values.push(val_returned.clone()); 
+                // this_inst += &format!(" {}", val_returned);
+                // v_values.push(val_returned); 
             }
+
+                    // this_inst = format!(" {}", single_v);
+
+                    if v_values.len() >= 2 {
+                        dbg!("{}", v_values.clone());
+    
+                        this_inst += " "; // this isnt right, should just mofidy this sepcific instruction. should change result.1
+                        this_inst += &v_values.join(", ");
+                    } else if let Some(single_v) = v_values.first() {
+                        dbg!("{}", v_values.clone());
+    
+                        let new = format!(" {}", single_v);
+                        this_inst += &new;
+                    }
+
             let fresh = format!("v{}", *index);
             *index += 1;
             insts.push((fresh.clone(), this_inst));
+            dbg!("{}", insts.clone());
             insts
         }
         Expr::NotAnInst(args) => {
-            dbg!("{}", *index);
+            // dbg!("{}", args.clone());
+
             let mut insts: Vec<(String, String)> = Vec::new();
             for a in args {
                 let result = to_clif_list(a, index, variables);
@@ -141,14 +180,12 @@ fn to_clif_list(
             insts
          }
         Expr::Var(s) => {
-            dbg!("{}", *index);
             variables.push(s.clone());
             let fresh = format!("v{}", *index);
             *index += 1;
             vec![(fresh, s)]
         }
         Expr::Int(i) => {
-            dbg!("{}", *index);
             let fresh = format!("v{}", *index);
             *index += 1;
             vec![(fresh, i.to_string())]
@@ -187,7 +224,7 @@ fn to_clif_list(
     output += &format!("block0(");
     for (i, _) in vars.iter().enumerate() {
         let block = if i == vars.len() - 1 {
-            format!("{}:i32)\n", vars[i])
+            format!("{}:i32):\n", vars[i])
         } else {
             format!("{}: i32, ", vars[i])
         };
@@ -202,7 +239,7 @@ fn to_clif_list(
             let random_int: i32 = rng.gen_range(0..10);
             expr.replace("?", &random_int.to_string())
         } else {
-            expr.clone() // return a copy of `expr`
+            expr.clone()
         };
         
         output += &format!("  {} = {}\n", var, expr_with_rand);

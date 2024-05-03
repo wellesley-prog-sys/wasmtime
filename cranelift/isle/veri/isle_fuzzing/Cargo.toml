@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 cranelift-isle = { path = "../../isle" }
 rand = "0.8.4" 
+regex = "1"
 
 [[bin]]
 name = "expr"
