@@ -11,11 +11,6 @@ use std::io::{self, BufRead, BufReader};
 use rand::Rng;
 // use rand::Rng;
 
-//hello becky! you are so slay!
-// hello carleen! you are slayer
-// aj is slay too
-// no
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
   Var(String),
