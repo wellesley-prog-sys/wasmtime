@@ -5,7 +5,7 @@ block0(v8: i32, v9: i32, v10: i32, v11: i32, v12:i32):
   v2 -> v10
   v3 -> v11
   v4 -> v12
-  v5 = iconst.i32 3 v4
+  v5 = iconst.i32 3
   v6 = ishl v3, v5
   v7 = uextend.i64 v6
 return v7;

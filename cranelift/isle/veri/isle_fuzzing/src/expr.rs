@@ -2,14 +2,17 @@ use cranelift_isle as isle;
 use isle::ast::*;
 use isle::sema::{Pattern, TermEnv, TypeEnv, VarId};
 use std::path::Path;
-// use crate::isle::sema;
 use crate::isle::ast;
 use isle::lexer::Pos;
 use isle::compile::create_envs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use rand::Rng;
-// use rand::Rng;
+
+/*
+Creating the Enums and Structs
+Expr has type Var, Int, Inst and NotAnInst
+*/
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
@@ -32,14 +35,25 @@ pub struct NotAnInst {
     pub name: Ident,
     pub args: Vec<Expr>,
 }
-
+/*
+Function ident_string
+Arguments, ident
+Returns String
+Notes: Helper function to turn Idents to a String type
+*/
 pub fn ident_string(varname: Ident) -> String {
     format!("{}", varname.0)
 }
-
+/*
+Function convert_pattern
+Arguments, pattern, typeEnv
+Returns Expr
+Notes: Compares each pattern against the instruction list, labels it to Inst, NotAnInst, Var or Int and creates an Expression (as defined in the Struct Above)
+*/
 fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
     match pattern {
         ast::Pattern::Var { var, .. } => {
+            dbg!("{}", pattern.clone());
             let name = var.0.clone();
             Expr::Var(name)
         }, 
@@ -70,6 +84,14 @@ fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
     }
 }
 
+/*
+Function lines_from_file
+Arguments: filename
+Returns Vector of Strings
+Notes: Creates a vector of strings given the text file. Used to generate the list of instructions. 
+Credit: Taken from //https://stackoverflow.com/questions/30801031/read-a-file-and-get-an-array-of-strings
+*/
+
 fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
     let file = File::open(filename).expect("no such file");
     let buf = BufReader::new(file);
@@ -78,6 +100,12 @@ fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
         .collect()
 }
 
+/*
+Function convert_rules
+Arguments: filename
+Returns Vector of Expr
+Notes: Parses isle file into the rule, Uses convert_pattern to create a vector of expressions
+*/
 fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
     let lexer = isle::lexer::Lexer::from_files([&filename]).unwrap();
     let defs = isle::parser::parse(lexer).expect("should parse");
@@ -90,70 +118,54 @@ fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
             None
         }
     }).cloned().collect();
-    let mut list_Expr = Vec::new(); //Expr
-    // let mut if_Expr = Vec::new(); //Expr
+    let mut list_Expr = Vec::new();
     for r in &rules{
-        // println!("{:?}", r);
         list_Expr.push(convert_pattern(&r.pattern,&typeenv));
-        // for iflet in &r.iflets {
-        //     if_Expr.push(convert_pattern(&iflet.pattern,&typeenv));
-        // }
     }
-    //dbg!(&defs);
-    //println!(defs);
-    // println!("{:?}", list_Expr);
     return list_Expr;
 }
 
+/*
+Function to_clif_list
+Arguments: Expr, Index, Variables, random_uextend
+Returns Vector of Expr
+Notes: Takes in an Expr, runs through a match statement of Inst, NotAnInst, Var and Int and returns a Tuple in (variable, instruction) format
+*/
 fn to_clif_list(
     e: Expr,
     index: &mut i32,
     variables: &mut Vec<String>,
+    random_uextend: String,
 ) -> Vec<(String, String)> {
     match e {
         Expr::Inst(i) => {
-            dbg!("{}", i.clone());
-
             let mut name = ident_string(i.name.clone());
-            let littledots = vec![".i16", ".i32", ".i64"];
+            let littledots = vec![".i8",".i16", ".i32", ".i64"];
             if name.clone() == "iconst" {
                 let mut rng = rand::thread_rng();
-                let newname = name + littledots[rng.gen_range(0..2)];
-                name = newname + &" ?".to_string();
+                let newname = name + littledots[rng.gen_range(0..4)];
+                let new = newname.clone() + &" ?".to_string();
+                let fresh = format!("v{}", *index);
+                *index += 1;
+                return vec![(fresh, new.to_string())];
             }
             if name.clone() == "uextend" {
-                let mut rng = rand::thread_rng();
-                name = name + littledots[rng.gen_range(0..2)];
+                name = name + &random_uextend;
             }
             let mut insts: Vec<(String, String)> = Vec::new();
             let mut this_inst = name;
-            
-            let mut v_values = Vec::new(); // Store "v" values
-
+            let mut v_values = Vec::new();
             for a in i.args {
-                let result = to_clif_list(a, index, variables);
+            
+                let result = to_clif_list(a, index, variables, random_uextend.to_string());
                 insts.extend(result.clone()); 
                 let val_returned = result.last().unwrap().0.clone();
-                dbg!("{}", val_returned.clone());
-                dbg!("{}", result.clone());
-                dbg!("inst: {}", this_inst.clone());                    
-                dbg!("v values: {}", v_values.clone());
-                // this_inst += &format!(" {}", val_returned);
                 v_values.push(val_returned.clone()); 
-                // this_inst += &format!(" {}", val_returned);
-                // v_values.push(val_returned); 
             }
-
-                    // this_inst = format!(" {}", single_v);
-
                     if v_values.len() >= 2 {
-                        dbg!("{}", v_values.clone());
-    
-                        this_inst += " "; // this isnt right, should just mofidy this sepcific instruction. should change result.1
+                        this_inst += " ";
                         this_inst += &v_values.join(", ");
                     } else if let Some(single_v) = v_values.first() {
-                        dbg!("{}", v_values.clone());
-    
                         let new = format!(" {}", single_v);
                         this_inst += &new;
                     }
@@ -161,15 +173,12 @@ fn to_clif_list(
             let fresh = format!("v{}", *index);
             *index += 1;
             insts.push((fresh.clone(), this_inst));
-            dbg!("{}", insts.clone());
             insts
         }
         Expr::NotAnInst(args) => {
-            // dbg!("{}", args.clone());
-
             let mut insts: Vec<(String, String)> = Vec::new();
             for a in args {
-                let result = to_clif_list(a, index, variables);
+                let result = to_clif_list(a, index, variables, random_uextend.to_string());
                 insts.extend(result.clone()); 
             }
             insts
@@ -188,47 +197,31 @@ fn to_clif_list(
     }
 }
 
-// (ineg (iadd (isub x y) (iconst k)))
-/**
- * [ ("v0", "x"),
- *   ("v1", "y"),
- *   ("v2", "isub v0 v1"),
- *   ("v3", "iconst ?"),
- *   ("v4", "iadd v2 v3"),
- *   ("v5", "ineg v4"),
- * ]
- * 
- * 
- *   block(x: i32, y: i32):
- *  v0 = x
- *  v1 = y
- *  v2 = isub v0 v1
- * 
- * 
- * 
- *   v5 = ineg v4
- *   return v5
- */
-
- fn format_output(tup: Vec<(String, String)>, vars: Vec<String>) -> String {
-    // function %f0(i32, i32) -> i32 {
+/*
+Function format_output
+Arguments: tuple, variable, random_uextend
+Returns String
+Notes: Takes in the tuple and formats it to a string containing the clif file. 
+*/
+ fn format_output(tup: Vec<(String, String)>, vars: Vec<String>, random_uextend: String) -> String {
     let mut output = format!("function %f0(");
+    let uextenddotless = random_uextend.replace(".", "");
     for (i, _) in vars.iter().enumerate() {
-        output += if i == vars.len() - 1 { "i32) -> i32 {\n" } else { "i32, " };
+        let temp_str = &("i32) ->".to_string() + &uextenddotless.to_string() + " {\n");
+
+        output += if i == vars.len() - 1 { temp_str} else { "i32, " };
     }
     output += &format!("block0(");
     for (i, _) in vars.iter().enumerate() {
         let block = if i == vars.len() - 1 {
-            format!("{}:i32):\n", vars[i])
+            format!("{}:i32):\n", tup[i].0)
         } else {
-            format!("{}: i32, ", vars[i])
+            format!("{}: i32, ", tup[i].0)
         };
         output += &block;
     }
-    
-    
-
     for (var, expr) in &tup {
+        let add_to_output = false;
         let expr_with_rand = if expr.contains("?") {
             let mut rng = rand::thread_rng();
             let random_int: i32 = rng.gen_range(0..10);
@@ -236,82 +229,29 @@ fn to_clif_list(
         } else {
             expr.clone()
         };
-        
-        output += &format!("  {} = {}\n", var, expr_with_rand);
+        let add_to_output = !vars.iter().any(|r| expr_with_rand.contains(r));
+
+        if add_to_output {
+            output += &format!("  {} = {}\n", var, expr_with_rand);
+        }
     }
     let last_var = &tup[tup.len() - 1].0;
     output += &format!("return {};\n}}", last_var);
-
     println!("{}", output);
-
-
     output
 }
 
-
 fn main() {
-
-    //let to_print: Vec<Expr> = convert_rules("amod_unextended.isle");
-    let list_Expr: Vec<Expr> = convert_rules("big.isle");
+    let littledots = vec![".i8",".i16", ".i32", ".i64"];
+    let list_Expr: Vec<Expr> = convert_rules("amod_unextended.isle");
     let mut result: Vec<(String, String)> = Vec::new();
     let mut variables: Vec<String> = Vec::new();
+    let mut rng = rand::thread_rng();
     let mut count: i32 = 0;
-
+    let random_uextend = littledots[rng.gen_range(0..4)];
     for element in list_Expr{
-        result.extend(to_clif_list(element, &mut count, &mut variables));
+        result.extend(to_clif_list(element, &mut count, &mut variables, random_uextend.to_string()));
     }
-    println!("{:?}", result);
-    println!("{:?}", variables);
-
-
     let mut program = String::new();
-    program = format_output(result, variables);
-    // program = format_output(result,variables);
-    // println!("{:?}", program);
-    //println!("{:?}",to_print);
+    program = format_output(result, variables, random_uextend.to_string());
     }
-
-    // for rule in to_print {
-        // let pattern = &rule.pattern;
-        // Now you can use `pattern` as needed
-        // println!("{:?}", pattern);
-        // println!("{:?}", rule);
-    // }
-    // dbg!(&pattern)
-
-// TODO 4/16
-// 1. check term against list of instructions --> only want isntructions, rest be notinst.
-    // not print pos by first converting it into a string
-// 2. convert a expr into valid input (webasm) cranelift IR (do cranelift) code -> operating on exprs (tree traversal)
-    // most deeply nested thing gets used first
-
-
-    // cargo run --bin expr
-
-
-
-/*pub fn find_instr(exprs: Vec<Expr>) -> Vec<String> {
-    let instr = lines_from_file("instructions.txt");
-    let mut filtered_instr = Vec::new();
-    for expr in exprs {
-        if let Expr::Inst(inst) = expr {
-            if let Ident(ident, _) = inst.name {
-                filtered_instr.push(ident);
-            }
-        }
-    }
-    filtered_instr
-}
-*/
-
-// 5.1 questions
-// function %f0(i32, i32, i32, i32) -> i32 {
-//     block0(off: i32, base: i32, flags: i32, index:i32)
-//       v0 = off
-//       v1 = base       //v2 missing ?????
-//       v3 = flags     // v4 missing????
-//       v5 = index
-//       v6 = iconst 6
-//       v7 = ishl v5 v6
-//       v8 = uextend v7  
-//     return v8
