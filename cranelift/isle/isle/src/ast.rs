@@ -102,6 +102,7 @@ pub enum SpecExpr {
     },
     /// An operator that matches a constant bitvector value.
     ConstBitVec {
+        // TODO(mbm): support arbitrary length bitvectors
         val: i128,
         width: i8,
         pos: Pos,
@@ -141,6 +142,7 @@ pub enum SpecOp {
     And,
     Or,
     Not,
+    Imp,
 
     // Integer comparisons
     Lt,

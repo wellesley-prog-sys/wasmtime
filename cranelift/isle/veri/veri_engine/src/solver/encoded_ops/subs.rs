@@ -26,8 +26,8 @@ pub fn subs(s: &mut SolverCtx, ty: usize, x: SExpr, y: SExpr, id: u32) -> SExpr 
         64 => (
             s.smt.numeral(64),
             s.smt.numeral(64 * 2),
-            x,
-            y,
+            s.smt.extract(63, 0, x),
+            s.smt.extract(63, 0, y),
             s.bv(0, 64),
             s.bv(1, 64 * 2),
             s.bv(63, 64),

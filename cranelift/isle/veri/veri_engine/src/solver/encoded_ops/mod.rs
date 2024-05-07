@@ -25,6 +25,7 @@ mod tests {
             tyctx: TypeContext {
                 tyvars: HashMap::new(),
                 tymap: HashMap::new(),
+                tymap_smt: HashMap::new(),
                 tyvals: HashMap::new(),
                 bv_unknown_width_sets: HashMap::new(),
             },

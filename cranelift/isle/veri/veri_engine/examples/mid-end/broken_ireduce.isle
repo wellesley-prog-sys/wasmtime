@@ -1,0 +1,318 @@
+(model Type (type Int))
+(type Type (primitive Type))
+(type Value (primitive Value))
+(type u64 (primitive u64))
+(type Imm64 (primitive Imm64))
+(type bool (primitive bool))
+(extern const $true bool)
+
+(type u8 (primitive u8))
+(type u16 (primitive u16))
+(type u32 (primitive u32))
+(type u128 (primitive u128))
+(type usize (primitive usize))
+
+(type Opcode extern
+    (enum
+        Jump
+        Brif
+        BrTable
+        Debugtrap
+        Trap
+        Trapz
+        ResumableTrap
+        Trapnz
+        ResumableTrapnz
+        Return
+        Call
+        CallIndirect
+        ReturnCall
+        ReturnCallIndirect
+        FuncAddr
+        Splat
+        Swizzle
+        X86Pshufb
+        Insertlane
+        Extractlane
+        Smin
+        Umin
+        Smax
+        Umax
+        AvgRound
+        UaddSat
+        SaddSat
+        UsubSat
+        SsubSat
+        Load
+        Store
+        Uload8
+        Sload8
+        Istore8
+        Uload16
+        Sload16
+        Istore16
+        Uload32
+        Sload32
+        Istore32
+        Uload8x8
+        Sload8x8
+        Uload16x4
+        Sload16x4
+        Uload32x2
+        Sload32x2
+        StackLoad
+        StackStore
+        StackAddr
+        DynamicStackLoad
+        DynamicStackStore
+        DynamicStackAddr
+        GlobalValue
+        SymbolValue
+        TlsValue
+        GetPinnedReg
+        SetPinnedReg
+        GetFramePointer
+        GetStackPointer
+        GetReturnAddress
+        TableAddr
+        Iconst
+        F32const
+        F64const
+        Vconst
+        Shuffle
+        Null
+        Nop
+        Select
+        SelectSpectreGuard
+        Bitselect
+        X86Blendv
+        VanyTrue
+        VallTrue
+        VhighBits
+        Icmp
+        IcmpImm
+        Iadd
+        Isub
+        Ineg
+        Iabs
+        Imul
+        Umulhi
+        Smulhi
+        SqmulRoundSat
+        X86Pmulhrsw
+        Udiv
+        Sdiv
+        Urem
+        Srem
+        IaddImm
+        ImulImm
+        UdivImm
+        SdivImm
+        UremImm
+        SremImm
+        IrsubImm
+        IaddCin
+        IaddCarry
+        UaddOverflow
+        SaddOverflow
+        UsubOverflow
+        SsubOverflow
+        UmulOverflow
+        SmulOverflow
+        UaddOverflowTrap
+        IsubBin
+        IsubBorrow
+        Band
+        Bor
+        Bxor
+        Bnot
+        BandNot
+        BorNot
+        BxorNot
+        BandImm
+        BorImm
+        BxorImm
+        Rotl
+        Rotr
+        RotlImm
+        RotrImm
+        Ishl
+        Ushr
+        Sshr
+        IshlImm
+        UshrImm
+        SshrImm
+        Bitrev
+        Clz
+        Cls
+        Ctz
+        Bswap
+        Popcnt
+        Fcmp
+        Fadd
+        Fsub
+        Fmul
+        Fdiv
+        Sqrt
+        Fma
+        Fneg
+        Fabs
+        Fcopysign
+        Fmin
+        Fmax
+        Ceil
+        Floor
+        Trunc
+        Nearest
+        IsNull
+        IsInvalid
+        Bitcast
+        ScalarToVector
+        Bmask
+        Ireduce
+        Snarrow
+        Unarrow
+        Uunarrow
+        SwidenLow
+        SwidenHigh
+        UwidenLow
+        UwidenHigh
+        IaddPairwise
+        X86Pmaddubsw
+        Uextend
+        Sextend
+        Fpromote
+        Fdemote
+        Fvdemote
+        FvpromoteLow
+        FcvtToUint
+        FcvtToSint
+        FcvtToUintSat
+        FcvtToSintSat
+        X86Cvtt2dq
+        FcvtFromUint
+        FcvtFromSint
+        Isplit
+        Iconcat
+        AtomicRmw
+        AtomicCas
+        AtomicLoad
+        AtomicStore
+        Fence
+        ExtractVector
+    )
+)
+
+(model Opcode (enum
+    (Ineg #x00)
+    (Iadd #x01)
+    (Uextend #x02)
+    (Sextend #x03)
+    (Isub #x04)
+    (Imul #x05)
+    (Iabs #x06)))
+
+;; multi?
+(decl pure reducible_modular_op (Value) Value)
+(extern extractor reducible_modular_op reducible_modular_op)
+
+(decl pure will_simplify_with_ireduce (Value) Value)
+(extern extractor will_simplify_with_ireduce will_simplify_with_ireduce)
+
+(decl pure will_simplify_with_ireduce_rec (u8 Value) Value)
+(extern extractor will_simplify_with_ireduce_rec will_simplify_with_ireduce_rec)
+
+
+(spec (simplify x) (provide (= x result)))
+(instantiate simplify
+    ((args (bv 8)) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 16)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 32)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(decl simplify (Value) Value)
+
+(form reduce
+    ((args Int (bv 64)) (ret (bv 8)) (canon (bv 64)))
+    ((args Int (bv 64)) (ret (bv 16)) (canon (bv 64)))
+    ((args Int (bv 64)) (ret (bv 32)) (canon (bv 64)))
+    ;; ((args Int (bv 64)) (ret (bv 64)) (canon (bv 64)))
+    ((args Int (bv 32)) (ret (bv 16)) (canon (bv 32)))
+    ((args Int (bv 32)) (ret (bv 8)) (canon (bv 32)))
+    ((args Int (bv 16)) (ret (bv 8)) (canon (bv 16)))
+    ;; ((args Int (bv 32)) (ret (bv 32)) (canon (bv 32)))
+    ;; ((args Int (bv 32)) (ret (bv 32)) (canon (bv 32)))
+    ;; ((args Int (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(decl ireduce (Type Value) Value)
+(extern extractor ireduce ireduce)
+(extern constructor ireduce ireduce)
+
+;; TODO: fix
+;; Restrict ty to 64, 32, or 16?
+(spec (ireduce ty x) 
+        (provide (= result (conv_to ty x))) 
+        (require (or (= ty 64) (= ty 32) (= ty 16))))
+;; (require (= ty (widthof x)))
+(instantiate ireduce reduce)
+
+
+
+(decl unary_op (Type Opcode Value) Value)
+
+;; TODO: add more Opcodes.
+;; Specs are from inst_specs.isle
+(spec (unary_op ty op v) (provide (= result (switch op
+            ((Opcode.Ineg)
+                (bvneg v))
+            ((Opcode.Uextend)
+                (zero_ext (widthof result) v))
+            ((Opcode.Sextend)
+                (sign_ext (widthof result) v))
+            ((Opcode.Iabs)
+                (if (bvsge x (conv_to (widthof x) #x0000000000000000))
+                    x
+                    (bvneg x)))
+))) (require (or (= op Opcode.Ineg) (= op Opcode.Uextend) (= op Opcode.Sextend) (= op Opcode.Iabs))))
+                    ;; (= op Opcode.Uextend) (= op Opcode.Sextend) (= op Opcode.Iabs)
+
+;; in static widths.smt the unary_op__27__op__91 must be saying that it must be oone of the unary op options, if it doesn't, then we are doing something wrong
+    
+(extern extractor unary_op unary_op)
+(extern constructor unary_op unary_op)
+
+(extern extractor binary_op binary_op)
+(extern constructor binary_op binary_op)
+
+(decl binary_op (Type Opcode Value Value) Value)
+(spec (binary_op ty op x y) (provide (= result (switch op
+            ;; ((Opcode.Iadd)
+            ;;     (bvadd x y))
+            ((Opcode.Isub)
+                (bvsub x y))
+            ;; ((Opcode.Imul)
+            ;;     (bvmul x y))
+            )))
+        (require (or (= op Opcode.Isub) )))
+        ;; (= op Opcode.Iadd)
+    ;;(= op Opcode.Isub)(= op Opcode.Iadd)
+
+;; What does this mean?
+;; Helper to check if we 
+(spec (reducible_modular_op x) (provide (= x result)))
+(spec (will_simplify_with_ireduce x) (provide (= x result)))
+
+
+(rule (simplify (ireduce smallty val@(unary_op _ op x)))
+      (if-let _ (reducible_modular_op val))
+      (if-let _ (will_simplify_with_ireduce x))
+      (unary_op smallty op (ireduce smallty x)))
+(rule (simplify (ireduce smallty val@(binary_op _ op x y)))
+      (if-let _ (reducible_modular_op val))
+      (if-let _ (will_simplify_with_ireduce x))
+      (if-let _ (will_simplify_with_ireduce y))
+      (binary_op smallty op (ireduce smallty x) (ireduce smallty y)))
+
+    ;; finish fixing reduce form
+    ;; debug why the widths are not sat
+    ;; unary 

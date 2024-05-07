@@ -7,7 +7,7 @@ use std::cell::Cell;
 pub use super::MachLabel;
 use super::RetPair;
 pub use crate::ir::{
-    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, ArgumentPurpose, Constant,
+    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, Constant,
     DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
@@ -16,7 +16,7 @@ pub use crate::machinst::{
     ABIArg, ABIArgSlot, InputSourceInst, Lower, LowerBackend, RealReg, Reg, RelocDistance, Sig,
     VCodeInst, Writable,
 };
-pub use crate::settings::{OptLevel, TlsModel};
+pub use crate::settings::TlsModel;
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);

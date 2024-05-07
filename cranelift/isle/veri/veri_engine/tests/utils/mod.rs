@@ -234,6 +234,11 @@ pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: T
     inputs.push(
         cur_dir
             .join("../../../codegen/src/isa/aarch64")
+            .join("inst_specs.isle"),
+    );
+    inputs.push(
+        cur_dir
+            .join("../../../codegen/src/isa/aarch64")
             .join("lower.isle"),
     );
     let config = Config {

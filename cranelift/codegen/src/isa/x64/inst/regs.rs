@@ -51,7 +51,7 @@ pub(crate) fn rax() -> Reg {
 pub(crate) fn rcx() -> Reg {
     gpr(ENC_RCX)
 }
-pub(crate) fn rdx() -> Reg {
+pub fn rdx() -> Reg {
     gpr(ENC_RDX)
 }
 pub(crate) fn r8() -> Reg {
@@ -69,7 +69,7 @@ pub(crate) fn r11() -> Reg {
 pub(crate) fn r12() -> Reg {
     gpr(ENC_R12)
 }
-pub(crate) fn r13() -> Reg {
+pub fn r13() -> Reg {
     gpr(ENC_R13)
 }
 pub(crate) fn r14() -> Reg {
@@ -79,7 +79,7 @@ pub(crate) fn rbx() -> Reg {
     gpr(ENC_RBX)
 }
 
-pub(crate) fn r15() -> Reg {
+pub fn r15() -> Reg {
     gpr(ENC_R15)
 }
 

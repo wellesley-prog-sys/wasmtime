@@ -1,0 +1,186 @@
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+success
+sat
+((val__clif3__2 #x0000))
+success
+sat
+success
+success
+sat
+((op__clif1__17 #x01)
+ (op__clif1__17 #x01))
+((unary_op__27__Opcode.Iabs__118 #x00)
+ (unary_op__27__Opcode.Iabs__118 #x00))
+((will_simplify_with_ireduce__9 #x0000)
+ (will_simplify_with_ireduce__9 #x0000))
+((ireduce__26__result__77 #x00)
+ (ireduce__26__result__77 #x00))
+((unary_op__22__ty__49 2)
+ (unary_op__22__ty__49 2))
+((ireduce__24__result__61 #x00)
+ (ireduce__24__result__61 #x00))
+((ireduce__24__x__63 #x0000)
+ (ireduce__24__x__63 #x0000))
+((unary_op__27__Opcode.Uextend__114 #x00)
+ (unary_op__27__Opcode.Uextend__114 #x00))
+((x__clif2__8 #x0000)
+ (x__clif2__8 #x0000))
+((simplify__25__result__75 #x00)
+ (simplify__25__result__75 #x00))
+((reducible_modular_op__3__result__5 #x0000)
+ (reducible_modular_op__3__result__5 #x0000))
+((val__clif3__2 #x0000)
+ (val__clif3__2 #x0000))
+((unary_op__22__op__29 #x01)
+ (unary_op__22__op__29 #x01))
+((unary_op__27__Opcode.Sextend__116 #x00)
+ (unary_op__27__Opcode.Sextend__116 #x00))
+((ireduce__24 #x00)
+ (ireduce__24 #x00))
+((simplify__25__x__74 #x00)
+ (simplify__25__x__74 #x00))
+((ireduce__24__ty__62 16)
+ (ireduce__24__ty__62 16))
+((unary_op__22__Opcode.Uextend__52 #x00)
+ (unary_op__22__Opcode.Uextend__52 #x00))
+((unary_op__27__x__103 #x00)
+ (unary_op__27__x__103 #x00))
+((reducible_modular_op__3 #x0000)
+ (reducible_modular_op__3 #x0000))
+((smallty__clif0__13 16)
+ (smallty__clif0__13 16))
+((ireduce__26__ty__78 16)
+ (ireduce__26__ty__78 16))
+((unary_op__22__Opcode.Sextend__54 #x01)
+ (unary_op__22__Opcode.Sextend__54 #x01))
+((unary_op__22__Opcode.Iabs__56 #x00)
+ (unary_op__22__Opcode.Iabs__56 #x00))
+((unary_op__27__Opcode.Ineg__112 #x00)
+ (unary_op__27__Opcode.Ineg__112 #x00))
+((ireduce__26__x__79 #x0000)
+ (ireduce__26__x__79 #x0000))
+((reducible_modular_op__3__x__4 #x0000)
+ (reducible_modular_op__3__x__4 #x0000))
+((unary_op__22__v__32 #x0000)
+ (unary_op__22__v__32 #x0000))
+((unary_op__27 #x00)
+ (unary_op__27 #x00))
+((unary_op__22 #x0000)
+ (unary_op__22 #x0000))
+((unary_op__22__result__28 #x0000)
+ (unary_op__22__result__28 #x0000))
+((unary_op__27__ty__111 16)
+ (unary_op__27__ty__111 16))
+((unary_op__22__Opcode.Ineg__50 #x00)
+ (unary_op__22__Opcode.Ineg__50 #x00))
+((simplify__25 #x00)
+ (simplify__25 #x00))
+((ireduce__26 #x00)
+ (ireduce__26 #x00))
+((unary_op__27__v__94 #x00)
+ (unary_op__27__v__94 #x00))
+((will_simplify_with_ireduce__9__result__11 #x0000)
+ (will_simplify_with_ireduce__9__result__11 #x0000))
+((unary_op__22__x__41 #x0000)
+ (unary_op__22__x__41 #x0000))
+((unary_op__27__result__90 #x00)
+ (unary_op__27__result__90 #x00))
+((unary_op__27__op__91 #x01)
+ (unary_op__27__op__91 #x01))
+((will_simplify_with_ireduce__9__x__10 #x0000)
+ (will_simplify_with_ireduce__9__x__10 #x0000))
+((fresh0 #x0000))
+((fresh1 #x0000))
+((fresh2 16))
+((fresh3 #x01))
+((fresh4 #x0000))
+((fresh5 2))
+(((= ((_ extract 7 0) simplify__25) ((_ extract 7 0) unary_op__27)) true))
+(((or (= ireduce__26__ty__78 64) (or (= ireduce__26__ty__78 32) (= ireduce__26__ty__78 16))) true)
+ ((or (= unary_op__27__op__91 unary_op__27__Opcode.Ineg__112) (or (= unary_op__27__op__91 unary_op__27__Opcode.Uextend__114) (or (= unary_op__27__op__91 unary_op__27__Opcode.Sextend__116) (= unary_op__27__op__91 unary_op__27__Opcode.Iabs__118)))) false)
+ ((or (= unary_op__22__op__29 (_ bv0 8)) (= unary_op__22__op__29 (_ bv2 8)) (= unary_op__22__op__29 (_ bv3 8)) (= unary_op__22__op__29 (_ bv6 8))) false)
+ ((or (= unary_op__27__op__91 (_ bv0 8)) (= unary_op__27__op__91 (_ bv2 8)) (= unary_op__27__op__91 (_ bv3 8)) (= unary_op__27__op__91 (_ bv6 8))) false))

@@ -457,6 +457,7 @@ impl SolverCtx {
         narrow_decl: SExpr,
         name: Option<String>,
     ) -> SExpr {
+        // unimplemented!("widen to register width");
         let width = self.bitwidth.checked_sub(narrow_width).unwrap();
         if width > 0 {
             let mut narrow_name = format!("narrow__{}", tyvar);
@@ -707,12 +708,12 @@ impl SolverCtx {
 
                         // Width math
                         if self.dynwidths {
-                            if self.onlywidths {
-                                return xs;
-                            }
                             // The shift arg needs to be extracted to the right width, default to 8 if unknown
                             let y_static_width = self.static_width(&y).unwrap_or(8);
                             let y_rec = self.vir_expr_to_sexp(*y);
+                            if self.onlywidths {
+                                return xs;
+                            }
                             let extract = self.smt.extract(
                                 y_static_width.checked_sub(1).unwrap().try_into().unwrap(),
                                 0,
@@ -1181,7 +1182,7 @@ impl SolverCtx {
                     Some(8) => {
                         let p = popcnt(self, 8, ex, tyvar);
                         if self.dynwidths {
-                            self.zero_extend(56, p)
+                            self.zero_extend(self.bitwidth - 8, p)
                         } else {
                             p
                         }
@@ -1189,7 +1190,7 @@ impl SolverCtx {
                     Some(16) => {
                         let p = popcnt(self, 16, ex, tyvar);
                         if self.dynwidths {
-                            self.zero_extend(56, p)
+                            self.zero_extend(self.bitwidth - 8, p)
                         } else {
                             self.zero_extend(8, p)
                         }
@@ -1197,14 +1198,18 @@ impl SolverCtx {
                     Some(32) => {
                         let p = popcnt(self, 32, ex, tyvar);
                         if self.dynwidths {
-                            self.zero_extend(56, p)
+                            self.zero_extend(self.bitwidth - 8, p)
                         } else {
                             self.zero_extend(24, p)
                         }
                     }
                     Some(64) => {
                         let p = popcnt(self, 64, ex, tyvar);
-                        self.zero_extend(56, p)
+                        if self.dynwidths {
+                            self.zero_extend(self.bitwidth - 8, p)
+                        } else {
+                            self.zero_extend(56, p)
+                        }
                     }
                     Some(w) => unreachable!("Unexpected popcnt width {}", w),
                     None => unreachable!("Need static popcnt width"),
@@ -1692,7 +1697,7 @@ pub fn run_solver(
 
     // Check whether the non-solver type inference was able to resolve all bitvector widths,
     // and add assumptions for known widths
-    for (_e, t) in &ctx.tyctx.tyvars {
+    for (e, t) in &ctx.tyctx.tyvars {
         let ty = &ctx.tyctx.tymap[&t];
         match ty {
             Type::BitVector(w) => {
@@ -1704,11 +1709,11 @@ pub fn run_solver(
                         let eq = ctx
                             .smt
                             .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
-                        // println!("Width from inference {} ({})", width_name, bitwidth);
+                        println!("Width from inference {} ({})", width_name, bitwidth);
                         ctx.width_assumptions.push(eq);
                     }
                     None => {
-                        // println!("Unresolved width: {:?} ({})", &e, *t);
+                        println!("Unresolved width: {:?} ({})", &e, *t);
                         // Assume the width is greater than 0
                         ctx.width_assumptions
                             .push(ctx.smt.gt(ctx.smt.atom(&width_name), ctx.smt.numeral(0)));
@@ -1735,7 +1740,7 @@ pub fn run_solver(
     ctx.smt.push().unwrap();
     println!("Adding assumptions to determine widths");
     for (i, a) in assumptions.iter().enumerate() {
-        // println!("dyn{}: {}", i, ctx.smt.display(*a));
+        println!("dyn{}: {}", i, ctx.smt.display(*a));
         ctx.smt
             .assert(ctx.smt.named(format!("dyn{i}"), *a))
             .unwrap();
@@ -1777,6 +1782,7 @@ fn resolve_dynamic_widths(
                 match ty {
                     Type::BitVector(w) => {
                         let width_name = format!("width__{}", t);
+                        ctx.additional_decls.push((width_name.clone(), ctx.smt.int_sort()));
                         let atom = ctx.smt.atom(&width_name);
                         let width = ctx.smt.get_value(vec![atom]).unwrap().first().unwrap().1;
                         let width_int = u8::try_from(ctx.smt.get(width)).unwrap();
@@ -1788,6 +1794,11 @@ fn resolve_dynamic_widths(
                             }
                             _ => (),
                         };
+
+                        // Check whether we agree with the result from
+                        // experimental SMT type inference.
+                        let ty_smt = ctx.tyctx.tymap_smt[&t];
+                        assert_eq!(ty_smt, Type::BitVector(Some(width_int as usize)));
 
                         // Check that the width is nonzero
                         if width_int <= 0 {

@@ -2018,23 +2018,32 @@
 (spec (alu_rrr op t a b)
     (provide
       (= result (switch op
+              ((ALUOp.Add)
+                (if (<= t 32)
+                    (zero_ext 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
+                    (bvadd a b)))
               ((ALUOp.Lsr)
                 (if (<= t 32)
-                    (conv_to 64 (bvlshr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
+                    (zero_ext 64 (bvlshr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
                     (bvlshr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
               ((ALUOp.Asr)
                 (if (<= t 32)
-                    (conv_to 64 (bvashr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
+                    (zero_ext 64 (bvashr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
                     (bvashr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
               ((ALUOp.Lsl)
                 (if (<= t 32)
-                    (conv_to 64 (bvshl (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
+                    (zero_ext 64 (bvshl (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
                     (bvshl a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b)))))))
     (require
-      (or (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
-      (or (= t 8) (= t 16) (= t 32) (= t 64))))
+      (or (= op (ALUOp.Add)) (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
+      (or (= t 8) (= t 16) (= t 32) (= t 64)))
+      ;(or (= t 32) (= t 64)))
+      )
 (decl alu_rrr (ALUOp Type Reg Reg) Reg)
-(rule (alu_rrr op ty src1 src2)
+(instantiate alu_rrr
+    ((args (bv 8) Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(rule alu_rrr_emit (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op (operand_size ty) dst src1 src2))))
         dst))
@@ -2633,10 +2642,14 @@
   (provide
     (= result
        (if (<= ty 32)
-           (conv_to 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
-           (bvadd a b)))))
+           (zero_ext 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
+           (bvadd a b))))
+  (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 (decl add (Type Reg Reg) Reg)
-(rule (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
+(instantiate add
+    ((args Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(rule add_alu_rrr (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
 
 (spec (add_imm ty a b)
   (provide

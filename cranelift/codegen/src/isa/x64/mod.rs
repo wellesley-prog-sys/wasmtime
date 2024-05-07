@@ -22,7 +22,7 @@ use target_lexicon::Triple;
 
 mod abi;
 pub mod encoding;
-mod inst;
+pub mod inst;
 mod lower;
 pub mod settings;
 

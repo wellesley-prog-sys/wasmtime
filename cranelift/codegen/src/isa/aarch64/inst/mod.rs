@@ -15,14 +15,14 @@ use smallvec::{smallvec, SmallVec};
 use std::fmt::Write;
 use std::string::{String, ToString};
 
-pub(crate) mod regs;
-pub(crate) use self::regs::*;
+pub mod regs;
+pub use self::regs::*;
 pub mod imms;
 pub use self::imms::*;
 pub mod args;
 pub use self::args::*;
 pub mod emit;
-pub(crate) use self::emit::*;
+pub use self::emit::*;
 use crate::isa::aarch64::abi::AArch64MachineDeps;
 
 pub(crate) mod unwind;
@@ -1191,7 +1191,11 @@ fn mem_finalize_for_show(mem: &AMode, state: &EmitState) -> (String, AMode) {
 }
 
 impl Inst {
-    fn print_with_state(&self, state: &mut EmitState, allocs: &mut AllocationConsumer) -> String {
+    pub fn print_with_state(
+        &self,
+        state: &mut EmitState,
+        allocs: &mut AllocationConsumer,
+    ) -> String {
         let mut empty_allocs = AllocationConsumer::default();
 
         fn op_name(alu_op: ALUOp) -> &'static str {

@@ -13,10 +13,26 @@ path = "src/lib.rs"
 name = "veri_engine_bin"
 path = "src/main.rs"
 
+[[bin]]
+name = "isla"
+path = "src/isla.rs"
+
+[[bin]]
+name = "emit"
+path = "src/emit.rs"
+
+[[bin]]
+name = "x64"
+path = "src/x64.rs"
+
 [dependencies]
 cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { path = "../../../codegen" }
+cranelift-reader = { path = "../../../reader" }
 cranelift-codegen-meta = { path = "../../../codegen/meta" }
+isla = { git = "https://github.com/rems-project/isla.git", rev = "2a4bd429b56634db52d59707b83090a535b5c4bc" }
+isla-lib = { git = "https://github.com/rems-project/isla.git", rev = "2a4bd429b56634db52d59707b83090a535b5c4bc" }
+anyhow = { workspace = true }
 veri_ir = { path = "../veri_ir" }
 easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
 clap = { version = "3.0.0", features = ["derive"] }
@@ -24,7 +40,10 @@ itertools = "0.10.3"
 log = "0.4.17"
 env_logger = "0.10.0"
 retry = "2.0.0"
+sha2 = "0.8.1"
+crossbeam = "0.8.1"
+strum = "0.26.1"
+strum_macros = "0.26.1"
 
-[dev-dependencies]
-strum = "0.24.0"
-strum_macros = "0.24.0"
+[features]
+default = ["cranelift-codegen/all-arch", "cranelift-codegen/trace-log"]

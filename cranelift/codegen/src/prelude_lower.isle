@@ -107,6 +107,7 @@
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
 (extern constructor temp_writable_reg temp_writable_reg)
+(spec (temp_writable_reg ty) (provide (= ty (widthof result))))
 
 ;; Get a temporary register for reading.
 (decl temp_reg (Type) Reg)
@@ -266,6 +267,7 @@
 ;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
 (decl pure writable_reg_to_reg (WritableReg) Reg)
 (extern constructor writable_reg_to_reg writable_reg_to_reg)
+(spec (writable_reg_to_reg reg) (provide (= result reg)))
 
 ;; Extract the result values for the given instruction.
 (decl inst_results (ValueSlice) Inst)
@@ -332,6 +334,8 @@
 
 (decl emit (MInst) Unit)
 (extern constructor emit emit)
+; TODO(mbm): what is the right spec for emit?
+(spec (emit inst) (provide (= result #b1)))
 
 ;; Sink an instruction.
 ;;

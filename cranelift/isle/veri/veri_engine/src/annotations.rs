@@ -99,7 +99,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         )
     }
 
-    fn variadic_binop<F: Fn(Box<Expr>, Box<Expr>, u32) -> Expr>(
+    fn variadic_binop<F: Fn(Box<Expr>, Box<Expr>) -> Expr>(
         b: F,
         args: &Vec<SpecExpr>,
         pos: &Pos,
@@ -117,7 +117,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         expr_args
             .iter()
             .rev()
-            .fold(last, |acc, a| b(Box::new(a.clone()), Box::new(acc), 0))
+            .fold(last, |acc, a| b(Box::new(a.clone()), Box::new(acc)))
     }
 
     match s {
@@ -132,8 +132,8 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
 
         // Variadic binops
-        SpecOp::And => variadic_binop(|x, y, i| Expr::And(x, y), args, pos, env),
-        SpecOp::Or => variadic_binop(|x, y, i| Expr::Or(x, y), args, pos, env),
+        SpecOp::And => variadic_binop(|x, y| Expr::And(x, y), args, pos, env),
+        SpecOp::Or => variadic_binop(|x, y| Expr::Or(x, y), args, pos, env),
 
         // Binary
         SpecOp::Eq => binop(|x, y| Expr::Eq(x, y), args, pos, env),
@@ -141,6 +141,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         SpecOp::Lte => binop(|x, y| Expr::Lte(x, y), args, pos, env),
         SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
         SpecOp::Gte => binop(|x, y| Expr::Lte(y, x), args, pos, env),
+        SpecOp::Imp => binop(|x, y| Expr::Imp(x, y), args, pos, env),
         SpecOp::BVAnd => binop(|x, y| Expr::BVAnd(x, y), args, pos, env),
         SpecOp::BVOr => binop(|x, y| Expr::BVOr(x, y), args, pos, env),
         SpecOp::BVXor => binop(|x, y| Expr::BVXor(x, y), args, pos, env),
@@ -340,6 +341,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
                 ast::ModelValue::EnumValues(vals) => {
                     for (v, e) in vals {
                         let ident = ast::Ident(format!("{}.{}", name.0, v.0), v.1);
+                        dbg!(&ident);
                         let term_id = termenv.get_term_by_name(typeenv, &ident).unwrap();
                         let val = spec_to_expr(e, &env);
                         let ty = match val {
