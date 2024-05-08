@@ -19,5 +19,9 @@ cargo run -- compile --target aarch64 -D testauto.clif
 
 
 # to run this script
-# first chmod +x automate_script.sh to make sure it is executable
+# first substitute the paths with your local paths. 
+# EXPR_RS_PATH is where expr.rs is located. 
+# TEST_CLIF_PATH should be the path to the generated code stored in testauto.clif file in cranelift folder
+# DIR_PATH should be the path to your local cranelift folder                                              
+# then chmod +x automate_script.sh to make sure it is executable
 # run the script: ./automate_script.sh
