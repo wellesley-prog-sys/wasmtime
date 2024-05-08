@@ -11,7 +11,7 @@ while true; do
 
     cd "$DIR_PATH"
 
-    # Run testauto.clif through cranelift (only wors on mac)
+    # Run testauto.clif through cranelift (only works on M series Mac)
     OUTPUT=$(cargo run -- compile --target aarch64 -D "$TEST_CLIF_PATH")
     echo "Output:"
     echo "$OUTPUT"
@@ -35,17 +35,10 @@ echo "complete. Found executable random gen .clif and output ARM"
 
 
 # to run this script
-<<<<<<< Updated upstream
-# first substitute the paths with your local paths. 
-# EXPR_RS_PATH is where expr.rs is located. 
-# TEST_CLIF_PATH should be the path to the generated code stored in testauto.clif file in cranelift folder
-# DIR_PATH should be the path to your local cranelift folder                                              
-=======
 # first update the paths with your local paths. 
     # EXPR_RS_PATH is where expr.rs is located. 
     # EXPR_DIR is the folder where expr.rs is located
     # TEST_CLIF_PATH should be the path to the generated code stored in testauto.clif file in cranelift folder
     # DIR_PATH should be the path to your local cranelift folder                                              
->>>>>>> Stashed changes
 # then chmod +x automate_script.sh to make sure it is executable
 # run the script: ./automate_script.sh
