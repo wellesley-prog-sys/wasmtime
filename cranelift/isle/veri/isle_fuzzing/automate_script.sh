@@ -1,10 +1,8 @@
-#!/bin/bash
+EXPR_RS_PATH="/Users/ajchau/Documents/GitHub/wasmtime/cranelift/isle/veri/isle_fuzzing/src/expr.rs"
 
-EXPR_RS_PATH="C:/Users/becky/Documents/GitHub/wasmtime/cranelift/isle/veri/isle_fuzzing/src/expr.rs"
+TEST_CLIF_PATH="/Users/ajchau/Documents/GitHub/wasmtime/cranelift/testauto.clif"
 
-TEST_CLIF_PATH="C:/Users/becky/Documents/GitHub/wasmtime/cranelift/isle/veri/isle_fuzzing/src/testauto.clif"
-
-DIR_PATH="C:/Users/becky/Documents/GitHub/wasmtime/cranelift/"
+DIR_PATH="/Users/ajchau/Documents/GitHub/wasmtime/cranelift/"
 
 # compile and run expr.rs, and get the output
 TEST_CLIF=$(cargo run --bin expr)
@@ -17,7 +15,6 @@ echo "$TEST_CLIF" > "$TEST_CLIF_PATH"
 cd "$DIR_PATH"
 
 cargo run -- compile --target aarch64 -D testauto.clif
-
 
 
 

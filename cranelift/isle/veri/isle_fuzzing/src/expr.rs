@@ -223,7 +223,7 @@ Notes: Takes in the tuple and formats it to a string containing the clif file.
         let add_to_output = false;
         let expr_with_rand = if expr.contains("?") {
             let mut rng = rand::thread_rng();
-            let random_int: i32 = rng.gen_range(0..10);
+            let random_int: i32 = rng.gen_range(0..99999999);
             expr.replace("?", &random_int.to_string())
         } else {
             expr.clone()

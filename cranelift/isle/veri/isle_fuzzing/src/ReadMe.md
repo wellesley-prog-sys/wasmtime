@@ -51,9 +51,6 @@ Currently our fuzzer inefficiently, where we must input the name of the file int
 This fuzzer is also not foolproof-- it occasionally generates invalid clif programs due to the extension (.i16, .i32, .i64) not always being compatible throghout the program. 
 
 ## Next Steps
-The general problem your project is tackling.
-The final README should also include:
-
-
-What tradeoffs did you make in choosing your representation? What else did you try that didn’t work as well?
-What assumptions did you make about scope? What are the limits of your model?
+We want to be able to detect when the program can be lowered successfully.
+We also want to generate multiple programs at a time. 
+We also want to automate the entire process. 
