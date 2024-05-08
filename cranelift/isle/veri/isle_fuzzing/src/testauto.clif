@@ -1,0 +1,7 @@
+function %f0(i32, i32, i32, i32) ->i64 {
+block0(v0: i32, v1: i32, v2: i32, v3:i32):
+  v4 = iconst.i64 7
+  v5 = ishl v3, v4
+  v6 = uextend.i64 v5
+return v6;
+}

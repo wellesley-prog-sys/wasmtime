@@ -53,7 +53,6 @@ Notes: Compares each pattern against the instruction list, labels it to Inst, No
 fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
     match pattern {
         ast::Pattern::Var { var, .. } => {
-            dbg!("{}", pattern.clone());
             let name = var.0.clone();
             Expr::Var(name)
         }, 
