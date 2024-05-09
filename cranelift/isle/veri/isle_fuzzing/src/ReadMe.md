@@ -33,7 +33,7 @@ To get our code, clone the repo https://github.com/AJChau-Bst/wasmtime/tree/PSL-
 git clone git@github.com:AJChau-Bst/wasmtime.git
 ```
 
-Install Wasmtime following the README in this link: GitHub - avanhatt/wasmtime: Standalone JIT-style runtime for WebAssembly, using Cranelift
+Install Wasmtime following the README in this link: [GitHub - avanhatt/wasmtime: Standalone JIT-style runtime for WebAssembly, using Cranelift](https://github.com/avanhatt/wasmtime)
 
 
 **Manual Use**
