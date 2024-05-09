@@ -28,6 +28,8 @@ Written by Annette Chau and Becky Chen
 ## Usage
 First, install and setup RUST following this link: https://www.rust-lang.org/tools/install. 
 
+Our code lives in this github repo: https://github.com/AJChau-Bst/wasmtime/tree/PSL-fuzzing
+
 To get our code, clone the repo https://github.com/AJChau-Bst/wasmtime/tree/PSL-fuzzing:
 ```
 git clone git@github.com:AJChau-Bst/wasmtime.git
@@ -38,7 +40,7 @@ Install Wasmtime following the README in this link: [GitHub - avanhatt/wasmtime:
 
 **Manual Use**
 
-To use expr.rs for clif module generation, run this command in the terminal: 
+To use expr.rs for clif module generation, run this command in the terminal when you are in wasmtime/cranelift/isle/veri/isle_fuzzing/src: 
 ```
 cargo run --bin expr
 ```
