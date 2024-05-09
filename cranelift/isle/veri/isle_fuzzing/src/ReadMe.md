@@ -1,4 +1,4 @@
-# Wellesley Programming System Lab and CS 340 Final Project: Creating a Fuzzer to randomly generate clif code from isle rules
+# Wellesley Programming System Lab and CS 340 Final Project: Creating a Fuzzer to randomly generate clif code from isle rules and run through Cranelift compiler
 
 Written by Annette Chau and Becky Chen
 
