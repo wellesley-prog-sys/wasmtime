@@ -26,7 +26,15 @@ Written by Annette Chau and Becky Chen
 - **format_output**: Formats the CLIF program output.
 
 ## Usage
-First, install and setup RUST following this link: https://www.rust-lang.org/tools/install.
+First, install and setup RUST following this link: https://www.rust-lang.org/tools/install. 
+
+To get our code, clone the repo https://github.com/AJChau-Bst/wasmtime/tree/PSL-fuzzing:
+```
+git clone git@github.com:AJChau-Bst/wasmtime.git
+```
+
+Install Wasmtime following the README in this link: GitHub - avanhatt/wasmtime: Standalone JIT-style runtime for WebAssembly, using Cranelift
+
 
 **Manual Use**
 
