@@ -75,7 +75,7 @@ Then, you will see the ISLE-guided, lowered ARM module in the terminal. This res
 
 **Limitation**
 
-Note that this only works for Macs with the ARM Chips (M1, M2, M3 or M4), and test.clif is manually created, where the user has copied and pasted the output of the code into a clif file. 
+Note that this only works for Macs with the ARM Chips (M1, M2, M3 or M4).
 
 ## General Problem
 
@@ -83,18 +83,20 @@ When instruction lowering from clif to a low level language (ARM or x86), guided
 
 A fuzzer is one way to find inputs that the ISLE rules guide has difficulty lowering accurately by randomly generating outputs that are not always expected. This can help find bugs that were not anticipated. 
 
-## Tradeoffs and Assumptions
+## Tradeoffs, Limitations, Assumptions
 
 We tried different parsing methods (seen in the misc folder/main.rs), where we attempted to find rules through parenthesis counting instead of through the patterns given. 
 
-Currently our fuzzer has a limited scope, where we can only generate one clif module that matches one single input ISLE rule at once. In the future, we want to have it run automatically and take in multiple files of ISLE rules. This will speed up the fuzzing process and generate code with more variety and sophisticated patterns. 
+Currently our fuzzer has a limited scope, where we can only generate one clif module that matches one single input ISLE rule at once. In the future, we want to have it take in multiple files of ISLE rules. This will speed up the fuzzing process and generate code with more variety and sophisticated patterns. 
 
 This fuzzer is also not foolproof-- it occasionally generates invalid clif programs due to the extension (.i16, .i32, .i64) not always being compatible throughout the program. This is the tradeoff of using random generation. Our automatic approach partially tackles this issue. However, it still takes more than the ideal amount of time to generate an executable clif module.
 
 ## Next Steps
 We want to be able to detect when the program can be lowered successfully. This would be more effective from a fuzzing perspective, to have the output efficiently checked against expected output.
 
-We also want to generate multiple programs at a time, hopefully through more advanced automation.
+We also want to take in and generate multiple programs at a time, hopefully through more advanced automation.
 
 ## Goals and Reflection
 Our goals did not change from our proposal. Quite the opposite, we were able to have a much clearer train of thought after receiving feedback for our proposal. We clarified our goals and tried our best to execute them. 
+
+We have completed most of our reach goals. 
