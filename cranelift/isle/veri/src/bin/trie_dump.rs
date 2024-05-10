@@ -1,6 +1,10 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle::overlap;
+use cranelift_isle::{
+    overlap,
+    sema::{Type, TypeEnv},
+    trie_again::Constraint,
+};
 use cranelift_isle_veri::program::Program;
 
 #[derive(Parser)]
@@ -73,7 +77,11 @@ fn main() -> anyhow::Result<()> {
             println!("\t\t\tconstraints = [");
             for i in 0..rule_set.bindings.len() {
                 if let Some(constraint) = rule.get_constraint(i.try_into().unwrap()) {
-                    println!("\t\t\t\t{}: {:?}", i, constraint);
+                    println!(
+                        "\t\t\t\t{}: {}",
+                        i,
+                        constraint_string(&constraint, &prog.tyenv)
+                    );
                 }
             }
             println!("\t\t\t]");
@@ -90,4 +98,26 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn constraint_string(constraint: &Constraint, tyenv: &TypeEnv) -> String {
+    match constraint {
+        Constraint::Variant { ty, variant, .. } => {
+            let ty = &tyenv.types[ty.index()];
+            match ty {
+                Type::Primitive(_, sym, _) => {
+                    format!("variant({})", tyenv.syms[sym.index()].clone())
+                }
+                Type::Enum { name, variants, .. } => {
+                    let name = &tyenv.syms[name.index()];
+                    let variant = &variants[variant.index()];
+                    let variant_name = &tyenv.syms[variant.name.index()];
+                    format!("variant({name}::{variant_name})")
+                }
+            }
+        }
+        Constraint::ConstInt { val, .. } => format!("const_int({})", val),
+        Constraint::ConstPrim { val } => format!("const_prim({})", tyenv.syms[val.index()]),
+        Constraint::Some => "some".to_string(),
+    }
 }
