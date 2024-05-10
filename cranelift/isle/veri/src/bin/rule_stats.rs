@@ -44,7 +44,8 @@ fn main() -> anyhow::Result<()> {
 
     // Read ISLE inputs.
     let inputs = opts.isle_input_files()?;
-    let prog = Program::from_files(&inputs)?;
+    let expand_internal_extractors = false;
+    let prog = Program::from_files(&inputs, expand_internal_extractors)?;
 
     // Stats.
     let rules = prog.rules_by_term();

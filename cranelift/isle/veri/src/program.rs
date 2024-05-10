@@ -9,11 +9,13 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn from_files(paths: &Vec<std::path::PathBuf>) -> Result<Self, Errors> {
+    pub fn from_files(
+        paths: &Vec<std::path::PathBuf>,
+        expand_internal_extractors: bool,
+    ) -> Result<Self, Errors> {
         let lexer = lexer::Lexer::from_files(paths)?;
         let defs = parser::parse(lexer)?;
         let mut tyenv = sema::TypeEnv::from_ast(&defs)?;
-        let expand_internal_extractors = false;
         let termenv = sema::TermEnv::from_ast(&mut tyenv, &defs, expand_internal_extractors)?;
 
         Ok(Self { tyenv, termenv })
