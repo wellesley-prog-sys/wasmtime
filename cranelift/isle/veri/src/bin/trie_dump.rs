@@ -59,9 +59,11 @@ fn main() -> anyhow::Result<()> {
         // Bindings.
         println!("\tbindings = [");
         for (i, binding) in rule_set.bindings.iter().enumerate() {
+            let ty = binding_type(binding, *term_id, &prog, rule_set);
             println!(
-                "\t\t{i}:\t{}",
-                binding_string(binding, *term_id, &prog, rule_set)
+                "\t\t{i}: {}\t{}",
+                ty.display(&prog.tyenv),
+                binding_string(binding, *term_id, &prog, rule_set),
             );
         }
         println!("\t]");
@@ -81,7 +83,7 @@ fn main() -> anyhow::Result<()> {
             for i in 0..rule_set.bindings.len() {
                 if let Some(constraint) = rule.get_constraint(i.try_into().unwrap()) {
                     println!(
-                        "\t\t\t\t{}: {}",
+                        "\t\t\t\t{}:\t{}",
                         i,
                         constraint_string(&constraint, &prog.tyenv)
                     );
@@ -228,6 +230,26 @@ enum BindingType {
     Tuple(Vec<BindingType>),
 }
 
+impl BindingType {
+    pub fn display(&self, tyenv: &TypeEnv) -> String {
+        match self {
+            BindingType::Base(type_id) => {
+                let ty = &tyenv.types[type_id.index()];
+                ty.name(tyenv).to_string()
+            }
+            BindingType::Option(inner) => format!("Option({})", inner.display(tyenv)),
+            BindingType::Tuple(inners) => format!(
+                "({inners})",
+                inners = inners
+                    .iter()
+                    .map(|inner| inner.display(tyenv))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
 // Determine the type of a given binding.
 fn binding_type(
     binding: &Binding,
@@ -236,10 +258,15 @@ fn binding_type(
     rule_set: &RuleSet,
 ) -> BindingType {
     match binding {
+        Binding::ConstInt { ty, .. } | Binding::MakeVariant { ty, .. } => BindingType::Base(*ty),
+
+        Binding::ConstPrim { val } => BindingType::Base(prog.tyenv.const_types[val]),
+
         Binding::Argument { index } => {
             let term = &prog.termenv.terms[term_id.index()];
             BindingType::Base(term.arg_tys[index.index()])
         }
+
         Binding::Extractor { term, .. } => {
             // Determine the extractor signature.
             let term = &prog.termenv.terms[term.index()];
@@ -292,7 +319,16 @@ fn binding_type(
             BindingType::Base(field.ty)
         }
 
-        _ => todo!("binding type: {binding:?}"),
+        Binding::MatchTuple { source, field } => {
+            let source_binding = &rule_set.bindings[source.index()];
+            let source_ty = binding_type(source_binding, term_id, prog, rule_set);
+            match source_ty {
+                BindingType::Tuple(tys) => tys[field.index()].clone(),
+                _ => unreachable!("source type should be a tuple"),
+            }
+        }
+
+        Binding::Iterator { .. } => unimplemented!("iterator bindings not supported"),
     }
 }
 
