@@ -89,7 +89,16 @@ fn main() -> anyhow::Result<()> {
             }
             println!("\t\t\t]");
             if !rule.equals.is_empty() {
-                println!("\t\t\tequals = {:?}", rule.equals);
+                println!("\t\t\tequals = [");
+                for i in 0..rule_set.bindings.len() {
+                    let binding_id = i.try_into().unwrap();
+                    if let Some(eq) = rule.equals.find(binding_id) {
+                        if eq != binding_id {
+                            println!("\t\t\t\t{} == {}", binding_id.index(), eq.index());
+                        }
+                    }
+                }
+                println!("\t\t\t]");
             }
             println!("\t\t\tprio = {}", rule.prio);
             println!("\t\t\tresult = {}", rule.result.index());
