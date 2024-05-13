@@ -72,8 +72,6 @@ fn main() -> anyhow::Result<()> {
         println!("\trules = [");
         for rule in &rule_set.rules {
             assert_eq!(rule.iterators.len(), 0);
-            // TODO(mbm): how to handle impure?
-
             println!("\t\t{{");
             println!(
                 "\t\t\tpos = {}",
@@ -95,6 +93,17 @@ fn main() -> anyhow::Result<()> {
             }
             println!("\t\t\tprio = {}", rule.prio);
             println!("\t\t\tresult = {}", rule.result.index());
+            if !rule.impure.is_empty() {
+                println!(
+                    "\t\t\timpure = {impure:?}",
+                    impure = rule
+                        .impure
+                        .iter()
+                        .copied()
+                        .map(BindingId::index)
+                        .collect::<Vec<_>>()
+                );
+            }
             println!("\t\t}}");
         }
         println!("\t]");
