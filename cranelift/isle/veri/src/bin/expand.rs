@@ -44,6 +44,10 @@ impl Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
+    // Config.
+    let term_name = "sink_load_into_addr";
+    let inline_term_names = vec![term_name, "add_imm_to_addr"];
+
     // Read ISLE inputs.
     let inputs = opts.isle_input_files()?;
     let expand_internal_extractors = true;
@@ -55,18 +59,30 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // Lookup term to expand.
-    let term_name = "lower";
     let term_id = prog
         .get_term_by_name(&term_name)
         .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
 
+    let mut inline_term_ids = Vec::new();
+    for inline_term_name in &inline_term_names {
+        println!("inline term: {inline_term_name}");
+        let term_id = prog
+            .get_term_by_name(&inline_term_name)
+            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+        inline_term_ids.push(term_id);
+    }
+
     // Expand.
-    let rule_set = &term_rule_sets[&term_id];
-    let mut expander = Expander::new(rule_set);
-    let expansions = expander.rules();
+    let mut expander = Expander::new(prog, term_rule_sets);
+    expander.constructor(term_id);
+    for inline_term_id in inline_term_ids {
+        expander.inline(inline_term_id);
+    }
+
+    expander.expand();
 
     // Report.
-    for expansion in &expansions {
+    for expansion in expander.expansions() {
         println!("{expansion:?}");
     }
 
