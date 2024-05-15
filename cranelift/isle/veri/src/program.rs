@@ -1,4 +1,6 @@
+use cranelift_isle::ast::Ident;
 use cranelift_isle::error::Errors;
+use cranelift_isle::lexer::Pos;
 use cranelift_isle::sema::{self, Rule, RuleId, Term, TermEnv, TermId, TypeEnv};
 use cranelift_isle::{lexer, parser};
 use std::collections::HashMap;
@@ -46,5 +48,10 @@ impl Program {
             rules.entry(rule.root_term).or_default().push(rule.id);
         }
         rules
+    }
+
+    pub fn get_term_by_name(&self, name: &str) -> Option<TermId> {
+        let sym = Ident(name.to_string(), Pos::default());
+        self.termenv.get_term_by_name(&self.tyenv, &sym)
     }
 }

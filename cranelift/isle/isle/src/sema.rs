@@ -2383,7 +2383,8 @@ impl TermEnv {
         Some(IfLet { lhs, rhs })
     }
 
-    fn get_term_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<TermId> {
+    /// Lookup term by name.
+    pub fn get_term_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<TermId> {
         tyenv
             .intern(sym)
             .and_then(|sym| self.term_map.get(&sym))
