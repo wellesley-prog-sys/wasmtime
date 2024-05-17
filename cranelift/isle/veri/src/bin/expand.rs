@@ -4,7 +4,7 @@ use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::overlap;
 use cranelift_isle::trie_again::BindingId;
-use cranelift_isle_veri::debug::{binding_string, binding_type};
+use cranelift_isle_veri::debug::{binding_string, binding_type, constraint_string};
 use cranelift_isle_veri::expand::{Expander, Expansion};
 use cranelift_isle_veri::program::Program;
 
@@ -21,6 +21,14 @@ struct Opts {
     /// Working directory.
     #[arg(long, required = true)]
     work_dir: std::path::PathBuf,
+
+    /// Term to expand.
+    #[arg(long, required = true)]
+    term_name: String,
+
+    /// Term names to inline.
+    #[arg(long)]
+    inline: Vec<String>,
 }
 
 impl Opts {
@@ -46,10 +54,6 @@ impl Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
-    // Config.
-    let term_name = "sink_load_into_addr";
-    let inline_term_names = vec![term_name, "add_imm_to_addr"];
-
     // Read ISLE inputs.
     let inputs = opts.isle_input_files()?;
     let expand_internal_extractors = true;
@@ -62,14 +66,18 @@ fn main() -> anyhow::Result<()> {
 
     // Lookup term to expand.
     let term_id = prog
-        .get_term_by_name(&term_name)
-        .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+        .get_term_by_name(opts.term_name.as_str())
+        .ok_or(anyhow::format_err!("unknown term {}", opts.term_name))?;
+
+    // Configure inline terms.
+    let mut inline_term_names = opts.inline.clone();
+    inline_term_names.push(opts.term_name.clone());
 
     let mut inline_term_ids = Vec::new();
     for inline_term_name in &inline_term_names {
         let term_id = prog
             .get_term_by_name(&inline_term_name)
-            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+            .ok_or(anyhow::format_err!("unknown term {inline_term_name}"))?;
         inline_term_ids.push(term_id);
         println!("inline term: {inline_term_name}");
     }
@@ -84,7 +92,9 @@ fn main() -> anyhow::Result<()> {
     expander.expand();
 
     // Report.
-    for expansion in expander.expansions() {
+    let expansions = expander.expansions();
+    println!("expansions = {}", expansions.len());
+    for expansion in expansions {
         print_expansion(&prog, expansion);
     }
 
@@ -113,7 +123,21 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
     }
     println!("\t]");
 
-    // pub constraints: HashMap<BindingId, Vec<Constraint>>,
-    // pub result: BindingId,
+    // Constraints.
+    println!("\tconstraints = [");
+    for (binding_id, constraints) in &expansion.constraints {
+        for constraint in constraints {
+            println!(
+                "\t\t{}:\t{}",
+                binding_id.index(),
+                constraint_string(&constraint, &prog.tyenv)
+            );
+        }
+    }
+    println!("\t]");
+
+    // Result.
+    println!("\tresult = {}", expansion.result.index());
+
     println!("}}");
 }

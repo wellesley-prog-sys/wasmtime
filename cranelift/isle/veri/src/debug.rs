@@ -169,7 +169,7 @@ pub fn binding_string(
     }
 }
 
-fn constraint_string(constraint: &Constraint, tyenv: &TypeEnv) -> String {
+pub fn constraint_string(constraint: &Constraint, tyenv: &TypeEnv) -> String {
     match constraint {
         Constraint::Variant { ty, variant, .. } => {
             let ty = &tyenv.types[ty.index()];
