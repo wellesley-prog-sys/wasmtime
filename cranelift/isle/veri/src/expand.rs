@@ -130,6 +130,15 @@ impl<'a> Expander<'a> {
     }
 
     pub fn inline(&mut self, term_id: TermId) {
+        // Internal constructors are supported for inlining.
+        let term = self.prog.term(term_id);
+        assert!(term.has_constructor(), "only constructors may be inlined");
+        assert!(
+            !term.has_external_constructor(),
+            "should be internal constructor"
+        );
+
+        // Add to inlineable set.
         self.inlineable.insert(term_id);
     }
 
