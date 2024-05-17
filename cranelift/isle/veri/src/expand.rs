@@ -11,6 +11,7 @@ pub struct Expansion {
     pub term: TermId,
     pub bindings: Vec<Option<Binding>>,
     pub constraints: HashMap<BindingId, Vec<Constraint>>,
+    // TODO: equals
     pub result: BindingId,
 }
 
