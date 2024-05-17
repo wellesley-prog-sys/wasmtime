@@ -66,8 +66,8 @@ impl Expansion {
     }
 }
 
-pub struct Expander {
-    prog: Program,
+pub struct Expander<'a> {
+    prog: &'a Program,
     term_rule_sets: HashMap<TermId, RuleSet>,
 
     /// Terms which can be considered for inlining.
@@ -80,8 +80,8 @@ pub struct Expander {
     complete: Vec<Expansion>,
 }
 
-impl Expander {
-    pub fn new(prog: Program, term_rule_sets: HashMap<TermId, RuleSet>) -> Self {
+impl<'a> Expander<'a> {
+    pub fn new(prog: &'a Program, term_rule_sets: HashMap<TermId, RuleSet>) -> Self {
         Self {
             prog,
             term_rule_sets,
@@ -144,16 +144,12 @@ impl Expander {
 
     pub fn expand(&mut self) {
         while !self.stack.is_empty() {
-            println!("---------------");
-            println!("stack size: {}", self.stack.len());
             let expansion = self.stack.pop().unwrap();
             self.extend(expansion);
         }
     }
 
     fn extend(&mut self, expansion: Expansion) {
-        println!("extend: {expansion:?}");
-
         // Look for a candidate for inlining. If none, we're done.
         let inline_binding_id = match self.inline_candidate(&expansion) {
             Some(binding_id) => binding_id,
@@ -164,7 +160,6 @@ impl Expander {
         };
 
         // Inline constructor.
-        println!("inline candidate: {inline_binding_id:?}");
         let binding = &expansion.bindings[inline_binding_id.index()];
         let (term_id, parameters) = match binding {
             Some(Binding::Constructor {
@@ -172,13 +167,11 @@ impl Expander {
             }) => (term, parameters),
             _ => unreachable!("expect constructor binding"),
         };
-        println!("inline term: {term_id:?}");
 
         let rule_set = &self.term_rule_sets[term_id];
         for rule in &rule_set.rules {
             let mut apply = Application::new(expansion.clone());
             let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
-            println!("inlined: {inlined:?}");
             self.stack.push(inlined);
         }
     }

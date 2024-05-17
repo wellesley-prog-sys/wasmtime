@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::overlap;
-use cranelift_isle_veri::expand::Expander;
+use cranelift_isle::trie_again::BindingId;
+use cranelift_isle_veri::debug::{binding_string, binding_type};
+use cranelift_isle_veri::expand::{Expander, Expansion};
 use cranelift_isle_veri::program::Program;
 
 #[derive(Parser)]
@@ -69,11 +71,11 @@ fn main() -> anyhow::Result<()> {
             .get_term_by_name(&inline_term_name)
             .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
         inline_term_ids.push(term_id);
-        println!("inline term: {inline_term_name} {term_id:?}");
+        println!("inline term: {inline_term_name}");
     }
 
     // Expand.
-    let mut expander = Expander::new(prog, term_rule_sets);
+    let mut expander = Expander::new(&prog, term_rule_sets);
     expander.constructor(term_id);
     for inline_term_id in inline_term_ids {
         expander.inline(inline_term_id);
@@ -83,8 +85,35 @@ fn main() -> anyhow::Result<()> {
 
     // Report.
     for expansion in expander.expansions() {
-        println!("{expansion:?}");
+        print_expansion(&prog, expansion);
     }
 
     Ok(())
+}
+
+pub fn print_expansion(prog: &Program, expansion: &Expansion) {
+    println!("expansion {{");
+
+    // Term.
+    println!("\tterm = {}", prog.term_name(expansion.term));
+
+    // Bindings.
+    let lookup_binding =
+        |binding_id: BindingId| expansion.bindings[binding_id.index()].clone().unwrap();
+    println!("\tbindings = [");
+    for (i, binding) in expansion.bindings.iter().enumerate() {
+        if let Some(binding) = binding {
+            let ty = binding_type(binding, expansion.term, &prog, lookup_binding);
+            println!(
+                "\t\t{i}: {}\t{}",
+                ty.display(&prog.tyenv),
+                binding_string(binding, expansion.term, &prog, lookup_binding),
+            );
+        }
+    }
+    println!("\t]");
+
+    // pub constraints: HashMap<BindingId, Vec<Constraint>>,
+    // pub result: BindingId,
+    println!("}}");
 }
