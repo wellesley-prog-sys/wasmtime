@@ -65,11 +65,11 @@ fn main() -> anyhow::Result<()> {
 
     let mut inline_term_ids = Vec::new();
     for inline_term_name in &inline_term_names {
-        println!("inline term: {inline_term_name}");
         let term_id = prog
             .get_term_by_name(&inline_term_name)
             .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
         inline_term_ids.push(term_id);
+        println!("inline term: {inline_term_name} {term_id:?}");
     }
 
     // Expand.
