@@ -219,6 +219,41 @@ impl Errors {
     }
 }
 
+/// Builder for the `isle::Errors`.
+pub struct ErrorsBuilder(Errors);
+
+impl ErrorsBuilder {
+    /// Start building an [Errors] object.
+    pub fn new() -> Self {
+        Self(Errors {
+            errors: Vec::new(),
+            files: Arc::new(Files::default()),
+        })
+    }
+
+    /// Return the built [Errors] object.
+    pub fn build(self) -> Errors {
+        self.0
+    }
+
+    /// Set the `errors` field of the under-construction [Errors] object.
+    pub fn errors(mut self, errors: Vec<Error>) -> Self {
+        self.0.errors = errors;
+        self
+    }
+
+    /// Set the `errors` field of the under-construction [Errors] object to a single error.
+    pub fn error(self, error: Error) -> Self {
+        self.errors(vec![error])
+    }
+
+    /// Set the [Errors::files] field of the under-construction [Errors] object.
+    pub fn files(mut self, files: Arc<Files>) -> Self {
+        self.0.files = files;
+        self
+    }
+}
+
 impl Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {

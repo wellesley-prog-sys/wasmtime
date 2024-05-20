@@ -1,7 +1,8 @@
 use cranelift_isle::ast::Ident;
-use cranelift_isle::error::Errors;
+use cranelift_isle::error::{Errors, ErrorsBuilder};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle::sema::{self, Rule, RuleId, Term, TermEnv, TermId, TypeEnv};
+use cranelift_isle::trie_again::{self, RuleSet};
 use cranelift_isle::{lexer, parser};
 use std::collections::HashMap;
 
@@ -53,5 +54,17 @@ impl Program {
     pub fn get_term_by_name(&self, name: &str) -> Option<TermId> {
         let sym = Ident(name.to_string(), Pos::default());
         self.termenv.get_term_by_name(&self.tyenv, &sym)
+    }
+
+    pub fn build_trie(&self) -> Result<Vec<(TermId, RuleSet)>, Errors> {
+        let (terms, errors) = trie_again::build(&self.termenv);
+        if errors.is_empty() {
+            Ok(terms)
+        } else {
+            Err(ErrorsBuilder::new()
+                .errors(errors)
+                .file_info_from_tyenv(&self.tyenv)
+                .build())
+        }
     }
 }

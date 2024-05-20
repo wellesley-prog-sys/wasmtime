@@ -1,6 +1,5 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle::overlap;
 use cranelift_isle_veri::{debug::print_rule_set, program::Program};
 
 #[derive(Parser)]
@@ -16,6 +15,10 @@ struct Opts {
     /// Working directory.
     #[arg(long, required = true)]
     work_dir: std::path::PathBuf,
+
+    /// Whether to disable expansion of internal extractors.
+    #[arg(long)]
+    no_expand_internal_extractors: bool,
 }
 
 impl Opts {
@@ -43,11 +46,10 @@ fn main() -> anyhow::Result<()> {
 
     // Read ISLE inputs.
     let inputs = opts.isle_input_files()?;
-    let expand_internal_extractors = true;
-    let prog = Program::from_files(&inputs, expand_internal_extractors)?;
+    let prog = Program::from_files(&inputs, !opts.no_expand_internal_extractors)?;
 
     // Dump rule sets.
-    let term_rule_sets = overlap::check(&prog.tyenv, &prog.termenv)?;
+    let term_rule_sets = prog.build_trie()?;
     for (term_id, rule_set) in &term_rule_sets {
         print_rule_set(&prog, term_id, rule_set);
     }

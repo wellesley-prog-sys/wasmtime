@@ -394,22 +394,35 @@ impl Term {
         match &self.kind {
             TermKind::Decl {
                 flags,
-                extractor_kind:
-                    Some(ExtractorKind::ExternalExtractor {
-                        name, infallible, ..
-                    }),
+                extractor_kind: Some(kind),
                 ..
             } => {
+                let (func_name, full_name, infallible) = match kind {
+                    ExtractorKind::InternalExtractor { .. } => {
+                        // TODO(mbm): what's the correct signature for an internal extractor?
+                        // TODO(mbm): is an internal extractor fallible?
+                        // TODO(mbm): do we need to consider the pattern field of an internal extractor?
+                        let name = format!("extractor_{}", tyenv.syms[self.name.index()]);
+                        (name.clone(), name, false)
+                    }
+                    ExtractorKind::ExternalExtractor {
+                        name, infallible, ..
+                    } => (
+                        tyenv.syms[name.index()].clone(),
+                        format!("C::{}", tyenv.syms[name.index()]),
+                        *infallible,
+                    ),
+                };
                 let ret_kind = if flags.multi {
                     ReturnKind::Iterator
-                } else if *infallible {
+                } else if infallible {
                     ReturnKind::Plain
                 } else {
                     ReturnKind::Option
                 };
                 Some(ExternalSig {
-                    func_name: tyenv.syms[name.index()].clone(),
-                    full_name: format!("C::{}", tyenv.syms[name.index()]),
+                    func_name,
+                    full_name,
                     param_tys: vec![self.ret_ty],
                     ret_tys: self.arg_tys.clone(),
                     ret_kind,
@@ -649,18 +662,20 @@ impl Pattern {
                         panic!("Pattern invocation of undefined term body")
                     }
                     TermKind::Decl {
-                        extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
-                        ..
-                    } => {
-                        panic!("Should have been expanded away")
-                    }
-                    TermKind::Decl {
                         flags,
-                        extractor_kind: Some(ExtractorKind::ExternalExtractor { infallible, .. }),
+                        extractor_kind,
                         ..
                     } => {
                         // Evaluate all `input` args.
                         let output_tys = args.iter().map(|arg| arg.ty()).collect();
+
+                        // TODO(mbm): is an internal extractor fallible?
+                        let infallible = match extractor_kind {
+                            Some(ExtractorKind::ExternalExtractor { infallible, .. }) => {
+                                *infallible
+                            }
+                            _ => false,
+                        };
 
                         // Invoke the extractor.
                         visitor.add_extract(
@@ -668,7 +683,7 @@ impl Pattern {
                             termdata.ret_ty,
                             output_tys,
                             term,
-                            *infallible && !flags.multi,
+                            infallible && !flags.multi,
                             flags.multi,
                         )
                     }
