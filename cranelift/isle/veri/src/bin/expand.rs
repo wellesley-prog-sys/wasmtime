@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle::overlap;
 use cranelift_isle::trie_again::BindingId;
 use cranelift_isle_veri::debug::{binding_string, binding_type, constraint_string};
 use cranelift_isle_veri::expand::{Expander, Expansion};
