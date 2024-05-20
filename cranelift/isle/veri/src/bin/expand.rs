@@ -107,6 +107,13 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
     // Term.
     println!("\tterm = {}", prog.term_name(expansion.term));
 
+    // Rules.
+    println!("\trules = [");
+    for pos in &expansion.rules {
+        println!("\t\t{}", pos.pretty_print_line(&prog.tyenv.filenames[..]));
+    }
+    println!("\t]");
+
     // Bindings.
     let lookup_binding =
         |binding_id: BindingId| expansion.bindings[binding_id.index()].clone().unwrap();

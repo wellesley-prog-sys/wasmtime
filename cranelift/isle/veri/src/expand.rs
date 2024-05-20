@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::program::Program;
 use cranelift_isle::{
+    lexer::Pos,
     sema::TermId,
     trie_again::{Binding, BindingId, Constraint, Rule, RuleSet},
 };
@@ -9,6 +10,7 @@ use cranelift_isle::{
 #[derive(Debug, Clone)]
 pub struct Expansion {
     pub term: TermId,
+    pub rules: Vec<Pos>,
     pub bindings: Vec<Option<Binding>>,
     pub constraints: HashMap<BindingId, Vec<Constraint>>,
     // TODO: equals
@@ -123,6 +125,7 @@ impl<'a> Expander<'a> {
         // Store.
         let expansion = Expansion {
             term: term_id,
+            rules: Vec::new(),
             bindings,
             constraints: HashMap::new(),
             result,
@@ -220,6 +223,9 @@ impl Application {
         parameters: &Box<[BindingId]>,
         call_site: BindingId,
     ) -> Expansion {
+        // Record the application of this rule.
+        self.expansion.rules.push(rule.pos);
+
         //
         struct Substitution {
             target: BindingId,
