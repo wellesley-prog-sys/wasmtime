@@ -125,8 +125,10 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
 
     // Constraints.
     println!("\tconstraints = [");
-    for (binding_id, constraints) in &expansion.constraints {
-        for constraint in constraints {
+    let mut constrained_binding_ids: Vec<_> = expansion.constraints.keys().collect();
+    constrained_binding_ids.sort();
+    for binding_id in &constrained_binding_ids {
+        for constraint in &expansion.constraints[binding_id] {
             println!(
                 "\t\t{}:\t{}",
                 binding_id.index(),
