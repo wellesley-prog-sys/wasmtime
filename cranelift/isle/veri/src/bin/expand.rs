@@ -22,6 +22,10 @@ struct Opts {
     #[arg(long, required = true)]
     work_dir: std::path::PathBuf,
 
+    /// Whether to disable expansion of internal extractors.
+    #[arg(long)]
+    no_expand_internal_extractors: bool,
+
     /// Term to expand.
     #[arg(long, required = true)]
     term_name: String,
@@ -56,13 +60,10 @@ fn main() -> anyhow::Result<()> {
 
     // Read ISLE inputs.
     let inputs = opts.isle_input_files()?;
-    let expand_internal_extractors = true;
-    let prog = Program::from_files(&inputs, expand_internal_extractors)?;
+    let prog = Program::from_files(&inputs, !opts.no_expand_internal_extractors)?;
 
     // Derive rule sets.
-    let term_rule_sets: HashMap<_, _> = overlap::check(&prog.tyenv, &prog.termenv)?
-        .into_iter()
-        .collect();
+    let term_rule_sets: HashMap<_, _> = prog.build_trie()?.into_iter().collect();
 
     // Lookup term to expand.
     let term_id = prog
