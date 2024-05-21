@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::program::Program;
 use cranelift_isle::{
+    disjointsets::DisjointSets,
     lexer::Pos,
     sema::TermId,
     trie_again::{Binding, BindingId, Constraint, Rule, RuleSet},
@@ -13,7 +14,7 @@ pub struct Expansion {
     pub rules: Vec<Pos>,
     pub bindings: Vec<Option<Binding>>,
     pub constraints: HashMap<BindingId, Vec<Constraint>>,
-    // TODO: equals
+    pub equals: DisjointSets<BindingId>,
     pub result: BindingId,
 }
 
@@ -128,6 +129,7 @@ impl<'a> Expander<'a> {
             rules: Vec::new(),
             bindings,
             constraints: HashMap::new(),
+            equals: DisjointSets::default(),
             result,
         };
         self.stack.push(expansion);
@@ -263,7 +265,20 @@ impl Application {
             }
         }
 
-        // TODO: equals
+        // Equals.
+        for i in 0..rule_set.bindings.len() {
+            let binding_id = i.try_into().unwrap();
+            if let Some(equal_binding_id) = rule.equals.find(binding_id) {
+                if equal_binding_id != binding_id {
+                    let expansion_binding_id = self.add_binding(rule_set, binding_id);
+                    let expansion_equal_binding_id = self.add_binding(rule_set, equal_binding_id);
+                    self.expansion
+                        .equals
+                        .merge(expansion_binding_id, expansion_equal_binding_id);
+                }
+            }
+        }
+
         // TODO: iterators, prio, impure?
 
         // Result.
