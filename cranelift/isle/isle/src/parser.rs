@@ -521,6 +521,7 @@ impl<'a> Parser<'a> {
             "rev" => Ok(SpecOp::Rev),
             "cls" => Ok(SpecOp::Cls),
             "clz" => Ok(SpecOp::Clz),
+            "load" => todo!(),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
     }

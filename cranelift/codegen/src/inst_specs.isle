@@ -226,3 +226,11 @@
 (spec (sextend x)
     (provide (= result (sign_ext (widthof result) x))))
 (instantiate sextend extend)
+
+
+(form load
+    ((args Int (bv 8) (bv 64) (bv 64)) (ret (bv 8)) (canon (bv 8)))
+)
+(spec (load flags val offset)
+    (provide (load flags (widthof result) (bvadd val offset))))
+(instantiate load load)
