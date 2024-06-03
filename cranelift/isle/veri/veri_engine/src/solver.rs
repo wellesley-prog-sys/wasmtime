@@ -1566,9 +1566,9 @@ impl SolverCtx {
 
         // if-let statement processing
         print!("(if-let "); 
-        for ifLetStruct in &rule.iflets {
-            let if_lhs = &ifLetStruct.lhs;
-            let if_rhs: &cranelift_isle::sema::Expr  = &ifLetStruct.rhs;
+        for if_let_struct in &rule.iflets {
+            let if_lhs = &if_let_struct.lhs;
+            let if_rhs: &cranelift_isle::sema::Expr  = &if_let_struct.rhs;
 
             let if_lhs_expr = self.display_isle_pattern(
                 termenv,
