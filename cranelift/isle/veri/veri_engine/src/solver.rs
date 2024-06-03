@@ -1564,6 +1564,26 @@ impl SolverCtx {
         );
         println!("{}", self.smt.display(lhs));
 
+        // if-let statement processing
+        print!("(if-let "); 
+        for ifLetStruct in &rule.iflets {
+            let if_lhs = &ifLetStruct.lhs;
+            let if_rhs: &cranelift_isle::sema::Expr  = &ifLetStruct.rhs;
+
+            let if_lhs_expr = self.display_isle_pattern(
+                termenv,
+                typeenv,
+                &vars,
+                rule,
+                &if_lhs, 
+            );
+    
+            let if_rhs_expr = self.display_isle_expr(termenv, typeenv, &vars, rule, &if_rhs); 
+
+            print!("({} {})\n", self.smt.display(if_lhs_expr), self.smt.display(if_rhs_expr)); 
+        }
+        print!(")\n");
+
         println!("=>");
         let rhs = self.display_isle_expr(termenv, typeenv, &vars, rule, &rule.rhs);
         println!("{}", self.smt.display(rhs));
