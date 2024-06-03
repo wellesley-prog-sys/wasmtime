@@ -125,6 +125,12 @@
 )
 
 (spec (amode_add  x y) (provide (= result (bvadd x (zero_ext 64 y)))))
+(form
+  amode
+  ((args (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 32)))
+  ((args (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64)))
+)
+(instantiate amode_add amode)
 (decl amode_add (Amode Value) Amode)
 (extern extractor amode_add amode_add)
 
