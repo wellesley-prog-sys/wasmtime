@@ -372,13 +372,7 @@ fn add_annotation_constraints(
 ) -> (veri_ir::Expr, u32) {
     let (e, t) = match expr {
         annotation_ir::Expr::Var(x, ..) => {
-            let mut t = tree.next_type_var;
-            if annotation_info.var_to_type_var.contains_key(&x) {
-                t = annotation_info.var_to_type_var[&x];
-            } else {
-                annotation_info.var_to_type_var.insert(x.clone(), t);
-                tree.next_type_var += 1;
-            }
+            let t = annotation_info.var_to_type_var[&x];
             let name = format!("{}__{}__{}", annotation_info.term, x, t);
             (veri_ir::Expr::Terminal(veri_ir::Terminal::Var(name)), t)
         }
@@ -1566,6 +1560,13 @@ fn add_rule_constraints(
                 term: curr.ident.clone(),
                 var_to_type_var: HashMap::new(),
             };
+            for arg in &annotation.sig.args {
+                annotation_info.var_to_type_var.insert(arg.name.clone(), tree.next_type_var);
+                tree.next_type_var += 1;
+            }
+            annotation_info.var_to_type_var.insert(annotation.sig.ret.name.clone(), tree.next_type_var);
+            tree.next_type_var += 1;
+
             for expr in annotation.assumptions {
                 let (typed_expr, _) = add_annotation_constraints(*expr, tree, &mut annotation_info);
                 curr.assertions.push(typed_expr.clone());
@@ -1599,6 +1600,9 @@ fn add_rule_constraints(
             // set args in rule equal to args in annotation
             for (child, arg) in curr.children.iter().zip(&annotation.sig.args) {
                 let rule_type_var = child.type_var;
+                if !annotation_info.var_to_type_var.contains_key(&arg.name) {
+                    continue;
+                }
                 let annotation_type_var = annotation_info.var_to_type_var[&arg.name];
 
                 // essentially constant propagate: if we know the value from the rule arg being
@@ -1747,20 +1751,21 @@ fn solve_constraints(
                                             .iter()
                                             .find_map(
                                                 |(k, &v)| if v == *v1 { Some(k) } else { None },
-                                            )
-                                            .unwrap();
+                                            );
                                         let e2 = ty_vars
                                             .unwrap()
                                             .iter()
                                             .find_map(
                                                 |(k, &v)| if v == *v2 { Some(k) } else { None },
-                                            )
-                                            .unwrap();
-
-                                        panic!(
-                                        "type conflict at constraint {:#?}:\nt{}:{:?}\n has type {:#?},\nt{}:{:?}\n has type {:#?}",
-                                        v, v1, e1, x, v2, e2, y
-                                        );
+                                            );
+                                        match (e1, e2) {
+                                            (Some(e1), Some(e2)) => 
+                                            panic!(
+                                                "type conflict at constraint {:#?}:\nt{}:{:?}\n has type {:#?},\nt{}:{:?}\n has type {:#?}",
+                                                v, v1, e1, x, v2, e2, y
+                                                ),
+                                            _ => continue,
+                                        }
                                     }
                                 }
                                 // union t1 and t2, keeping t2 as the leader
