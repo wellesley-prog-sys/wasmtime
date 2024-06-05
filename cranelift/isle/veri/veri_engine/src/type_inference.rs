@@ -2202,7 +2202,7 @@ fn create_parse_tree_expr(
 
             TypeVarNode {
                 ident: format!("{}__{}", name, type_var),
-                construct: TypeVarConstruct::Term(term_id),
+                construct: TypeVarConstruct::Term(*term_id),
                 type_var,
                 children,
                 assertions: vec![],

@@ -983,7 +983,7 @@ impl SolverCtx {
                 }
             }
             Expr::Conditional(c, t, e) => {
-                if self.dynwidths &&  matches!(ty, Some(Type::BitVector(_))) {
+                if self.dynwidths && matches!(ty, Some(Type::BitVector(_))) {
                     self.assume_same_width_from_sexpr(width.clone().unwrap(), &*t);
                     self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }

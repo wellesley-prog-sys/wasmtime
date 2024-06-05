@@ -22,8 +22,8 @@ use crate::machinst::valueregs;
 use crate::{
     binemit::CodeOffset,
     ir::{
-        immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst,
-        InstructionData, MemFlags, TrapCode, Value, ValueList,
+        immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
+        MemFlags, TrapCode, Value, ValueList,
     },
     isa::aarch64::abi::AArch64CallSite,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},

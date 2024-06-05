@@ -4215,7 +4215,6 @@
             (inst MInst (MInst.Neg size src dst)))
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst dst)))
 
-;; AVH TODO: is SyntheticAmode just the address?
 ;; Gpr: can we start this as just a new type, modeled as a 64 bit bitvecotr?
 (spec (x64_lea ty amode)
       (provide (= result amode))
