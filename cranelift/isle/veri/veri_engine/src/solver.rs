@@ -480,15 +480,11 @@ impl SolverCtx {
                 self.smt.concat(padding, self.smt.atom(narrow_name)),
             ));
             self.smt.atom(wide_name)
+        } else if let Some(s) = name {
+            self.assume(self.smt.eq(self.smt.atom(&s), narrow_decl));
+            self.smt.atom(&s)
         } else {
-            if let Some(s) = name {
-                // self.additional_decls
-                //     .push((s.clone(), format!("(_ BitVec {})", self.bitwidth)));
-                self.assume(self.smt.eq(self.smt.atom(&s), narrow_decl));
-                self.smt.atom(&s)
-            } else {
-                narrow_decl
-            }
+            narrow_decl
         }
     }
 
@@ -987,11 +983,9 @@ impl SolverCtx {
                 }
             }
             Expr::Conditional(c, t, e) => {
-                if self.dynwidths {
-                    if matches!(ty, Some(Type::BitVector(_))) {
-                        self.assume_same_width_from_sexpr(width.clone().unwrap(), &*t);
-                        self.assume_same_width_from_sexpr(width.unwrap(), &*e);
-                    }
+                if self.dynwidths &&  matches!(ty, Some(Type::BitVector(_))) {
+                    self.assume_same_width_from_sexpr(width.clone().unwrap(), &*t);
+                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }
                 let cs = self.vir_expr_to_sexp(*c);
                 let ts = self.vir_expr_to_sexp(*t);
@@ -1565,22 +1559,20 @@ impl SolverCtx {
         println!("{}", self.smt.display(lhs));
 
         // if-let statement processing
-        print!("(if-let "); 
+        print!("(if-let ");
         for if_let_struct in &rule.iflets {
             let if_lhs = &if_let_struct.lhs;
-            let if_rhs: &cranelift_isle::sema::Expr  = &if_let_struct.rhs;
+            let if_rhs: &cranelift_isle::sema::Expr = &if_let_struct.rhs;
 
-            let if_lhs_expr = self.display_isle_pattern(
-                termenv,
-                typeenv,
-                &vars,
-                rule,
-                &if_lhs, 
+            let if_lhs_expr = self.display_isle_pattern(termenv, typeenv, &vars, rule, &if_lhs);
+
+            let if_rhs_expr = self.display_isle_expr(termenv, typeenv, &vars, rule, &if_rhs);
+
+            print!(
+                "({} {})\n",
+                self.smt.display(if_lhs_expr),
+                self.smt.display(if_rhs_expr)
             );
-    
-            let if_rhs_expr = self.display_isle_expr(termenv, typeenv, &vars, rule, &if_rhs); 
-
-            print!("({} {})\n", self.smt.display(if_lhs_expr), self.smt.display(if_rhs_expr)); 
         }
         print!(")\n");
 

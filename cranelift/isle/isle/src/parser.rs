@@ -1,7 +1,5 @@
 //! Parser for ISLE language.
 
-#![allow(missing_docs)]
-
 use crate::ast::*;
 use crate::error::{Error, Errors, Span};
 use crate::lexer::{Lexer, Pos, Token};
@@ -21,7 +19,7 @@ pub fn parse(lexer: Lexer) -> Result<Defs> {
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
 
-    // HACK(mbm): allow positions to be disabled to support testing
+    /// Allow positions to be disabled to support testing
     disable_pos: bool,
 }
 
@@ -42,7 +40,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // HACK(mbm): allow positions to be disabled to support testing
+    /// Allow positions to be disabled to support testing
     pub fn disable_pos(&mut self) {
         self.disable_pos = true;
     }
@@ -167,6 +165,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse ISLE definitions
     pub fn parse_defs(mut self) -> Result<Defs> {
         let mut defs = vec![];
         while !self.lexer.eof() {

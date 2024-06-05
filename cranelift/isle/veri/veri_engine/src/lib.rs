@@ -81,9 +81,9 @@ pub fn build_clif_lower_isle() -> PathBuf {
     // For now, build ISLE files for x86 and aarch64
     let isas = vec![Isa::X86, Isa::Arm64];
 
-    if let Err(err) = meta::generate(&isas, &out_dir, isle_dir) {
+    if let Err(err) = meta::generate(&isas, out_dir, isle_dir) {
         panic!("Meta generate error: {}", err);
     }
 
-    PathBuf::from(isle_dir.join("clif_lower.isle"))
+    isle_dir.join("clif_lower.isle")
 }

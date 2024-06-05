@@ -102,10 +102,7 @@ pub enum Type {
 
 impl Type {
     pub fn is_poly(&self) -> bool {
-        match self {
-            Type::Poly(_) => true,
-            _ => false,
-        }
+        matches!(self, Type::Poly(_))
     }
 }
 

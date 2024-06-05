@@ -28,7 +28,7 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config) {
     let types = annotation_env
         .get_term_signatures_by_name(&termenv, &typeenv)
         .get(&config.term as &str)
-        .expect(format!("Missing term width for {}", config.term).as_str())
+        .unwrap_or_else(|| panic!("Missing term width for {}", config.term))
         .clone();
 
     for type_instantiation in types {
@@ -36,7 +36,7 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config) {
             &termenv,
             &typeenv,
             &annotation_env,
-            &config,
+            config,
             &type_instantiation,
             &None,
         );

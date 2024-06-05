@@ -237,7 +237,7 @@ fn type_annotations_using_rule<'a>(
                 Box::new(iflet_rhs_expr.unwrap()),
             ));
         }
-        print!("\n");
+        println!();
     }
     let lhs = &mut create_parse_tree_pattern(
         rule,
@@ -1561,10 +1561,14 @@ fn add_rule_constraints(
                 var_to_type_var: HashMap::new(),
             };
             for arg in &annotation.sig.args {
-                annotation_info.var_to_type_var.insert(arg.name.clone(), tree.next_type_var);
+                annotation_info
+                    .var_to_type_var
+                    .insert(arg.name.clone(), tree.next_type_var);
                 tree.next_type_var += 1;
             }
-            annotation_info.var_to_type_var.insert(annotation.sig.ret.name.clone(), tree.next_type_var);
+            annotation_info
+                .var_to_type_var
+                .insert(annotation.sig.ret.name.clone(), tree.next_type_var);
             tree.next_type_var += 1;
 
             for expr in annotation.assumptions {
@@ -1746,20 +1750,22 @@ fn solve_constraints(
                             match (x.is_poly(), y.is_poly()) {
                                 (false, false) => {
                                     if x != y {
-                                        let e1 = ty_vars
-                                            .unwrap()
-                                            .iter()
-                                            .find_map(
-                                                |(k, &v)| if v == *v1 { Some(k) } else { None },
-                                            );
-                                        let e2 = ty_vars
-                                            .unwrap()
-                                            .iter()
-                                            .find_map(
-                                                |(k, &v)| if v == *v2 { Some(k) } else { None },
-                                            );
+                                        let e1 = ty_vars.unwrap().iter().find_map(|(k, &v)| {
+                                            if v == *v1 {
+                                                Some(k)
+                                            } else {
+                                                None
+                                            }
+                                        });
+                                        let e2 = ty_vars.unwrap().iter().find_map(|(k, &v)| {
+                                            if v == *v2 {
+                                                Some(k)
+                                            } else {
+                                                None
+                                            }
+                                        });
                                         match (e1, e2) {
-                                            (Some(e1), Some(e2)) => 
+                                            (Some(e1), Some(e2)) =>
                                             panic!(
                                                 "type conflict at constraint {:#?}:\nt{}:{:?}\n has type {:#?},\nt{}:{:?}\n has type {:#?}",
                                                 v, v1, e1, x, v2, e2, y
@@ -2070,7 +2076,7 @@ fn create_parse_tree_pattern(
             let var_node = TypeVarNode {
                 ident: ident.clone(),
                 construct: TypeVarConstruct::Var,
-                type_var: type_var,
+                type_var,
                 children: vec![],
                 assertions: vec![],
             };
@@ -2196,7 +2202,7 @@ fn create_parse_tree_expr(
 
             TypeVarNode {
                 ident: format!("{}__{}", name, type_var),
-                construct: TypeVarConstruct::Term(term_id.clone()),
+                construct: TypeVarConstruct::Term(term_id),
                 type_var,
                 children,
                 assertions: vec![],
