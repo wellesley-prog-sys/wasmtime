@@ -3,22 +3,6 @@
 use cranelift_isle::ast::Defs;
 use cranelift_isle::compile;
 use cranelift_isle::error::Errors;
-<<<<<<< HEAD
-use cranelift_isle::lexer::{self, Lexer};
-use cranelift_isle::parser::Parser;
-use cranelift_isle::printer;
-use std::default::Default;
-use std::io::BufWriter;
-use std::iter::zip;
-
-/// Parse without positional information, to enable equality on structure alone.
-fn parse_without_pos(lexer: Lexer) -> Result<Defs, Errors> {
-    let mut parser = Parser::new(lexer);
-    parser.disable_pos();
-    parser.parse_defs()
-}
-=======
->>>>>>> main
 
 fn build(filename: &str) -> Result<String, Errors> {
     compile::from_files(&[filename], &Default::default())
