@@ -7,9 +7,12 @@ publish = false
 version = "0.0.0"
 license = "Apache-2.0 WITH LLVM-exception"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
-arbitrary = { version = "1.1.0", features = ["derive"] }
+arbitrary = { workspace = true, features = ["derive"] }
 component-test-util = { workspace = true }
 component-fuzz-util = { workspace = true }
 env_logger = { workspace = true }
@@ -19,20 +22,21 @@ target-lexicon = { workspace = true }
 tempfile = "3.3.0"
 wasmparser = { workspace = true }
 wasmprinter = { workspace = true }
-wasmtime = { workspace = true, features = ['default', 'winch'] }
+wasmtime = { workspace = true, features = ['default', 'winch', 'gc'] }
 wasmtime-wast = { workspace = true }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = "0.20.0"
+wasmi = "0.31.1"
+futures = { workspace = true }
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
 # binary for MinGW which is built on our CI. It does have one for Windows-msvc,
 # though, so we could use that if we wanted. For now though just simplify a bit
 # and don't depend on this on Windows.  The same applies on s390x and riscv.
 [target.'cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))'.dependencies]
-v8 = "0.74.1"
+v8 = "0.86.0"
 
 [dev-dependencies]
 wat = { workspace = true }
@@ -45,4 +49,7 @@ rand = { version = "0.8.0", features = ["small_rng"] }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, features = ['build-libinterpret'] }
 
 [features]
-fuzz-spec-interpreter = ['wasm-spec-interpreter']
+fuzz-spec-interpreter = ['dep:wasm-spec-interpreter']
+
+# Fuzz proof-carrying code. Off by default.
+fuzz-pcc = []

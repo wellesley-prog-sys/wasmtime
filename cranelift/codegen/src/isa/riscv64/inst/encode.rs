@@ -1,20 +1,17 @@
 //! Contains the RISC-V instruction encoding logic.
 //!
 //! These formats are specified in the RISC-V specification in section 2.2.
-//! See: https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
+//! See: <https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf>
 //!
 //! Some instructions especially in extensions have slight variations from
 //! the base RISC-V specification.
 
 use super::*;
-use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, CsznOp, VecAluOpRImm5,
-    VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth,
-    VecOpCategory, VecOpMasking, ZcbMemOp,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, VecAluOpRImm5,
+    VecAluOpRR, VecAluOpRRRImm5, VecAluOpRRRR, VecOpCategory, ZcbMemOp,
 };
 use crate::machinst::isle::WritableReg;
-use crate::Reg;
 
 fn unsigned_field_width(value: u32, width: u8) -> u32 {
     debug_assert_eq!(value & (!0 << width), 0);
@@ -418,7 +415,7 @@ pub fn encode_ci_sp_load(op: CiOp, rd: WritableReg, imm: Uimm6) -> u16 {
     // LDSP:  [5|4:3|8:6]
     // FLDSP: [5|4:3|8:6]
     //
-    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+    // We don't receive the entire offset in `imm`, just a multiple of the load-size.
 
     // Number of bits in the lowest position of imm. 3 for lwsp, 2 for {f,}ldsp.
     let low_bits = match op {
@@ -468,7 +465,7 @@ pub fn encode_ciw_type(op: CiwOp, rd: WritableReg, imm: u8) -> u16 {
     let mut imm_field = 0;
     imm_field |= ((imm >> 1) & 1) << 0;
     imm_field |= ((imm >> 0) & 1) << 1;
-    imm_field |= ((imm >> 4) & 7) << 2;
+    imm_field |= ((imm >> 4) & 15) << 2;
     imm_field |= ((imm >> 2) & 3) << 6;
 
     let mut bits = 0;
@@ -512,7 +509,7 @@ pub fn encode_css_type(op: CssOp, src: Reg, imm: Uimm6) -> u16 {
     // c.sdsp:  [5:3|8:6]
     // c.fsdsp: [5:3|8:6]
     //
-    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+    // We don't receive the entire offset in `imm`, just a multiple of the load-size.
 
     // Number of bits in the lowest position of imm. 4 for c.swsp, 3 for c.{f,}sdsp.
     let low_bits = match op {
@@ -654,4 +651,25 @@ pub fn encode_zcbmem_load(op: ZcbMemOp, rd: WritableReg, base: Reg, imm: Uimm2) 
 
 pub fn encode_zcbmem_store(op: ZcbMemOp, src: Reg, base: Reg, imm: Uimm2) -> u16 {
     encode_zcbmem_bits(op, src, base, imm)
+}
+
+pub fn encode_fli(ty: Type, imm: FliConstant, rd: WritableReg) -> u32 {
+    // FLI.{S,D} is encoded as a FMV.{W,D} instruction with rs2 set to the
+    // immediate value to be loaded.
+    let op = match ty {
+        F32 => FpuOPRR::FmvWX,
+        F64 => FpuOPRR::FmvDX,
+        _ => unreachable!(),
+    };
+    let frm = 0; // FRM is hard coded to 0 in both instructions
+    let rs2 = 1; // rs2 set to 1 is what differentiates FLI from FMV
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op_code(), 7);
+    bits |= reg_to_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(frm, 3) << 12;
+    bits |= unsigned_field_width(imm.bits() as u32, 5) << 15;
+    bits |= unsigned_field_width(rs2, 6) << 20;
+    bits |= unsigned_field_width(op.funct7(), 7) << 25;
+    bits
 }

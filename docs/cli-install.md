@@ -2,7 +2,7 @@
 
 Here we'll show you how to install the `wasmtime` command line tool. Note that
 this is distinct from embedding the Wasmtime project into another, for that
-you'll want to consult the [embedding documentation](embed.md).
+you'll want to consult the [embedding documentation](lang.md).
 
 The easiest way to install the `wasmtime` CLI tool is through our installation
 script. Linux and macOS users can execute the following:
@@ -11,7 +11,7 @@ script. Linux and macOS users can execute the following:
 $ curl https://wasmtime.dev/install.sh -sSf | bash
 ```
 
-This will download a precompiled version of `wasmtime` and place it in
+This will download a precompiled version of `wasmtime`, place it in
 `$HOME/.wasmtime`, and update your shell configuration to place the right
 directory in `PATH`.
 

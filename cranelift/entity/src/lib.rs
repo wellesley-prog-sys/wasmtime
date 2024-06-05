@@ -29,8 +29,7 @@
 //!   references allocated from an associated memory pool. It has a much smaller footprint than
 //!   `Vec`.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 #![no_std]
 
 extern crate alloc;
@@ -38,6 +37,9 @@ extern crate alloc;
 // Re-export core so that the macros works with both std and no_std crates
 #[doc(hidden)]
 pub extern crate core as __core;
+
+use core::iter::FusedIterator;
+use core::ops::Range;
 
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
 /// of an `SecondaryMap` or `SparseMap`.
@@ -48,6 +50,67 @@ pub trait EntityRef: Copy + Eq {
 
     /// Get the index that was used to create this entity reference.
     fn index(self) -> usize;
+}
+
+/// Iterate over a `Range<E: EntityRef>`, yielding a sequence of `E` items.
+#[inline]
+pub fn iter_entity_range<E>(range: Range<E>) -> IterEntityRange<E>
+where
+    E: EntityRef,
+{
+    IterEntityRange {
+        range: range.start.index()..range.end.index(),
+        _phantom: core::marker::PhantomData,
+    }
+}
+
+/// Iterator type returned by `iter_entity_range`.
+pub struct IterEntityRange<E> {
+    range: Range<usize>,
+    _phantom: core::marker::PhantomData<E>,
+}
+
+impl<E> Iterator for IterEntityRange<E>
+where
+    E: EntityRef,
+{
+    type Item = E;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let i = self.range.next()?;
+        Some(E::new(i))
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.range.size_hint()
+    }
+}
+
+impl<E> DoubleEndedIterator for IterEntityRange<E>
+where
+    E: EntityRef,
+{
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let i = self.range.next_back()?;
+        Some(E::new(i))
+    }
+}
+
+impl<E> FusedIterator for IterEntityRange<E>
+where
+    E: EntityRef,
+    Range<usize>: FusedIterator,
+{
+}
+
+impl<E> ExactSizeIterator for IterEntityRange<E>
+where
+    E: EntityRef,
+    Range<usize>: ExactSizeIterator,
+{
 }
 
 /// Macro which provides the common implementation of a 32-bit entity reference.
@@ -203,6 +266,7 @@ mod map;
 mod primary;
 mod set;
 mod sparse;
+mod unsigned;
 
 pub use self::boxed_slice::BoxedSlice;
 pub use self::iter::{Iter, IterMut};
@@ -212,6 +276,7 @@ pub use self::map::SecondaryMap;
 pub use self::primary::PrimaryMap;
 pub use self::set::EntitySet;
 pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
+pub use self::unsigned::Unsigned;
 
 /// A collection of tests to ensure that use of the different `entity_impl!` forms will generate
 /// `EntityRef` implementations that behave the same way.

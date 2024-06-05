@@ -3,6 +3,7 @@
 use cranelift_isle::ast::Defs;
 use cranelift_isle::compile;
 use cranelift_isle::error::Errors;
+<<<<<<< HEAD
 use cranelift_isle::lexer::{self, Lexer};
 use cranelift_isle::parser::Parser;
 use cranelift_isle::printer;
@@ -16,6 +17,8 @@ fn parse_without_pos(lexer: Lexer) -> Result<Defs, Errors> {
     parser.disable_pos();
     parser.parse_defs()
 }
+=======
+>>>>>>> main
 
 fn build(filename: &str) -> Result<String, Errors> {
     compile::from_files(&[filename], &Default::default())

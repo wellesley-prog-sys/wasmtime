@@ -2,18 +2,44 @@
 //! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
+#[cfg(feature = "onnx")]
+pub mod onnxruntime;
+#[cfg(feature = "openvino")]
 pub mod openvino;
+#[cfg(all(feature = "winml", target_os = "windows"))]
+pub mod winml;
 
+#[cfg(feature = "onnx")]
+use self::onnxruntime::OnnxBackend;
+#[cfg(feature = "openvino")]
 use self::openvino::OpenvinoBackend;
+#[cfg(all(feature = "winml", target_os = "windows"))]
+use self::winml::WinMLBackend;
+
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph};
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use thiserror::Error;
 use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
-pub fn list() -> Vec<crate::Backend> {
-    vec![Backend::from(OpenvinoBackend::default())]
+pub fn list() -> Vec<Backend> {
+    let mut backends = vec![];
+    #[cfg(feature = "openvino")]
+    {
+        backends.push(Backend::from(OpenvinoBackend::default()));
+    }
+    #[cfg(all(feature = "winml", target_os = "windows"))]
+    {
+        backends.push(Backend::from(WinMLBackend::default()));
+    }
+    #[cfg(feature = "onnx")]
+    {
+        backends.push(Backend::from(OnnxBackend::default()));
+    }
+    backends
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
@@ -60,4 +86,12 @@ pub enum BackendError {
     InvalidNumberOfBuilders(usize, usize),
     #[error("Not enough memory to copy tensor data of size: {0}")]
     NotEnoughMemory(usize),
+}
+
+/// Read a file into a byte vector.
+fn read(path: &Path) -> anyhow::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+    let mut buffer = vec![];
+    file.read_to_end(&mut buffer)?;
+    Ok(buffer)
 }

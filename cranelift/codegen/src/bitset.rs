@@ -6,17 +6,38 @@
 //! If you would like to add support for larger bitsets in the future, you need to change the trait
 //! bound `Into<u32>` and the `u32` in the implementation of `max_bits()`.
 
-use core::convert::{From, Into};
 use core::mem::size_of;
 use core::ops::{Add, BitOr, Shl, Sub};
 
 /// A small bitset built on a single primitive integer type
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub struct BitSet<T>(pub T);
+
+impl<T> std::fmt::Debug for BitSet<T>
+where
+    T: Into<u32>
+        + From<u8>
+        + BitOr<T, Output = T>
+        + Shl<u8, Output = T>
+        + Sub<T, Output = T>
+        + Add<T, Output = T>
+        + PartialEq
+        + Copy,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut s = f.debug_struct(std::any::type_name::<Self>());
+        for i in 0..Self::bits() {
+            use std::string::ToString;
+            let i = u32::try_from(i).unwrap();
+            s.field(&i.to_string(), &self.contains(i));
+        }
+        s.finish()
+    }
+}
 
 impl<T> BitSet<T>
 where

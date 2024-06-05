@@ -8,11 +8,10 @@
 
 use crate::state::FuncTranslationState;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
-    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex,
-    WasmError, WasmFuncType, WasmHeapType, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData, Memory, MemoryIndex,
+    Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex, WasmError, WasmFuncType,
+    WasmHeapType, WasmResult,
 };
-use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder, Type};
@@ -22,6 +21,7 @@ use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
 use std::string::ToString;
 use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
+use wasmtime_types::{ConstExpr, ModuleInternedTypeIndex};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -50,6 +50,9 @@ pub trait TargetEnvironment: TypeConvert {
 
     /// Whether to enable Spectre mitigations for heap accesses.
     fn heap_access_spectre_mitigation(&self) -> bool;
+
+    /// Whether to add proof-carrying-code facts to verify memory accesses.
+    fn proof_carrying_code(&self) -> bool;
 
     /// Get the Cranelift integer type to use for native pointers.
     ///
@@ -132,12 +135,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// The index space covers both imported and locally declared memories.
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap>;
 
-    /// Set up the necessary preamble definitions in `func` to access the table identified
-    /// by `index`.
-    ///
-    /// The index space covers both imported and locally declared tables.
-    fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table>;
-
     /// Set up a signature definition in the preamble of `func` that can be used for an indirect
     /// call with signature `index`.
     ///
@@ -196,16 +193,17 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
+    /// Returns `None` if this statically traps instead of creating a call
+    /// instruction.
     fn translate_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         sig_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst>;
+    ) -> WasmResult<Option<ir::Inst>>;
 
     /// Translate a `return_call` WebAssembly instruction at the builder's
     /// current position.
@@ -240,7 +238,6 @@ pub trait FuncEnvironment: TargetEnvironment {
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         sig_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
@@ -362,19 +359,14 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn translate_data_drop(&mut self, pos: FuncCursor, seg_index: u32) -> WasmResult<()>;
 
     /// Translate a `table.size` WebAssembly instruction.
-    fn translate_table_size(
-        &mut self,
-        pos: FuncCursor,
-        index: TableIndex,
-        table: ir::Table,
-    ) -> WasmResult<ir::Value>;
+    fn translate_table_size(&mut self, pos: FuncCursor, index: TableIndex)
+        -> WasmResult<ir::Value>;
 
     /// Translate a `table.grow` WebAssembly instruction.
     fn translate_table_grow(
         &mut self,
         pos: FuncCursor,
         table_index: TableIndex,
-        table: ir::Table,
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value>;
@@ -384,7 +376,6 @@ pub trait FuncEnvironment: TargetEnvironment {
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         index: ir::Value,
     ) -> WasmResult<ir::Value>;
 
@@ -393,7 +384,6 @@ pub trait FuncEnvironment: TargetEnvironment {
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
-        table: ir::Table,
         value: ir::Value,
         index: ir::Value,
     ) -> WasmResult<()>;
@@ -403,9 +393,7 @@ pub trait FuncEnvironment: TargetEnvironment {
         &mut self,
         pos: FuncCursor,
         dst_table_index: TableIndex,
-        dst_table: ir::Table,
         src_table_index: TableIndex,
-        src_table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -427,7 +415,6 @@ pub trait FuncEnvironment: TargetEnvironment {
         pos: FuncCursor,
         seg_index: u32,
         table_index: TableIndex,
-        table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -534,6 +521,15 @@ pub trait FuncEnvironment: TargetEnvironment {
         addr: ir::Value,
         count: ir::Value,
     ) -> WasmResult<ir::Value>;
+
+    /// Translate an `i32` value into an `i31ref`.
+    fn translate_ref_i31(&mut self, pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value>;
+
+    /// Sign-extend an `i31ref` into an `i32`.
+    fn translate_i31_get_s(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
+
+    /// Zero-extend an `i31ref` into an `i32`.
+    fn translate_i31_get_u(&mut self, pos: FuncCursor, i31ref: ir::Value) -> WasmResult<ir::Value>;
 
     /// Emit code at the beginning of every wasm loop.
     ///
@@ -701,7 +697,7 @@ pub trait ModuleEnvironment<'data>: TypeConvert {
 
     /// Translates a type index to its signature index, only called for type
     /// indices which point to functions.
-    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
+    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<ModuleInternedTypeIndex> {
         let _ = index;
         Err(WasmError::Unsupported("module linking".to_string()))
     }
@@ -806,7 +802,7 @@ pub trait ModuleEnvironment<'data>: TypeConvert {
     }
 
     /// Declares a global to the environment.
-    fn declare_global(&mut self, global: Global, init: GlobalInit) -> WasmResult<()>;
+    fn declare_global(&mut self, global: Global, init: ConstExpr) -> WasmResult<()>;
 
     /// Provides the number of exports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.

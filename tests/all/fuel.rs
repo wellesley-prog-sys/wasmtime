@@ -1,4 +1,3 @@
-use anyhow::Result;
 use wasmtime::*;
 use wast::parser::{self, Parse, ParseBuffer, Parser};
 use wast::token::Span;
@@ -53,9 +52,9 @@ fn fuel_consumed(wasm: &[u8]) -> u64 {
     let engine = Engine::new(&config).unwrap();
     let module = Module::new(&engine, wasm).unwrap();
     let mut store = Store::new(&engine, ());
-    store.add_fuel(u64::max_value()).unwrap();
+    store.set_fuel(u64::MAX).unwrap();
     drop(Instance::new(&mut store, &module, &[]));
-    store.fuel_consumed().unwrap()
+    u64::MAX - store.get_fuel().unwrap()
 }
 
 #[test]
@@ -116,7 +115,7 @@ fn iloop() {
         let engine = Engine::new(&config).unwrap();
         let module = Module::new(&engine, wat).unwrap();
         let mut store = Store::new(&engine, ());
-        store.add_fuel(10_000).unwrap();
+        store.set_fuel(10_000).unwrap();
         let error = Instance::new(&mut store, &module, &[]).err().unwrap();
         assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     }
@@ -128,21 +127,10 @@ fn manual_fuel() {
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
-    store.add_fuel(10_000).unwrap();
-    assert_eq!(store.fuel_consumed(), Some(0));
-    assert_eq!(store.fuel_remaining(), Some(10_000));
-    assert_eq!(store.consume_fuel(1).unwrap(), 9_999);
-    assert_eq!(store.fuel_consumed(), Some(1));
-    assert_eq!(store.fuel_remaining(), Some(9_999));
-    assert!(store.consume_fuel(10_000).is_err());
-    assert_eq!(store.consume_fuel(999).unwrap(), 9_000);
-    assert!(store.consume_fuel(10_000).is_err());
-    assert_eq!(store.consume_fuel(8998).unwrap(), 2);
-    assert!(store.consume_fuel(3).is_err());
-    assert_eq!(store.consume_fuel(1).unwrap(), 1);
-    assert_eq!(store.consume_fuel(1).unwrap(), 0);
-    assert_eq!(store.consume_fuel(0).unwrap(), 0);
-    assert_eq!(store.fuel_remaining(), Some(0));
+    store.set_fuel(10_000).unwrap();
+    assert_eq!(store.get_fuel().ok(), Some(10_000));
+    assert_eq!(store.set_fuel(1).ok(), Some(()));
+    assert_eq!(store.get_fuel().ok(), Some(1));
 }
 
 #[test]
@@ -165,10 +153,11 @@ fn host_function_consumes_all() {
     )
     .unwrap();
     let mut store = Store::new(&engine, ());
-    store.add_fuel(FUEL).unwrap();
+    store.set_fuel(FUEL).unwrap();
     let func = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| {
-        let consumed = caller.fuel_consumed().unwrap();
-        assert_eq!(caller.consume_fuel((FUEL - consumed) - 1).unwrap(), 1);
+        let remaining = caller.get_fuel().unwrap();
+        assert_eq!(remaining, FUEL - 2);
+        assert!(caller.set_fuel(1).is_ok());
     });
 
     let instance = Instance::new(&mut store, &module, &[func.into()]).unwrap();
@@ -183,11 +172,8 @@ fn manual_edge_cases() {
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
-    store.add_fuel(u64::MAX).unwrap();
-    assert_eq!(store.fuel_consumed(), Some(0));
-    assert!(store.consume_fuel(u64::MAX).is_err());
-    assert!(store.consume_fuel(i64::MAX as u64 + 1).is_err());
-    assert_eq!(store.consume_fuel(i64::MAX as u64).unwrap(), 0);
+    store.set_fuel(u64::MAX).unwrap();
+    assert_eq!(store.get_fuel().unwrap(), u64::MAX);
 }
 
 #[test]
@@ -217,8 +203,8 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
 
     let mut store = Store::new(&engine, ());
     let init_fuel = 1_000;
-    store.add_fuel(init_fuel).unwrap();
-    assert_eq!(init_fuel, store.fuel_remaining().unwrap());
+    store.set_fuel(init_fuel).unwrap();
+    assert_eq!(init_fuel, store.get_fuel().unwrap());
 
     let instance = Instance::new(&mut store, &module, &[]).unwrap();
     let f = instance
@@ -230,7 +216,43 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
 
     // The `i32.add` consumed some fuel before the unconditionally trapping
     // memory access.
-    let consumed_fuel = store.fuel_consumed().unwrap();
+    let consumed_fuel = init_fuel - store.get_fuel().unwrap();
     assert!(consumed_fuel > 0);
-    assert_eq!(init_fuel, consumed_fuel + store.fuel_remaining().unwrap());
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn get_fuel_clamps_at_zero() -> Result<()> {
+    let engine = Engine::new(Config::new().consume_fuel(true))?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+(module
+  (func $add2 (export "add2") (param $n i32) (result i32)
+    (i32.add (local.get $n) (i32.const 2))
+  )
+)
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let add2 = instance.get_typed_func::<i32, i32>(&mut store, "add2")?;
+
+    // Start with 6 fuel and one invocation of this function should cost 4 fuel
+    store.set_fuel(6)?;
+    assert_eq!(store.get_fuel()?, 6);
+    add2.call(&mut store, 10)?;
+    assert_eq!(store.get_fuel()?, 2);
+
+    // One more invocation of the function would technically take us to -2 fuel,
+    // but that's not representable, so the store should report 0 fuel after
+    // this completes.
+    add2.call(&mut store, 10)?;
+    assert_eq!(store.get_fuel()?, 0);
+
+    // Any further attempts should fail.
+    assert!(add2.call(&mut store, 10).is_err());
+
+    Ok(())
 }

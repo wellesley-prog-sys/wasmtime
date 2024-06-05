@@ -3,7 +3,6 @@ use cranelift_codegen::{
     ir::{self, ExternalName, UserExternalNameRef},
     settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
-use std::collections::BTreeMap;
 use wasmtime_environ::{FlagValue, FuncIndex, Trap, TrapInformation};
 
 pub mod isa_builder;
@@ -37,16 +36,16 @@ pub enum RelocationTarget {
 /// Converts cranelift_codegen settings to the wasmtime_environ equivalent.
 pub fn clif_flags_to_wasmtime(
     flags: impl IntoIterator<Item = settings::Value>,
-) -> BTreeMap<String, FlagValue> {
+) -> Vec<(&'static str, FlagValue<'static>)> {
     flags
         .into_iter()
-        .map(|val| (val.name.to_string(), to_flag_value(&val)))
+        .map(|val| (val.name, to_flag_value(&val)))
         .collect()
 }
 
-fn to_flag_value(v: &settings::Value) -> FlagValue {
+fn to_flag_value(v: &settings::Value) -> FlagValue<'static> {
     match v.kind() {
-        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap().into()),
+        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap()),
         settings::SettingKind::Num => FlagValue::Num(v.as_num().unwrap()),
         settings::SettingKind::Bool => FlagValue::Bool(v.as_bool().unwrap()),
         settings::SettingKind::Preset => unreachable!(),
@@ -87,6 +86,7 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
             ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
             ir::TrapCode::NullReference => Trap::NullReference,
+            ir::TrapCode::NullI31Ref => Trap::NullI31Ref,
 
             // These do not get converted to wasmtime traps, since they
             // shouldn't ever be hit in theory. Instead of catching and handling

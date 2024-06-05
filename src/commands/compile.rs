@@ -29,39 +29,39 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| {
 });
 
 /// Compiles a WebAssembly module.
-#[derive(Parser)]
-#[structopt(
-    name = "compile",
+#[derive(Parser, PartialEq)]
+#[command(
     version,
     after_help = AFTER_HELP.as_str()
 )]
 pub struct CompileCommand {
-    #[clap(flatten)]
-    common: CommonOptions,
+    #[command(flatten)]
+    #[allow(missing_docs)]
+    pub common: CommonOptions,
 
     /// The target triple; default is the host triple
-    #[clap(long, value_name = "TARGET")]
-    target: Option<String>,
+    #[arg(long, value_name = "TARGET")]
+    pub target: Option<String>,
 
-    /// The path of the output compiled module; defaults to <MODULE>.cwasm
-    #[clap(short = 'o', long, value_name = "OUTPUT")]
-    output: Option<PathBuf>,
+    /// The path of the output compiled module; defaults to `<MODULE>.cwasm`
+    #[arg(short = 'o', long, value_name = "OUTPUT")]
+    pub output: Option<PathBuf>,
 
     /// The directory path to write clif files into, one clif file per wasm function.
-    #[clap(long = "emit-clif", value_name = "PATH")]
-    emit_clif: Option<PathBuf>,
+    #[arg(long = "emit-clif", value_name = "PATH")]
+    pub emit_clif: Option<PathBuf>,
 
     /// The path of the WebAssembly to compile
-    #[clap(index = 1, value_name = "MODULE")]
-    module: PathBuf,
+    #[arg(index = 1, value_name = "MODULE")]
+    pub module: PathBuf,
 }
 
 impl CompileCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.common.init_logging();
+        self.common.init_logging()?;
 
-        let mut config = self.common.config(self.target.as_deref())?;
+        let mut config = self.common.config(self.target.as_deref(), None)?;
 
         if let Some(path) = self.emit_clif {
             if !path.exists() {
@@ -87,7 +87,11 @@ impl CompileCommand {
             );
         }
 
+        #[cfg(feature = "wat")]
         let input = wat::parse_file(&self.module).with_context(|| "failed to read input file")?;
+        #[cfg(not(feature = "wat"))]
+        let input = std::fs::read(&self.module)
+            .with_context(|| format!("failed to read input file: {:?}", self.module))?;
 
         let output = self.output.take().unwrap_or_else(|| {
             let mut output: PathBuf = self.module.file_name().unwrap().into();
@@ -96,7 +100,14 @@ impl CompileCommand {
         });
 
         let output_bytes = if wasmparser::Parser::is_component(&input) {
-            engine.precompile_component(&input)?
+            #[cfg(feature = "component-model")]
+            {
+                engine.precompile_component(&input)?
+            }
+            #[cfg(not(feature = "component-model"))]
+            {
+                bail!("component model support was disabled at compile time")
+            }
         } else {
             engine.precompile_module(&input)?
         };

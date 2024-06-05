@@ -5,7 +5,10 @@ edition.workspace = true
 authors.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
-wasmparser = { workspace = true }
+wasmparser = { workspace = true, features = ['std', 'validate'] }
 wat = { workspace = true }
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ['std'] }

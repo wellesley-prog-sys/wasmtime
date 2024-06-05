@@ -1,4 +1,4 @@
-use crate::RunResult;
+use crate::{RunResult, RuntimeFiberStack};
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::io;
@@ -16,6 +16,14 @@ impl FiberStack {
     }
 
     pub unsafe fn from_raw_parts(_base: *mut u8, _len: usize) -> io::Result<Self> {
+        Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
+    }
+
+    pub fn is_from_raw_parts(&self) -> bool {
+        false
+    }
+
+    pub fn from_custom(_custom: Box<dyn RuntimeFiberStack>) -> io::Result<Self> {
         Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
     }
 
@@ -52,7 +60,7 @@ extern "C" {
 
 unsafe extern "system" fn fiber_start<F, A, B, C>(data: *mut c_void)
 where
-    F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
+    F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
 {
     // Set the stack guarantee to be consistent with what Rust expects for threads
     // This value is taken from:
@@ -72,7 +80,7 @@ where
 impl Fiber {
     pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> io::Result<Self>
     where
-        F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
+        F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
     {
         unsafe {
             let state = Box::new(StartState {

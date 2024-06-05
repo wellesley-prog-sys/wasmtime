@@ -5,7 +5,6 @@ use memmap2::MmapMut;
 
 #[cfg(not(any(feature = "selinux-fix", windows)))]
 use std::alloc;
-use std::convert::TryFrom;
 use std::ffi::c_void;
 use std::io;
 use std::mem;
@@ -132,6 +131,8 @@ pub(crate) struct Memory {
     position: usize,
     branch_protection: BranchProtection,
 }
+
+unsafe impl Send for Memory {}
 
 impl Memory {
     pub(crate) fn new(branch_protection: BranchProtection) -> Self {

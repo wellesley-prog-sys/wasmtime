@@ -28,11 +28,11 @@ pub enum Token<'a> {
     Dot,                   // '.'
     Colon,                 // ':'
     Equal,                 // '='
-    Not,                   // '!'
+    Bang,                  // '!'
     Arrow,                 // '->'
     Float(&'a str),        // Floating point immediate
     Integer(&'a str),      // Integer immediate
-    Type(types::Type),     // i32, f32, b32x4, ...
+    Type(types::Type),     // i32, f32, i32x4, ...
     DynamicType(u32),      // dt5
     Value(Value),          // v12, v7
     Block(Block),          // block3
@@ -40,7 +40,7 @@ pub enum Token<'a> {
     StackSlot(u32),        // ss3
     DynamicStackSlot(u32), // dss4
     GlobalValue(u32),      // gv3
-    Table(u32),            // table2
+    MemoryType(u32),       // mt0
     Constant(u32),         // const2
     FuncRef(u32),          // fn2
     SigRef(u32),           // sig2
@@ -344,7 +344,7 @@ impl<'a> Lexer<'a> {
             "dss" => Some(Token::DynamicStackSlot(number)),
             "dt" => Some(Token::DynamicType(number)),
             "gv" => Some(Token::GlobalValue(number)),
-            "table" => Some(Token::Table(number)),
+            "mt" => Some(Token::MemoryType(number)),
             "const" => Some(Token::Constant(number)),
             "fn" => Some(Token::FuncRef(number)),
             "sig" => Some(Token::SigRef(number)),
@@ -474,7 +474,7 @@ impl<'a> Lexer<'a> {
                 Some('.') => Some(self.scan_char(Token::Dot)),
                 Some(':') => Some(self.scan_char(Token::Colon)),
                 Some('=') => Some(self.scan_char(Token::Equal)),
-                Some('!') => Some(self.scan_char(Token::Not)),
+                Some('!') => Some(self.scan_char(Token::Bang)),
                 Some('+') => Some(self.scan_number()),
                 Some('*') => Some(self.scan_char(Token::Multiply)),
                 Some('-') => {
@@ -513,11 +513,7 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::trailing_digits;
     use super::*;
-    use crate::error::Location;
-    use cranelift_codegen::ir::types;
-    use cranelift_codegen::ir::{Block, Value};
 
     #[test]
     fn digits() {

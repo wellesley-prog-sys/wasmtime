@@ -92,10 +92,7 @@ impl DiffEngine for V8Engine {
         };
         match wasmtime {
             Trap::MemoryOutOfBounds => {
-                return verify_v8(&[
-                    "memory access out of bounds",
-                    "data segment is out of bounds",
-                ])
+                return verify_v8(&["memory access out of bounds", "is out of bounds"])
             }
             Trap::UnreachableCodeReached => {
                 return verify_v8(&[
@@ -132,6 +129,7 @@ impl DiffEngine for V8Engine {
                 return verify_v8(&[
                     "table initializer is out of bounds",
                     "table index is out of bounds",
+                    "element segment out of bounds",
                 ])
             }
             Trap::BadSignature => return verify_v8(&["function signature mismatch"]),
@@ -191,6 +189,7 @@ impl DiffInstance for V8Instance {
                 }
                 // JS doesn't support v128 parameters
                 DiffValue::V128(_) => return Ok(None),
+                DiffValue::AnyRef { .. } => unimplemented!(),
             });
         }
         // JS doesn't support v128 return values
@@ -297,7 +296,7 @@ fn get_diff_value(
     scope: &mut v8::HandleScope<'_>,
 ) -> DiffValue {
     match ty {
-        DiffValueType::I32 => DiffValue::I32(val.to_int32(scope).unwrap().value() as i32),
+        DiffValueType::I32 => DiffValue::I32(val.to_int32(scope).unwrap().value()),
         DiffValueType::I64 => {
             let (val, todo) = val.to_big_int(scope).unwrap().i64_value();
             assert!(todo);
@@ -313,6 +312,7 @@ fn get_diff_value(
         DiffValueType::ExternRef => DiffValue::ExternRef {
             null: val.is_null(),
         },
+        DiffValueType::AnyRef => unimplemented!(),
         DiffValueType::V128 => unreachable!(),
     }
 }

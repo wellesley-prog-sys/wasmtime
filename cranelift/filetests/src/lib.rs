@@ -3,13 +3,7 @@
 //! This crate contains the main test driver as well as implementations of the
 //! available filetest commands.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 pub use crate::function_runner::TestFileCompiler;
 use crate::runner::TestRunner;
@@ -26,7 +20,6 @@ mod subtest;
 mod test_alias_analysis;
 mod test_cat;
 mod test_compile;
-mod test_dce;
 mod test_domtree;
 mod test_interpret;
 mod test_legalizer;
@@ -36,7 +29,6 @@ mod test_run;
 mod test_safepoint;
 mod test_unwind;
 mod test_verifier;
-mod test_wasm;
 
 /// Main entry point for `clif-util test`.
 ///
@@ -96,7 +88,6 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
         "alias-analysis" => test_alias_analysis::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
-        "dce" => test_dce::subtest(parsed),
         "domtree" => test_domtree::subtest(parsed),
         "interpret" => test_interpret::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),

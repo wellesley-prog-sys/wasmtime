@@ -47,6 +47,12 @@
 //! - Detect cycles in global values.
 //! - Detect use of 'vmctx' global value when no corresponding parameter is defined.
 //!
+//! Memory types
+//!
+//! - Ensure that struct fields are in offset order.
+//! - Ensure that struct fields are completely within the overall
+//!   struct size, and do not overlap.
+//!
 //! TODO:
 //! Ad hoc checking
 //!
@@ -66,7 +72,8 @@ use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
-    Inst, JumpTable, MemFlags, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
+    Inst, JumpTable, MemFlags, MemoryTypeData, Opcode, SigRef, StackSlot, Type, Value, ValueDef,
+    ValueList,
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
@@ -150,7 +157,7 @@ where
 
 /// Result of a step in the verification process.
 ///
-/// Functions that return `VerifierStepResult<()>` should also take a
+/// Functions that return `VerifierStepResult` should also take a
 /// mutable reference to `VerifierErrors` as argument in order to report
 /// errors.
 ///
@@ -158,11 +165,11 @@ where
 /// meaning that the verification process may continue. However, other (non-fatal)
 /// errors might have been reported through the previously mentioned `VerifierErrors`
 /// argument.
-pub type VerifierStepResult<T> = Result<T, ()>;
+pub type VerifierStepResult = Result<(), ()>;
 
 /// Result of a verification operation.
 ///
-/// Unlike `VerifierStepResult<()>` which may be `Ok` while still having reported
+/// Unlike `VerifierStepResult` which may be `Ok` while still having reported
 /// errors, this type always returns `Err` if an error (fatal or not) was reported.
 pub type VerifierResult<T> = Result<T, VerifierErrors>;
 
@@ -196,7 +203,7 @@ impl VerifierErrors {
     /// Return a `VerifierStepResult` that is fatal if at least one error was reported,
     /// and non-fatal otherwise.
     #[inline]
-    pub fn as_result(&self) -> VerifierStepResult<()> {
+    pub fn as_result(&self) -> VerifierStepResult {
         if self.is_empty() {
             Ok(())
         } else {
@@ -210,13 +217,13 @@ impl VerifierErrors {
     }
 
     /// Report a fatal error and return `Err`.
-    pub fn fatal(&mut self, error: impl Into<VerifierError>) -> VerifierStepResult<()> {
+    pub fn fatal(&mut self, error: impl Into<VerifierError>) -> VerifierStepResult {
         self.report(error);
         Err(())
     }
 
     /// Report a non-fatal error and return `Ok`.
-    pub fn nonfatal(&mut self, error: impl Into<VerifierError>) -> VerifierStepResult<()> {
+    pub fn nonfatal(&mut self, error: impl Into<VerifierError>) -> VerifierStepResult {
         self.report(error);
         Ok(())
     }
@@ -278,7 +285,7 @@ pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
     domtree: &DominatorTree,
     fisa: FOI,
     errors: &mut VerifierErrors,
-) -> VerifierStepResult<()> {
+) -> VerifierStepResult {
     let _tt = timing::verifier();
     let verifier = Verifier::new(func, fisa.into());
     if cfg.is_valid() {
@@ -318,7 +325,7 @@ impl<'a> Verifier<'a> {
     // Check for:
     //  - cycles in the global value declarations.
     //  - use of 'vmctx' when no special parameter declares it.
-    fn verify_global_values(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn verify_global_values(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         let mut cycle_seen = false;
         let mut seen = SparseSet::new();
 
@@ -403,43 +410,47 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        if let Some(isa) = self.isa {
-            for (table, table_data) in &self.func.tables {
-                let base = table_data.base_gv;
-                if !self.func.global_values.is_valid(base) {
-                    return errors.nonfatal((table, format!("invalid base global value {}", base)));
-                }
+    fn verify_memory_types(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
+        // Verify that all fields are statically-sized and lie within
+        // the struct, do not overlap, and are in offset order
+        for (mt, mt_data) in &self.func.memory_types {
+            match mt_data {
+                MemoryTypeData::Struct { size, fields } => {
+                    let mut last_offset = 0;
+                    for field in fields {
+                        if field.offset < last_offset {
+                            errors.report((
+                                mt,
+                                format!(
+                                    "memory type {} has a field at offset {}, which is out-of-order",
+                                    mt, field.offset
+                                ),
+                            ));
+                        }
+                        last_offset = match field.offset.checked_add(u64::from(field.ty.bytes())) {
+                            Some(o) => o,
+                            None => {
+                                errors.report((
+                                        mt,
+                                        format!(
+                                            "memory type {} has a field at offset {} of size {}; offset plus size overflows a u64",
+                                            mt, field.offset, field.ty.bytes()),
+                                ));
+                                break;
+                            }
+                        };
 
-                let pointer_type = isa.pointer_type();
-                let base_type = self.func.global_values[base].global_type(isa);
-                if base_type != pointer_type {
-                    errors.report((
-                        table,
-                        format!(
-                            "table base has type {}, which is not the pointer type {}",
-                            base_type, pointer_type
-                        ),
-                    ));
+                        if last_offset > *size {
+                            errors.report((
+                                        mt,
+                                        format!(
+                                            "memory type {} has a field at offset {} of size {} that overflows the struct size {}",
+                                            mt, field.offset, field.ty.bytes(), *size),
+                                          ));
+                        }
+                    }
                 }
-
-                let bound_gv = table_data.bound_gv;
-                if !self.func.global_values.is_valid(bound_gv) {
-                    return errors
-                        .nonfatal((table, format!("invalid bound global value {}", bound_gv)));
-                }
-
-                let index_type = table_data.index_type;
-                let bound_type = self.func.global_values[bound_gv].global_type(isa);
-                if index_type != bound_type {
-                    errors.report((
-                        table,
-                        format!(
-                            "table index type {} differs from the type of its bound, {}",
-                            index_type, bound_type
-                        ),
-                    ));
-                }
+                _ => {}
             }
         }
 
@@ -448,7 +459,7 @@ impl<'a> Verifier<'a> {
 
     /// Check that the given block can be encoded as a BB, by checking that only
     /// branching instructions are ending the block.
-    fn encodable_as_bb(&self, block: Block, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn encodable_as_bb(&self, block: Block, errors: &mut VerifierErrors) -> VerifierStepResult {
         match self.func.is_block_basic(block) {
             Ok(()) => Ok(()),
             Err((inst, message)) => errors.fatal((inst, self.context(inst), message)),
@@ -460,7 +471,7 @@ impl<'a> Verifier<'a> {
         block: Block,
         inst: Inst,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let is_terminator = self.func.dfg.insts[inst].opcode().is_terminator();
         let is_last_inst = self.func.layout.last_inst(block) == Some(inst);
 
@@ -506,11 +517,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn instruction_integrity(
-        &self,
-        inst: Inst,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    fn instruction_integrity(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         let inst_data = &self.func.dfg.insts[inst];
         let dfg = &self.func.dfg;
 
@@ -542,7 +549,7 @@ impl<'a> Verifier<'a> {
         &self,
         inst: Inst,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         use crate::ir::instructions::InstructionData::*;
 
         for arg in self.func.dfg.inst_values(inst) {
@@ -610,9 +617,6 @@ impl<'a> Verifier<'a> {
             }
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
-            }
-            TableAddr { table, .. } => {
-                self.verify_table(inst, table, errors)?;
             }
             NullAry {
                 opcode: Opcode::GetPinnedReg,
@@ -709,7 +713,7 @@ impl<'a> Verifier<'a> {
         loc: impl Into<AnyEntity>,
         e: Block,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !self.func.dfg.block_is_valid(e) || !self.func.layout.is_block_inserted(e) {
             return errors.fatal((loc, format!("invalid block reference {}", e)));
         }
@@ -726,7 +730,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         s: SigRef,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !self.func.dfg.signatures.is_valid(s) {
             errors.fatal((
                 inst,
@@ -743,7 +747,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         f: FuncRef,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !self.func.dfg.ext_funcs.is_valid(f) {
             errors.nonfatal((
                 inst,
@@ -760,7 +764,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         ss: StackSlot,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !self.func.sized_stack_slots.is_valid(ss) {
             errors.nonfatal((
                 inst,
@@ -777,7 +781,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         ss: DynamicStackSlot,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !self.func.dynamic_stack_slots.is_valid(ss) {
             errors.nonfatal((
                 inst,
@@ -794,7 +798,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         gv: GlobalValue,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !self.func.global_values.is_valid(gv) {
             errors.nonfatal((
                 inst,
@@ -806,25 +810,12 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_table(
-        &self,
-        inst: Inst,
-        table: ir::Table,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
-        if !self.func.tables.is_valid(table) {
-            errors.nonfatal((inst, self.context(inst), format!("invalid table {}", table)))
-        } else {
-            Ok(())
-        }
-    }
-
     fn verify_value_list(
         &self,
         inst: Inst,
         l: &ValueList,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !l.is_valid(&self.func.dfg.value_lists) {
             errors.nonfatal((
                 inst,
@@ -841,7 +832,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         j: JumpTable,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         if !self.func.stencil.dfg.jump_tables.is_valid(j) {
             errors.nonfatal((
                 inst,
@@ -862,7 +853,7 @@ impl<'a> Verifier<'a> {
         loc_inst: Inst,
         v: Value,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let dfg = &self.func.dfg;
         if !dfg.value_is_valid(v) {
             errors.nonfatal((
@@ -880,7 +871,7 @@ impl<'a> Verifier<'a> {
         loc_inst: Inst,
         v: Value,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         self.verify_value(loc_inst, v, errors)?;
 
         let dfg = &self.func.dfg;
@@ -974,7 +965,7 @@ impl<'a> Verifier<'a> {
         loc_inst: Inst,
         v: Value,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         self.verify_value(loc_inst, v, errors)?;
 
         match self.func.dfg.value_def(v) {
@@ -1008,7 +999,7 @@ impl<'a> Verifier<'a> {
         flags: MemFlags,
         arg: Value,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let typ = self.func.dfg.ctrl_typevar(inst);
         let value_type = self.func.dfg.value_type(arg);
 
@@ -1045,7 +1036,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         constant: Constant,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let type_size = self.func.dfg.ctrl_typevar(inst).bytes() as usize;
         let constant_size = self.func.dfg.constants.get(constant).len();
         if type_size != constant_size {
@@ -1065,7 +1056,7 @@ impl<'a> Verifier<'a> {
         &self,
         domtree: &DominatorTree,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         // We consider two `DominatorTree`s to be equal if they return the same immediate
         // dominator for each block. Therefore the current domtree is valid if it matches the freshly
         // computed one.
@@ -1111,8 +1102,8 @@ impl<'a> Verifier<'a> {
                 return errors.fatal((
                     next_block,
                     format!(
-                        "invalid domtree, rpo_cmp_block does not says {} is greater than {}",
-                        prev_block, next_block
+                        "invalid domtree, rpo_cmp_block does not say {} is greater than {}; rpo = {:#?}",
+                        prev_block, next_block, domtree.cfg_postorder()
                     ),
                 ));
             }
@@ -1120,7 +1111,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_entry_block_params(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn typecheck_entry_block_params(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         if let Some(block) = self.func.layout.entry_block() {
             let expected_types = &self.func.signature.params;
             let block_param_count = self.func.dfg.num_block_params(block);
@@ -1153,7 +1144,7 @@ impl<'a> Verifier<'a> {
         errors.as_result()
     }
 
-    fn check_entry_not_cold(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn check_entry_not_cold(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         if let Some(entry_block) = self.func.layout.entry_block() {
             if self.func.layout.is_cold(entry_block) {
                 return errors
@@ -1163,7 +1154,7 @@ impl<'a> Verifier<'a> {
         errors.as_result()
     }
 
-    fn typecheck(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn typecheck(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         let inst_data = &self.func.dfg.insts[inst];
         let constraints = inst_data.opcode().constraints();
 
@@ -1204,7 +1195,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         ctrl_type: Type,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let mut i = 0;
         for &result in self.func.dfg.inst_results(inst) {
             let result_type = self.func.dfg.value_type(result);
@@ -1246,7 +1237,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         ctrl_type: Type,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let constraints = self.func.dfg.insts[inst].opcode().constraints();
 
         for (i, &arg) in self.func.dfg.inst_fixed_args(inst).iter().enumerate() {
@@ -1287,7 +1278,7 @@ impl<'a> Verifier<'a> {
         &self,
         inst: Inst,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         match &self.func.dfg.insts[inst] {
             ir::InstructionData::Jump { destination, .. } => {
                 self.typecheck_block_call(inst, destination, errors)?;
@@ -1333,7 +1324,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         block: &ir::BlockCall,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let pool = &self.func.dfg.value_lists;
         let iter = self
             .func
@@ -1351,7 +1342,7 @@ impl<'a> Verifier<'a> {
         iter: I,
         variable_args: &[Value],
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let mut i = 0;
 
         for expected_type in iter {
@@ -1389,7 +1380,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_return(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn typecheck_return(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         match self.func.dfg.insts[inst] {
             ir::InstructionData::MultiAry {
                 opcode: Opcode::Return,
@@ -1431,7 +1422,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         sig_ref: SigRef,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let signature = &self.func.dfg.signatures[sig_ref];
         let cc = signature.call_conv;
         if !cc.supports_tail_calls() {
@@ -1459,7 +1450,7 @@ impl<'a> Verifier<'a> {
         actual_types: impl ExactSizeIterator<Item = Type>,
         errors: &mut VerifierErrors,
         message: &str,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let expected_types = &self.func.signature.returns;
         if actual_types.len() != expected_types.len() {
             return errors.nonfatal((inst, self.context(inst), message));
@@ -1481,22 +1472,8 @@ impl<'a> Verifier<'a> {
 
     // Check special-purpose type constraints that can't be expressed in the normal opcode
     // constraints.
-    fn typecheck_special(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn typecheck_special(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         match self.func.dfg.insts[inst] {
-            ir::InstructionData::TableAddr { table, arg, .. } => {
-                let index_type = self.func.dfg.value_type(arg);
-                let table_index_type = self.func.tables[table].index_type;
-                if index_type != table_index_type {
-                    return errors.nonfatal((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "index type {} differs from table index type {}",
-                            index_type, table_index_type,
-                        ),
-                    ));
-                }
-            }
             ir::InstructionData::UnaryGlobalValue { global_value, .. } => {
                 if let Some(isa) = self.isa {
                     let inst_type = self.func.dfg.value_type(self.func.dfg.first_result(inst));
@@ -1521,7 +1498,7 @@ impl<'a> Verifier<'a> {
         &self,
         cfg: &ControlFlowGraph,
         errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    ) -> VerifierStepResult {
         let mut expected_succs = BTreeSet::<Block>::new();
         let mut got_succs = BTreeSet::<Block>::new();
         let mut expected_preds = BTreeSet::<Inst>::new();
@@ -1589,11 +1566,7 @@ impl<'a> Verifier<'a> {
         errors.as_result()
     }
 
-    fn immediate_constraints(
-        &self,
-        inst: Inst,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    fn immediate_constraints(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         let inst_data = &self.func.dfg.insts[inst];
 
         match *inst_data {
@@ -1659,7 +1632,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn iconst_bounds(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn iconst_bounds(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         use crate::ir::instructions::InstructionData::UnaryImm;
 
         let inst_data = &self.func.dfg.insts[inst];
@@ -1692,7 +1665,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn typecheck_function_signature(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn typecheck_function_signature(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         let params = self
             .func
             .signature
@@ -1752,9 +1725,9 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         self.verify_global_values(errors)?;
-        self.verify_tables(errors)?;
+        self.verify_memory_types(errors)?;
         self.typecheck_entry_block_params(errors)?;
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;
@@ -1861,7 +1834,7 @@ mod tests {
             args: Default::default(),
         });
 
-        func.dfg.append_result(test_inst, ctrl_typevar);
+        func.dfg.make_inst_results(test_inst, ctrl_typevar);
         func.layout.append_inst(test_inst, block0);
         func.layout.append_inst(end_inst, block0);
 
@@ -1947,13 +1920,11 @@ mod tests {
         let block0 = func.dfg.make_block();
         func.layout.append_block(block0);
 
-        // Build instruction: v0, v1 = iconst 42
-        let inst = func.dfg.make_inst(InstructionData::UnaryImm {
-            opcode: Opcode::Iconst,
-            imm: 42.into(),
+        // Build instruction "f64const 0.0" (missing one required result)
+        let inst = func.dfg.make_inst(InstructionData::UnaryIeee64 {
+            opcode: Opcode::F64const,
+            imm: 0.into(),
         });
-        func.dfg.append_result(inst, types::I32);
-        func.dfg.append_result(inst, types::I32);
         func.layout.append_inst(inst, block0);
 
         // Setup verifier.
@@ -1962,11 +1933,11 @@ mod tests {
         let verifier = Verifier::new(&func, flags.into());
 
         // Now the error message, when printed, should contain the instruction sequence causing the
-        // error (i.e. v0, v1 = iconst.i32 42) and not only its entity value (i.e. inst0)
+        // error (i.e. f64const 0.0) and not only its entity value (i.e. inst0)
         let _ = verifier.typecheck_results(inst, types::I32, &mut errors);
         assert_eq!(
             format!("{}", errors.0[0]),
-            "inst0 (v0, v1 = iconst.i32 42): has more result values than expected"
+            "inst0 (f64const 0.0): has fewer result values than expected"
         )
     }
 

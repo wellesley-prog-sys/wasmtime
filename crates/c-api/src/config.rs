@@ -3,9 +3,9 @@
 #![cfg_attr(not(feature = "cache"), allow(unused_imports))]
 
 use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t};
-use std::mem::MaybeUninit;
 use std::ops::Range;
 use std::os::raw::c_char;
+use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
     Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, Result, Strategy,
@@ -71,13 +71,32 @@ pub extern "C" fn wasmtime_config_max_wasm_stack_set(c: &mut wasm_config_t, size
 }
 
 #[no_mangle]
+#[cfg(feature = "threads")]
 pub extern "C" fn wasmtime_config_wasm_threads_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_threads(enable);
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_tail_call_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_tail_call(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_wasm_reference_types_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_reference_types(enable);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_function_references_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_function_references(enable);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_gc_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_gc(enable);
 }
 
 #[no_mangle]
@@ -119,6 +138,7 @@ pub extern "C" fn wasmtime_config_wasm_memory64_set(c: &mut wasm_config_t, enabl
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasmtime_config_strategy_set(
     c: &mut wasm_config_t,
     strategy: wasmtime_strategy_t,
@@ -137,6 +157,7 @@ pub extern "C" fn wasmtime_config_parallel_compilation_set(c: &mut wasm_config_t
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasmtime_config_cranelift_debug_verifier_set(
     c: &mut wasm_config_t,
     enable: bool,
@@ -145,6 +166,7 @@ pub extern "C" fn wasmtime_config_cranelift_debug_verifier_set(
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasmtime_config_cranelift_nan_canonicalization_set(
     c: &mut wasm_config_t,
     enable: bool,
@@ -153,6 +175,7 @@ pub extern "C" fn wasmtime_config_cranelift_nan_canonicalization_set(
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasmtime_config_cranelift_opt_level_set(
     c: &mut wasm_config_t,
     opt_level: wasmtime_opt_level_t,
@@ -232,6 +255,7 @@ pub extern "C" fn wasmtime_config_native_unwind_info_set(c: &mut wasm_config_t, 
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasmtime_config_target_set(
     c: &mut wasm_config_t,
     target: *const c_char,
@@ -241,6 +265,12 @@ pub unsafe extern "C" fn wasmtime_config_target_set(
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_macos_use_mach_ports_set(c: &mut wasm_config_t, enabled: bool) {
+    c.config.macos_use_mach_ports(enabled);
+}
+
+#[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasmtime_config_cranelift_flag_enable(
     c: &mut wasm_config_t,
     flag: *const c_char,
@@ -250,6 +280,7 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_flag_enable(
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasmtime_config_cranelift_flag_set(
     c: &mut wasm_config_t,
     flag: *const c_char,
@@ -362,7 +393,25 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
         reserved_size_in_bytes: Option<usize>,
         guard_size_in_bytes: usize,
     ) -> Result<Box<dyn wasmtime::LinearMemory>, String> {
-        let mut memory = MaybeUninit::uninit();
+        extern "C" fn panic_get_callback(
+            _env: *mut std::ffi::c_void,
+            _byte_size: &mut usize,
+            _maximum_byte_size: &mut usize,
+        ) -> *mut u8 {
+            panic!("a callback must be set");
+        }
+        extern "C" fn panic_grow_callback(
+            _env: *mut std::ffi::c_void,
+            _size: usize,
+        ) -> Option<Box<wasmtime_error_t>> {
+            panic!("a callback must be set");
+        }
+        let mut memory = wasmtime_linear_memory_t {
+            env: ptr::null_mut(),
+            get_memory: panic_get_callback,
+            grow_memory: panic_grow_callback,
+            finalizer: None,
+        };
         let cb = self.new_memory;
         let error = cb(
             self.foreign.data,
@@ -371,11 +420,10 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
             maximum.unwrap_or(usize::MAX),
             reserved_size_in_bytes.unwrap_or(0),
             guard_size_in_bytes,
-            memory.as_mut_ptr(),
+            &mut memory,
         );
         match error {
             None => {
-                let memory = unsafe { memory.assume_init() };
                 let foreign = crate::ForeignData {
                     data: memory.env,
                     finalizer: memory.finalizer,
@@ -406,4 +454,9 @@ pub unsafe extern "C" fn wasmtime_config_host_memory_creator_set(
         },
         new_memory: creator.new_memory,
     }));
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_memory_init_cow_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.memory_init_cow(enable);
 }

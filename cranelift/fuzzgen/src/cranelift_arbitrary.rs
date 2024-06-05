@@ -2,7 +2,7 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use anyhow::Result;
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
-use cranelift::codegen::ir::{AbiParam, Signature, Type};
+use cranelift::codegen::ir::{AbiParam, Signature};
 use cranelift::codegen::isa::CallConv;
 
 use arbitrary::Unstructured;
@@ -64,6 +64,11 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
             allowed_callconvs.push(CallConv::Tail);
         }
 
+        // The winch calling convention is supposed to work on x64.
+        if matches!(architecture, Architecture::X86_64) {
+            allowed_callconvs.push(CallConv::Winch);
+        }
+
         Ok(*self.choose(&allowed_callconvs[..])?)
     }
 
@@ -90,12 +95,19 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
 
     fn signature(
         &mut self,
-        simd_enabled: bool,
+        mut simd_enabled: bool,
         architecture: Architecture,
         max_params: usize,
         max_rets: usize,
     ) -> Result<Signature> {
         let callconv = self.callconv(architecture)?;
+
+        // Winch doesn't support SIMD yet
+        // https://github.com/bytecodealliance/wasmtime/issues/8093
+        if callconv == CallConv::Winch {
+            simd_enabled = false;
+        }
+
         let mut sig = Signature::new(callconv);
 
         for _ in 0..max_params {

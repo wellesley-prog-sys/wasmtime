@@ -7,7 +7,6 @@ You can compile and run this example on Linux with:
    cargo build --release -p wasmtime-c-api
    c++ examples/async.cpp \
        -I crates/c-api/include \
-       -I crates/c-api/wasm-c-api/include \
        target/release/libwasmtime.a \
        -std=c++11 \
        -lpthread -ldl -lm \
@@ -166,7 +165,7 @@ int main() {
   // A thread that will async perform host function calls.
   std::thread printer_thread([]() {
     int32_t value_to_print = printer_state.get_value_to_print();
-    std::cout << "recieved value to print!" << std::endl;
+    std::cout << "received value to print!" << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::cout << "printing: " << value_to_print << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -181,9 +180,8 @@ int main() {
   // This pointer is unowned.
   auto *context = wasmtime_store_context(store.get());
   // Configure the store to periodically yield control
-  wasmtime_context_out_of_fuel_async_yield(context,
-                                           /*injection_count=*/10,
-                                           /*fuel_to_inject=*/10000);
+  wasmtime_context_set_fuel(context, 100000);
+  wasmtime_context_fuel_async_yield_interval(context, /*interval=*/10000);
 
   auto compiled_module =
       compile_wat_module_from_file(engine.get(), "examples/async.wat");

@@ -994,11 +994,6 @@
     (CondBreak
       (cond Cond))
 
-    ;; Marker, no-op in generated code SP "virtual offset" is adjusted. This
-    ;; controls how MemArg::NominalSPOffset args are lowered.
-    (VirtualSPOffsetAdj
-      (offset i64))
-
     ;; Pseudoinstruction to keep a value alive.
     (DummyUse
      (reg Reg))
@@ -1522,7 +1517,7 @@
 (extern extractor vr128_ty vr128_ty)
 
 
-;; Helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers for various immediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Special integer types and their constructors
 
@@ -1538,11 +1533,6 @@
 
 (decl pure partial i64_nonequal (i64 i64) i64)
 (extern constructor i64_nonequal i64_nonequal)
-
-(decl pure partial i64_nonzero (i64) i64)
-(rule (i64_nonzero x)
-      (if (i64_nonequal x 0))
-      x)
 
 (decl pure partial i64_not_neg1 (i64) i64)
 (rule (i64_not_neg1 x)
@@ -1778,7 +1768,7 @@
 (decl memarg_got () MemArg)
 (extern constructor memarg_got memarg_got)
 
-;; Create a MemArg refering to a stack address formed by
+;; Create a MemArg referring to a stack address formed by
 ;; adding a base (relative to SP) and an offset.
 (decl memarg_stack_off (i64 i64) MemArg)
 (extern constructor memarg_stack_off memarg_stack_off)
@@ -2877,8 +2867,8 @@
       (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
         (vec_rot_imm $I16X8 (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16) 8)))
 
-;; When passing a vector value in register to a function whose ABI uses
-;; a different lane order than the current function, we need to swap lanes.
+;; When passing a vector value to a function whose ABI uses a different
+;; lane order than the current function, we need to swap lanes.
 ;; The first operand is the lane order used by the callee.
 (decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
 (rule 4 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
@@ -2953,15 +2943,17 @@
 (rule (copy_reg_to_arg_slot uses lo _ (ABIArgSlot.Reg reg ty ext) src)
       (let ((_ Unit (args_builder_push uses (abi_vec_elt_rev lo ty src) reg)))
         (output_none)))
-(rule (copy_reg_to_arg_slot _ _ base (ABIArgSlot.Stack offset ty ext) src)
-      (side_effect (arg_store (abi_ext_ty ext ty) src (memarg_stack_off base offset))))
+(rule (copy_reg_to_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext) src)
+      (side_effect (arg_store (abi_ext_ty ext ty) (abi_vec_elt_rev lo ty src)
+                              (memarg_stack_off base offset))))
 
 ;; Copy one component of an argument/return value from its slot.
 (decl copy_reg_from_arg_slot (CallRetList LaneOrder i64 ABIArgSlot) Reg)
 (rule (copy_reg_from_arg_slot defs lo _ (ABIArgSlot.Reg reg ty ext))
       (abi_vec_elt_rev lo ty (defs_lookup defs reg)))
-(rule (copy_reg_from_arg_slot _ _ base (ABIArgSlot.Stack offset ty ext))
-      (arg_load (abi_ext_ty ext ty) (memarg_stack_off base offset)))
+(rule (copy_reg_from_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext))
+      (abi_vec_elt_rev lo ty (arg_load (abi_ext_ty ext ty)
+                                       (memarg_stack_off base offset))))
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
 (decl abi_ext_ty (ArgumentExtension Type) Type)
@@ -3463,7 +3455,7 @@
 ;; Push an instruction sequence to rotate a value loaded from memory
 ;; to the well-defined location: the high bytes in case of a big-endian
 ;; memory operation, and the low bytes in the little-endian case.
-;; (This is somewhat arbitary but chosen to allow the most efficient
+;; (This is somewhat arbitrary but chosen to allow the most efficient
 ;; sequences to compute the various atomic operations.)
 ;; Note that $I8 accesses always use the big-endian case.
 (decl casloop_rotate_in (VecMInstBuilder Type MemFlags Reg Reg) Reg)

@@ -1,13 +1,7 @@
 //! Performs autodetection of the host for the purposes of running
 //! Cranelift to generate code to run on the same machine.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;
@@ -28,7 +22,7 @@ pub fn builder() -> Result<isa::Builder, &'static str> {
 /// in the current configuration.
 ///
 /// Selects the given backend variant specifically; this is
-/// useful when more than oen backend exists for a given target
+/// useful when more than one backend exists for a given target
 /// (e.g., on x86-64).
 pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'static str> {
     let mut isa_builder = isa::lookup(Triple::host()).map_err(|err| match err {
@@ -46,7 +40,7 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
 /// in the current configuration.
 ///
 /// Selects the given backend variant specifically; this is
-/// useful when more than oen backend exists for a given target
+/// useful when more than one backend exists for a given target
 /// (e.g., on x86-64).
 pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'static str> {
     #[cfg(target_arch = "x86_64")]
@@ -150,6 +144,10 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
         // the cpuinfo interface, so we can't rely on it being present for now.
         let _ = riscv::cpuinfo_detect(isa_builder);
     }
+
+    // On all other architectures (e.g. wasm32) we won't infer any native flags,
+    // but still need to use the `isa_builder` to avoid compiler warnings.
+    let _ = isa_builder;
     Ok(())
 }
 

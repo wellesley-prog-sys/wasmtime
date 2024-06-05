@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-object"
-version = "0.101.0"
+version = "0.110.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -9,11 +9,14 @@ license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-module = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["std"] }
 cranelift-control = { workspace = true }
-object = { workspace = true, features = ["write"] }
+object = { workspace = true, features = ["write", "std"] }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }

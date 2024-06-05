@@ -3,18 +3,16 @@
 This document shows an example of how to embed Wasmtime using the [Rust
 API][apidoc] to execute a simple wasm program. Be sure to also check out the
 [full API documentation][apidoc] for a full listing of what the [`wasmtime`
-crate][wasmtime] has to offer and the [book examples for
-Rust](./examples-rust-embed.md) for more information.
+crate][wasmtime] has to offer.
 
 [apidoc]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/
 [wasmtime]: https://crates.io/crates/wasmtime
 
 ## Creating the WebAssembly to execute
 
-Creation of a WebAssembly file is generally covered by the [Writing
-WebAssembly chapter](./wasm.md), so we'll just assume that you've already got a
-wasm file on hand for the rest of this tutorial. To make things simple we'll
-also just assume you've got a `hello.wat` file which looks like this:
+We'll just assume that you've already got a wasm file on hand for the rest of
+this tutorial. To make things simple we'll also just assume you've got a
+`hello.wat` file which looks like this:
 
 ```wat
 (module
@@ -38,12 +36,11 @@ $ cd wasmtime_hello
 
 Next you'll want to add `hello.wat` to the root of your project.
 
-We will be using the `wasmtime` crate to run the wasm file, so next up we need a
-dependency in `Cargo.toml`:
+We will be using the `wasmtime` crate to run the wasm file. Please execute the command `cargo add wasmtime` to use the latest version of the crate. The `dependencies` block in the `Cargo.toml` file will appear as follows:
 
 ```toml
 [dependencies]
-wasmtime = "1.0.0"
+wasmtime = "19.0.0"
 ```
 
 Next up let's write the code that we need to execute this wasm file. The

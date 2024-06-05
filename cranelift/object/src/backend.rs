@@ -3,9 +3,8 @@
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
-use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{self, ir, FinalizedMachReloc};
+use cranelift_codegen::{ir, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
@@ -16,7 +15,8 @@ use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
 use object::{
-    RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+    RelocationEncoding, RelocationFlags, RelocationKind, SectionKind, SymbolFlags, SymbolKind,
+    SymbolScope,
 };
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -39,10 +39,10 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
-    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [ir::LibCall]
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [`ir::LibCall`]
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use [cranelift_module::default_libcall_names]().
+    /// argument, use [`cranelift_module::default_libcall_names`].
     pub fn new<V: Into<Vec<u8>>>(
         isa: OwnedTargetIsa,
         name: V,
@@ -80,11 +80,24 @@ impl ObjectBuilder {
                         binary_format,
                     )));
                 }
-                // FIXME(#4994) get the right variant from the TargetIsa
+
+                // FIXME(#4994): Get the right float ABI variant from the TargetIsa
+                let mut eflags = object::elf::EF_RISCV_FLOAT_ABI_DOUBLE;
+
+                // Set the RVC eflag if we have the C extension enabled.
+                let has_c = isa
+                    .isa_flags()
+                    .iter()
+                    .filter(|f| f.name == "has_zca" || f.name == "has_zcd")
+                    .all(|f| f.as_bool().unwrap_or_default());
+                if has_c {
+                    eflags |= object::elf::EF_RISCV_RVC;
+                }
+
                 file_flags = object::FileFlags::Elf {
                     os_abi: object::elf::ELFOSABI_NONE,
                     abi_version: 0,
-                    e_flags: object::elf::EF_RISCV_RVC | object::elf::EF_RISCV_FLOAT_ABI_DOUBLE,
+                    e_flags: eflags,
                 };
                 object::Architecture::Riscv64
             }
@@ -132,7 +145,7 @@ pub struct ObjectModule {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
-    known_labels: HashMap<(UserFuncName, CodeOffset), SymbolId>,
+    known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
 }
 
@@ -141,6 +154,7 @@ impl ObjectModule {
     pub fn new(builder: ObjectBuilder) -> Self {
         let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
         object.flags = builder.flags;
+        object.set_subsections_via_symbols();
         object.add_file_symbol(builder.name);
         Self {
             isa: builder.isa,
@@ -355,24 +369,21 @@ impl Module for ObjectModule {
         let align = alignment
             .max(self.isa.function_alignment().minimum.into())
             .max(self.isa.symbol_alignment());
-        let (section, offset) = if self.per_function_section {
+        let section = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
-            let (section, offset) =
-                self.object
-                    .add_subsection(StandardSection::Text, &symbol_name, bytes, align);
-            self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
-            self.object.symbol_mut(symbol).value = offset;
-            (section, offset)
+            self.object
+                .add_subsection(StandardSection::Text, &symbol_name)
         } else {
-            let section = self.object.section_id(StandardSection::Text);
-            let offset = self.object.add_symbol_data(symbol, section, bytes, align);
-            (section, offset)
+            self.object.section_id(StandardSection::Text)
         };
+        let offset = self.object.add_symbol_data(symbol, section, bytes, align);
 
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func)))
+                .map(|record| {
+                    self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func, func_id))
+                })
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -488,9 +499,7 @@ impl ObjectModule {
             for &ObjectRelocRecord {
                 offset,
                 ref name,
-                kind,
-                encoding,
-                size,
+                flags,
                 addend,
             } in &symbol.relocs
             {
@@ -500,9 +509,7 @@ impl ObjectModule {
                         symbol.section,
                         Relocation {
                             offset: symbol.offset + u64::from(offset),
-                            size,
-                            kind,
-                            encoding,
+                            flags,
                             symbol: target_symbol,
                             addend,
                         },
@@ -594,15 +601,10 @@ impl ObjectModule {
                 }
             }
 
-            ModuleRelocTarget::FunctionOffset(ref fname, offset) => {
-                match self.known_labels.entry((fname.clone(), offset)) {
+            ModuleRelocTarget::FunctionOffset(func_id, offset) => {
+                match self.known_labels.entry((func_id, offset)) {
                     Entry::Occupied(o) => *o.get(),
                     Entry::Vacant(v) => {
-                        let func_user_name = fname.get_user().unwrap();
-                        let func_id = FuncId::from_name(&ModuleRelocTarget::user(
-                            func_user_name.namespace,
-                            func_user_name.index,
-                        ));
                         let func_symbol_id = self.functions[func_id].unwrap().0;
                         let func_symbol = self.object.symbol(func_symbol_id);
 
@@ -627,41 +629,58 @@ impl ObjectModule {
     }
 
     fn process_reloc(&self, record: &ModuleReloc) -> ObjectRelocRecord {
-        let mut addend = record.addend;
-        let (kind, encoding, size) = match record.kind {
-            Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
-            Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
-            Reloc::X86PCRel4 => (RelocationKind::Relative, RelocationEncoding::Generic, 32),
-            Reloc::X86CallPCRel4 => (RelocationKind::Relative, RelocationEncoding::X86Branch, 32),
+        let flags = match record.kind {
+            Reloc::Abs4 => RelocationFlags::Generic {
+                kind: RelocationKind::Absolute,
+                encoding: RelocationEncoding::Generic,
+                size: 32,
+            },
+            Reloc::Abs8 => RelocationFlags::Generic {
+                kind: RelocationKind::Absolute,
+                encoding: RelocationEncoding::Generic,
+                size: 64,
+            },
+            Reloc::X86PCRel4 => RelocationFlags::Generic {
+                kind: RelocationKind::Relative,
+                encoding: RelocationEncoding::Generic,
+                size: 32,
+            },
+            Reloc::X86CallPCRel4 => RelocationFlags::Generic {
+                kind: RelocationKind::Relative,
+                encoding: RelocationEncoding::X86Branch,
+                size: 32,
+            },
             // TODO: Get Cranelift to tell us when we can use
             // R_X86_64_GOTPCRELX/R_X86_64_REX_GOTPCRELX.
-            Reloc::X86CallPLTRel4 => (
-                RelocationKind::PltRelative,
-                RelocationEncoding::X86Branch,
-                32,
-            ),
-            Reloc::X86SecRel => (
-                RelocationKind::SectionOffset,
-                RelocationEncoding::Generic,
-                32,
-            ),
-            Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
-            Reloc::Arm64Call => (
-                RelocationKind::Relative,
-                RelocationEncoding::AArch64Call,
-                26,
-            ),
+            Reloc::X86CallPLTRel4 => RelocationFlags::Generic {
+                kind: RelocationKind::PltRelative,
+                encoding: RelocationEncoding::X86Branch,
+                size: 32,
+            },
+            Reloc::X86SecRel => RelocationFlags::Generic {
+                kind: RelocationKind::SectionOffset,
+                encoding: RelocationEncoding::Generic,
+                size: 32,
+            },
+            Reloc::X86GOTPCRel4 => RelocationFlags::Generic {
+                kind: RelocationKind::GotRelative,
+                encoding: RelocationEncoding::Generic,
+                size: 32,
+            },
+            Reloc::Arm64Call => RelocationFlags::Generic {
+                kind: RelocationKind::Relative,
+                encoding: RelocationEncoding::AArch64Call,
+                size: 26,
+            },
             Reloc::ElfX86_64TlsGd => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
                     "ElfX86_64TlsGd is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_X86_64_TLSGD),
-                    RelocationEncoding::Generic,
-                    32,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_X86_64_TLSGD,
+                }
             }
             Reloc::MachOX86_64Tlv => {
                 assert_eq!(
@@ -669,15 +688,11 @@ impl ObjectModule {
                     object::BinaryFormat::MachO,
                     "MachOX86_64Tlv is not supported for this file format"
                 );
-                addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
-                (
-                    RelocationKind::MachO {
-                        value: object::macho::X86_64_RELOC_TLV,
-                        relative: true,
-                    },
-                    RelocationEncoding::Generic,
-                    32,
-                )
+                RelocationFlags::MachO {
+                    r_type: object::macho::X86_64_RELOC_TLV,
+                    r_pcrel: true,
+                    r_length: 2,
+                }
             }
             Reloc::MachOAarch64TlsAdrPage21 => {
                 assert_eq!(
@@ -685,14 +700,11 @@ impl ObjectModule {
                     object::BinaryFormat::MachO,
                     "MachOAarch64TlsAdrPage21 is not supported for this file format"
                 );
-                (
-                    RelocationKind::MachO {
-                        value: object::macho::ARM64_RELOC_TLVP_LOAD_PAGE21,
-                        relative: true,
-                    },
-                    RelocationEncoding::Generic,
-                    21,
-                )
+                RelocationFlags::MachO {
+                    r_type: object::macho::ARM64_RELOC_TLVP_LOAD_PAGE21,
+                    r_pcrel: true,
+                    r_length: 2,
+                }
             }
             Reloc::MachOAarch64TlsAdrPageOff12 => {
                 assert_eq!(
@@ -700,88 +712,94 @@ impl ObjectModule {
                     object::BinaryFormat::MachO,
                     "MachOAarch64TlsAdrPageOff12 is not supported for this file format"
                 );
-                (
-                    RelocationKind::MachO {
-                        value: object::macho::ARM64_RELOC_TLVP_LOAD_PAGEOFF12,
-                        relative: false,
-                    },
-                    RelocationEncoding::Generic,
-                    12,
-                )
+                RelocationFlags::MachO {
+                    r_type: object::macho::ARM64_RELOC_TLVP_LOAD_PAGEOFF12,
+                    r_pcrel: false,
+                    r_length: 2,
+                }
             }
-            Reloc::Aarch64TlsGdAdrPage21 => {
+            Reloc::Aarch64TlsDescAdrPage21 => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "Aarch64TlsGdAdrPrel21 is not supported for this file format"
+                    "Aarch64TlsDescAdrPage21 is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADR_PAGE21),
-                    RelocationEncoding::Generic,
-                    21,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_AARCH64_TLSDESC_ADR_PAGE21,
+                }
             }
-            Reloc::Aarch64TlsGdAddLo12Nc => {
+            Reloc::Aarch64TlsDescLd64Lo12 => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "Aarch64TlsGdAddLo12Nc is not supported for this file format"
+                    "Aarch64TlsDescLd64Lo12 is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADD_LO12_NC),
-                    RelocationEncoding::Generic,
-                    12,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_AARCH64_TLSDESC_LD64_LO12,
+                }
             }
+            Reloc::Aarch64TlsDescAddLo12 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsDescAddLo12 is not supported for this file format"
+                );
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_AARCH64_TLSDESC_ADD_LO12,
+                }
+            }
+            Reloc::Aarch64TlsDescCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsDescCall is not supported for this file format"
+                );
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_AARCH64_TLSDESC_CALL,
+                }
+            }
+
             Reloc::Aarch64AdrGotPage21 => match self.object.format() {
-                object::BinaryFormat::Elf => (
-                    RelocationKind::Elf(object::elf::R_AARCH64_ADR_GOT_PAGE),
-                    RelocationEncoding::Generic,
-                    21,
-                ),
-                object::BinaryFormat::MachO => (
-                    RelocationKind::MachO {
-                        value: object::macho::ARM64_RELOC_GOT_LOAD_PAGE21,
-                        relative: true,
-                    },
-                    RelocationEncoding::Generic,
-                    21,
-                ),
+                object::BinaryFormat::Elf => RelocationFlags::Elf {
+                    r_type: object::elf::R_AARCH64_ADR_GOT_PAGE,
+                },
+                object::BinaryFormat::MachO => RelocationFlags::MachO {
+                    r_type: object::macho::ARM64_RELOC_GOT_LOAD_PAGE21,
+                    r_pcrel: true,
+                    r_length: 2,
+                },
                 _ => unimplemented!("Aarch64AdrGotPage21 is not supported for this file format"),
             },
             Reloc::Aarch64Ld64GotLo12Nc => match self.object.format() {
-                object::BinaryFormat::Elf => (
-                    RelocationKind::Elf(object::elf::R_AARCH64_LD64_GOT_LO12_NC),
-                    RelocationEncoding::Generic,
-                    12,
-                ),
-                object::BinaryFormat::MachO => (
-                    RelocationKind::MachO {
-                        value: object::macho::ARM64_RELOC_GOT_LOAD_PAGEOFF12,
-                        relative: false,
-                    },
-                    RelocationEncoding::Generic,
-                    12,
-                ),
+                object::BinaryFormat::Elf => RelocationFlags::Elf {
+                    r_type: object::elf::R_AARCH64_LD64_GOT_LO12_NC,
+                },
+                object::BinaryFormat::MachO => RelocationFlags::MachO {
+                    r_type: object::macho::ARM64_RELOC_GOT_LOAD_PAGEOFF12,
+                    r_pcrel: false,
+                    r_length: 2,
+                },
                 _ => unimplemented!("Aarch64Ld64GotLo12Nc is not supported for this file format"),
             },
-            Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
-            Reloc::S390xPLTRel32Dbl => (
-                RelocationKind::PltRelative,
-                RelocationEncoding::S390xDbl,
-                32,
-            ),
+            Reloc::S390xPCRel32Dbl => RelocationFlags::Generic {
+                kind: RelocationKind::Relative,
+                encoding: RelocationEncoding::S390xDbl,
+                size: 32,
+            },
+            Reloc::S390xPLTRel32Dbl => RelocationFlags::Generic {
+                kind: RelocationKind::PltRelative,
+                encoding: RelocationEncoding::S390xDbl,
+                size: 32,
+            },
             Reloc::S390xTlsGd64 => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
                     "S390xTlsGd64 is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_390_TLS_GD64),
-                    RelocationEncoding::Generic,
-                    64,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_390_TLS_GD64,
+                }
             }
             Reloc::S390xTlsGdCall => {
                 assert_eq!(
@@ -789,23 +807,19 @@ impl ObjectModule {
                     object::BinaryFormat::Elf,
                     "S390xTlsGdCall is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_390_TLS_GDCALL),
-                    RelocationEncoding::Generic,
-                    0,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_390_TLS_GDCALL,
+                }
             }
-            Reloc::RiscvCall => {
+            Reloc::RiscvCallPlt => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "RiscvCall is not supported for this file format"
+                    "RiscvCallPlt is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_RISCV_CALL),
-                    RelocationEncoding::Generic,
-                    0,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_RISCV_CALL_PLT,
+                }
             }
             Reloc::RiscvTlsGdHi20 => {
                 assert_eq!(
@@ -813,11 +827,9 @@ impl ObjectModule {
                     object::BinaryFormat::Elf,
                     "RiscvTlsGdHi20 is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_RISCV_TLS_GD_HI20),
-                    RelocationEncoding::Generic,
-                    0,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_RISCV_TLS_GD_HI20,
+                }
             }
             Reloc::RiscvPCRelLo12I => {
                 assert_eq!(
@@ -825,11 +837,19 @@ impl ObjectModule {
                     object::BinaryFormat::Elf,
                     "RiscvPCRelLo12I is not supported for this file format"
                 );
-                (
-                    RelocationKind::Elf(object::elf::R_RISCV_PCREL_LO12_I),
-                    RelocationEncoding::Generic,
-                    0,
-                )
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_RISCV_PCREL_LO12_I,
+                }
+            }
+            Reloc::RiscvGotHi20 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvGotHi20 is not supported for this file format"
+                );
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_RISCV_GOT_HI20,
+                }
             }
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
@@ -838,10 +858,8 @@ impl ObjectModule {
         ObjectRelocRecord {
             offset: record.offset,
             name: record.name.clone(),
-            kind,
-            encoding,
-            size,
-            addend,
+            flags,
+            addend: record.addend,
         }
     }
 }
@@ -902,8 +920,6 @@ struct SymbolRelocs {
 struct ObjectRelocRecord {
     offset: CodeOffset,
     name: ModuleRelocTarget,
-    kind: RelocationKind,
-    encoding: RelocationEncoding,
-    size: u8,
+    flags: RelocationFlags,
     addend: Addend,
 }

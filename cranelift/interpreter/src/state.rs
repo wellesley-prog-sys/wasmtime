@@ -25,7 +25,7 @@ pub trait State<'a> {
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;
     /// Retrieve a reference to the currently executing [Function].
     fn get_current_function(&self) -> &'a Function;
-    /// Retrieve the handler callback for a [LibCall](cranelift_codegen::ir::LibCall)
+    /// Retrieve the handler callback for a [LibCall]
     fn get_libcall_handler(&self) -> LibCallHandler;
 
     /// Record that an interpreter has called into a new [Function].
@@ -125,9 +125,17 @@ pub enum MemoryError {
     #[error("Requested an offset of {offset} but max was {max}")]
     InvalidOffset { offset: u64, max: u64 },
     #[error("Load of {load_size} bytes is larger than available size at address {addr:?}")]
-    OutOfBoundsLoad { addr: Address, load_size: usize },
+    OutOfBoundsLoad {
+        addr: Address,
+        load_size: usize,
+        mem_flags: MemFlags,
+    },
     #[error("Store of {store_size} bytes is larger than available size at address {addr:?}")]
-    OutOfBoundsStore { addr: Address, store_size: usize },
+    OutOfBoundsStore {
+        addr: Address,
+        store_size: usize,
+        mem_flags: MemFlags,
+    },
     #[error("Load of {load_size} bytes is misaligned at address {addr:?}")]
     MisalignedLoad { addr: Address, load_size: usize },
     #[error("Store of {store_size} bytes is misaligned at address {addr:?}")]

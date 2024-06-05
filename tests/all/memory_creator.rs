@@ -1,11 +1,10 @@
 #[cfg(all(not(target_os = "windows"), not(miri)))]
 mod not_for_windows {
     use wasmtime::*;
-    use wasmtime_environ::{WASM32_MAX_PAGES, WASM_PAGE_SIZE};
+    use wasmtime_environ::{WASM32_MAX_SIZE, WASM_PAGE_SIZE};
 
     use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
-    use std::convert::TryFrom;
     use std::ops::Range;
     use std::ptr::null_mut;
     use std::sync::{Arc, Mutex};
@@ -27,6 +26,9 @@ mod not_for_windows {
 
             let mem = mmap_anonymous(null_mut(), size, ProtFlags::empty(), MapFlags::PRIVATE)
                 .expect("mmap failed");
+
+            // NOTE: mmap_anonymous returns zero initialized memory, which is relied upon by this
+            // API.
 
             mprotect(mem, minimum, MprotectFlags::READ | MprotectFlags::WRITE)
                 .expect("mprotect failed");
@@ -77,7 +79,7 @@ mod not_for_windows {
         }
 
         fn wasm_accessible(&self) -> Range<usize> {
-            let base = self.mem as usize;
+            let base = self.mem;
             let end = base + self.size;
             base..end
         }
@@ -112,9 +114,7 @@ mod not_for_windows {
             unsafe {
                 let mem = Box::new(CustomMemory::new(
                     minimum,
-                    maximum.unwrap_or(
-                        usize::try_from(WASM32_MAX_PAGES * u64::from(WASM_PAGE_SIZE)).unwrap(),
-                    ),
+                    maximum.unwrap_or(usize::try_from(WASM32_MAX_SIZE).unwrap()),
                     self.num_total_bytes.clone(),
                 ));
                 *self.num_created_memories.lock().unwrap() += 1;

@@ -259,7 +259,7 @@ impl WorkerThread {
     }
 
     /// Increases the usage counter and recompresses the file
-    /// if the usage counter reached configurable treshold.
+    /// if the usage counter reached configurable threshold.
     fn handle_on_cache_get(&self, path: PathBuf) {
         trace!("handle_on_cache_get() for path: {}", path.display());
 
@@ -728,7 +728,7 @@ impl WorkerThread {
 }
 
 fn read_stats_file(path: &Path) -> Option<ModuleCacheStatistics> {
-    fs::read(path)
+    fs::read_to_string(path)
         .map_err(|err| {
             trace!(
                 "Failed to read stats file, path: {}, err: {}",
@@ -736,8 +736,8 @@ fn read_stats_file(path: &Path) -> Option<ModuleCacheStatistics> {
                 err
             )
         })
-        .and_then(|bytes| {
-            toml::from_slice::<ModuleCacheStatistics>(&bytes[..]).map_err(|err| {
+        .and_then(|contents| {
+            toml::from_str::<ModuleCacheStatistics>(&contents).map_err(|err| {
                 trace!(
                     "Failed to parse stats file, path: {}, err: {}",
                     path.display(),
@@ -758,11 +758,7 @@ fn write_stats_file(path: &Path, stats: &ModuleCacheStatistics) -> bool {
             )
         })
         .and_then(|serialized| {
-            if fs_write_atomic(path, "stats", serialized.as_bytes()) {
-                Ok(())
-            } else {
-                Err(())
-            }
+            fs_write_atomic(path, "stats", serialized.as_bytes()).map_err(|_| ())
         })
         .is_ok()
 }
@@ -851,7 +847,7 @@ fn acquire_task_fs_lock(
 
 // we have either both, or just path; dir entry is desirable since on some platforms we can get
 // metadata without extra syscalls
-// futhermore: it's better to get a path if we have it instead of allocating a new one from the dir entry
+// furthermore: it's better to get a path if we have it instead of allocating a new one from the dir entry
 fn is_fs_lock_expired(
     entry: Option<&fs::DirEntry>,
     path: &PathBuf,

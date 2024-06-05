@@ -512,14 +512,12 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li a3,-1
-;   subw a0,a0,a3
+;   addiw a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, -1
-;   subw a0, a0, a3
+;   addiw a0, a0, 1
 ;   ret
 
 function %f28(i64) -> i64 {
@@ -531,14 +529,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,-1
-;   sub a0,a0,a3
+;   addi a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, -1
-;   sub a0, a0, a3
+;   addi a0, a0, 1
 ;   ret
 
 function %f29(i64) -> i64 {
@@ -550,14 +546,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,1
-;   sub a0,zero,a3
+;   li a1,1
+;   sub a0,zero,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 1
-;   neg a0, a3
+;   addi a1, zero, 1
+;   neg a0, a1
 ;   ret
 
 function %add_i128(i128, i128) -> i128 {
@@ -618,13 +614,13 @@ block0(v0: i32, v1: i32, v2: i32):
 ; VCode:
 ; block0:
 ;   mulw a5,a1,a2
-;   add a0,a5,a0
+;   addw a0,a5,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mulw a5, a1, a2
-;   add a0, a5, a0
+;   addw a0, a5, a0
 ;   ret
 
 function %msub_i32(i32, i32, i32) -> i32 {

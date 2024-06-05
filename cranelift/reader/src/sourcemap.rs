@@ -10,8 +10,8 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::{
-    Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, JumpTable, SigRef, StackSlot, Table,
-    Value,
+    Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, JumpTable, MemoryType, SigRef,
+    StackSlot, Value,
 };
 use std::collections::HashMap;
 
@@ -47,11 +47,6 @@ impl SourceMap {
     /// Look up a global value entity.
     pub fn contains_gv(&self, gv: GlobalValue) -> bool {
         self.locations.contains_key(&gv.into())
-    }
-
-    /// Look up a table entity.
-    pub fn contains_table(&self, table: Table) -> bool {
-        self.locations.contains_key(&table.into())
     }
 
     /// Look up a signature entity.
@@ -104,13 +99,6 @@ impl SourceMap {
                     None
                 } else {
                     Some(gv.into())
-                }
-            }),
-            "table" => Table::with_number(num).and_then(|table| {
-                if !self.contains_table(table) {
-                    None
-                } else {
-                    Some(table.into())
                 }
             }),
             "sig" => SigRef::with_number(num).and_then(|sig| {
@@ -182,8 +170,8 @@ impl SourceMap {
         self.def_entity(entity.into(), loc)
     }
 
-    /// Define the table `entity`.
-    pub fn def_table(&mut self, entity: Table, loc: Location) -> ParseResult<()> {
+    /// Define the memory type `entity`.
+    pub fn def_mt(&mut self, entity: MemoryType, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

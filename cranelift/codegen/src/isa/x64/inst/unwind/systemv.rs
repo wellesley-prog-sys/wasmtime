@@ -86,9 +86,6 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
     fn map(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
         Ok(map_reg(reg)?.0)
     }
-    fn sp(&self) -> u16 {
-        X86_64::RSP.0
-    }
     fn fp(&self) -> Option<u16> {
         Some(X86_64::RBP.0)
     }
@@ -104,7 +101,6 @@ mod tests {
     use crate::settings::{builder, Flags};
     use crate::Context;
     use gimli::write::Address;
-    use std::str::FromStr;
     use target_lexicon::triple;
 
     #[test]
@@ -116,7 +112,7 @@ mod tests {
 
         let mut context = Context::for_function(create_function(
             CallConv::SystemV,
-            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
+            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64, 0)),
         ));
 
         let code = context

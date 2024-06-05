@@ -6,7 +6,6 @@
 
 use alloc::vec::Vec;
 use core::cmp::Ordering;
-use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
@@ -755,7 +754,7 @@ impl Ieee32 {
     }
 
     /// Create an `Ieee32` number representing the greatest negative value
-    /// not convertable from f32 to a signed integer with width n.
+    /// not convertible from f32 to a signed integer with width n.
     pub fn fcvt_to_sint_negative_overflow<I: Into<i32>>(n: I) -> Self {
         let n = n.into();
         debug_assert!(n < 32);
@@ -972,7 +971,7 @@ impl Ieee64 {
     }
 
     /// Create an `Ieee64` number representing the greatest negative value
-    /// not convertable from f64 to a signed integer with width n.
+    /// not convertible from f64 to a signed integer with width n.
     pub fn fcvt_to_sint_negative_overflow<I: Into<i64>>(n: I) -> Self {
         let n = n.into();
         debug_assert!(n < 64);
@@ -1181,9 +1180,7 @@ impl Not for Ieee64 {
 mod tests {
     use super::*;
     use alloc::string::ToString;
-    use core::fmt::Display;
     use core::mem;
-    use core::str::FromStr;
     use core::{f32, f64};
 
     #[test]

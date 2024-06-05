@@ -5,10 +5,10 @@
 
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
-    self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
-    DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
-    JumpTableData, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot, StackSlotData,
-    StackSlots, Table, TableData, Type,
+    self, pcc::Fact, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData,
+    DynamicStackSlots, DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst,
+    JumpTable, JumpTableData, Layout, MemoryType, MemoryTypeData, Opcode, SigRef, Signature,
+    SourceLocs, StackSlot, StackSlotData, StackSlots, Type,
 };
 use crate::isa::CallConv;
 use crate::write::write_function;
@@ -172,8 +172,11 @@ pub struct FunctionStencil {
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
-    /// Tables referenced.
-    pub tables: PrimaryMap<ir::Table, ir::TableData>,
+    /// Global value proof-carrying-code facts.
+    pub global_value_facts: SecondaryMap<ir::GlobalValue, Option<Fact>>,
+
+    /// Memory types for proof-carrying code.
+    pub memory_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
 
     /// Data flow graph containing the primary definition of all instructions, blocks and values.
     pub dfg: DataFlowGraph,
@@ -201,7 +204,8 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
-        self.tables.clear();
+        self.global_value_facts.clear();
+        self.memory_types.clear();
         self.dfg.clear();
         self.layout.clear();
         self.srclocs.clear();
@@ -235,6 +239,11 @@ impl FunctionStencil {
         self.global_values.push(data)
     }
 
+    /// Declares a memory type for use by the function.
+    pub fn create_memory_type(&mut self, data: MemoryTypeData) -> MemoryType {
+        self.memory_types.push(data)
+    }
+
     /// Find the global dyn_scale value associated with given DynamicType.
     pub fn get_dyn_scale(&self, ty: DynamicType) -> GlobalValue {
         self.dfg.dynamic_types.get(ty).unwrap().dynamic_scale
@@ -253,11 +262,6 @@ impl FunctionStencil {
             .get(ty)
             .unwrap_or_else(|| panic!("Undeclared dynamic vector type: {}", ty))
             .concrete()
-    }
-
-    /// Declares a table accessible to the function.
-    pub fn create_table(&mut self, data: TableData) -> Table {
-        self.tables.push(data)
     }
 
     /// Find a presumed unique special-purpose function parameter value.
@@ -314,7 +318,17 @@ impl FunctionStencil {
     pub fn is_leaf(&self) -> bool {
         // Conservative result: if there's at least one function signature referenced in this
         // function, assume it is not a leaf.
-        self.dfg.signatures.is_empty()
+        let has_signatures = !self.dfg.signatures.is_empty();
+
+        // Under some TLS models, retrieving the address of a TLS variable requires calling a
+        // function. Conservatively assume that any function that references a tls global value
+        // is not a leaf.
+        let has_tls = self.global_values.values().any(|gv| match gv {
+            GlobalValueData::Symbol { tls, .. } => *tls,
+            _ => false,
+        });
+
+        !has_signatures && !has_tls
     }
 
     /// Replace the `dst` instruction's data with the `src` instruction's data
@@ -398,7 +412,8 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
-                tables: PrimaryMap::new(),
+                global_value_facts: SecondaryMap::new(),
+                memory_types: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),

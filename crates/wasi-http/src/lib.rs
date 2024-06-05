@@ -1,25 +1,68 @@
-pub use crate::types::{WasiHttpCtx, WasiHttpView};
+//! Wasmtime's WASI HTTP Implementation
+//!
+//! This crate's implementation is primarily built on top of [`hyper`].
+//!
+//! # WASI HTTP Interfaces
+//!
+//! This crate contains implementations of the following interfaces:
+//!
+//! * `wasi:http/incoming-handler`
+//! * `wasi:http/outgoing-handler`
+//! * `wasi:http/types`
+//!
+//! The crate also contains an implementation of the [`wasi:http/proxy`] world.
+//!
+//! [`wasi:http/proxy`]: crate::proxy
+
+//! All traits are implemented in terms of a [`WasiHttpView`] trait which provides
+//! basic access to [`WasiHttpCtx`], configuration for WASI HTTP, and a [`wasmtime_wasi::ResourceTable`],
+//! the state for all host-defined component model resources.
+
+//! # Examples
+//!
+//! Usage of this crate is done through a few steps to get everything hooked up:
+//!
+//! 1. First implement [`WasiHttpView`] for your type which is the `T` in
+//!    [`wasmtime::Store<T>`].
+//! 2. Add WASI HTTP interfaces to a [`wasmtime::component::Linker<T>`]. This is either
+//!    done through functions like [`proxy::add_to_linker`] (which bundles all interfaces
+//!    in the `wasi:http/proxy` world together) or through individual interfaces like the
+//!    [`bindings::http::outgoing_handler::add_to_linker_get_host`] function.
+//! 3. Use the previous [`wasmtime::component::Linker<T>::instantiate`] to instantiate
+//!    a [`wasmtime::component::Component`] within a [`wasmtime::Store<T>`]. If you're
+//!    targeting the `wasi:http/proxy` world, you can instantiate the component with
+//!    [`proxy::Proxy::instantiate_async`] or [`proxy::sync::Proxy::instantiate`] functions.
+
+#![deny(missing_docs)]
+
+mod error;
+mod http_impl;
+mod types_impl;
 
 pub mod body;
-pub mod http_impl;
+pub mod io;
 pub mod proxy;
 pub mod types;
-pub mod types_impl;
 
+/// Raw bindings to the `wasi:http` package.
 pub mod bindings {
+    #![allow(missing_docs)]
     wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
-                import wasi:http/incoming-handler
-                import wasi:http/outgoing-handler
-                import wasi:http/types
-            ",
+            import wasi:http/incoming-handler@0.2.0;
+            import wasi:http/outgoing-handler@0.2.0;
+            import wasi:http/types@0.2.0;
+        ",
         tracing: true,
         async: false,
+        trappable_imports: true,
         with: {
-            "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
-            "wasi:io/poll": wasmtime_wasi::preview2::bindings::io::poll,
+            // Upstream package dependencies
+            "wasi:io": wasmtime_wasi::bindings::io,
 
+            // Configure all WIT http resources to be defined types in this
+            // crate to use the `ResourceTable` helper methods.
             "wasi:http/types/outgoing-body": super::body::HostOutgoingBody,
             "wasi:http/types/future-incoming-response": super::types::HostFutureIncomingResponse,
             "wasi:http/types/outgoing-response": super::types::HostOutgoingResponse,
@@ -30,76 +73,18 @@ pub mod bindings {
             "wasi:http/types/outgoing-request": super::types::HostOutgoingRequest,
             "wasi:http/types/incoming-request": super::types::HostIncomingRequest,
             "wasi:http/types/fields": super::types::HostFields,
-        }
+            "wasi:http/types/request-options": super::types::HostRequestOptions,
+        },
+        trappable_error_type: {
+            "wasi:http/types/error-code" => crate::HttpError,
+        },
     });
 
     pub use wasi::http;
 }
 
-impl From<wasmtime_wasi::preview2::TableError> for crate::bindings::http::types::Error {
-    fn from(err: wasmtime_wasi::preview2::TableError) -> Self {
-        Self::UnexpectedError(err.to_string())
-    }
-}
-
-impl From<anyhow::Error> for crate::bindings::http::types::Error {
-    fn from(err: anyhow::Error) -> Self {
-        Self::UnexpectedError(err.to_string())
-    }
-}
-
-impl From<std::io::Error> for crate::bindings::http::types::Error {
-    fn from(err: std::io::Error) -> Self {
-        let message = err.to_string();
-        match err.kind() {
-            std::io::ErrorKind::InvalidInput => Self::InvalidUrl(message),
-            std::io::ErrorKind::AddrNotAvailable => Self::InvalidUrl(message),
-            _ => {
-                if message.starts_with("failed to lookup address information") {
-                    Self::InvalidUrl("invalid dnsname".to_string())
-                } else {
-                    Self::ProtocolError(message)
-                }
-            }
-        }
-    }
-}
-
-impl From<http::Error> for crate::bindings::http::types::Error {
-    fn from(err: http::Error) -> Self {
-        Self::InvalidUrl(err.to_string())
-    }
-}
-
-impl From<hyper::Error> for crate::bindings::http::types::Error {
-    fn from(err: hyper::Error) -> Self {
-        let message = err.message().to_string();
-        if err.is_timeout() {
-            Self::TimeoutError(message)
-        } else if err.is_parse_status() || err.is_user() {
-            Self::InvalidUrl(message)
-        } else if err.is_body_write_aborted()
-            || err.is_canceled()
-            || err.is_closed()
-            || err.is_incomplete_message()
-            || err.is_parse()
-        {
-            Self::ProtocolError(message)
-        } else {
-            Self::UnexpectedError(message)
-        }
-    }
-}
-
-impl From<tokio::time::error::Elapsed> for crate::bindings::http::types::Error {
-    fn from(err: tokio::time::error::Elapsed) -> Self {
-        Self::TimeoutError(err.to_string())
-    }
-}
-
-#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-impl From<rustls::client::InvalidDnsNameError> for crate::bindings::http::types::Error {
-    fn from(_err: rustls::client::InvalidDnsNameError) -> Self {
-        Self::InvalidUrl("invalid dnsname".to_string())
-    }
-}
+pub use crate::error::{
+    http_request_error, hyper_request_error, hyper_response_error, HttpError, HttpResult,
+};
+#[doc(inline)]
+pub use crate::types::{WasiHttpCtx, WasiHttpView};

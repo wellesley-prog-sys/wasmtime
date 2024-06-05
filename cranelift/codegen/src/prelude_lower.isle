@@ -173,7 +173,7 @@
 ;; the shift amount to the bit width of the value being shifted, and so the high
 ;; half of the `i128` won't ever be used.
 ;;
-;; As a side efect, this marks that value as used.
+;; As a side effect, this marks that value as used.
 (decl lo_reg (Value) Reg)
 (rule (lo_reg val)
       (let ((regs ValueRegs (put_in_regs val)))
@@ -198,6 +198,11 @@
 (decl multi_reg_to_single (MultiReg) InstOutput)
 (rule (multi_reg_to_single (MultiReg.One a))
       (value_reg a))
+
+;; Add a range fact to a register, when compiling with
+;; proof-carrying-code enabled.
+(decl add_range_fact (Reg u16 u64 u64) Reg)
+(extern constructor add_range_fact add_range_fact)
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -322,6 +327,25 @@
 ;; present.
 (decl maybe_uextend (Value) Value)
 (extern extractor maybe_uextend maybe_uextend)
+
+;; Get a signed 32-bit immediate in an u32 from an Imm64, if possible.
+;; Note that this checks that the raw i64 value from the Imm64 fits in i32,
+;; so `-1_u32` will not actually match -- it's treated as `0xFFFF_FFFF_i64`,
+;; which doesn't fit in an i32 and thus doesn't match the extractor.
+;; An Imm64 of `-1_i64` *will* match, however.
+(spec (simm32 x)
+    (provide (= result (sign_ext 64 x)))
+    (require (= (widthof x) 32)))
+(decl simm32 (i32) Imm64)
+(extern extractor simm32 simm32)
+
+;; Get an unsigned 8-bit immediate in a u8 from an Imm64, if possible.
+(spec (uimm8 arg)
+    (provide (= result (zero_ext 64 arg)))
+    (require (bvslt result #x0000000000000100)
+             (= (widthof arg) 8)))
+(decl uimm8 (u8) Imm64)
+(extern extractor uimm8 uimm8)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

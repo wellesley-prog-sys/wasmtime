@@ -10,7 +10,6 @@
 //! single ISA instance.
 
 use crate::alias_analysis::AliasAnalysis;
-use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
@@ -31,6 +30,7 @@ use crate::{timing, CompileError};
 use alloc::string::String;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
+use target_lexicon::Architecture;
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;
@@ -141,7 +141,7 @@ impl Context {
 
         self.verify_if(isa)?;
 
-        self.optimize(isa)?;
+        self.optimize(isa, ctrl_plane)?;
 
         isa.compile_function(&self.func, &self.domtree, self.want_disasm, ctrl_plane)
     }
@@ -151,7 +151,11 @@ impl Context {
     /// allocation.
     ///
     /// Public only for testing purposes.
-    pub fn optimize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+    pub fn optimize(
+        &mut self,
+        isa: &dyn TargetIsa,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<()> {
         log::debug!(
             "Number of CLIF instructions to optimize: {}",
             self.func.dfg.num_insts()
@@ -177,15 +181,12 @@ impl Context {
 
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
-
-        if opt_level != OptLevel::None {
-            self.dce(isa)?;
-        }
-
         self.remove_constant_phis(isa)?;
 
+        self.func.dfg.resolve_all_aliases();
+
         if opt_level != OptLevel::None {
-            self.egraph_pass(isa)?;
+            self.egraph_pass(isa, ctrl_plane)?;
         }
 
         Ok(())
@@ -237,6 +238,8 @@ impl Context {
     /// Run the verifier on the function.
     ///
     /// Also check that the dominator tree and control flow graph are consistent with the function.
+    ///
+    /// TODO: rename to "CLIF validate" or similar.
     pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> VerifierResult<()> {
         let mut errors = VerifierErrors::default();
         let _ = verify_context(&self.func, &self.cfg, &self.domtree, fisa, &mut errors);
@@ -257,13 +260,6 @@ impl Context {
         Ok(())
     }
 
-    /// Perform dead-code elimination on the function.
-    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
-        do_dce(&mut self.func, &mut self.domtree);
-        self.verify_if(fisa)?;
-        Ok(())
-    }
-
     /// Perform constant-phi removal on the function.
     pub fn remove_constant_phis<'a, FOI: Into<FlagsOrIsa<'a>>>(
         &mut self,
@@ -276,7 +272,15 @@ impl Context {
 
     /// Perform NaN canonicalizing rewrites on the function.
     pub fn canonicalize_nans(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_nan_canonicalization(&mut self.func);
+        // Currently only RiscV64 is the only arch that may not have vector support.
+        let has_vector_support = match isa.triple().architecture {
+            Architecture::Riscv64(_) => match isa.isa_flags().iter().find(|f| f.name == "has_v") {
+                Some(value) => value.as_bool().unwrap_or(false),
+                None => false,
+            },
+            _ => true,
+        };
+        do_nan_canonicalization(&mut self.func, has_vector_support);
         self.verify_if(isa)
     }
 
@@ -345,7 +349,11 @@ impl Context {
     }
 
     /// Run optimizations via the egraph infrastructure.
-    pub fn egraph_pass<'a, FOI>(&mut self, fisa: FOI) -> CodegenResult<()>
+    pub fn egraph_pass<'a, FOI>(
+        &mut self,
+        fisa: FOI,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<()>
     where
         FOI: Into<FlagsOrIsa<'a>>,
     {
@@ -355,6 +363,7 @@ impl Context {
             "About to optimize with egraph phase:\n{}",
             self.func.display()
         );
+        let fisa = fisa.into();
         self.compute_loop_analysis();
         let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
         let mut pass = EgraphPass::new(
@@ -362,9 +371,12 @@ impl Context {
             &self.domtree,
             &self.loop_analysis,
             &mut alias_analysis,
+            &fisa.flags,
+            ctrl_plane,
         );
         pass.run();
         log::debug!("egraph stats: {:?}", pass.stats);
+        trace!("pinned_union_count: {}", pass.eclasses.pinned_union_count);
         trace!("After egraph optimization:\n{}", self.func.display());
 
         self.verify_if(fisa)

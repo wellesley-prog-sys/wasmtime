@@ -6,8 +6,8 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use std::thread;
+use wasi_common::{sync::WasiCtxBuilder, WasiCtx};
 use wasmtime::*;
-use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
 fn store(engine: &Engine) -> Store<WasiCtx> {
     let wasi = WasiCtxBuilder::new().build();
@@ -20,7 +20,7 @@ fn instantiate(pre: &InstancePre<WasiCtx>, engine: &Engine) -> Result<()> {
     Ok(())
 }
 
-fn benchmark_name<'a>(strategy: &InstanceAllocationStrategy) -> &'static str {
+fn benchmark_name(strategy: &InstanceAllocationStrategy) -> &'static str {
     match strategy {
         InstanceAllocationStrategy::OnDemand => "default",
         InstanceAllocationStrategy::Pooling { .. } => "pooling",
@@ -48,7 +48,7 @@ fn bench_sequential(c: &mut Criterion, path: &Path) {
             // benchmark programs.
             linker.func_wrap("bench", "start", || {}).unwrap();
             linker.func_wrap("bench", "end", || {}).unwrap();
-            wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
+            wasi_common::sync::add_to_linker(&mut linker, |cx| cx).unwrap();
             let pre = linker
                 .instantiate_pre(&module)
                 .expect("failed to pre-instantiate");
@@ -82,7 +82,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
             // benchmark programs.
             linker.func_wrap("bench", "start", || {}).unwrap();
             linker.func_wrap("bench", "end", || {}).unwrap();
-            wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
+            wasi_common::sync::add_to_linker(&mut linker, |cx| cx).unwrap();
             let pre = Arc::new(
                 linker
                     .instantiate_pre(&module)
@@ -219,7 +219,7 @@ fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
         InstanceAllocationStrategy::OnDemand,
         InstanceAllocationStrategy::Pooling({
             let mut config = PoolingAllocationConfig::default();
-            config.memory_pages(10_000);
+            config.max_memory_size(10_000 << 16);
             config
         }),
     ]

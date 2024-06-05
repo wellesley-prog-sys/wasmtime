@@ -7,7 +7,6 @@ use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
-use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
@@ -20,15 +19,14 @@ use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
         immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, StackSlot, TrapCode, Value, ValueList,
+        MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InstOutput, Lower},
+    machinst::{ArgPair, InstOutput},
 };
-use crate::{isa, isle_common_prelude_methods, isle_lower_prelude_methods};
+use crate::{isa, isle_common_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
-use std::convert::TryFrom;
 use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;
@@ -85,6 +83,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
+            Opcode::ReturnCall,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -175,19 +174,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
-                from: AMode::FPOffset(8, I64),
+                from: AMode::FPOffset(8),
             });
             tmp.to_reg()
         } else {
             link_reg()
-        }
-    }
-    fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
-        assert!(ty.is_int(), "{:?}", ty);
-        if ty.bits() == 128 {
-            ValueRegs::two(self.zero_reg(), self.zero_reg())
-        } else {
-            ValueRegs::one(self.zero_reg())
         }
     }
 
@@ -197,6 +188,20 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn imm12_and(&mut self, imm: Imm12, x: u64) -> Imm12 {
         Imm12::from_i16(imm.as_i16() & (x as i16))
+    }
+
+    fn fli_constant_from_u64(&mut self, ty: Type, imm: u64) -> Option<FliConstant> {
+        FliConstant::maybe_from_u64(ty, imm)
+    }
+
+    fn fli_constant_from_negated_u64(&mut self, ty: Type, imm: u64) -> Option<FliConstant> {
+        let negated_imm = match ty {
+            F64 => imm ^ 0x8000000000000000,
+            F32 => imm ^ 0x80000000,
+            _ => unimplemented!(),
+        };
+
+        FliConstant::maybe_from_u64(ty, negated_imm)
     }
 
     fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
@@ -293,8 +298,22 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         writable_zero_reg()
     }
     #[inline]
-    fn zero_reg(&mut self) -> Reg {
-        zero_reg()
+    fn zero_reg(&mut self) -> XReg {
+        XReg::new(zero_reg()).unwrap()
+    }
+    fn is_non_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg != self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
+    }
+    fn is_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg == self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
     }
     #[inline]
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {
@@ -303,10 +322,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     #[inline]
     fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {
         Imm12::maybe_from_i64(val).unwrap()
-    }
-
-    fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
-        None
     }
 
     fn frm_bits(&mut self, frm: &FRM) -> UImm5 {
@@ -326,6 +341,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
         Imm12::maybe_from_i64((val + add) as i64).unwrap()
+    }
+    fn imm12_add(&mut self, val: Imm12, add: i32) -> Option<Imm12> {
+        Imm12::maybe_from_i64((i32::from(val.as_i16()) + add).into())
     }
 
     //
@@ -365,6 +383,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_m()
     }
 
+    fn has_zfa(&mut self) -> bool {
+        self.backend.isa_flags.has_zfa()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -385,24 +407,27 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
-        AMode::RegOffset(base, offset, ty)
+    fn has_zicond(&mut self) -> bool {
+        self.backend.isa_flags.has_zicond()
     }
 
-    fn gen_sp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
-        AMode::SPOffset(offset, ty)
+    fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64) -> AMode {
+        AMode::RegOffset(base, offset)
     }
 
-    fn gen_fp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
-        AMode::FPOffset(offset, ty)
+    fn gen_sp_offset_amode(&mut self, offset: i64) -> AMode {
+        AMode::SPOffset(offset)
     }
 
-    fn gen_stack_slot_amode(&mut self, ss: StackSlot, offset: i64, ty: Type) -> AMode {
-        // Offset from beginning of stackslot area, which is at nominal SP (see
-        // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
+    fn gen_fp_offset_amode(&mut self, offset: i64) -> AMode {
+        AMode::FPOffset(offset)
+    }
+
+    fn gen_stack_slot_amode(&mut self, ss: StackSlot, offset: i64) -> AMode {
+        // Offset from beginning of stackslot area.
         let stack_off = self.lower_ctx.abi().sized_stackslot_offsets()[ss] as i64;
         let sp_off: i64 = stack_off + offset;
-        AMode::NominalSPOffset(sp_off, ty)
+        AMode::SlotOffset(sp_off)
     }
 
     fn gen_const_amode(&mut self, c: VCodeConstant) -> AMode {
@@ -484,6 +509,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     #[inline]
+    fn int_compare_decompose(&mut self, cmp: IntegerCompare) -> (IntCC, XReg, XReg) {
+        (cmp.kind, self.xreg_new(cmp.rs1), self.xreg_new(cmp.rs2))
+    }
+
+    #[inline]
     fn vstate_from_type(&mut self, ty: Type) -> VState {
         VState::from_type(ty)
     }
@@ -514,6 +544,83 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn vec_alu_rr_dst_type(&mut self, op: &VecAluOpRR) -> Type {
         MInst::canonical_type_for_rc(op.dst_regclass())
+    }
+
+    fn bclr_imm(&mut self, ty: Type, i: u64) -> Option<Imm12> {
+        // Only consider those bits in the immediate which are up to the width
+        // of `ty`.
+        let neg = !i & (u64::MAX >> (64 - ty.bits()));
+        if neg.count_ones() != 1 {
+            return None;
+        }
+        Imm12::maybe_from_u64(neg.trailing_zeros().into())
+    }
+
+    fn binvi_imm(&mut self, i: u64) -> Option<Imm12> {
+        if i.count_ones() != 1 {
+            return None;
+        }
+        Imm12::maybe_from_u64(i.trailing_zeros().into())
+    }
+    fn bseti_imm(&mut self, i: u64) -> Option<Imm12> {
+        self.binvi_imm(i)
+    }
+
+    fn fcvt_smin_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
+        match (int, float) {
+            // Saturating cases for larger integers are handled using the
+            // `fcvt.{w,d}.{s,d}` instruction directly, that automatically
+            // saturates up/down to the correct limit.
+            //
+            // NB: i32/i64 don't use this function because the native RISC-V
+            // instruction does everything we already need, so only cases for
+            // i8/i16 are listed here.
+            (I8, F32) if saturating => f32::from(i8::MIN).to_bits().into(),
+            (I8, F64) if saturating => f64::from(i8::MIN).to_bits(),
+            (I16, F32) if saturating => f32::from(i16::MIN).to_bits().into(),
+            (I16, F64) if saturating => f64::from(i16::MIN).to_bits(),
+
+            (_, F32) if !saturating => f32_cvt_to_int_bounds(true, int.bits()).0.to_bits().into(),
+            (_, F64) if !saturating => f64_cvt_to_int_bounds(true, int.bits()).0.to_bits(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn fcvt_smax_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
+        // NB: see `fcvt_smin_bound` for some more comments
+        match (int, float) {
+            (I8, F32) if saturating => f32::from(i8::MAX).to_bits().into(),
+            (I8, F64) if saturating => f64::from(i8::MAX).to_bits(),
+            (I16, F32) if saturating => f32::from(i16::MAX).to_bits().into(),
+            (I16, F64) if saturating => f64::from(i16::MAX).to_bits(),
+
+            (_, F32) if !saturating => f32_cvt_to_int_bounds(true, int.bits()).1.to_bits().into(),
+            (_, F64) if !saturating => f64_cvt_to_int_bounds(true, int.bits()).1.to_bits(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn fcvt_umax_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
+        // NB: see `fcvt_smin_bound` for some more comments
+        match (int, float) {
+            (I8, F32) if saturating => f32::from(u8::MAX).to_bits().into(),
+            (I8, F64) if saturating => f64::from(u8::MAX).to_bits(),
+            (I16, F32) if saturating => f32::from(u16::MAX).to_bits().into(),
+            (I16, F64) if saturating => f64::from(u16::MAX).to_bits(),
+
+            (_, F32) if !saturating => f32_cvt_to_int_bounds(false, int.bits()).1.to_bits().into(),
+            (_, F64) if !saturating => f64_cvt_to_int_bounds(false, int.bits()).1.to_bits(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn fcvt_umin_bound(&mut self, float: Type, saturating: bool) -> u64 {
+        assert!(!saturating);
+        match float {
+            F32 => (-1.0f32).to_bits().into(),
+            F64 => (-1.0f64).to_bits(),
+            _ => unimplemented!(),
+        }
     }
 }
 

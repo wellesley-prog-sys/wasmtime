@@ -2,12 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::{
-    ir::types,
-    ir::AtomicRmwOp,
-    isa, isle_common_prelude_methods, isle_lower_prelude_methods,
-    machinst::{InputSourceInst, Reg, Writable},
-};
+use crate::{ir::types, ir::AtomicRmwOp, isa, isle_common_prelude_methods};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -17,29 +12,29 @@ use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
 use crate::{
     ir::{
-        condcodes::{CondCode, FloatCC, IntCC},
+        condcodes::{FloatCC, IntCC},
         immediates::*,
         types::*,
         BlockCall, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
-    isa::{
-        unwind::UnwindInst,
-        x64::{
-            abi::X64CallSite,
-            inst::{args::*, regs, CallInfo, ReturnCallInfo},
-        },
+    isa::x64::{
+        abi::X64CallSite,
+        inst::{args::*, regs, CallInfo, ReturnCallInfo},
     },
     machinst::{
-        isle::*, valueregs, ArgPair, InsnInput, InstOutput, Lower, MachAtomicRmwOp, MachInst,
+        isle::*, valueregs, ArgPair, InsnInput, InstOutput, MachAtomicRmwOp, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };
 use alloc::vec::Vec;
 use regalloc2::PReg;
 use std::boxed::Box;
-use std::convert::TryFrom;
 
-type BoxCallInfo = Box<CallInfo>;
+/// Type representing out-of-line data for calls. This type optional because the
+/// call instruction is also used by Winch to emit calls, but the
+/// `Box<CallInfo>` field is not used, it's only used by Cranelift. By making it
+/// optional, we reduce the number of heap allocations in Winch.
+type BoxCallInfo = Option<Box<CallInfo>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecArgPair = Vec<ArgPair>;
 
@@ -123,6 +118,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
+            Opcode::ReturnCall,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -150,7 +146,8 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
-            if let Some(imm) = to_simm32(c as i64) {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            if let Some(imm) = to_simm32(c as i64, ty) {
                 return imm.to_reg_mem_imm();
             }
         }
@@ -162,7 +159,8 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
-            if let Some(imm) = to_simm32(c as i64) {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            if let Some(imm) = to_simm32(c as i64, ty) {
                 return XmmMemImm::new(imm.to_reg_mem_imm()).unwrap();
             }
         }
@@ -329,13 +327,9 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn simm32_from_value(&mut self, val: Value) -> Option<GprMemImm> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant: u64 = self.lower_ctx.get_constant(inst)?;
+        let ty = self.lower_ctx.dfg().value_type(val);
         let constant = constant as i64;
-        to_simm32(constant)
-    }
-
-    #[inline]
-    fn simm32_from_imm64(&mut self, imm: Imm64) -> Option<GprMemImm> {
-        to_simm32(imm.bits())
+        to_simm32(constant, ty)
     }
 
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
@@ -588,15 +582,15 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn gpr_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<Gpr> {
-        match val.clone().to_imm8_reg() {
-            Imm8Reg::Reg { reg } => Some(Gpr::new(reg).unwrap()),
+        match val.as_imm8_reg() {
+            &Imm8Reg::Reg { reg } => Some(Gpr::new(reg).unwrap()),
             Imm8Reg::Imm8 { .. } => None,
         }
     }
 
     fn imm8_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<u8> {
-        match val.clone().to_imm8_reg() {
-            Imm8Reg::Imm8 { imm } => Some(imm),
+        match val.as_imm8_reg() {
+            &Imm8Reg::Imm8 { imm } => Some(imm),
             Imm8Reg::Reg { .. } => None,
         }
     }
@@ -621,11 +615,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             types::R32 => panic!("shouldn't have 32-bits refs on x64"),
             _ => None,
         }
-    }
-
-    #[inline]
-    fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
-        x.without_equal()
     }
 
     #[inline]
@@ -1061,8 +1050,8 @@ const I8X16_USHR_MASKS: [u8; 128] = [
 ];
 
 #[inline]
-fn to_simm32(constant: i64) -> Option<GprMemImm> {
-    if constant == ((constant << 32) >> 32) {
+fn to_simm32(constant: i64, ty: Type) -> Option<GprMemImm> {
+    if ty.bits() <= 32 || constant == ((constant << 32) >> 32) {
         Some(
             GprMemImm::new(RegMemImm::Imm {
                 simm32: constant as u32,

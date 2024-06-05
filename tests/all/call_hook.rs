@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{bail, Error, Result};
+use anyhow::bail;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};
@@ -32,9 +32,14 @@ fn call_wrapped_func() -> Result<(), Error> {
             assert_eq!(d, 4.0);
         },
     ));
+    let func_ty = FuncType::new(
+        store.engine(),
+        [ValType::I32, ValType::I64, ValType::F32, ValType::F64],
+        [],
+    );
     funcs.push(Func::new(
         &mut store,
-        FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
+        func_ty,
         |caller: Caller<State>, params, results| {
             verify(caller.data());
 
@@ -47,20 +52,21 @@ fn call_wrapped_func() -> Result<(), Error> {
             Ok(())
         },
     ));
+    let func_ty = FuncType::new(
+        store.engine(),
+        [ValType::I32, ValType::I64, ValType::F32, ValType::F64],
+        [],
+    );
     funcs.push(unsafe {
-        Func::new_unchecked(
-            &mut store,
-            FuncType::new([ValType::I32, ValType::I64, ValType::F32, ValType::F64], []),
-            |caller: Caller<State>, space| {
-                verify(caller.data());
+        Func::new_unchecked(&mut store, func_ty, |caller: Caller<State>, space| {
+            verify(caller.data());
 
-                assert_eq!(space[0].get_i32(), 1i32);
-                assert_eq!(space[1].get_i64(), 2i64);
-                assert_eq!(space[2].get_f32(), 3.0f32.to_bits());
-                assert_eq!(space[3].get_f64(), 4.0f64.to_bits());
-                Ok(())
-            },
-        )
+            assert_eq!(space[0].get_i32(), 1i32);
+            assert_eq!(space[1].get_i64(), 2i64);
+            assert_eq!(space[2].get_f32(), 3.0f32.to_bits());
+            assert_eq!(space[3].get_f64(), 4.0f64.to_bits());
+            Ok(())
+        })
     });
 
     let mut n = 0;
@@ -89,10 +95,10 @@ fn call_wrapped_func() -> Result<(), Error> {
 
         unsafe {
             let mut args = [
-                Val::I32(1).to_raw(&mut store),
-                Val::I64(2).to_raw(&mut store),
-                Val::F32(3.0f32.to_bits()).to_raw(&mut store),
-                Val::F64(4.0f64.to_bits()).to_raw(&mut store),
+                Val::I32(1).to_raw(&mut store)?,
+                Val::I64(2).to_raw(&mut store)?,
+                Val::F32(3.0f32.to_bits()).to_raw(&mut store)?,
+                Val::F64(4.0f64.to_bits()).to_raw(&mut store)?,
             ];
             f.call_unchecked(&mut store, args.as_mut_ptr(), args.len())?;
         }
@@ -115,9 +121,9 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, State::default());
     store.call_hook(State::call_hook);
-    let f = Func::wrap4_async(
+    let f = Func::wrap_async(
         &mut store,
-        |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+        |caller: Caller<State>, (a, b, c, d): (i32, i64, f32, f64)| {
             Box::new(async move {
                 // Calling this func will switch context into wasm, then back to host:
                 assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
@@ -239,9 +245,9 @@ async fn call_linked_func_async() -> Result<(), Error> {
     let mut store = Store::new(&engine, State::default());
     store.call_hook(State::call_hook);
 
-    let f = Func::wrap4_async(
+    let f = Func::wrap_async(
         &mut store,
-        |caller: Caller<State>, a: i32, b: i64, c: f32, d: f64| {
+        |caller: Caller<State>, (a, b, c, d): (i32, i64, f32, f64)| {
             Box::new(async move {
                 // Calling this func will switch context into wasm, then back to host:
                 assert_eq!(caller.data().context, vec![Context::Wasm, Context::Host]);
@@ -440,7 +446,7 @@ fn trapping() -> Result<(), Error> {
             }
 
             // recur so that we can trigger a next call.
-            // propogate its trap, if it traps!
+            // propagate its trap, if it traps!
             if recur > 0 {
                 let _ = caller
                     .get_export("export")
@@ -517,7 +523,7 @@ fn trapping() -> Result<(), Error> {
     assert_eq!(s.calls_into_wasm, 1);
     assert_eq!(s.returns_from_wasm, 1);
 
-    // trap in next call to wasm. No calls after the bit is set, so this trap shouldnt happen:
+    // trap in next call to wasm. No calls after the bit is set, so this trap shouldn't happen:
     let (s, e) = run(TRAP_NEXT_CALL_WASM, false);
     assert!(e.is_none());
     assert_eq!(s.calls_into_host, 1);
@@ -722,7 +728,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     let mut linker = Linker::new(&engine);
 
     // Simulate a host function that has lots of yields with an infinite loop.
-    linker.func_wrap0_async("host", "f", |mut cx| {
+    linker.func_wrap_async("host", "f", |mut cx, _: ()| {
         Box::new(async move {
             let state = cx.data_mut();
             assert_eq!(*state, 0);

@@ -184,7 +184,6 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::convert::TryFrom;
 use std::mem;
 use std::string::String;
 use std::vec::Vec;
@@ -311,6 +310,9 @@ pub struct MachBuffer<I: VCodeInst> {
     /// constant may appear in this array multiple times if it was emitted
     /// multiple times.
     used_constants: SmallVec<[(VCodeConstant, CodeOffset); 4]>,
+    /// Indicates when a patchable region is currently open, to guard that it's
+    /// not possible to nest patchable regions.
+    open_patchable: bool,
 }
 
 impl MachBufferFinalized<Stencil> {
@@ -377,7 +379,7 @@ pub struct MachLabel(u32);
 entity_impl!(MachLabel);
 
 impl MachLabel {
-    /// Get a label for a block. (The first N MachLabels are always reseved for
+    /// Get a label for a block. (The first N MachLabels are always reserved for
     /// the N blocks in the vcode.)
     pub fn from_block(bindex: BlockIndex) -> MachLabel {
         MachLabel(bindex.index() as u32)
@@ -411,6 +413,29 @@ pub enum StackMapExtent {
     StartedAtOffset(CodeOffset),
 }
 
+/// Represents the beginning of an editable region in the [`MachBuffer`], while code emission is
+/// still occurring. An [`OpenPatchRegion`] is closed by [`MachBuffer::end_patchable`], consuming
+/// the [`OpenPatchRegion`] token in the process.
+pub struct OpenPatchRegion(usize);
+
+/// A region in the [`MachBuffer`] code buffer that can be edited prior to finalization. An example
+/// of where you might want to use this is for patching instructions that mention constants that
+/// won't be known until later: [`MachBuffer::start_patchable`] can be used to begin the patchable
+/// region, instructions can be emitted with placeholder constants, and the [`PatchRegion`] token
+/// can be produced by [`MachBuffer::end_patchable`]. Once the values of those constants are known,
+/// the [`PatchRegion::patch`] function can be used to get a mutable buffer to the instruction
+/// bytes, and the constants uses can be updated directly.
+pub struct PatchRegion {
+    range: std::ops::Range<usize>,
+}
+
+impl PatchRegion {
+    /// Consume the patch region to yield a mutable slice of the [`MachBuffer`] data buffer.
+    pub fn patch<I: VCodeInst>(self, buffer: &mut MachBuffer<I>) -> &mut [u8] {
+        &mut buffer.data[self.range]
+    }
+}
+
 impl<I: VCodeInst> MachBuffer<I> {
     /// Create a new section, known to start at `start_offset` and with a size limited to
     /// `length_limit`.
@@ -437,6 +462,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             labels_at_tail_off: 0,
             constants: Default::default(),
             used_constants: Default::default(),
+            open_patchable: false,
         }
     }
 
@@ -513,6 +539,29 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
 
         // Post-invariant: as for `put1()`.
+    }
+
+    /// Begin a region of patchable code. There is one requirement for the
+    /// code that is emitted: It must not introduce any instructions that
+    /// could be chomped (branches are an example of this). In other words,
+    /// you must not call [`MachBuffer::add_cond_branch`] or
+    /// [`MachBuffer::add_uncond_branch`] between calls to this method and
+    /// [`MachBuffer::end_patchable`].
+    pub fn start_patchable(&mut self) -> OpenPatchRegion {
+        assert!(!self.open_patchable, "Patchable regions may not be nested");
+        self.open_patchable = true;
+        OpenPatchRegion(usize::try_from(self.cur_offset()).unwrap())
+    }
+
+    /// End a region of patchable code, yielding a [`PatchRegion`] value that
+    /// can be consumed later to produce a one-off mutable slice to the
+    /// associated region of the data buffer.
+    pub fn end_patchable(&mut self, open: OpenPatchRegion) -> PatchRegion {
+        // No need to assert the state of `open_patchable` here, as we take
+        // ownership of the only `OpenPatchable` value.
+        self.open_patchable = false;
+        let end = usize::try_from(self.cur_offset()).unwrap();
+        PatchRegion { range: open.0..end }
     }
 
     /// Allocate a `Label` to refer to some offset. May not be bound to a fixed
@@ -693,7 +742,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Inform the buffer of an unconditional branch at the given offset,
-    /// targetting the given label. May be used to optimize branches.
+    /// targeting the given label. May be used to optimize branches.
     /// The last added label-use must correspond to this branch.
     /// This must be called when the current offset is equal to `start`; i.e.,
     /// before actually emitting the branch. This implies that for a branch that
@@ -707,6 +756,10 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Additional requirement: no labels may be bound between `start` and `end`
     /// (exclusive on both ends).
     pub fn add_uncond_branch(&mut self, start: CodeOffset, end: CodeOffset, target: MachLabel) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction inserted within a patchable region"
+        );
         assert!(self.cur_offset() == start);
         debug_assert!(end > start);
         assert!(!self.pending_fixup_records.is_empty());
@@ -726,7 +779,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Inform the buffer of a conditional branch at the given offset,
-    /// targetting the given label. May be used to optimize branches.
+    /// targeting the given label. May be used to optimize branches.
     /// The last added label-use must correspond to this branch.
     ///
     /// Additional requirement: no labels may be bound between `start` and `end`
@@ -738,6 +791,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         target: MachLabel,
         inverted: &[u8],
     ) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction inserted within a patchable region"
+        );
         assert!(self.cur_offset() == start);
         debug_assert!(end > start);
         assert!(!self.pending_fixup_records.is_empty());
@@ -759,6 +816,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     fn truncate_last_branch(&mut self) {
+        debug_assert!(
+            !self.open_patchable,
+            "Branch instruction truncated within a patchable region"
+        );
+
         self.lazily_clear_labels_at_tail();
         // Invariants hold at this point.
 
@@ -906,7 +968,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
             // For any branch, conditional or unconditional:
             // - If the target is a label at the current offset, then remove
-            //   the conditional branch, and reset all labels that targetted
+            //   the conditional branch, and reset all labels that targeted
             //   the current offset (end of branch) to the truncated
             //   end-of-code.
             //
@@ -1486,9 +1548,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Add an external relocation at the current offset.
-    pub fn add_reloc<T: Into<RelocTarget> + Clone>(
+    /// Add an external relocation at the given offset from current offset.
+    pub fn add_reloc_at_offset<T: Into<RelocTarget> + Clone>(
         &mut self,
+        offset: CodeOffset,
         kind: Reloc,
         target: &T,
         addend: Addend,
@@ -1528,11 +1591,21 @@ impl<I: VCodeInst> MachBuffer<I> {
         // when a relocation can't otherwise be resolved later, so it shouldn't
         // actually result in any memory unsafety or anything like that.
         self.relocs.push(MachReloc {
-            offset: self.data.len() as CodeOffset,
+            offset: self.data.len() as CodeOffset + offset,
             kind,
             target,
             addend,
         });
+    }
+
+    /// Add an external relocation at the current offset.
+    pub fn add_reloc<T: Into<RelocTarget> + Clone>(
+        &mut self,
+        kind: Reloc,
+        target: &T,
+        addend: Addend,
+    ) {
+        self.add_reloc_at_offset(0, kind, target, addend);
     }
 
     /// Add a trap record at the current offset.
@@ -1562,8 +1635,11 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Set the `SourceLoc` for code from this offset until the offset at the
     /// next call to `end_srcloc()`.
-    pub fn start_srcloc(&mut self, loc: RelSourceLoc) {
-        self.cur_srcloc = Some((self.cur_offset(), loc));
+    /// Returns the current [CodeOffset] and [RelSourceLoc].
+    pub fn start_srcloc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {
+        let cur = (self.cur_offset(), loc);
+        self.cur_srcloc = Some(cur);
+        cur
     }
 
     /// Mark the end of the `SourceLoc` segment started at the last
@@ -1583,10 +1659,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add stack map metadata for this program point: a set of stack offsets
     /// (from SP upward) that contain live references.
-    ///
-    /// The `offset_to_fp` value is the offset from the nominal SP (at which the `stack_offsets`
-    /// are based) and the FP value. By subtracting `offset_to_fp` from each `stack_offsets`
-    /// element, one can obtain live-reference offsets from FP instead.
     pub fn add_stack_map(&mut self, extent: StackMapExtent, stack_map: StackMap) {
         let (start, end) = match extent {
             StackMapExtent::UpcomingBytes(insn_len) => {
@@ -1599,7 +1671,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 (start_offset, end_offset)
             }
         };
-        trace!("Adding stack map for offsets {start:#x}..{end:#x}");
+        trace!("Adding stack map for offsets {start:#x}..{end:#x}: {stack_map:?}");
         self.stack_maps.push(MachStackMap {
             offset: start,
             offset_end: end,
@@ -2005,8 +2077,6 @@ mod test {
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::machinst::{MachInstEmit, MachInstEmitState};
     use crate::settings;
-    use std::default::Default;
-    use std::vec::Vec;
 
     fn label(n: u32) -> MachLabel {
         MachLabel::from_block(BlockIndex::new(n as usize))
@@ -2025,7 +2095,7 @@ mod test {
         buf.reserve_labels_for_blocks(2);
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
         assert_eq!(0, buf.total_size());
@@ -2046,15 +2116,15 @@ mod test {
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
 
@@ -2077,17 +2147,17 @@ mod test {
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Udf {
             trap_code: TrapCode::Interrupt,
         };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
 
@@ -2099,9 +2169,9 @@ mod test {
             kind: CondBrKind::NotZero(xreg(0)),
             trap_code: TrapCode::Interrupt,
         };
-        inst.emit(&[], &mut buf2, &info, &mut state);
+        inst.emit(&mut buf2, &info, &mut state);
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf2, &info, &mut state);
+        inst.emit(&mut buf2, &info, &mut state);
 
         let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
@@ -2123,7 +2193,7 @@ mod test {
             taken: target(2),
             not_taken: target(3),
         };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
@@ -2131,16 +2201,16 @@ mod test {
                 buf.emit_island(0, state.ctrl_plane_mut());
             }
             let inst = Inst::Nop4;
-            inst.emit(&[], &mut buf, &info, &mut state);
+            inst.emit(&mut buf, &info, &mut state);
         }
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
@@ -2170,7 +2240,7 @@ mod test {
             // go directly to the target.
             not_taken: BranchTarget::ResolvedOffset(2000000 + 4 - 4),
         };
-        inst.emit(&[], &mut buf2, &info, &mut state);
+        inst.emit(&mut buf2, &info, &mut state);
 
         let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
@@ -2188,16 +2258,16 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
             let inst = Inst::Nop4;
-            inst.emit(&[], &mut buf, &info, &mut state);
+            inst.emit(&mut buf, &info, &mut state);
         }
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
@@ -2206,7 +2276,7 @@ mod test {
             taken: target(0),
             not_taken: target(1),
         };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
@@ -2219,11 +2289,11 @@ mod test {
             taken: BranchTarget::ResolvedOffset(8),
             not_taken: BranchTarget::ResolvedOffset(4 - (2000000 + 4)),
         };
-        inst.emit(&[], &mut buf2, &info, &mut state);
+        inst.emit(&mut buf2, &info, &mut state);
         let inst = Inst::Jump {
             dest: BranchTarget::ResolvedOffset(-(2000000 + 8)),
         };
-        inst.emit(&[], &mut buf2, &info, &mut state);
+        inst.emit(&mut buf2, &info, &mut state);
 
         let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
@@ -2278,38 +2348,38 @@ mod test {
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state);
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
         let inst = Inst::Jump { dest: target(0) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(5) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(5), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(7) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(6), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(7), state.ctrl_plane_mut());
         let inst = Inst::Ret {};
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
@@ -2351,23 +2421,23 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(2) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&mut buf, &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 

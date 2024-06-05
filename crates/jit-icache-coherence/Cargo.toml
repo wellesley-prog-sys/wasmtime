@@ -8,8 +8,12 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cfg-if = { workspace = true }
+anyhow = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -20,7 +24,7 @@ features = [
 ]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "android"))'.dependencies]
-libc = "0.2.42"
+libc = { workspace = true }
 
 [features]
 # Most modern CPUs are SMP (multicore). However, when only one core is present,

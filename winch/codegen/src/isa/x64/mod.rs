@@ -1,14 +1,13 @@
 use crate::{
-    abi::ABI,
-    codegen::{CodeGen, CodeGenContext, FuncEnv},
+    abi::{wasm_sig, ABI},
+    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv, TypeConverter},
 };
 
 use crate::frame::{DefinedLocals, Frame};
-use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
+use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
-use crate::trampoline::{Trampoline, TrampolineKind};
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegBitSet,
@@ -19,7 +18,8 @@ use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFin
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, WasmFuncType};
+use wasmtime_cranelift::CompiledFunction;
+use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, VMOffsets, WasmFuncType};
 
 use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
 
@@ -89,12 +89,15 @@ impl TargetIsa for X64 {
     fn compile_function(
         &self,
         sig: &WasmFuncType,
-        types: &ModuleTypes,
         body: &FunctionBody,
         translation: &ModuleTranslation,
+        types: &ModuleTypesBuilder,
+        builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
-    ) -> Result<MachBufferFinalized<Final>> {
+    ) -> Result<CompiledFunction> {
         let pointer_bytes = self.pointer_bytes();
+        let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
+
         let mut body = body.get_binary_reader();
         let mut masm = X64Masm::new(
             pointer_bytes,
@@ -102,9 +105,20 @@ impl TargetIsa for X64 {
             self.isa_flags.clone(),
         );
         let stack = Stack::new();
-        let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
+        let abi_sig = wasm_sig::<abi::X64ABI>(sig);
+
+        let env = FuncEnv::new(
+            &vmoffsets,
+            translation,
+            types,
+            builtins,
+            self,
+            abi::X64ABI::ptr_type(),
+        );
+        let type_converter = TypeConverter::new(env.translation, env.types);
+        let defined_locals =
+            DefinedLocals::new::<abi::X64ABI>(&type_converter, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),
@@ -118,13 +132,18 @@ impl TargetIsa for X64 {
         );
 
         let regalloc = RegAlloc::from(gpr, fpr);
-        let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let env = FuncEnv::new(pointer_bytes, translation, types, self.wasmtime_call_conv());
+        let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
+        let base = codegen.source_location.base;
 
-        Ok(masm.finalize())
+        let names = codegen.env.take_name_map();
+        Ok(CompiledFunction::new(
+            masm.finalize(base),
+            names,
+            self.function_alignment(),
+        ))
     }
 
     fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
@@ -136,34 +155,15 @@ impl TargetIsa for X64 {
         16
     }
 
-    fn compile_trampoline(
+    fn emit_unwind_info(
         &self,
-        ty: &WasmFuncType,
-        kind: TrampolineKind,
-    ) -> Result<MachBufferFinalized<Final>> {
-        use TrampolineKind::*;
+        buffer: &MachBufferFinalized<Final>,
+        kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
+    ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
+        Ok(cranelift_codegen::isa::x64::emit_unwind_info(buffer, kind)?)
+    }
 
-        let mut masm = X64Masm::new(
-            self.pointer_bytes(),
-            self.shared_flags.clone(),
-            self.isa_flags.clone(),
-        );
-        let call_conv = self.wasmtime_call_conv();
-
-        let mut trampoline = Trampoline::new(
-            &mut masm,
-            regs::scratch(),
-            regs::argv(),
-            &call_conv,
-            self.pointer_bytes(),
-        );
-
-        match kind {
-            ArrayToWasm(idx) => trampoline.emit_array_to_wasm(ty, idx)?,
-            NativeToWasm(idx) => trampoline.emit_native_to_wasm(ty, idx)?,
-            WasmToNative => trampoline.emit_wasm_to_native(ty)?,
-        }
-
-        Ok(masm.finalize())
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        Some(cranelift_codegen::isa::x64::create_cie())
     }
 }

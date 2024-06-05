@@ -33,7 +33,10 @@
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Base case, simply adding things in registers.
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd x y)))
+(rule -1 (lower (has_type (fits_in_32 (ty_int ty)) (iadd x y)))
+  (rv_addw x y))
+
+(rule 0 (lower (has_type $I64 (iadd x y)))
   (rv_add x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
@@ -75,7 +78,7 @@
 ;; !!! Important !!!
 ;; These rules only work for (ishl (uextend _) _) and not for (uextend (ishl _ _))!
 ;; Getting this wrong means a potential misscalculation of the shift amount.
-;; Additionaly we can only ensure that this is correct if the uextend is 32 to 64 bits.
+;; Additionally we can only ensure that this is correct if the uextend is 32 to 64 bits.
 (decl pure partial match_shnadd_uw (Imm64) AluOPRRR)
 (rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
 (rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
@@ -312,50 +315,59 @@
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
-(rule (lower (has_type (ty_int_ref_scalar_64 ty) (isub x y)))
-  (rv_sub x y))
-
-(rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
+(rule 0 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
   (rv_subw x y))
+
+(rule 1 (lower (has_type $I64 (isub x y)))
+  (rv_sub x y))
 
 (rule 2 (lower (has_type $I128 (isub x y)))
   (i128_sub x y))
 
+;; Switch to an `addi` by a negative if we can fit the value in an `imm12`.
+(rule 3 (lower (has_type (ty_int_ref_scalar_64 ty) (isub x y)))
+  (if-let imm12_neg (imm12_from_negated_value y))
+  (alu_rr_imm12 (select_addi ty) x imm12_neg))
+
 ;; SIMD Vectors
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
   (rv_vsub_vv x y (unmasked) ty))
 
-(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat y))))
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat y))))
   (rv_vsub_vx x y (unmasked) ty))
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat (sextend y @ (value_type sext_ty))))))
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat (sextend y @ (value_type sext_ty))))))
   (if-let half_ty (ty_half_width ty))
   (if-let $true (ty_equal (lane_type half_ty) sext_ty))
   (rv_vwsub_wx x y (unmasked) (vstate_mf2 half_ty)))
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat (uextend y @ (value_type uext_ty))))))
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat (uextend y @ (value_type uext_ty))))))
   (if-let half_ty (ty_half_width ty))
   (if-let $true (ty_equal (lane_type half_ty) uext_ty))
   (rv_vwsubu_wx x y (unmasked) (vstate_mf2 half_ty)))
 
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (isub (splat x) y)))
+(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (isub (splat x) y)))
   (rv_vrsub_vx y x (unmasked) ty))
 
-(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
+  (if-let imm5_neg (negated_replicated_imm5 y))
+  (rv_vadd_vi x imm5_neg (unmasked) ty))
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
   (if-let x_imm (replicated_imm5 x))
   (rv_vrsub_vi y x_imm (unmasked) ty))
 
 
 ;; Signed Widening Low Subtractions
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register _) (isub x (swiden_low y @ (value_type in_ty)))))
+(rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (swiden_low y @ (value_type in_ty)))))
   (rv_vwsub_wv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
                                                            (swiden_low y))))
   (rv_vwsub_vv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
                                                            (splat (sextend y @ (value_type sext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwsub_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -363,28 +375,28 @@
 ;; Signed Widening High Subtractions
 ;; These are the same as the low widenings, but we first slide down the inputs.
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register _) (isub x (swiden_high y @ (value_type in_ty)))))
+(rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (swiden_high y @ (value_type in_ty)))))
   (rv_vwsub_wv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
                                                            (swiden_high y))))
   (rv_vwsub_vv (gen_slidedown_half in_ty x) (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
                                                            (splat (sextend y @ (value_type sext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwsub_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
 ;; Unsigned Widening Low Subtractions
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register _) (isub x (uwiden_low y @ (value_type in_ty)))))
+(rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (uwiden_low y @ (value_type in_ty)))))
   (rv_vwsubu_wv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
                                                            (uwiden_low y))))
   (rv_vwsubu_vv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
                                                            (splat (uextend y @ (value_type uext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwsubu_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -392,35 +404,35 @@
 ;; Unsigned Widening High Subtractions
 ;; These are the same as the low widenings, but we first slide down the inputs.
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register _) (isub x (uwiden_high y @ (value_type in_ty)))))
+(rule 6 (lower (has_type (ty_vec_fits_in_register _) (isub x (uwiden_high y @ (value_type in_ty)))))
   (rv_vwsubu_wv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
                                                            (uwiden_high y))))
   (rv_vwsubu_vv (gen_slidedown_half in_ty x) (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
                                                            (splat (uextend y @ (value_type uext_ty))))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwsubu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
 ;; Signed Widening Mixed High/Low Subtractions
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_low x @ (value_type in_ty))
                                                            (swiden_high y))))
   (rv_vwsub_vv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (swiden_high x @ (value_type in_ty))
                                                            (swiden_low y))))
   (rv_vwsub_vv (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
 ;; Unsigned Widening Mixed High/Low Subtractions
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_low x @ (value_type in_ty))
                                                            (uwiden_high y))))
   (rv_vwsubu_vv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 8 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
+(rule 10 (lower (has_type (ty_vec_fits_in_register _) (isub (uwiden_high x @ (value_type in_ty))
                                                            (uwiden_low y))))
   (rv_vwsubu_vv (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
@@ -553,7 +565,7 @@
 (rule 1 (lower (has_type (fits_in_16 ty) (sdiv x y @ (iconst imm))))
   (if-let $true (has_m))
   (if (safe_divisor_from_imm64 ty imm))
-  (rv_divw (sext x) y))
+  (rv_divw (sext x) (sext y)))
 
 (rule 2 (lower (has_type $I32 (sdiv x y)))
   (if-let $true (has_m))
@@ -601,7 +613,7 @@
 (rule 1 (lower (has_type (fits_in_16 ty) (urem x y @ (iconst imm))))
   (if-let $true (has_m))
   (if (safe_divisor_from_imm64 ty imm))
-  (rv_remuw (zext x) y))
+  (rv_remuw (zext x) (zext y)))
 
 (rule 2 (lower (has_type $I32 (urem x y)))
   (if-let $true (has_m))
@@ -630,7 +642,7 @@
 (rule 1 (lower (has_type (fits_in_16 ty) (srem x y @ (iconst imm))))
   (if-let $true (has_m))
   (if (safe_divisor_from_imm64 ty imm))
-  (rv_remw (sext x) y))
+  (rv_remw (sext x) (sext y)))
 
 (rule 2 (lower (has_type $I32 (srem x y)))
   (if-let $true (has_m))
@@ -651,8 +663,13 @@
   (rv_rem x y))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_int ty) (band x y)))
-  (gen_and ty x y))
+(rule -1 (lower (has_type (fits_in_64 ty) (band x y)))
+  (rv_and x y))
+
+(rule 0 (lower (has_type $I128 (band x y)))
+  (value_regs
+    (rv_and (value_regs_get x 0) (value_regs_get y 0))
+    (rv_and (value_regs_get x 1) (value_regs_get y 1))))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (band x (imm12_from_value y))))
@@ -707,6 +724,74 @@
   (if-let x_imm (replicated_imm5 x))
   (rv_vand_vi y x_imm (unmasked) ty))
 
+;; `bclr{,i}` specializations from `zbs`
+
+(rule 13 (lower (has_type (fits_in_32 ty) (band x (bnot (ishl (i64_from_iconst 1) y)))))
+  (if-let $true (has_zbs))
+  (rv_bclr x (rv_andi y (imm12_const (u8_sub (ty_bits ty) 1)))))
+(rule 14 (lower (has_type (fits_in_32 ty) (band (bnot (ishl (i64_from_iconst 1) y)) x)))
+  (if-let $true (has_zbs))
+  (rv_bclr x (rv_andi y (imm12_const (u8_sub (ty_bits ty) 1)))))
+
+(rule 15 (lower (has_type $I64 (band x (bnot (ishl (i64_from_iconst 1) y)))))
+  (if-let $true (has_zbs))
+  (rv_bclr x y))
+(rule 16 (lower (has_type $I64 (band (bnot (ishl (i64_from_iconst 1) y)) x)))
+  (if-let $true (has_zbs))
+  (rv_bclr x y))
+
+(rule 17 (lower (has_type (fits_in_64 ty) (band x (u64_from_iconst n))))
+  (if-let $true (has_zbs))
+  (if-let imm (bclr_imm ty n))
+  (rv_bclri x imm))
+(rule 18 (lower (has_type (fits_in_64 ty) (band (u64_from_iconst n) x)))
+  (if-let $true (has_zbs))
+  (if-let imm (bclr_imm ty n))
+  (rv_bclri x imm))
+
+(decl pure partial bclr_imm (Type u64) Imm12)
+(extern constructor bclr_imm bclr_imm)
+
+;; `bext{,i}` specializations from `zbs`
+
+(rule 19 (lower (has_type $I32 (band (ushr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+(rule 19 (lower (has_type $I32 (band (sshr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+(rule 19 (lower (has_type $I32 (band (u64_from_iconst 1) (ushr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+(rule 19 (lower (has_type $I32 (band (u64_from_iconst 1) (sshr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+
+(rule 19 (lower (has_type $I64 (band (ushr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+(rule 19 (lower (has_type $I64 (band (sshr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+(rule 19 (lower (has_type $I64 (band (u64_from_iconst 1) (ushr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+(rule 19 (lower (has_type $I64 (band (u64_from_iconst 1) (sshr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+
+(rule 20 (lower (has_type $I32 (band (ushr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 31)))
+(rule 20 (lower (has_type $I32 (band (sshr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 31)))
+(rule 20 (lower (has_type $I64 (band (ushr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 63)))
+(rule 20 (lower (has_type $I64 (band (sshr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 63)))
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int ty) (bor x y)))
@@ -765,6 +850,33 @@
   (if-let x_imm (replicated_imm5 x))
   (rv_vor_vi y x_imm (unmasked) ty))
 
+;; `bset{,i}` specializations from `zbs`
+
+(rule 13 (lower (has_type $I32 (bor x (ishl (i64_from_iconst 1) y))))
+  (if-let $true (has_zbs))
+  (rv_bset x (rv_andi y (imm12_const 31))))
+(rule 14 (lower (has_type $I32 (bor (ishl (i64_from_iconst 1) y) x)))
+  (if-let $true (has_zbs))
+  (rv_bset x (rv_andi y (imm12_const 31))))
+
+(rule 13 (lower (has_type $I64 (bor x (ishl (i64_from_iconst 1) y))))
+  (if-let $true (has_zbs))
+  (rv_bset x y))
+(rule 14 (lower (has_type $I64 (bor (ishl (i64_from_iconst 1) y) x)))
+  (if-let $true (has_zbs))
+  (rv_bset x y))
+
+(rule 15 (lower (has_type (fits_in_64 _) (bor x (u64_from_iconst n))))
+  (if-let $true (has_zbs))
+  (if-let imm (bseti_imm n))
+  (rv_bseti x imm))
+(rule 16 (lower (has_type (fits_in_64 _) (bor (u64_from_iconst n) x)))
+  (if-let $true (has_zbs))
+  (if-let imm (bseti_imm n))
+  (rv_bseti x imm))
+
+(decl pure partial bseti_imm (u64) Imm12)
+(extern constructor bseti_imm bseti_imm)
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
@@ -802,23 +914,79 @@
   (if-let x_imm (replicated_imm5 x))
   (rv_vxor_vi y x_imm (unmasked) ty))
 
+;; `binv{,i}` specializations from `zbs`
+
+(rule 13 (lower (has_type $I32 (bxor x (ishl (i64_from_iconst 1) y))))
+  (if-let $true (has_zbs))
+  (rv_binv x (rv_andi y (imm12_const 31))))
+(rule 14 (lower (has_type $I32 (bxor (ishl (i64_from_iconst 1) y) x)))
+  (if-let $true (has_zbs))
+  (rv_binv x (rv_andi y (imm12_const 31))))
+
+(rule 13 (lower (has_type $I64 (bxor x (ishl (i64_from_iconst 1) y))))
+  (if-let $true (has_zbs))
+  (rv_binv x y))
+(rule 14 (lower (has_type $I64 (bxor (ishl (i64_from_iconst 1) y) x)))
+  (if-let $true (has_zbs))
+  (rv_binv x y))
+
+(rule 15 (lower (has_type (fits_in_64 _) (bxor x (u64_from_iconst n))))
+  (if-let $true (has_zbs))
+  (if-let imm (binvi_imm n))
+  (rv_binvi x imm))
+(rule 16 (lower (has_type (fits_in_64 _) (bxor (u64_from_iconst n) x)))
+  (if-let $true (has_zbs))
+  (if-let imm (binvi_imm n))
+  (rv_binvi x imm))
+
+(decl pure partial binvi_imm (u64) Imm12)
+(extern constructor binvi_imm binvi_imm)
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_scalar ty) (bnot x)))
-  (gen_bnot ty x))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bnot x)))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (bnot x)))
+  (rv_not x))
+
+(rule 1 (lower (has_type (ty_scalar_float ty) (bnot x)))
+  (move_x_to_f (rv_not (move_f_to_x x ty)) (float_int_of_same_size ty)))
+
+(rule 2 (lower (has_type $I128 (bnot x)))
+  (value_regs
+    (rv_not (value_regs_get x 0))
+    (rv_not (value_regs_get x 1))))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (bnot x)))
   (rv_vnot_v x (unmasked) ty))
 
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 _) (bnot (bxor x y))))
+  (if-let $true (has_zbb))
+  (rv_xnor x y))
+
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 (ty_int ty)) (bitrev x)))
-  (lower_bit_reverse x ty))
+
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (bitrev x)))
+  (gen_bitrev ty x))
 
 (rule 1 (lower (has_type $I128 (bitrev x)))
-  (let ((val ValueRegs x)
-    (lo_rev XReg (lower_bit_reverse (value_regs_get val 0) $I64))
-    (hi_rev XReg (lower_bit_reverse (value_regs_get val 1) $I64)))
-    (value_regs hi_rev lo_rev)))
+  (value_regs
+    (gen_bitrev $I64 (value_regs_get x 1))
+    (gen_bitrev $I64 (value_regs_get x 0))))
+
+
+;; Constructs a sequence of instructions that reverse all bits in `x` up to
+;; the given type width.
+(decl gen_bitrev (Type XReg) XReg)
+
+(rule 0 (gen_bitrev (ty_16_or_32 (ty_int ty)) x)
+  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
+  (rv_srli (gen_bitrev $I64 x) shift_amt))
+
+(rule 1 (gen_bitrev $I8 x)
+  (gen_brev8 x $I8))
+
+(rule 1 (gen_bitrev $I64 x)
+  (gen_brev8 (gen_bswap $I64 x) $I64))
+
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -830,22 +998,8 @@
     (gen_bswap $I64 (value_regs_get x 1))
     (gen_bswap $I64 (value_regs_get x 0))))
 
-(rule 3 (lower (has_type (fits_in_32 ty) (bswap x)))
-  (if-let $true (has_zbb))
-  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
-  (rv_srli (rv_rev8 x) shift_amt))
-
-(rule 4 (lower (has_type $I64 (bswap x)))
-  (if-let $true (has_zbb))
-  (rv_rev8 x))
-
-(rule 5 (lower (has_type $I128 (bswap x)))
-  (if-let $true (has_zbb))
-  (value_regs
-    (rv_rev8 (value_regs_get x 1))
-    (rv_rev8 (value_regs_get x 0))))
-
-;; Helper to generate a fallback byte-swap sequence when `zbb` isn't available.
+;; Builds a sequence of instructions that swaps the bytes in `x` up to the given
+;; type width.
 (decl gen_bswap (Type XReg) XReg)
 
 ;; This is only here to make the rule below work. bswap.i8 isn't valid
@@ -868,6 +1022,15 @@
         (bot_shifted_left XReg (rv_slli swap_bot shift))
         (bot XReg (rv_srli bot_shifted_left shift)))
     (rv_or top bot)))
+
+(rule 2 (gen_bswap (ty_16_or_32 (ty_int ty)) x)
+  (if-let $true (has_zbb))
+  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
+  (rv_srli (rv_rev8 x) shift_amt))
+
+(rule 3 (gen_bswap $I64 x)
+  (if-let $true (has_zbb))
+  (rv_rev8 x))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (ctz x)))
@@ -962,39 +1125,6 @@
   (let ((lo XReg (sext val)))
     (value_regs lo (rv_srai lo (imm12_const 63)))))
 
-;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (iadd x y)))))
-  (rv_addw x y))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (isub x y)))))
-  (rv_subw x y))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ishl x y)))))
-  (rv_sllw x (value_regs_get y 0)))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ushr x y)))))
-  (rv_srlw x (value_regs_get y 0)))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (sshr x y)))))
-  (rv_sraw x (value_regs_get y 0)))
-
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (iadd x (imm12_from_value y))))))
-  (rv_addiw x y))
-
-(rule 3 (lower (has_type $I64 (sextend (has_type $I32 (iadd (imm12_from_value x) y)))))
-  (rv_addiw y x))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ishl x (imm12_from_value y))))))
-  (rv_slliw x y))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ushr x (imm12_from_value y))))))
-  (rv_srliw x y))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (sshr x (imm12_from_value y))))))
-  (rv_sraiw x y))
-
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 _) (popcnt x)))
@@ -1072,7 +1202,7 @@
 
 ;; 8/16 bit types need a mask on the shift amount
 (rule 0 (lower (has_type (ty_int (ty_8_or_16 ty)) (ishl x y)))
-  (if-let mask (u64_to_imm12 (shift_mask ty)))
+  (if-let mask (u64_to_imm12 (ty_shift_mask ty)))
   (rv_sllw x (rv_andi (value_regs_get y 0) mask)))
 
 ;; Using the 32bit version of `sll` automatically masks the shift amount.
@@ -1085,12 +1215,12 @@
 
 ;; If the shift amount is known. We can mask it and encode it in the instruction.
 (rule 2 (lower (has_type (int_fits_in_32 ty) (ishl x (maybe_uextend (imm12_from_value y)))))
-  (rv_slliw x (imm12_and y (shift_mask ty))))
+  (rv_slliw x (imm12_and y (ty_shift_mask ty))))
 
 ;; We technically don't need to mask the shift amount here. The instruction
 ;; does the right thing. But it's neater when pretty printing it.
 (rule 3 (lower (has_type ty @ $I64 (ishl x (maybe_uextend (imm12_from_value y)))))
-  (rv_slli x (imm12_and y (shift_mask ty))))
+  (rv_slli x (imm12_and y (ty_shift_mask ty))))
 
 ;; With `Zba` we have a shift that zero extends the LHS argument.
 (rule 4 (lower (has_type $I64 (ishl (uextend x @ (value_type $I32)) (maybe_uextend (imm12_from_value y)))))
@@ -1132,7 +1262,7 @@
 ;; 8/16 bit types need a mask on the shift amount, and the LHS needs to be
 ;; zero extended.
 (rule 0 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x y)))
-  (if-let mask (u64_to_imm12 (shift_mask ty)))
+  (if-let mask (u64_to_imm12 (ty_shift_mask ty)))
   (rv_srlw (zext x) (rv_andi (value_regs_get y 0) mask)))
 
 ;; Using the 32bit version of `srl` automatically masks the shift amount.
@@ -1145,7 +1275,7 @@
 
 ;; When the RHS is known we can just encode it in the instruction.
 (rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x (maybe_uextend (imm12_from_value y)))))
-  (rv_srliw (zext x) (imm12_and y (shift_mask ty))))
+  (rv_srliw (zext x) (imm12_and y (ty_shift_mask ty))))
 
 (rule 3 (lower (has_type $I32 (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srliw x y))
@@ -1187,7 +1317,7 @@
 ;; 8/16 bit types need a mask on the shift amount, and the LHS needs to be
 ;; zero extended.
 (rule 0 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x y)))
-  (if-let mask (u64_to_imm12 (shift_mask ty)))
+  (if-let mask (u64_to_imm12 (ty_shift_mask ty)))
   (rv_sraw (sext x) (rv_andi (value_regs_get y 0) mask)))
 
 ;; Using the 32bit version of `sra` automatically masks the shift amount.
@@ -1200,7 +1330,7 @@
 
 ;; When the RHS is known we can just encode it in the instruction.
 (rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x (maybe_uextend (imm12_from_value y)))))
-  (rv_sraiw (sext x) (imm12_and y (shift_mask ty))))
+  (rv_sraiw (sext x) (imm12_and y (ty_shift_mask ty))))
 
 (rule 3 (lower (has_type $I32 (sshr x (maybe_uextend (imm12_from_value y)))))
   (rv_sraiw x y))
@@ -1244,19 +1374,114 @@
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (rotl x y)))
-  (lower_rotl ty (zext x) (value_regs_get y 0)))
+
+(rule 0 (lower (has_type (fits_in_64 ty) (rotl rs amount)))
+  (let
+    ((rs XReg (zext rs))
+      (amount XReg (value_regs_get amount 0))
+      (x ValueRegs (gen_shamt ty amount))
+      (shamt XReg (value_regs_get x 0))
+      (len_sub_shamt Reg (value_regs_get x 1))
+      (part1 Reg (rv_sll rs shamt))
+      (part2 Reg (rv_srl rs len_sub_shamt))
+      (part3 Reg (gen_select_xreg (cmp_eqz shamt) (zero_reg) part2)))
+    (rv_or part1 part3)))
+
+(rule 1 (lower (has_type $I32 (rotl rs amount)))
+  (if-let $true (has_zbb))
+  (rv_rolw rs (value_regs_get amount 0)))
+
+(rule 2 (lower (has_type $I32 (rotl rs (u64_from_iconst n))))
+  (if-let $true (has_zbb))
+  (if-let (imm12_from_u64 imm) (u64_sub 32 (u64_and n 31)))
+  (rv_roriw rs imm))
+
+(rule 1 (lower (has_type $I64 (rotl rs amount)))
+  (if-let $true (has_zbb))
+  (rv_rol rs (value_regs_get amount 0)))
+
+(rule 2 (lower (has_type $I64 (rotl rs (u64_from_iconst n))))
+  (if-let $true (has_zbb))
+  (if-let (imm12_from_u64 imm) (u64_sub 64 (u64_and n 63)))
+  (rv_rori rs imm))
 
 (rule 1 (lower (has_type $I128 (rotl x y)))
-  (lower_i128_rotl x y))
+  (let
+    ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
+      (low_part1 XReg (rv_sll (value_regs_get x 0) shamt))
+      (low_part2 XReg (rv_srl (value_regs_get x 1) len_sub_shamt))
+      ;;; if shamt == 0 low_part2 will overflow we should zero instead.
+      (low_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) low_part2))
+      (low XReg (rv_or low_part1 low_part3))
+      (high_part1 XReg (rv_sll (value_regs_get x 1) shamt))
+      (high_part2 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
+      (high_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) high_part2))
+      (high XReg (rv_or high_part1 high_part3))
+      (const64 XReg (imm $I64 64))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+    ;; right now we only rotate less than 64 bits.
+    ;; if shamt is greater than or equal 64 , we should switch low and high.
+    (gen_select_regs
+      (cmp_geu shamt_128 const64)
+      (value_regs high low)
+      (value_regs low high)
+    )))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (rotr x y)))
-  (lower_rotr ty (zext x) (value_regs_get y 0)))
+
+(rule (lower (has_type (fits_in_64 ty) (rotr rs amount)))
+  (let
+    ((rs XReg (zext rs))
+      (amount XReg (value_regs_get amount 0))
+      (x ValueRegs (gen_shamt ty amount))
+      (shamt XReg (value_regs_get x 0))
+      (len_sub_shamt XReg (value_regs_get x 1))
+      (part1 XReg (rv_srl rs shamt))
+      (part2 XReg (rv_sll rs len_sub_shamt))
+      (part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) part2)))
+    (rv_or part1 part3)))
+
+(rule 1 (lower (has_type $I32 (rotr rs amount)))
+  (if-let $true (has_zbb))
+  (rv_rorw rs (value_regs_get amount 0)))
+
+(rule 2 (lower (has_type $I32 (rotr rs (imm12_from_value n))))
+  (if-let $true (has_zbb))
+  (rv_roriw rs n))
+
+(rule 1 (lower (has_type $I64 (rotr rs amount)))
+  (if-let $true (has_zbb))
+  (rv_ror rs (value_regs_get amount 0)))
+
+(rule 2 (lower (has_type $I64 (rotr rs (imm12_from_value n))))
+  (if-let $true (has_zbb))
+  (rv_rori rs n))
 
 (rule 1 (lower (has_type $I128 (rotr x y)))
-  (lower_i128_rotr x y))
-
+  (let
+    ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
+      (low_part1 XReg (rv_srl (value_regs_get x 0) shamt))
+      (low_part2 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
+      ;;; if shamt == 0 low_part2 will overflow we should zero instead.
+      (low_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) low_part2))
+      (low XReg (rv_or low_part1 low_part3))
+      (high_part1 XReg (rv_srl (value_regs_get x 1) shamt))
+      (high_part2 XReg (rv_sll (value_regs_get x 0) len_sub_shamt))
+      (high_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) high_part2))
+      (high XReg (rv_or high_part1 high_part3))
+      (const64 XReg (imm $I64 64))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+    ;; right now we only rotate less than 64 bits.
+    ;; if shamt is greater than or equal 64 , we should switch low and high.
+    (gen_select_regs
+      (cmp_geu shamt_128 const64)
+      (value_regs high low)
+      (value_regs low high)
+    )))
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fabs x)))
@@ -1283,47 +1508,60 @@
   (rv_vfsgnj_vf x y (unmasked) ty))
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_scalar_float ty) (fma x y z)))
-  (rv_fmadd ty x y z))
 
-;; (fma x y z) computes x * y + z
-;; vfmacc computes vd[i] = +(vs1[i] * vs2[i]) + vd[i]
-;; We need to reverse the order of the arguments
+;; RISC-V has 4 FMA instructions that do a slightly different computation.
+;;
+;; fmadd:   (rs1 * rs2) + rs3
+;; fmsub:   (rs1 * rs2) - rs3
+;; fnmadd: -(rs1 * rs2) - rs3
+;; fnmsub: -(rs1 * rs2) + rs3
+;;
+;; Additionally there are vector versions of these instructions with slightly different names.
+;; The vector instructions also have two variants each. `.vv` and `.vf`, where `.vv` variants
+;; take two vector operands and the `.vf` variants take a vector operand and a scalar operand.
+;;
+;; Due to this, variation they receive the arguments in a different order. So we need to swap
+;; the arguments below.
+;;
+;; vfmacc:  vd[i] = +(vs1[i] * vs2[i]) + vd[i]
+;; vfmsac:  vd[i] = +(vs1[i] * vs2[i]) - vd[i]
+;; vfnmacc: vd[i] = -(vs1[i] * vs2[i]) - vd[i]
+;; vfnmsac: vd[i] = -(vs1[i] * vs2[i]) + vd[i]
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fma x y z)))
-  (rv_vfmacc_vv z y x (unmasked) ty))
+(type IsFneg (enum (Result (negate u64) (value Value))))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y z)))
-  (rv_vfmacc_vf z y x (unmasked) ty))
+(decl pure is_fneg (Value) IsFneg)
+(rule 1 (is_fneg (fneg x)) (IsFneg.Result 1 x))
+(rule 0 (is_fneg x) (IsFneg.Result 0 x))
 
-;; vfmsac computes vd[i] = +(vs1[i] * vs2[i]) - vd[i]
+(rule (lower (has_type ty (fma x_src y_src z_src)))
+  (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
+  (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
+  (if-let (IsFneg.Result neg_z z) (is_fneg z_src))
+  (rv_fma ty (u64_xor neg_x neg_y) neg_z x y z))
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fma x y (fneg z))))
-  (rv_vfmsac_vv z y x (unmasked) ty))
-
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma (splat x) y (fneg z))))
-  (rv_vfmsac_vf z y x (unmasked) ty))
-
-;; vfnmacc computes vd[i] = -(vs1[i] * vs2[i]) - vd[i]
-
-(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y (fneg z))))
-  (rv_vfnmacc_vv z y x (unmasked) ty))
-
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y (fneg z))))
-  (rv_vfnmacc_vf z y x (unmasked) ty))
-
-;; vfnmsac computes vd[i] = -(vs1[i] * vs2[i]) + vd[i]
-
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg x) y z)))
-  (rv_vfnmsac_vv z y x (unmasked) ty))
-
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (fma (fneg (splat x)) y z)))
-  (rv_vfnmsac_vf z y x (unmasked) ty))
-
+; parity arguments indicate whether to negate the x*y term or the z term, respectively
+(decl rv_fma (Type u64 u64 Value Value Value) InstOutput)
+(rule 0 (rv_fma (ty_scalar_float ty) 0 0 x y z) (rv_fmadd ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 0 1 x y z) (rv_fmsub ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 1 0 x y z) (rv_fnmsub ty (FRM.RNE) x y z))
+(rule 0 (rv_fma (ty_scalar_float ty) 1 1 x y z) (rv_fnmadd ty (FRM.RNE) x y z))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 0 0 x y z) (rv_vfmacc_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 0 1 x y z) (rv_vfmsac_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 1 0 x y z) (rv_vfnmsac_vv z y x (unmasked) ty))
+(rule 1 (rv_fma (ty_vec_fits_in_register ty) 1 1 x y z) (rv_vfnmacc_vv z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 0 0 (splat x) y z) (rv_vfmacc_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 0 1 (splat x) y z) (rv_vfmsac_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 1 0 (splat x) y z) (rv_vfnmsac_vf z y x (unmasked) ty))
+(rule 2 (rv_fma (ty_vec_fits_in_register ty) 1 1 (splat x) y z) (rv_vfnmacc_vf z y x (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 0 0 x (splat y) z) (rv_vfmacc_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 0 1 x (splat y) z) (rv_vfmsac_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 1 0 x (splat y) z) (rv_vfnmsac_vf z x y (unmasked) ty))
+(rule 3 (rv_fma (ty_vec_fits_in_register ty) 1 1 x (splat y) z) (rv_vfnmacc_vf z x y (unmasked) ty))
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (sqrt x)))
-  (rv_fsqrt ty x))
+  (rv_fsqrt ty (FRM.RNE) x))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (sqrt x)))
   (rv_vfsqrt_v x (unmasked) ty))
@@ -1435,7 +1673,7 @@
 
 ;;;;;  Rules for `fdemote`;;;;;;;;;;;;;;;;;;
 (rule (lower (fdemote x))
-  (rv_fcvtsd x))
+  (rv_fcvtsd (FRM.RNE) x))
 
 ;;;;;  Rules for `fvdemote`;;;;;;;;;;;;;;;;;
 
@@ -1454,7 +1692,7 @@
 ;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_scalar_float ty) (fadd x y)))
-  (rv_fadd ty x y))
+  (rv_fadd ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fadd x y)))
   (rv_vfadd_vv x y (unmasked) ty))
@@ -1468,7 +1706,7 @@
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fsub x y)))
-  (rv_fsub ty x y))
+  (rv_fsub ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fsub x y)))
   (rv_vfsub_vv x y (unmasked) ty))
@@ -1481,7 +1719,7 @@
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmul x y)))
-  (rv_fmul ty x y))
+  (rv_fmul ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmul x y)))
   (rv_vfmul_vv x y (unmasked) ty))
@@ -1495,7 +1733,7 @@
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fdiv x y)))
-  (rv_fdiv ty x y))
+  (rv_fdiv ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fdiv x y)))
   (rv_vfdiv_vv x y (unmasked) ty))
@@ -1508,8 +1746,22 @@
 
 ;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V's `fmin` instruction returns the number input if one of inputs is a
+;; NaN. We handle this by manually checking if one of the inputs is a NaN
+;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmin x y)))
-  (gen_float_select (FloatSelectOP.Min) x y ty))
+  (let (;; Check if both inputs are not nan.
+        (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
+        ;; `fadd` returns a nan if any of the inputs is a NaN.
+        (nan FReg (rv_fadd ty (FRM.RNE) x y))
+        (min FReg (rv_fmin ty x y)))
+    (gen_select_freg is_ordered min nan)))
+
+;; With Zfa we can use the special `fminm` that precisely matches the expected
+;; NaN behavior.
+(rule 1 (lower (has_type (ty_scalar_float ty) (fmin x y)))
+  (if-let $true (has_zfa))
+  (rv_fminm ty x y))
 
 ;; vfmin does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmin returns the
@@ -1517,7 +1769,7 @@
 ;;
 ;; TODO: We can improve this by using a masked `fmin` instruction that modifies
 ;; the canonical nan register. That way we could avoid the `vmerge.vv` instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmin x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmin x y)))
   (let ((is_not_nan VReg (gen_fcmp_mask ty (FloatCC.Ordered) x y))
         (nan XReg (imm $I64 (canonical_nan_u64 (lane_type ty))))
         (vec_nan VReg (rv_vmv_vx nan ty))
@@ -1526,8 +1778,22 @@
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V's `fmax` instruction returns the number input if one of inputs is a
+;; NaN. We handle this by manually checking if one of the inputs is a NaN
+;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmax x y)))
-  (gen_float_select (FloatSelectOP.Max) x y ty))
+  (let (;; Check if both inputs are not nan.
+        (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
+        ;; `fadd` returns a NaN if any of the inputs is a NaN.
+        (nan FReg (rv_fadd ty (FRM.RNE) x y))
+        (max FReg (rv_fmax ty x y)))
+    (gen_select_freg is_ordered max nan)))
+
+;; With Zfa we can use the special `fmaxm` that precisely matches the expected
+;; NaN behavior.
+(rule 1 (lower (has_type (ty_scalar_float ty) (fmax x y)))
+  (if-let $true (has_zfa))
+  (rv_fmaxm ty x y))
 
 ;; vfmax does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmax returns the
@@ -1535,7 +1801,7 @@
 ;;
 ;; TODO: We can improve this by using a masked `fmax` instruction that modifies
 ;; the canonical nan register. That way we could avoid the `vmerge.vv` instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmax x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmax x y)))
   (let ((is_not_nan VReg (gen_fcmp_mask ty (FloatCC.Ordered) x y))
         (nan XReg (imm $I64 (canonical_nan_u64 (lane_type ty))))
         (vec_nan VReg (rv_vmv_vx nan ty))
@@ -1560,17 +1826,28 @@
   (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
-  (gen_select_xreg (lower_int_compare c) x y))
 
-(rule 1 (lower (has_type $I128 (select c x y)))
-  (gen_select_regs (lower_int_compare c) x y))
+;; Manually matching (iconst 0) here is a bit of a hack. We can't do that as part
+;; of the iconst rule because that runs into regalloc issues. gen_select_xreg
+;; has some optimizations based on the use of the zero register so we have to
+;; manually match it here.
+(rule 5 (lower (has_type (ty_int_ref_scalar_64 _) (select c (i64_from_iconst 0) y)))
+  (gen_select_xreg (is_nonzero_cmp c) (zero_reg) y))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
-  (gen_select_vreg (lower_int_compare c) x y))
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 _) (select c x (i64_from_iconst 0))))
+  (gen_select_xreg (is_nonzero_cmp c) x (zero_reg)))
 
-(rule 3 (lower (has_type (ty_scalar_float _) (select c x y)))
-  (gen_select_freg (lower_int_compare c) x y))
+(rule 3 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
+  (gen_select_xreg (is_nonzero_cmp c) x y))
+
+(rule 2 (lower (has_type $I128 (select c x y)))
+  (gen_select_regs (is_nonzero_cmp c) x y))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
+  (gen_select_vreg (is_nonzero_cmp c) x y))
+
+(rule 0 (lower (has_type (ty_scalar_float _) (select c x y)))
+  (gen_select_freg (is_nonzero_cmp c) x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
@@ -1584,7 +1861,7 @@
 ;; For vectors, we also do the same operation.
 ;; We can technically use any type in the bitwise operations, but prefer
 ;; using the type of the inputs so that we avoid emitting unnecessary
-;; `vsetvl` instructions. it's likeley that the vector unit is already
+;; `vsetvl` instructions. it's likely that the vector unit is already
 ;; configured for that type.
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bitselect c x y)))
   (let ((tmp_x VReg (rv_vand_vv c x (unmasked) ty))
@@ -1596,21 +1873,29 @@
 ;;
 ;; This allows us to skip the mask expansion step and use the more efficient
 ;; vmerge.vvm instruction.
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
+;;
+;; We should be careful to ensure that the mask and the vmerge have the
+;; same type. So that we don't generate a mask with length 16 (i.e. for i8x16), and then
+;; only copy the first few lanes of the result to the destination register because
+;; the bitselect has a different length (i.e. i64x2).
+;;
+;; See: https://github.com/bytecodealliance/wasmtime/issues/8131
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
   (let ((mask VReg (gen_icmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b) x y)))
   (let ((mask VReg (gen_fcmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (bitcast _ (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (bitcast _ (fcmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
   (let ((mask VReg (gen_fcmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (bitselect (bitcast _ (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _ty) (bitselect (bitcast _ (icmp cc a @ (value_type (ty_vec_fits_in_register cmp_ty)) b)) x y)))
   (let ((mask VReg (gen_icmp_mask cmp_ty cc a b)))
-    (rv_vmerge_vvm y x mask ty)))
+    (rv_vmerge_vvm y x mask cmp_ty)))
 
 
 ;;;;;  Rules for `isplit`;;;;;;;;;
@@ -1638,7 +1923,7 @@
     (gen_select_xreg (cmp_gt x y) x y)))
 
 (rule 1 (lower (has_type $I128 (smax x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.SignedGreaterThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.SignedGreaterThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smax x y)))
   (rv_vmax_vv x y (unmasked) ty))
@@ -1657,7 +1942,7 @@
     (gen_select_xreg (cmp_lt x y) x y)))
 
 (rule 1 (lower (has_type $I128 (smin x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.SignedLessThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.SignedLessThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smin x y)))
   (rv_vmin_vv x y (unmasked) ty))
@@ -1676,7 +1961,7 @@
     (gen_select_xreg (cmp_gtu x y) x y)))
 
 (rule 1 (lower (has_type $I128 (umax x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.UnsignedGreaterThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.UnsignedGreaterThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umax x y)))
   (rv_vmaxu_vv x y (unmasked) ty))
@@ -1695,7 +1980,7 @@
     (gen_select_xreg (cmp_ltu x y) x y)))
 
 (rule 1 (lower (has_type $I128 (umin x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.UnsignedLessThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.UnsignedLessThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umin x y)))
   (rv_vminu_vv x y (unmasked) ty))
@@ -1729,41 +2014,41 @@
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))
-  (gen_load (amode addr offset $I8) (LoadOP.Lbu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lbu) flags))
 
 ;;;;;  Rules for `sload8`;;;;;;;;;
 (rule (lower (sload8 flags addr offset))
-  (gen_load (amode addr offset $I8) (LoadOP.Lb) flags))
+  (gen_load (amode addr offset) (LoadOP.Lb) flags))
 
 ;;;;;  Rules for `uload16`;;;;;;;;;
 (rule (lower (uload16 flags addr offset))
-  (gen_load (amode addr offset $I16) (LoadOP.Lhu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lhu) flags))
 
 ;;;;;  Rules for `iload16`;;;;;;;;;
 (rule (lower (sload16 flags addr offset))
-  (gen_load (amode addr offset $I16) (LoadOP.Lh) flags))
+  (gen_load (amode addr offset) (LoadOP.Lh) flags))
 
 ;;;;;  Rules for `uload32`;;;;;;;;;
 (rule (lower (uload32 flags addr offset))
-  (gen_load (amode addr offset $I32) (LoadOP.Lwu) flags))
+  (gen_load (amode addr offset) (LoadOP.Lwu) flags))
 
 ;;;;;  Rules for `sload32`;;;;;;;;;
 (rule (lower (sload32 flags addr offset))
-  (gen_load (amode addr offset $I32) (LoadOP.Lw) flags))
+  (gen_load (amode addr offset) (LoadOP.Lw) flags))
 
 ;;;;;  Rules for `load`;;;;;;;;;
 (rule (lower (has_type ty (load flags addr offset)))
-  (gen_load (amode addr offset ty) (load_op ty) flags))
+  (gen_load (amode addr offset) (load_op ty) flags))
 
 (rule 1 (lower (has_type $I128 (load flags addr offset)))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((lo XReg (gen_load (amode addr offset $I64) (LoadOP.Ld) flags))
-        (hi XReg (gen_load (amode addr offset_plus_8 $I64) (LoadOP.Ld) flags)))
+  (let ((lo XReg (gen_load (amode addr offset) (LoadOP.Ld) flags))
+        (hi XReg (gen_load (amode addr offset_plus_8) (LoadOP.Ld) flags)))
     (value_regs lo hi)))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (load flags addr offset)))
   (let ((eew VecElementWidth (element_width_from_type ty))
-        (amode AMode (amode addr offset ty)))
+        (amode AMode (amode addr offset)))
     (vec_load eew (VecAMode.UnitStride amode) flags (unmasked) ty)))
 
 ;;;;;  Rules for Load + Extend Combos ;;;;;;;;;
@@ -1789,86 +2074,205 @@
 
 ;;;;;  Rules for `uload8x8`;;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (uload8x8 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `uload16x4`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (uload16x4 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `uload32x2`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (uload32x2 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload8x8`;;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (sload8x8 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload16x4`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (sload16x4 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `sload32x2`;;;;;;;;;
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (sload32x2 flags addr offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule (lower (istore8 flags src addr offset))
-  (gen_store (amode addr offset $I8) (StoreOP.Sb) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sb) flags src))
 
 ;;;;;  Rules for `istore16`;;;;;;;;;
 (rule (lower (istore16 flags src addr offset))
-  (gen_store (amode addr offset $I16) (StoreOP.Sh) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sh) flags src))
 
 ;;;;;  Rules for `istore32`;;;;;;;;;
 (rule (lower (istore32 flags src addr offset))
-  (gen_store (amode addr offset $I32) (StoreOP.Sw) flags src))
+  (rv_store (amode addr offset) (StoreOP.Sw) flags src))
 
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule (lower (store flags src @ (value_type ty) addr offset))
-  (gen_store (amode addr offset ty) (store_op ty) flags src))
+  (gen_store (amode addr offset) flags src))
 
 (rule 1 (lower (store flags src @ (value_type $I128) addr offset))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((_ InstOutput (gen_store (amode addr offset $I64) (StoreOP.Sd) flags (value_regs_get src 0))))
-    (gen_store (amode addr offset_plus_8 $I64) (StoreOP.Sd) flags (value_regs_get src 1))))
+  (let ((_ InstOutput (rv_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
+    (rv_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
 
 (rule 2 (lower (store flags src @ (value_type (ty_vec_fits_in_register ty)) addr offset))
   (let ((eew VecElementWidth (element_width_from_type ty))
-        (amode AMode (amode addr offset ty)))
+        (amode AMode (amode addr offset)))
     (vec_store eew (VecAMode.UnitStride amode) src flags (unmasked) ty)))
 
 
 ;;;;;  Rules for `icmp`;;;;;;;;;
 
-(decl gen_icmp (IntCC ValueRegs ValueRegs Type) XReg)
-(rule
-  (gen_icmp cc x y ty)
-  (let
-    ((result WritableXReg (temp_writable_xreg))
-      (_ Unit (emit (MInst.Icmp cc result x y ty))))
-    result))
+;; 8-64 bit comparisons. Mostly fall back onto `IntegerCompare` and then
+;; materializing that, but before that happens try to match some
+;; constant-related patterns
 
-(rule 0 (lower (icmp cc x @ (value_type (ty_int ty)) y))
-  (gen_icmp cc (zext x) (zext y) ty))
+(rule 0 (lower (icmp cc x @ (value_type (fits_in_64 ty)) y))
+  (lower_icmp cc x y))
 
-(rule 1 (lower (icmp cc x @ (value_type (ty_int ty)) y))
-  (if (signed_cond_code cc))
-  (gen_icmp cc (sext x) (sext y) ty))
+(decl lower_icmp (IntCC Value Value) XReg)
+(rule 0 (lower_icmp cc x y)
+  (lower_int_compare (icmp_to_int_compare cc x y)))
 
-(rule 2 (lower (icmp cc x @ (value_type $I128) y))
-  (gen_icmp cc x y $I128))
+;; a == $imm => seqz(xori(..))
+(rule 1 (lower_icmp (IntCC.Equal) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) y)
+  (rv_seqz (rv_xori (sext x) imm)))
+(rule 2 (lower_icmp (IntCC.Equal) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) x)
+  (rv_seqz (rv_xori (sext y) imm)))
 
-(rule 3 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
+;; a != $imm => snez(xori(..))
+(rule 1 (lower_icmp (IntCC.NotEqual) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) y)
+  (rv_snez (rv_xori (sext x) imm)))
+(rule 2 (lower_icmp (IntCC.NotEqual) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) x)
+  (rv_snez (rv_xori (sext y) imm)))
+
+;; a < $imm => slti(..)
+(rule 1 (lower_icmp (IntCC.SignedLessThan) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) y)
+  (rv_slti (sext x) imm))
+(rule 1 (lower_icmp (IntCC.SignedGreaterThan) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) x)
+  (rv_slti (sext y) imm))
+(rule 1 (lower_icmp (IntCC.UnsignedLessThan) x y)
+  (if-let (u64_from_iconst (u64_nonzero (imm12_from_u64 imm))) y)
+  (rv_sltiu (zext x) imm))
+(rule 1 (lower_icmp (IntCC.UnsignedGreaterThan) x y)
+  (if-let (u64_from_iconst (u64_nonzero (imm12_from_u64 imm))) x)
+  (rv_sltiu (zext y) imm))
+
+;; a >= $imm => !(a < $imm)
+(rule 2 (lower_icmp cc @ (IntCC.SignedGreaterThanOrEqual) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 _))) y)
+  (rv_xori (lower_icmp (intcc_complement cc) x y) (imm12_const 1)))
+(rule 2 (lower_icmp cc @ (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (if-let (u64_from_iconst (u64_nonzero (imm12_from_u64 _))) y)
+  (rv_xori (lower_icmp (intcc_complement cc) x y) (imm12_const 1)))
+
+;; Materializes an `IntegerCompare` bundle directly into an `XReg` with a 0
+;; or 1 value.
+(decl lower_int_compare (IntegerCompare) XReg)
+
+;; x == y => x ^ y == 0
+(rule 0 (lower_int_compare (int_compare_decompose (IntCC.Equal) x y))
+  (rv_seqz (rv_xor x y)))
+(rule 1 (lower_int_compare (int_compare_decompose (IntCC.Equal) x (zero_reg)))
+  (rv_seqz x))
+(rule 2 (lower_int_compare (int_compare_decompose (IntCC.Equal) (zero_reg) y))
+  (rv_seqz y))
+;; x != y => x ^ y != 0
+(rule 0 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) x y))
+  (rv_snez (rv_xor x y)))
+(rule 1 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) x (zero_reg)))
+  (rv_snez x))
+(rule 2 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) (zero_reg) x))
+  (rv_snez x))
+;; x < y => x < y
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedLessThan) x y))
+  (rv_slt x y))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedLessThan) x y))
+  (rv_sltu x y))
+;; x > y => y < x
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedGreaterThan) x y))
+  (rv_slt y x))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedGreaterThan) x y))
+  (rv_sltu y x))
+;; x <= y => !(y < x)
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedLessThanOrEqual) x y))
+  (rv_xori (rv_slt y x) (imm12_const 1)))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedLessThanOrEqual) x y))
+  (rv_xori (rv_sltu y x) (imm12_const 1)))
+;; x >= y => !(x < y)
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedGreaterThanOrEqual) x y))
+  (rv_xori (rv_slt x y) (imm12_const 1)))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedGreaterThanOrEqual) x y))
+  (rv_xori (rv_sltu x y) (imm12_const 1)))
+
+;; 128-bit comparisons.
+;;
+;; Currently only `==`, `!=`, and `<` are implemented, and everything else
+;; delegates to one of those.
+
+(rule 20 (lower (icmp cc x @ (value_type $I128) y))
+  (lower_icmp_i128 cc x y))
+
+(decl lower_icmp_i128 (IntCC ValueRegs ValueRegs) XReg)
+(rule 0 (lower_icmp_i128 (IntCC.Equal) x y)
+  (let ((lo XReg (rv_xor (value_regs_get x 0) (value_regs_get y 0)))
+        (hi XReg (rv_xor (value_regs_get x 1) (value_regs_get y 1))))
+    (rv_seqz (rv_or lo hi))))
+(rule 0 (lower_icmp_i128 (IntCC.NotEqual) x y)
+  (let ((lo XReg (rv_xor (value_regs_get x 0) (value_regs_get y 0)))
+        (hi XReg (rv_xor (value_regs_get x 1) (value_regs_get y 1))))
+    (rv_snez (rv_or lo hi))))
+
+;; swap args for `>` to use `<` instead
+(rule 0 (lower_icmp_i128 cc @ (IntCC.SignedGreaterThan) x y)
+  (lower_icmp_i128 (intcc_swap_args cc) y x))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.UnsignedGreaterThan) x y)
+  (lower_icmp_i128 (intcc_swap_args cc) y x))
+
+;; complement `=`-related conditions to get ones that don't use `=`.
+(rule 0 (lower_icmp_i128 cc @ (IntCC.SignedLessThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.SignedGreaterThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.UnsignedLessThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+
+;; Compare both the bottom and upper halves of the 128-bit values. If
+;; the top half is equal use the bottom comparison, otherwise use the upper
+;; comparison. Note that the lower comparison is always unsigned since if it's
+;; used the top halves are all zeros and the semantic values are positive.
+(rule 1 (lower_icmp_i128 cc x y)
+  (if-let (IntCC.UnsignedLessThan) (intcc_unsigned cc))
+  (let ((x_lo Reg (value_regs_get x 0))
+        (x_hi Reg (value_regs_get x 1))
+        (y_lo Reg (value_regs_get y 0))
+        (y_hi Reg (value_regs_get y 1))
+        (top_cmp XReg (lower_int_compare (int_compare cc x_hi y_hi)))
+        (bottom_cmp XReg (rv_sltu x_lo y_lo)))
+    (gen_select_xreg (cmp_eqz (rv_xor x_hi y_hi)) bottom_cmp top_cmp)))
+
+;; vector icmp comparisons
+
+(rule 30 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_icmp_mask ty cc x y)))
-
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule 0 (lower (fcmp cc x @ (value_type (ty_scalar_float ty)) y))
-  (lower_fcmp (emit_fcmp cc ty x y)))
+  (lower_float_compare (fcmp_to_float_compare cc ty x y)))
 
-(decl lower_fcmp (FCmp) XReg)
-(rule (lower_fcmp (FCmp.One r)) r)
-(rule (lower_fcmp (FCmp.Zero r)) (rv_seqz r))
+(decl lower_float_compare (FloatCompare) XReg)
+(rule (lower_float_compare (FloatCompare.One r)) r)
+(rule (lower_float_compare (FloatCompare.Zero r)) (rv_seqz r))
 
 (rule 1 (lower (fcmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_fcmp_mask ty cc x y)))
@@ -1879,17 +2283,81 @@
   (load_ext_name name 0))
 
 ;;;;;  Rules for `fcvt_to_uint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_uint v @ (value_type from))))
-  (gen_fcvt_int $false v $false from to))
+
+;; RISC-V float-to-integer conversion does not trap, but Cranelift semantics are
+;; to trap. This manually performs checks for NaN and out-of-bounds values and
+;; traps in such cases.
+;;
+;; TODO: could this perhaps be more optimal through inspection of the `fcsr`?
+;; Unsure whether that needs to be preserved across function calls and/or would
+;; cause other problems. Also unsure whether it's actually more performant.
+(rule (lower (has_type ity (fcvt_to_uint v @ (value_type fty))))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+        (min FReg (imm fty (fcvt_umin_bound fty $false)))
+        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
+        (max FReg (imm fty (fcvt_umax_bound fty ity $false)))
+        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
+    (lower_inbounds_fcvt_to_uint ity fty v)))
+
+(decl lower_inbounds_fcvt_to_uint (Type Type FReg) XReg)
+(rule 0 (lower_inbounds_fcvt_to_uint (fits_in_32 _) fty v)
+  (rv_fcvtwu fty (FRM.RTZ) v))
+(rule 1 (lower_inbounds_fcvt_to_uint $I64 fty v)
+  (rv_fcvtlu fty (FRM.RTZ) v))
 
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
-(rule 0 (lower (has_type to (fcvt_to_sint v @ (value_type (ty_scalar_float from)))))
-  (gen_fcvt_int $false v $true from to))
+
+;; NB: see above with `fcvt_to_uint` as this is similar
+(rule (lower (has_type ity (fcvt_to_sint v @ (value_type fty))))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+        (min FReg (imm fty (fcvt_smin_bound fty ity $false)))
+        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
+        (max FReg (imm fty (fcvt_smax_bound fty ity $false)))
+        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
+    (lower_inbounds_fcvt_to_sint ity fty v)))
+
+(decl lower_inbounds_fcvt_to_sint (Type Type FReg) XReg)
+(rule 0 (lower_inbounds_fcvt_to_sint (fits_in_32 _) fty v)
+  (rv_fcvtw fty (FRM.RTZ) v))
+(rule 1 (lower_inbounds_fcvt_to_sint $I64 fty v)
+  (rv_fcvtl fty (FRM.RTZ) v))
 
 ;;;;;  Rules for `fcvt_to_sint_sat`;;;;;;;;;
+
 (rule 0 (lower (has_type to (fcvt_to_sint_sat v @ (value_type (ty_scalar_float from)))))
-  (gen_fcvt_int $true v $true from to))
+  (handle_fcvt_to_int_nan from v (lower_fcvt_to_sint_sat from to v)))
+
+;; Lowers to a `rv_fcvt*` instruction but handles 8/16-bit cases where the
+;; float is clamped before the conversion.
+(decl lower_fcvt_to_sint_sat (Type Type FReg) XReg)
+(rule 0 (lower_fcvt_to_sint_sat ty (fits_in_16 out_ty) v)
+  (let ((max FReg (imm ty (fcvt_smax_bound ty out_ty $true)))
+        (min FReg (imm ty (fcvt_smin_bound ty out_ty $true)))
+        (clamped FReg (rv_fmin ty max (rv_fmax ty min v))))
+    (rv_fcvtw ty (FRM.RTZ) clamped)))
+(rule 1 (lower_fcvt_to_sint_sat ty $I32 v) (rv_fcvtw ty (FRM.RTZ) v))
+(rule 1 (lower_fcvt_to_sint_sat ty $I64 v) (rv_fcvtl ty (FRM.RTZ) v))
+
+(decl fcvt_smax_bound (Type Type bool) u64)
+(extern constructor fcvt_smax_bound fcvt_smax_bound)
+(decl fcvt_smin_bound (Type Type bool) u64)
+(extern constructor fcvt_smin_bound fcvt_smin_bound)
+
+;; RISC-V float-to-int conversions generate the same output for NaN and +Inf,
+;; but Cranelift semantics are to produce 0 for NaN instead. This helper
+;; translates these semantics by taking the float being converted (with the type
+;; specified) and the native RISC-V output as an `XReg`. The returned `XReg`
+;; will be zeroed out if the float is NaN.
+;;
+;; This is done by comparing the float to itself, generating 0 if it's NaN. This
+;; bit is then negated to become either all-ones or all-zeros which is then
+;; and-ed against the native output. That'll produce all zeros if the input is
+;; NaN or the native output otherwise.
+(decl handle_fcvt_to_int_nan (Type FReg XReg) XReg)
+(rule (handle_fcvt_to_int_nan ty freg xreg)
+  (let ((is_not_nan XReg (rv_feq ty freg freg))
+        (not_nan_mask XReg (rv_neg is_not_nan)))
+    (rv_and xreg not_nan_mask)))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_sint_sat v @ (value_type from_ty))))
   (if-let zero (i8_to_imm5 0))
@@ -1898,8 +2366,25 @@
     (rv_vmerge_vim cvt zero is_nan from_ty)))
 
 ;;;;;  Rules for `fcvt_to_uint_sat`;;;;;;;;;
+
 (rule 0 (lower (has_type to (fcvt_to_uint_sat v @ (value_type (ty_scalar_float from)))))
-  (gen_fcvt_int $true v $false from to))
+  (handle_fcvt_to_int_nan from v (lower_fcvt_to_uint_sat from to v)))
+
+;; Lowers to a `rv_fcvt*` instruction but handles 8/16-bit cases where the
+;; float is clamped before the conversion.
+(decl lower_fcvt_to_uint_sat (Type Type FReg) XReg)
+(rule 0 (lower_fcvt_to_uint_sat ty (fits_in_16 out_ty) v)
+  (let ((max FReg (imm ty (fcvt_umax_bound ty out_ty $true)))
+        (min FReg (rv_fmvdx (zero_reg)))
+        (clamped FReg (rv_fmin ty max (rv_fmax ty min v))))
+    (rv_fcvtwu ty (FRM.RTZ) clamped)))
+(rule 1 (lower_fcvt_to_uint_sat ty $I32 v) (rv_fcvtwu ty (FRM.RTZ) v))
+(rule 1 (lower_fcvt_to_uint_sat ty $I64 v) (rv_fcvtlu ty (FRM.RTZ) v))
+
+(decl fcvt_umax_bound (Type Type bool) u64)
+(extern constructor fcvt_umax_bound fcvt_umax_bound)
+(decl fcvt_umin_bound (Type bool) u64)
+(extern constructor fcvt_umin_bound fcvt_umin_bound)
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_uint_sat v @ (value_type from_ty))))
   (if-let zero (i8_to_imm5 0))
@@ -1909,44 +2394,44 @@
 
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtsl (sext v)))
+  (rv_fcvtsl (FRM.RNE) (sext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I32))))
-  (rv_fcvtsw v))
+  (rv_fcvtsw (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I64))))
-  (rv_fcvtsl v))
+  (rv_fcvtsl (FRM.RNE) v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdl (sext v)))
+  (rv_fcvtdl (FRM.RNE) (sext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I32))))
   (rv_fcvtdw v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I64))))
-  (rv_fcvtdl v))
+  (rv_fcvtdl (FRM.RNE) v))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_sint v @ (value_type from_ty))))
   (rv_vfcvt_f_x_v v (unmasked) from_ty))
 
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtslu (zext v)))
+  (rv_fcvtslu (FRM.RNE) (zext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I32))))
-  (rv_fcvtswu v))
+  (rv_fcvtswu (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I64))))
-  (rv_fcvtslu v))
+  (rv_fcvtslu (FRM.RNE) v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdlu (zext v)))
+  (rv_fcvtdlu (FRM.RNE) (zext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I32))))
   (rv_fcvtdwu v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I64))))
-  (rv_fcvtdlu v))
+  (rv_fcvtdlu (FRM.RNE) v))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_uint v @ (value_type from_ty))))
   (rv_vfcvt_f_xu_v v (unmasked) from_ty))
@@ -1962,34 +2447,50 @@
       (elf_tls_get_addr name))
 
 ;;;;;  Rules for `bitcast`;;;;;;;;;
-(rule
-   (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
+
+;; These rules should probably be handled in `gen_bitcast`, but it's convenient to have that return
+;; a single register, instead of a `ValueRegs`
+(rule 2 (lower (has_type $I128 (bitcast _ v @ (value_type (ty_vec_fits_in_register _)))))
+    (value_regs
+      (gen_extractlane $I64X2 v 0)
+      (gen_extractlane $I64X2 v 1)))
+
+;; Move the high half into a vector register, and then use vslide1up to move it up and
+;; insert the lower half in one instruction.
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (bitcast _ v @ (value_type $I128))))
+    (let ((lo XReg (value_regs_get v 0))
+          (hi XReg (value_regs_get v 1))
+          (vstate VState (vstate_from_type $I64X2))
+          (vec VReg (rv_vmv_sx hi vstate)))
+      (rv_vslide1up_vx vec vec lo (unmasked) vstate)))
+
+(rule 0 (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
    (gen_bitcast v in_ty out_ty))
 
 ;;;;;  Rules for `ceil`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (ceil x)))
-  (gen_float_round (FloatRoundOP.Ceil) x ty))
+  (gen_float_round (FRM.RUP) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ceil x)))
   (gen_vec_round x (FRM.RUP) ty))
 
 ;;;;;  Rules for `floor`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (floor x)))
-  (gen_float_round (FloatRoundOP.Floor) x ty))
+  (gen_float_round (FRM.RDN) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (floor x)))
   (gen_vec_round x (FRM.RDN) ty))
 
 ;;;;;  Rules for `trunc`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (trunc x)))
-  (gen_float_round (FloatRoundOP.Trunc) x ty))
+  (gen_float_round (FRM.RTZ) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (trunc x)))
   (gen_vec_round x (FRM.RTZ) ty))
 
 ;;;;;  Rules for `nearest`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (nearest x)))
-  (gen_float_round (FloatRoundOP.Nearest) x ty))
+  (gen_float_round (FRM.RNE) x ty))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (nearest x)))
   (gen_vec_round x (FRM.RNE) ty))
@@ -2002,17 +2503,24 @@
 ;;
 ;; We don't have cmov's in RISC-V either, but we can emulate those using bitwise
 ;; operations, which is what we do below.
-(rule (lower (has_type ty (select_spectre_guard cmp @ (value_type cmp_ty) x @ (value_type arg_ty) y)))
-  (let (;; Build a mask that is 0 or -1 depending on the input comparision value.
-        ;; `lower_bmask` handles normalizing the input.
-        (mask ValueRegs (lower_bmask cmp arg_ty))
-        ;; Using the mask above we can select either `x` or `y` by
-        ;; performing a bitwise `and` on both sides and then merging them
-        ;; together. We know that only the bits of one of the sides will be selected.
-        ;; TODO: We can use `andn` here if we have `Zbb`
-        (lhs ValueRegs (gen_and arg_ty x mask))
-        (rhs ValueRegs (gen_and arg_ty y (gen_bnot arg_ty mask))))
-    (gen_or arg_ty lhs rhs)))
+
+;; Base case: use `gen_bmask` to generate a 0 mask or -1 mask from the value of
+;; `cmp`. This is then used with some bit twiddling to produce the final result.
+(rule 0 (lower (has_type (fits_in_64 _) (select_spectre_guard cmp x y)))
+  (let ((mask XReg (gen_bmask cmp)))
+    (rv_or (rv_and mask x) (rv_andn y mask))))
+(rule 1 (lower (has_type $I128 (select_spectre_guard cmp x y)))
+  (let ((mask XReg (gen_bmask cmp)))
+    (value_regs
+      (rv_or (rv_and mask (value_regs_get x 0)) (rv_andn (value_regs_get y 0) mask))
+      (rv_or (rv_and mask (value_regs_get x 1)) (rv_andn (value_regs_get y 1) mask)))))
+
+;; Special case when an argument is the constant zero as some ands and ors
+;; can be folded away.
+(rule 2 (lower (has_type (fits_in_64 _) (select_spectre_guard cmp (i64_from_iconst 0) y)))
+  (rv_andn y (gen_bmask cmp)))
+(rule 3 (lower (has_type (fits_in_64 _) (select_spectre_guard cmp x (i64_from_iconst 0))))
+  (rv_and x (gen_bmask cmp)))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule
@@ -2044,7 +2552,7 @@
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iabs x)))
   (let ((extended XReg (sext x))
         (negated XReg (rv_neg extended)))
-    (max $I64 extended negated)))
+    (gen_select_xreg (cmp_gt extended negated) extended negated)))
 
 ;; For vectors we generate the same code, but with vector instructions
 ;; we can skip the sign extension, since the vector unit will only process
@@ -2306,7 +2814,7 @@
 ;; elements. Using vcompress we can extract the elements and group them together.
 ;;
 ;; This is likely not the optimal way of doing this. LLVM does this using a bunch
-;; of vrgathers (See: https://godbolt.org/z/jq8Wj8WG4), that doesen't seem to be
+;; of vrgathers (See: https://godbolt.org/z/jq8Wj8WG4), that doesn't seem to be
 ;; too much better than this.
 ;;
 ;; However V8 does something better. They use 2 vcompresses using LMUL2, that means
@@ -2340,7 +2848,7 @@
 ;; we use a special rounding mode in the right shift instruction.
 ;;
 ;; For the right shift instruction we use `vssrl` which is a Scaling Shift
-;; Right Logical instruction using the `vxrm` fixed-point rouding mode. The
+;; Right Logical instruction using the `vxrm` fixed-point rounding mode. The
 ;; default rounding mode is `rnu` (round-to-nearest-up (add +0.5 LSB)).
 ;; Which is coincidentally the rounding mode we want for `avg_round`.
 (rule (lower (has_type (ty_vec_fits_in_register ty) (avg_round x y)))
@@ -2352,18 +2860,23 @@
 
 ;;;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector x)))
-  (if (ty_vector_not_float ty))
-  (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
-        (mask VReg (gen_vec_mask 1)))
-    (rv_vmerge_vxm zero x mask ty)))
-
 (rule 0 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector x)))
   (if (ty_vector_float ty))
   (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
         (elem VReg (rv_vfmv_sf x ty))
         (mask VReg (gen_vec_mask 1)))
     (rv_vmerge_vvm zero elem mask ty)))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector x)))
+  (if (ty_vector_not_float ty))
+  (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
+        (mask VReg (gen_vec_mask 1)))
+    (rv_vmerge_vxm zero x mask ty)))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector (imm5_from_value x))))
+  (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
+        (mask VReg (gen_vec_mask 1)))
+    (rv_vmerge_vim zero x mask ty)))
 
 ;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

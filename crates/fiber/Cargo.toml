@@ -7,7 +7,11 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
+anyhow = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
 

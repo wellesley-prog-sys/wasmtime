@@ -1,23 +1,22 @@
 //! The module that implements the `wasmtime config` command.
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 const CONFIG_NEW_AFTER_HELP: &str =
     "If no file path is specified, the system configuration file path will be used.";
 
 /// Controls Wasmtime configuration settings
-#[derive(Parser)]
-#[clap(name = "config")]
+#[derive(Parser, PartialEq)]
 pub struct ConfigCommand {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     subcommand: ConfigSubcommand,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Subcommand, PartialEq)]
 enum ConfigSubcommand {
     /// Creates a new Wasmtime configuration file
-    #[clap(after_help = CONFIG_NEW_AFTER_HELP)]
+    #[command(after_help = CONFIG_NEW_AFTER_HELP)]
     New(ConfigNewCommand),
 }
 
@@ -31,11 +30,10 @@ impl ConfigCommand {
 }
 
 /// Creates a new Wasmtime configuration file
-#[derive(Parser)]
-#[clap(name = "new", after_help = CONFIG_NEW_AFTER_HELP)]
+#[derive(Parser, PartialEq)]
 pub struct ConfigNewCommand {
     /// The path of the new configuration file
-    #[clap(index = 1, value_name = "FILE_PATH")]
+    #[arg(index = 1, value_name = "FILE_PATH")]
     path: Option<String>,
 }
 

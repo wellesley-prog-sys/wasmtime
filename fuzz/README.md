@@ -9,6 +9,31 @@ oracles and pass libFuzzer-provided inputs to them. The test case generators and
 oracles themselves are independent from the fuzzing engine that is driving the
 fuzzing process and are defined in `wasmtime/crates/fuzzing`.
 
+## Safety warning
+
+Fuzzers exist to generate random garbage and then try running it. **You
+should not trust these fuzz targets**: they could in theory try to read
+or write files on your disk, send your private data to reporters, or do
+anything else. If they succeed at doing something malicious, they are
+doing a great job at identifying dangerous bugs and we're proud of them.
+
+In addition, some of these fuzz targets use other libraries, such as to
+test that our implementation matches other WebAssembly runtimes. **We
+have not reviewed those runtimes or libraries** for safety, security,
+correctness, supply-chain attacks, or any other properties. Software
+used only during fuzzing is not subject to [our usual `cargo vet`
+requirements][vet-docs].
+
+[vet-docs]: https://docs.wasmtime.dev/contributing-coding-guidelines.html#dependencies-of-wasmtime
+
+Paragraphs 7 and 8 of the license which this work is distributed to you
+under are especially important here: **We disclaim all warranties and
+liability** if running some fuzz target causes you any harm.
+
+Therefore, **if you are at all concerned about the safety of your
+computer**, then you should either not run these fuzz targets, or only
+run them in a sandbox with sufficient isolation for your threat model.
+
 ## Example
 
 To start fuzzing run the following command, where `$MY_FUZZ_TARGET` is one of
@@ -87,4 +112,16 @@ following steps to reproduce it locally:
 3. For more debugging information, run the command above with `RUST_LOG=debug`
    to print the configuration and WebAssembly input used by the test case (see
    uses of  `log_wasm` in the `wasmtime-fuzzing` crate).
+
+## Target specific options
+
+### `cranelift-fuzzgen`
+
+Fuzzgen supports passing the `FUZZGEN_ALLOWED_OPS` environment variable, which when available restricts the instructions that it will generate.
+
+Running `FUZZGEN_ALLOWED_OPS=ineg,ishl cargo fuzz run cranelift-fuzzgen` will run fuzzgen but only generate `ineg` or `ishl` opcodes.
+
+### `cranelift-icache`
+
+The icache target also uses the fuzzgen library, thus also supports the `FUZZGEN_ALLOWED_OPS` environment variable as described in the `cranelift-fuzzgen` section above.
 

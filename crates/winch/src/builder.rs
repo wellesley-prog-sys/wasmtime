@@ -1,19 +1,28 @@
 use crate::compiler::Compiler;
 use anyhow::{bail, Result};
 use std::sync::Arc;
-use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
-use wasmtime_environ::{CompilerBuilder, Setting};
+use target_lexicon::Triple;
+use wasmtime_cranelift::isa_builder::IsaBuilder;
+use wasmtime_environ::{CompilerBuilder, Setting, Tunables};
 use winch_codegen::{isa, TargetIsa};
 
 /// Compiler builder.
 struct Builder {
     inner: IsaBuilder<Result<Box<dyn TargetIsa>>>,
+    cranelift: Box<dyn CompilerBuilder>,
+    tunables: Option<Tunables>,
 }
 
-pub fn builder() -> Box<dyn CompilerBuilder> {
-    Box::new(Builder {
-        inner: IsaBuilder::new(|triple| isa::lookup(triple).map_err(|e| e.into())),
-    })
+pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
+    let inner = IsaBuilder::new(triple.clone(), |triple| {
+        isa::lookup(triple).map_err(|e| e.into())
+    })?;
+    let cranelift = wasmtime_cranelift::builder(triple)?;
+    Ok(Box::new(Builder {
+        inner,
+        cranelift,
+        tunables: None,
+    }))
 }
 
 impl CompilerBuilder for Builder {
@@ -22,31 +31,43 @@ impl CompilerBuilder for Builder {
     }
 
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {
-        self.inner.target(target)?;
+        self.inner.target(target.clone())?;
+        self.cranelift.target(target)?;
         Ok(())
     }
 
     fn set(&mut self, name: &str, value: &str) -> Result<()> {
-        self.inner.set(name, value)
+        self.inner.set(name, value)?;
+        self.cranelift.set(name, value)?;
+        Ok(())
     }
 
     fn enable(&mut self, name: &str) -> Result<()> {
-        self.inner.enable(name)
+        self.inner.enable(name)?;
+        self.cranelift.enable(name)?;
+        Ok(())
     }
 
     fn settings(&self) -> Vec<Setting> {
         self.inner.settings()
     }
 
-    fn set_tunables(&mut self, tunables: wasmtime_environ::Tunables) -> Result<()> {
-        let _ = tunables;
+    fn set_tunables(&mut self, tunables: Tunables) -> Result<()> {
+        assert!(tunables.winch_callable);
+        self.tunables = Some(tunables.clone());
+        self.cranelift.set_tunables(tunables)?;
         Ok(())
     }
 
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self.inner.build()?;
-
-        Ok(Box::new(Compiler::new(isa)))
+        let cranelift = self.cranelift.build()?;
+        let tunables = self
+            .tunables
+            .as_ref()
+            .expect("set_tunables not called")
+            .clone();
+        Ok(Box::new(Compiler::new(isa, cranelift, tunables)))
     }
 
     fn enable_incremental_compilation(

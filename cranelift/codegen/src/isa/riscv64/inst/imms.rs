@@ -62,7 +62,7 @@ impl Display for Imm12 {
     }
 }
 
-// singed
+// signed
 #[derive(Clone, Copy, Default)]
 pub struct Imm20 {
     /// 32-bit container where the low 20 bits are the data payload.
@@ -196,10 +196,6 @@ impl Imm6 {
     }
 
     pub fn maybe_from_i32(value: i32) -> Option<Self> {
-        value.try_into().ok().and_then(Imm6::maybe_from_i16)
-    }
-
-    pub fn maybe_from_i64(value: i64) -> Option<Self> {
         value.try_into().ok().and_then(Imm6::maybe_from_i16)
     }
 

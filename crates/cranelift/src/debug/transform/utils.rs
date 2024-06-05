@@ -60,7 +60,7 @@ pub(crate) fn add_internal_types(
         gimli::DW_AT_type = write::AttributeValue::UnitRef(memory_byte_die_id)
     });
 
-    // Create artificial VMContext type and its reference for convinience viewing
+    // Create artificial VMContext type and its reference for convenience viewing
     // its fields (such as memory ref) in a debugger. Build DW_TAG_structure_type:
     //   .. DW_AT_name = "WasmtimeVMContext"
     let vmctx_die_id = comp_unit.add(root_id, gimli::DW_TAG_structure_type);
@@ -93,7 +93,7 @@ pub(crate) fn add_internal_types(
             });
         }
         ModuleMemoryOffset::Imported(_) => {
-            // TODO implement convinience pointer to and additional types for VMMemoryImport.
+            // TODO implement convenience pointer to and additional types for VMMemoryImport.
         }
         ModuleMemoryOffset::None => (),
     }
@@ -178,7 +178,6 @@ where
         let frame_info = FunctionFrameInfo {
             value_ranges: &func.value_labels_ranges,
             memory_offset: memory_offset.clone(),
-            sized_stack_slots: &func.sized_stack_slots,
         };
         Some(frame_info)
     } else {

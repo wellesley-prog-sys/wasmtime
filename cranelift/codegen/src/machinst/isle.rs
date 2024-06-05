@@ -7,10 +7,10 @@ use std::cell::Cell;
 pub use super::MachLabel;
 use super::RetPair;
 pub use crate::ir::{
-    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, Constant,
-    DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName, FuncRef,
+    GlobalValue, Immediate, SigRef, StackSlot,
 };
-pub use crate::isa::TargetIsa;
+pub use crate::isa::{unwind::UnwindInst, TargetIsa};
 pub use crate::machinst::{
     ABIArg, ABIArgSlot, InputSourceInst, Lower, LowerBackend, RealReg, Reg, RelocDistance, Sig,
     VCodeInst, Writable,
@@ -223,7 +223,13 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn i64_from_iconst(&mut self, val: Value) -> Option<i64> {
             let inst = self.def_inst(val)?;
-            let constant = self.lower_ctx.get_constant(inst)? as i64;
+            let constant = match self.lower_ctx.data(inst) {
+                InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    imm,
+                } => imm.bits(),
+                _ => return None,
+            };
             let ty = self.lower_ctx.output_ty(inst, 0);
             let shift_amt = std::cmp::max(0, 64 - self.ty_bits(ty));
             Some((constant << shift_amt) >> shift_amt)
@@ -563,6 +569,18 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn simm32(&mut self, x: Imm64) -> Option<i32> {
+            i64::from(x).try_into().ok()
+        }
+
+        #[inline]
+        fn uimm8(&mut self, x: Imm64) -> Option<u8> {
+            let x64: i64 = x.into();
+            let x8: u8 = x64.try_into().ok()?;
+            Some(x8)
+        }
+
+        #[inline]
         fn preg_to_reg(&mut self, preg: PReg) -> Reg {
             preg.into()
         }
@@ -682,6 +700,11 @@ macro_rules! isle_lower_prelude_methods {
         fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
             targets.len() as u32
         }
+
+        fn add_range_fact(&mut self, reg: Reg, bits: u16, min: u64, max: u64) -> Reg {
+            self.lower_ctx.add_range_fact(reg, bits, min, max);
+            reg
+        }
     };
 }
 
@@ -741,6 +764,7 @@ macro_rules! isle_prelude_caller_methods {
                 self.lower_ctx.sigs(),
                 sig_ref,
                 &extname,
+                Opcode::Call,
                 dist,
                 caller_conv,
                 self.backend.flags().clone(),
@@ -808,9 +832,7 @@ macro_rules! isle_prelude_method_helpers {
                 call_site.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
-                for inst in call_site.gen_arg(self.lower_ctx, i, *arg_regs) {
-                    self.lower_ctx.emit(inst);
-                }
+                call_site.gen_arg(self.lower_ctx, i, *arg_regs);
             }
         }
 
@@ -821,15 +843,13 @@ macro_rules! isle_prelude_method_helpers {
             mut caller: $abicaller,
             args: ValueSlice,
         ) -> InstOutput {
-            caller.emit_stack_pre_adjust(self.lower_ctx);
-
             self.gen_call_common_args(&mut caller, args);
 
             // Handle retvals prior to emitting call, so the
             // constraints are on the call instruction; but buffer the
             // instructions till after the call.
             let mut outputs = InstOutput::new();
-            let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
+            let mut retval_insts = crate::machinst::abi::SmallInstVec::new();
             // We take the *last* `num_rets` returns of the sig:
             // this skips a StructReturn, if any, that is present.
             let sigdata_num_rets = self.lower_ctx.sigs().num_rets(abi);
@@ -853,8 +873,6 @@ macro_rules! isle_prelude_method_helpers {
             for inst in retval_insts {
                 self.lower_ctx.emit(inst);
             }
-
-            caller.emit_stack_post_adjust(self.lower_ctx);
 
             outputs
         }

@@ -1,17 +1,22 @@
 //! Cranelift umbrella crate, providing a convenient one-line dependency.
 
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
+#![deny(missing_docs)]
 #![no_std]
 
 /// Provide these crates, renamed to reduce stutter.
 pub use cranelift_codegen as codegen;
+#[cfg(feature = "frontend")]
 pub use cranelift_frontend as frontend;
+#[cfg(feature = "interpreter")]
+pub use cranelift_interpreter as interpreter;
+#[cfg(feature = "jit")]
+pub use cranelift_jit as jit;
+#[cfg(feature = "module")]
+pub use cranelift_module as module;
+#[cfg(feature = "native")]
+pub use cranelift_native as native;
+#[cfg(feature = "object")]
+pub use cranelift_object as object;
 
 /// A prelude providing convenient access to commonly-used cranelift features. Use
 /// as `use cranelift::prelude::*`.
@@ -28,6 +33,7 @@ pub mod prelude {
     pub use crate::codegen::isa;
     pub use crate::codegen::settings::{self, Configurable};
 
+    #[cfg(feature = "frontend")]
     pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 }
 

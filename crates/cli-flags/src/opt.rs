@@ -15,6 +15,7 @@ use std::time::Duration;
 #[macro_export]
 macro_rules! wasmtime_option_group {
     (
+        $(#[$attr:meta])*
         pub struct $opts:ident {
             $(
                 $(#[doc = $doc:tt])*
@@ -32,6 +33,7 @@ macro_rules! wasmtime_option_group {
         }
     ) => {
         #[derive(Default, Debug)]
+        $(#[$attr])*
         pub struct $opts {
             $(
                 pub $opt: $container<$payload>,
@@ -41,7 +43,7 @@ macro_rules! wasmtime_option_group {
             )?
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug,PartialEq)]
         #[allow(non_camel_case_types)]
         enum $option {
             $(
@@ -106,7 +108,7 @@ macro_rules! wasmtime_option_group {
 }
 
 /// Parser registered with clap which handles parsing the `...` in `-O ...`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CommaSeparated<T>(pub Vec<T>);
 
 impl<T> ValueParserFactory for CommaSeparated<T>
@@ -299,7 +301,10 @@ impl WasmtimeOptionValue for u32 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
-        Ok(val.parse()?)
+        match val.strip_prefix("0x") {
+            Some(hex) => Ok(u32::from_str_radix(hex, 16)?),
+            None => Ok(val.parse()?),
+        }
     }
 }
 
@@ -307,7 +312,10 @@ impl WasmtimeOptionValue for u64 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
-        Ok(val.parse()?)
+        match val.strip_prefix("0x") {
+            Some(hex) => Ok(u64::from_str_radix(hex, 16)?),
+            None => Ok(val.parse()?),
+        }
     }
 }
 
@@ -315,7 +323,10 @@ impl WasmtimeOptionValue for usize {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
-        Ok(val.parse()?)
+        match val.strip_prefix("0x") {
+            Some(hex) => Ok(usize::from_str_radix(hex, 16)?),
+            None => Ok(val.parse()?),
+        }
     }
 }
 
@@ -366,10 +377,7 @@ impl WasmtimeOptionValue for wasmtime::Strategy {
         match String::parse(val)?.as_str() {
             "cranelift" => Ok(wasmtime::Strategy::Cranelift),
             "winch" => Ok(wasmtime::Strategy::Winch),
-            other => bail!(
-                "unknown optimization level `{}`, only 0,1,2,s accepted",
-                other
-            ),
+            other => bail!("unknown compiler `{other}` only `cranelift` and `winch` accepted",),
         }
     }
 }

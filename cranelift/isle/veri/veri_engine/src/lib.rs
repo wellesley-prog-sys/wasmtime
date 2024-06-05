@@ -66,7 +66,7 @@ pub fn parse_isle_to_terms(lexer: isle::lexer::Lexer) -> (TypeEnv, TermEnv) {
 
 pub fn build_clif_lower_isle() -> PathBuf {
     // Build the relevant ISLE prelude using the meta crate
-    let out_dir = "veri-isle-clif-gen";
+    let out_dir = std::path::Path::new(&"veri-isle-clif-gen");
     let isle_dir = std::path::Path::new(&out_dir);
 
     if isle_dir.is_dir() {
@@ -81,7 +81,7 @@ pub fn build_clif_lower_isle() -> PathBuf {
     // For now, build ISLE files for x86 and aarch64
     let isas = vec![Isa::X86, Isa::Arm64];
 
-    if let Err(err) = meta::generate(&isas, &out_dir, isle_dir.to_str().unwrap()) {
+    if let Err(err) = meta::generate(&isas, &out_dir, isle_dir) {
         panic!("Meta generate error: {}", err);
     }
 

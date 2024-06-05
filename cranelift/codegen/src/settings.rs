@@ -231,21 +231,10 @@ fn parse_bool_value(value: &str) -> SetResult<bool> {
 fn parse_enum_value(value: &str, choices: &[&str]) -> SetResult<u8> {
     match choices.iter().position(|&tag| tag == value) {
         Some(idx) => Ok(idx as u8),
-        None => {
-            // TODO: Use `join` instead of this code, once
-            // https://github.com/rust-lang/rust/issues/27747 is resolved.
-            let mut all_choices = String::new();
-            let mut first = true;
-            for choice in choices {
-                if first {
-                    first = false
-                } else {
-                    all_choices += ", ";
-                }
-                all_choices += choice;
-            }
-            Err(SetError::BadValue(format!("any among {}", all_choices)))
-        }
+        None => Err(SetError::BadValue(format!(
+            "any among {}",
+            choices.join(", ")
+        ))),
     }
 }
 
@@ -530,6 +519,7 @@ regalloc_checker = false
 regalloc_verbose_logs = false
 enable_alias_analysis = true
 enable_verifier = true
+enable_pcc = false
 is_pic = false
 use_colocated_libcalls = false
 enable_float = true
@@ -542,7 +532,6 @@ unwind_info = true
 preserve_frame_pointers = false
 machine_code_cfg_info = false
 enable_probestack = false
-probestack_func_adjusts_sp = false
 enable_jump_tables = true
 enable_heap_access_spectre_mitigation = true
 enable_table_access_spectre_mitigation = true

@@ -6,9 +6,12 @@ version = "0.0.0"
 edition.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
-arbitrary = { version = "1.1.0", features = ["derive"] }
+arbitrary = { workspace = true, features = ["derive"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 wasmtime-component-util = { workspace = true }

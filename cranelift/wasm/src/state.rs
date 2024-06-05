@@ -4,7 +4,7 @@
 //! value and control stacks during the translation of a single function.
 
 use crate::environ::{FuncEnvironment, GlobalVariable};
-use crate::{FuncIndex, GlobalIndex, Heap, MemoryIndex, TableIndex, TypeIndex, WasmResult};
+use crate::{FuncIndex, GlobalIndex, Heap, MemoryIndex, TypeIndex, WasmResult};
 use crate::{HashMap, Occupied, Vacant};
 use cranelift_codegen::ir::{self, Block, Inst, Value};
 use std::vec::Vec;
@@ -194,7 +194,7 @@ impl ControlStackFrame {
         // (see also `FuncTranslationState::push_if`).
         // Yet, the original_stack_size member accounts for them only once, so that the else
         // block can see the same number of parameters as the consequent block. As a matter of
-        // fact, we need to substract an extra number of parameter values for if blocks.
+        // fact, we need to subtract an extra number of parameter values for if blocks.
         let num_duplicated_params = match self {
             &ControlStackFrame::If {
                 num_param_values, ..
@@ -229,9 +229,6 @@ pub struct FuncTranslationState {
     // Map of heaps that have been created by `FuncEnvironment::make_heap`.
     memory_to_heap: HashMap<MemoryIndex, Heap>,
 
-    // Map of tables that have been created by `FuncEnvironment::make_table`.
-    pub(crate) tables: HashMap<TableIndex, ir::Table>,
-
     // Map of indirect call signatures that have been created by
     // `FuncEnvironment::make_indirect_sig()`.
     // Stores both the signature reference and the number of WebAssembly arguments
@@ -261,7 +258,6 @@ impl FuncTranslationState {
             reachable: true,
             globals: HashMap::new(),
             memory_to_heap: HashMap::new(),
-            tables: HashMap::new(),
             signatures: HashMap::new(),
             functions: HashMap::new(),
         }
@@ -273,7 +269,6 @@ impl FuncTranslationState {
         self.reachable = true;
         self.globals.clear();
         self.memory_to_heap.clear();
-        self.tables.clear();
         self.signatures.clear();
         self.functions.clear();
     }
@@ -334,7 +329,7 @@ impl FuncTranslationState {
         (v1, v2, v3)
     }
 
-    /// Helper to ensure the the stack size is at least as big as `n`; note that due to
+    /// Helper to ensure the stack size is at least as big as `n`; note that due to
     /// `debug_assert` this will not execute in non-optimized builds.
     #[inline]
     fn ensure_length_is_at_least(&self, n: usize) {
@@ -469,21 +464,6 @@ impl FuncTranslationState {
         match self.memory_to_heap.entry(index) {
             Occupied(entry) => Ok(*entry.get()),
             Vacant(entry) => Ok(*entry.insert(environ.make_heap(func, index)?)),
-        }
-    }
-
-    /// Get the `Table` reference that should be used to access table `index`.
-    /// Create the reference if necessary.
-    pub(crate) fn get_or_create_table<FE: FuncEnvironment + ?Sized>(
-        &mut self,
-        func: &mut ir::Function,
-        index: u32,
-        environ: &mut FE,
-    ) -> WasmResult<ir::Table> {
-        let index = TableIndex::from_u32(index);
-        match self.tables.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => Ok(*entry.insert(environ.make_table(func, index)?)),
         }
     }
 

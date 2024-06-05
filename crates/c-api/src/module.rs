@@ -1,6 +1,6 @@
 use crate::{
     handle_result, wasm_byte_vec_t, wasm_engine_t, wasm_exporttype_t, wasm_exporttype_vec_t,
-    wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
+    wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t, CExternType,
 };
 use anyhow::Context;
 use std::ffi::CStr;
@@ -29,6 +29,7 @@ pub struct wasm_shared_module_t {
 wasmtime_c_api_macros::declare_own!(wasm_shared_module_t);
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasm_module_new(
     store: &mut wasm_store_t,
     binary: &wasm_byte_vec_t,
@@ -40,6 +41,7 @@ pub unsafe extern "C" fn wasm_module_new(
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasm_module_validate(
     store: &mut wasm_store_t,
     binary: &wasm_byte_vec_t,
@@ -53,7 +55,7 @@ fn fill_exports(module: &Module, out: &mut wasm_exporttype_vec_t) {
         .map(|e| {
             Some(Box::new(wasm_exporttype_t::new(
                 e.name().to_owned(),
-                e.ty(),
+                CExternType::new(e.ty()),
             )))
         })
         .collect::<Vec<_>>();
@@ -67,7 +69,7 @@ fn fill_imports(module: &Module, out: &mut wasm_importtype_vec_t) {
             Some(Box::new(wasm_importtype_t::new(
                 i.module().to_owned(),
                 i.name().to_owned(),
-                i.ty(),
+                CExternType::new(i.ty()),
             )))
         })
         .collect::<Vec<_>>();
@@ -105,6 +107,7 @@ pub unsafe extern "C" fn wasm_module_obtain(
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasm_module_serialize(module: &wasm_module_t, ret: &mut wasm_byte_vec_t) {
     if let Ok(buf) = module.module.serialize() {
         ret.set_buffer(buf);
@@ -130,6 +133,7 @@ pub struct wasmtime_module_t {
 wasmtime_c_api_macros::declare_own!(wasmtime_module_t);
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasmtime_module_new(
     engine: &wasm_engine_t,
     wasm: *const u8,
@@ -166,6 +170,7 @@ pub extern "C" fn wasmtime_module_imports(
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasmtime_module_validate(
     engine: &wasm_engine_t,
     wasm: *const u8,
@@ -176,6 +181,7 @@ pub unsafe extern "C" fn wasmtime_module_validate(
 }
 
 #[no_mangle]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasmtime_module_serialize(
     module: &wasmtime_module_t,
     ret: &mut wasm_byte_vec_t,
@@ -186,8 +192,8 @@ pub extern "C" fn wasmtime_module_serialize(
 #[no_mangle]
 pub extern "C" fn wasmtime_module_image_range(
     module: &wasmtime_module_t,
-    start: &mut usize,
-    end: &mut usize,
+    start: &mut *const u8,
+    end: &mut *const u8,
 ) {
     let range = module.module.image_range();
     *start = range.start;

@@ -92,7 +92,6 @@ use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
 use smallvec::SmallVec;
-use std::convert::TryFrom;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 
@@ -178,7 +177,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();
                     // Put globals in the "table" abstract heap category as well.
-                    flags.set_table();
+                    flags.set_alias_region(Some(ir::AliasRegion::Table));
                     builder.ins().load(ty, flags, addr, offset)
                 }
                 GlobalVariable::Custom => environ.translate_custom_global_get(
@@ -195,7 +194,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();
                     // Put globals in the "table" abstract heap category as well.
-                    flags.set_table();
+                    flags.set_alias_region(Some(ir::AliasRegion::Table));
                     let mut val = state.pop1();
                     // Ensure SIMD values are cast to their default Cranelift type, I8x16.
                     if ty.is_vector() {
@@ -646,7 +645,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // `table_index` is the index of the table to search the function
             // in.
             let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
-            let table = state.get_or_create_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -656,12 +654,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let call = environ.translate_call_indirect(
                 builder,
                 TableIndex::from_u32(*table_index),
-                table,
                 TypeIndex::from_u32(*type_index),
                 sigref,
                 callee,
                 state.peekn(num_args),
             )?;
+            let call = match call {
+                Some(call) => call,
+                None => {
+                    state.reachable = false;
+                    return Ok(());
+                }
+            };
             let inst_results = builder.inst_results(call);
             debug_assert_eq!(
                 inst_results.len(),
@@ -708,7 +712,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // `table_index` is the index of the table to search the function
             // in.
             let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
-            let table = state.get_or_create_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -718,7 +721,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.translate_return_call_indirect(
                 builder,
                 TableIndex::from_u32(*table_index),
-                table,
                 TypeIndex::from_u32(*type_index),
                 sigref,
                 callee,
@@ -1543,54 +1545,43 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.translate_data_drop(builder.cursor(), *data_index)?;
         }
         Operator::TableSize { table: index } => {
-            let table = state.get_or_create_table(builder.func, *index, environ)?;
-            state.push1(environ.translate_table_size(
-                builder.cursor(),
-                TableIndex::from_u32(*index),
-                table,
-            )?);
+            state.push1(
+                environ.translate_table_size(builder.cursor(), TableIndex::from_u32(*index))?,
+            );
         }
         Operator::TableGrow { table: index } => {
             let table_index = TableIndex::from_u32(*index);
-            let table = state.get_or_create_table(builder.func, *index, environ)?;
             let delta = state.pop1();
             let init_value = state.pop1();
             state.push1(environ.translate_table_grow(
                 builder.cursor(),
                 table_index,
-                table,
                 delta,
                 init_value,
             )?);
         }
         Operator::TableGet { table: index } => {
             let table_index = TableIndex::from_u32(*index);
-            let table = state.get_or_create_table(builder.func, *index, environ)?;
             let index = state.pop1();
-            state.push1(environ.translate_table_get(builder, table_index, table, index)?);
+            state.push1(environ.translate_table_get(builder, table_index, index)?);
         }
         Operator::TableSet { table: index } => {
             let table_index = TableIndex::from_u32(*index);
-            let table = state.get_or_create_table(builder.func, *index, environ)?;
             let value = state.pop1();
             let index = state.pop1();
-            environ.translate_table_set(builder, table_index, table, value, index)?;
+            environ.translate_table_set(builder, table_index, value, index)?;
         }
         Operator::TableCopy {
             dst_table: dst_table_index,
             src_table: src_table_index,
         } => {
-            let dst_table = state.get_or_create_table(builder.func, *dst_table_index, environ)?;
-            let src_table = state.get_or_create_table(builder.func, *src_table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_table_copy(
                 builder.cursor(),
                 TableIndex::from_u32(*dst_table_index),
-                dst_table,
                 TableIndex::from_u32(*src_table_index),
-                src_table,
                 dest,
                 src,
                 len,
@@ -1607,7 +1598,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             elem_index,
             table: table_index,
         } => {
-            let table = state.get_or_create_table(builder.func, *table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
@@ -1615,7 +1605,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.cursor(),
                 *elem_index,
                 TableIndex::from_u32(*table_index),
-                table,
                 dest,
                 src,
                 len,
@@ -2503,8 +2492,68 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(r);
         }
 
-        Operator::RefI31 | Operator::I31GetS | Operator::I31GetU => {
+        Operator::RefI31 => {
+            let val = state.pop1();
+            let i31ref = environ.translate_ref_i31(builder.cursor(), val)?;
+            state.push1(i31ref);
+        }
+        Operator::I31GetS => {
+            let i31ref = state.pop1();
+            let val = environ.translate_i31_get_s(builder.cursor(), i31ref)?;
+            state.push1(val);
+        }
+        Operator::I31GetU => {
+            let i31ref = state.pop1();
+            let val = environ.translate_i31_get_u(builder.cursor(), i31ref)?;
+            state.push1(val);
+        }
+
+        Operator::TryTable { .. } | Operator::ThrowRef => {
+            unimplemented!("exception operators not yet implemented")
+        }
+
+        Operator::RefEq
+        | Operator::RefTestNonNull { .. }
+        | Operator::RefTestNullable { .. }
+        | Operator::RefCastNonNull { .. }
+        | Operator::RefCastNullable { .. }
+        | Operator::BrOnCast { .. }
+        | Operator::BrOnCastFail { .. }
+        | Operator::AnyConvertExtern
+        | Operator::ExternConvertAny
+        | Operator::ArrayNew { .. }
+        | Operator::ArrayNewDefault { .. }
+        | Operator::ArrayNewFixed { .. }
+        | Operator::ArrayNewData { .. }
+        | Operator::ArrayNewElem { .. }
+        | Operator::ArrayGet { .. }
+        | Operator::ArrayGetU { .. }
+        | Operator::ArrayGetS { .. }
+        | Operator::ArraySet { .. }
+        | Operator::ArrayLen { .. }
+        | Operator::ArrayFill { .. }
+        | Operator::ArrayCopy { .. }
+        | Operator::ArrayInitData { .. }
+        | Operator::ArrayInitElem { .. }
+        | Operator::StructNew { .. }
+        | Operator::StructNewDefault { .. }
+        | Operator::StructGetS { .. }
+        | Operator::StructGetU { .. }
+        | Operator::StructSet { .. }
+        | Operator::StructGet { .. } => {
             unimplemented!("GC operators not yet implemented")
+        }
+
+        Operator::GlobalAtomicGet { .. }
+        | Operator::GlobalAtomicSet { .. }
+        | Operator::GlobalAtomicRmwAdd { .. }
+        | Operator::GlobalAtomicRmwSub { .. }
+        | Operator::GlobalAtomicRmwOr { .. }
+        | Operator::GlobalAtomicRmwXor { .. }
+        | Operator::GlobalAtomicRmwAnd { .. }
+        | Operator::GlobalAtomicRmwXchg { .. }
+        | Operator::GlobalAtomicRmwCmpxchg { .. } => {
+            unimplemented!("shared-everything-threads not yet implemented")
         }
     };
     Ok(())
@@ -2685,7 +2734,7 @@ where
     // `addr32 + offset` to `addr32 + offset + width` (not inclusive). In this
     // scenario our adjusted offset that we're checking is `memarg.offset +
     // access_size`. Note that we do saturating arithmetic here to avoid
-    // overflow. THe addition here is in the 64-bit space, which means that
+    // overflow. The addition here is in the 64-bit space, which means that
     // we'll never overflow for 32-bit wasm but for 64-bit this is an issue. If
     // our effective offset is u64::MAX though then it's impossible for for
     // that to actually be a valid offset because otherwise the wasm linear
@@ -2736,7 +2785,7 @@ where
     //   legalization of `heap_addr`, eliding the bounds check entirely.
     //
     // * For wasm64 offsets <=2gb will generate a single `heap_addr`
-    //   instruction, but at this time all heaps are "dyanmic" which means that
+    //   instruction, but at this time all heaps are "dynamic" which means that
     //   a single bounds check is forced. Ideally we'd do better here, but
     //   that's the current state of affairs.
     //
@@ -2811,11 +2860,16 @@ where
     let mut flags = MemFlags::new();
     flags.set_endianness(ir::Endianness::Little);
 
+    if heap.memory_type.is_some() {
+        // Proof-carrying code is enabled; check this memory access.
+        flags.set_checked();
+    }
+
     // The access occurs to the `heap` disjoint category of abstract
     // state. This may allow alias analysis to merge redundant loads,
     // etc. when heap accesses occur interleaved with other (table,
     // vmctx, stack) accesses.
-    flags.set_heap();
+    flags.set_alias_region(Some(ir::AliasRegion::Heap));
 
     Ok(Reachability::Reachable((flags, index, addr)))
 }

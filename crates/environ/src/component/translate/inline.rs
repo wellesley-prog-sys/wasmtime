@@ -45,11 +45,10 @@
 //! side-effectful initializers are emitted to the `GlobalInitializer` list in the
 //! final `Component`.
 
-use crate::component::translate::adapt::{Adapter, AdapterOptions};
 use crate::component::translate::*;
-use crate::{EntityType, PrimaryMap};
-use indexmap::IndexMap;
+use crate::EntityType;
 use std::borrow::Cow;
+use wasmparser::types::ComponentAnyTypeId;
 
 pub(super) fn run(
     types: &mut ComponentTypesBuilder,
@@ -114,12 +113,9 @@ pub(super) fn run(
         if let TypeDef::Interface(_) = ty {
             continue;
         }
-        let index = inliner
-            .result
-            .import_types
-            .push((name.as_str().to_string(), ty));
+        let index = inliner.result.import_types.push((name.0.to_string(), ty));
         let path = ImportPath::root(index);
-        args.insert(name.as_str(), ComponentItemDef::from_import(path, ty)?);
+        args.insert(name.0, ComponentItemDef::from_import(path, ty)?);
     }
 
     // This will run the inliner to completion after being seeded with the
@@ -220,7 +216,7 @@ struct InlinerFrame<'a> {
     /// register resource types after instantiation has completed.
     ///
     /// This is `Some` for all subcomponents and `None` for the root component.
-    instance_ty: Option<TypeId>,
+    instance_ty: Option<ComponentInstanceTypeId>,
 }
 
 /// "Closure state" for a component which is resolved from the `ClosedOverVars`
@@ -228,7 +224,7 @@ struct InlinerFrame<'a> {
 //
 // FIXME: this is cloned quite a lot and given the internal maps if this is a
 // perf issue we may want to `Rc` these fields. Note that this is only a perf
-// hit at compile-time though which we in general don't pay too too much
+// hit at compile-time though which we in general don't pay too much
 // attention to.
 #[derive(Default, Clone)]
 struct ComponentClosure<'a> {
@@ -332,7 +328,10 @@ enum ComponentInstanceDef<'a> {
     //
     // FIXME: same as the issue on `ComponentClosure` where this is cloned a lot
     // and may need `Rc`.
-    Items(IndexMap<&'a str, ComponentItemDef<'a>>),
+    Items(
+        IndexMap<&'a str, ComponentItemDef<'a>>,
+        Option<TypeComponentInstanceIndex>,
+    ),
 }
 
 #[derive(Clone)]
@@ -399,7 +398,7 @@ impl<'a> Inliner<'a> {
                     match frames.last_mut() {
                         Some((parent, _)) => {
                             parent.finish_instantiate(
-                                ComponentInstanceDef::Items(exports),
+                                ComponentInstanceDef::Items(exports, None),
                                 instance_ty.unwrap(),
                                 types,
                             );
@@ -431,7 +430,7 @@ impl<'a> Inliner<'a> {
             // was provided as an import at the instantiation-site to what was
             // needed during the component's instantiation.
             Import(name, ty) => {
-                let arg = match frame.args.get(name.as_str()) {
+                let arg = match frame.args.get(name.0) {
                     Some(arg) => arg,
 
                     // Not all arguments need to be provided for instantiation,
@@ -447,12 +446,11 @@ impl<'a> Inliner<'a> {
                     // skipped.
                     None => {
                         match ty {
-                            ComponentEntityType::Type { created, .. } => {
-                                match frame.translation.types_ref()[*created] {
-                                    wasmparser::types::Type::Resource(_) => unreachable!(),
-                                    _ => {}
-                                }
-                            }
+                            ComponentEntityType::Type {
+                                created: ComponentAnyTypeId::Resource(_),
+                                ..
+                            } => unreachable!(),
+                            ComponentEntityType::Type { .. } => {}
                             _ => unreachable!(),
                         }
                         return Ok(None);
@@ -643,16 +641,14 @@ impl<'a> Inliner<'a> {
                 // intended, though, since `ty` can't be referred to outside of
                 // this component.
                 let idx = self.result.resource_index(idx);
-                types
-                    .resources_mut()
-                    .register_resource(frame.translation.types_ref(), *ty, idx);
+                types.resources_mut().register_resource(ty.resource(), idx);
             }
 
             // Resource-related intrinsics are generally all the same.
             // Wasmparser type information is converted to wasmtime type
             // information and then new entries for each intrinsic are recorded.
             ResourceNew(id, ty) => {
-                let id = types.resource_id(frame.translation.types_ref(), *id);
+                let id = types.resource_id(id.resource());
                 let index = self
                     .result
                     .trampolines
@@ -660,7 +656,7 @@ impl<'a> Inliner<'a> {
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             ResourceRep(id, ty) => {
-                let id = types.resource_id(frame.translation.types_ref(), *id);
+                let id = types.resource_id(id.resource());
                 let index = self
                     .result
                     .trampolines
@@ -668,7 +664,7 @@ impl<'a> Inliner<'a> {
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             ResourceDrop(id, ty) => {
-                let id = types.resource_id(frame.translation.types_ref(), *id);
+                let id = types.resource_id(id.resource());
                 let index = self
                     .result
                     .trampolines
@@ -788,14 +784,16 @@ impl<'a> Inliner<'a> {
                 return Ok(Some(frame));
             }
 
-            ComponentSynthetic(map) => {
+            ComponentSynthetic(map, ty) => {
                 let items = map
                     .iter()
                     .map(|(name, index)| Ok((*name, frame.item(*index, types)?)))
                     .collect::<Result<_>>()?;
+                let types_ref = frame.translation.types_ref();
+                let ty = types.convert_instance(types_ref, *ty)?;
                 frame
                     .component_instances
-                    .push(ComponentInstanceDef::Items(items));
+                    .push(ComponentInstanceDef::Items(items, Some(ty)));
             }
 
             // Core wasm aliases, this and the cases below, are creating
@@ -851,7 +849,7 @@ impl<'a> Inliner<'a> {
                     // through instantiation of a component or through a
                     // synthetic renaming of items we just schlep around the
                     // definitions of various items here.
-                    ComponentInstanceDef::Items(map) => frame.push_item(map[*name].clone()),
+                    ComponentInstanceDef::Items(map, _) => frame.push_item(map[*name].clone()),
                 }
             }
 
@@ -1034,7 +1032,10 @@ impl<'a> Inliner<'a> {
             // from.
             ComponentItemDef::Module(module) => match module {
                 ModuleDef::Static(idx) => dfg::Export::ModuleStatic(idx),
-                ModuleDef::Import(path, _) => dfg::Export::ModuleImport(self.runtime_import(&path)),
+                ModuleDef::Import(path, ty) => dfg::Export::ModuleImport {
+                    ty,
+                    import: self.runtime_import(&path),
+                },
             },
 
             ComponentItemDef::Func(func) => match func {
@@ -1056,7 +1057,7 @@ impl<'a> Inliner<'a> {
             },
 
             ComponentItemDef::Instance(instance) => {
-                let mut result = IndexMap::new();
+                let mut exports = IndexMap::new();
                 match instance {
                     // If this instance is one that was originally imported by
                     // the component itself then the imports are translated here
@@ -1069,20 +1070,24 @@ impl<'a> Inliner<'a> {
                         for (name, ty) in types[ty].exports.iter() {
                             let path = path.push(name);
                             let def = ComponentItemDef::from_import(path, *ty)?;
-                            self.record_export(name, def, types, &mut result)?;
+                            self.record_export(name, def, types, &mut exports)?;
+                        }
+                        dfg::Export::Instance {
+                            ty: Some(ty),
+                            exports,
                         }
                     }
 
                     // An exported instance which is itself a bag of items is
-                    // translated recursively here to our `result` map which is
+                    // translated recursively here to our `exports` map which is
                     // the bag of items we're exporting.
-                    ComponentInstanceDef::Items(map) => {
+                    ComponentInstanceDef::Items(map, ty) => {
                         for (name, def) in map {
-                            self.record_export(name, def, types, &mut result)?;
+                            self.record_export(name, def, types, &mut exports)?;
                         }
+                        dfg::Export::Instance { ty, exports }
                     }
                 }
-                dfg::Export::Instance(result)
             }
 
             // FIXME(#4283) should make an official decision on whether this is
@@ -1105,7 +1110,7 @@ impl<'a> InlinerFrame<'a> {
         translation: &'a Translation<'a>,
         closure: ComponentClosure<'a>,
         args: HashMap<&'a str, ComponentItemDef<'a>>,
-        instance_ty: Option<TypeId>,
+        instance_ty: Option<ComponentInstanceTypeId>,
     ) -> Self {
         // FIXME: should iterate over the initializers of `translation` and
         // calculate the size of each index space to use `with_capacity` for
@@ -1229,7 +1234,7 @@ impl<'a> InlinerFrame<'a> {
     fn finish_instantiate(
         &mut self,
         def: ComponentInstanceDef<'a>,
-        ty: TypeId,
+        ty: ComponentInstanceTypeId,
         types: &mut ComponentTypesBuilder,
     ) {
         let (resources, types) = types.resources_mut_and_types();
@@ -1237,7 +1242,7 @@ impl<'a> InlinerFrame<'a> {
         let arg = ComponentItemDef::Instance(def);
         resources.register_component_entity_type(
             &self.translation.types_ref(),
-            wasmparser::types::ComponentEntityType::Instance(ty),
+            ComponentEntityType::Instance(ty),
             &mut path,
             &mut |path| arg.lookup_resource(path, types),
         );
@@ -1297,7 +1302,7 @@ impl<'a> ComponentItemDef<'a> {
             cur = match instance {
                 // If this instance is a "bag of things" then this is as easy as
                 // looking up the name in the bag of names.
-                ComponentInstanceDef::Items(names) => names[element].clone(),
+                ComponentInstanceDef::Items(names, _) => names[element].clone(),
 
                 // If, however, this instance is an imported instance then this
                 // is a further projection within the import with one more path

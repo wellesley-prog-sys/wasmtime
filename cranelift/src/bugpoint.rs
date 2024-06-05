@@ -26,14 +26,14 @@ pub struct Options {
     file: PathBuf,
 
     /// Configure Cranelift settings
-    #[clap(long = "set")]
+    #[arg(long = "set")]
     settings: Vec<String>,
 
     /// Specify the target architecture.
     target: String,
 
     /// Be more verbose
-    #[clap(short, long)]
+    #[arg(short, long)]
     verbose: bool,
 }
 
@@ -822,18 +822,10 @@ fn inst_count(func: &Function) -> usize {
         .sum()
 }
 
-fn resolve_aliases(func: &mut Function) {
-    for block in func.stencil.layout.blocks() {
-        for inst in func.stencil.layout.block_insts(block) {
-            func.stencil.dfg.resolve_aliases_in_arguments(inst);
-        }
-    }
-}
-
 /// Resolve aliases only if function still crashes after this.
 fn try_resolve_aliases(context: &mut CrashCheckContext, func: &mut Function) {
     let mut func_with_resolved_aliases = func.clone();
-    resolve_aliases(&mut func_with_resolved_aliases);
+    func_with_resolved_aliases.dfg.resolve_all_aliases();
     if let CheckResult::Crash(_) = context.check_for_crash(&func_with_resolved_aliases) {
         *func = func_with_resolved_aliases;
     }
@@ -1059,7 +1051,6 @@ impl<'a> CrashCheckContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_reader::ParseOptions;
 
     fn run_test(test_str: &str, expected_str: &str) {
         let test_file = parse_test(test_str, ParseOptions::default()).unwrap();

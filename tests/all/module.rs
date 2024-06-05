@@ -1,4 +1,3 @@
-use anyhow::Result;
 use wasmtime::*;
 
 #[test]
@@ -43,7 +42,7 @@ fn caches_across_engines() {
         // differ in wasm features enabled (which can affect
         // runtime/compilation settings)
         let res = Module::deserialize(
-            &Engine::new(Config::new().wasm_simd(false)).unwrap(),
+            &Engine::new(Config::new().wasm_threads(false)).unwrap(),
             &bytes,
         );
         assert!(res.is_err());
@@ -182,7 +181,7 @@ fn serialize_not_overly_massive() -> Result<()> {
 #[cfg_attr(any(not(target_arch = "x86_64"), miri), ignore)]
 fn missing_sse_and_floats_still_works() -> Result<()> {
     let mut config = Config::new();
-    config.wasm_simd(false);
+    config.wasm_simd(false).wasm_relaxed_simd(false);
     unsafe {
         config.cranelift_flag_set("has_sse41", "false");
     }
@@ -237,5 +236,97 @@ fn large_add_chain_no_stack_overflow() -> Result<()> {
     wat.push_str(")\n)");
     Module::new(&engine, &wat)?;
 
+    Ok(())
+}
+
+#[test]
+fn compile_a_component() -> Result<()> {
+    let engine = Engine::default();
+    let err = Module::new(&engine, "(component)").unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("expected a WebAssembly module but was given a WebAssembly component"),
+        "bad error: {err}"
+    );
+    Ok(())
+}
+
+#[test]
+fn call_indirect_caching_and_memory64() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_memory64(true);
+    config.cache_call_indirects(true);
+    let engine = Engine::new(&config)?;
+    Module::new(
+        &engine,
+        "(module
+            (memory i64 1)
+            (func (param i64) (result i32)
+                local.get 0
+                i32.load offset=0x100000000
+            )
+        )",
+    )?;
+    Ok(())
+}
+
+#[test]
+fn call_indirect_caching_out_of_bounds_table_index() -> Result<()> {
+    let mut config = Config::new();
+    config.cache_call_indirects(true);
+    let engine = Engine::new(&config)?;
+    // Test an out-of-bounds table index: this is exposed to the prescan
+    // that call-indirect caching must perform during compilation, so we
+    // need to make sure the error is properly handled by the validation
+    // that comes later.
+    let err = Module::new(
+        &engine,
+        "(module
+            (func (param i32)
+                ref.null func
+                local.get 0
+                table.set 32  ;; out-of-bounds table index
+            )
+        )",
+    )
+    .unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("table index out of bounds"),
+        "bad error: {err}"
+    );
+    Ok(())
+}
+
+#[test]
+fn tail_call_defaults() -> Result<()> {
+    let wasm_with_tail_calls = "(module (func $a return_call $a))";
+    if cfg!(target_arch = "s390x") {
+        // off by default on s390x
+        let res = Module::new(&Engine::default(), wasm_with_tail_calls);
+        assert!(res.is_err());
+    } else {
+        // on by default
+        Module::new(&Engine::default(), wasm_with_tail_calls)?;
+
+        // on by default for cranelift
+        Module::new(
+            &Engine::new(Config::new().strategy(Strategy::Cranelift))?,
+            wasm_with_tail_calls,
+        )?;
+    }
+
+    if cfg!(target_arch = "x86_64") {
+        // off by default for winch
+        let err = Module::new(
+            &Engine::new(Config::new().strategy(Strategy::Winch))?,
+            wasm_with_tail_calls,
+        );
+        assert!(err.is_err());
+
+        // can't enable with winch
+        let err = Engine::new(Config::new().strategy(Strategy::Winch).wasm_tail_call(true));
+        assert!(err.is_err());
+    }
     Ok(())
 }

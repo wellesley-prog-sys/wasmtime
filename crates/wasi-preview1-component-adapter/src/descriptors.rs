@@ -1,13 +1,15 @@
-use crate::bindings::wasi::cli::{
-    stderr, stdin, stdout, terminal_stderr, terminal_stdin, terminal_stdout,
-};
-use crate::bindings::wasi::filesystem::types as filesystem;
+use crate::bindings::wasi::cli::{stderr, stdin, stdout};
 use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
-use crate::bindings::wasi::sockets::tcp;
-use crate::{BlockingMode, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr};
+use crate::{BlockingMode, BumpAlloc, ImportAlloc, State, TrappingUnwrap, WasmStr};
 use core::cell::{Cell, OnceCell, UnsafeCell};
 use core::mem::MaybeUninit;
+use core::num::NonZeroUsize;
 use wasi::{Errno, Fd};
+
+#[cfg(not(feature = "proxy"))]
+use crate::bindings::wasi::filesystem::types as filesystem;
+#[cfg(not(feature = "proxy"))]
+use crate::File;
 
 pub const MAX_DESCRIPTORS: usize = 128;
 
@@ -19,6 +21,8 @@ pub enum Descriptor {
 
     /// Input and/or output wasi-streams, along with stream metadata.
     Streams(Streams),
+
+    Bad,
 }
 
 /// Input and/or output wasi-streams, along with a stream type that
@@ -44,12 +48,14 @@ impl Streams {
                 let input = match &self.type_ {
                     // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
                     // or write.
+                    #[cfg(not(feature = "proxy"))]
                     StreamType::File(File {
                         descriptor_type: filesystem::DescriptorType::Directory,
                         ..
                     }) => return Err(wasi::ERRNO_BADF),
                     // For files, we may have adjusted the position for seeking, so
                     // create a new stream.
+                    #[cfg(not(feature = "proxy"))]
                     StreamType::File(file) => {
                         let input = file.fd.read_via_stream(file.position.get())?;
                         input
@@ -70,12 +76,14 @@ impl Streams {
                 let output = match &self.type_ {
                     // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
                     // or write.
+                    #[cfg(not(feature = "proxy"))]
                     StreamType::File(File {
                         descriptor_type: filesystem::DescriptorType::Directory,
                         ..
                     }) => return Err(wasi::ERRNO_BADF),
                     // For files, we may have adjusted the position for seeking, so
                     // create a new stream.
+                    #[cfg(not(feature = "proxy"))]
                     StreamType::File(file) => {
                         let output = if file.append {
                             file.fd.append_via_stream()?
@@ -93,28 +101,38 @@ impl Streams {
     }
 }
 
-#[allow(dead_code)] // until Socket is implemented
 pub enum StreamType {
     /// Streams for implementing stdio.
-    Stdio(IsATTY),
+    Stdio(Stdio),
 
     /// Streaming data with a file.
+    #[cfg(not(feature = "proxy"))]
     File(File),
-
-    /// Streaming data with a socket connection.
-    Socket(tcp::TcpSocket),
 }
 
-pub enum IsATTY {
-    Yes,
-    No,
+pub enum Stdio {
+    Stdin,
+    Stdout,
+    Stderr,
 }
 
-impl IsATTY {
+impl Stdio {
     pub fn filetype(&self) -> wasi::Filetype {
-        match self {
-            IsATTY::Yes => wasi::FILETYPE_CHARACTER_DEVICE,
-            IsATTY::No => wasi::FILETYPE_UNKNOWN,
+        #[cfg(not(feature = "proxy"))]
+        let is_terminal = {
+            use crate::bindings::wasi::cli;
+            match self {
+                Stdio::Stdin => cli::terminal_stdin::get_terminal_stdin().is_some(),
+                Stdio::Stdout => cli::terminal_stdout::get_terminal_stdout().is_some(),
+                Stdio::Stderr => cli::terminal_stderr::get_terminal_stderr().is_some(),
+            }
+        };
+        #[cfg(feature = "proxy")]
+        let is_terminal = false;
+        if is_terminal {
+            wasi::FILETYPE_CHARACTER_DEVICE
+        } else {
+            wasi::FILETYPE_UNKNOWN
         }
     }
 }
@@ -128,32 +146,21 @@ pub struct Descriptors {
 
     /// Points to the head of a free-list of closed file descriptors.
     closed: Option<Fd>,
+}
 
-    /// Preopened directories. Initialized lazily. Access with `State::get_preopens`
-    /// to take care of initialization.
-    preopens: Cell<Option<&'static [Preopen]>>,
+#[cfg(not(feature = "proxy"))]
+#[link(wasm_import_module = "wasi:filesystem/preopens@0.2.0")]
+extern "C" {
+    #[link_name = "get-directories"]
+    fn wasi_filesystem_get_directories(rval: *mut PreopenList);
 }
 
 impl Descriptors {
-    pub fn new(import_alloc: &ImportAlloc, arena: &BumpArena) -> Self {
+    pub fn new(state: &State) -> Self {
         let d = Descriptors {
             table: UnsafeCell::new(MaybeUninit::uninit()),
             table_len: Cell::new(0),
             closed: None,
-            preopens: Cell::new(None),
-        };
-
-        let stdin_isatty = match terminal_stdin::get_terminal_stdin() {
-            Some(_) => IsATTY::Yes,
-            None => IsATTY::No,
-        };
-        let stdout_isatty = match terminal_stdout::get_terminal_stdout() {
-            Some(_) => IsATTY::Yes,
-            None => IsATTY::No,
-        };
-        let stderr_isatty = match terminal_stderr::get_terminal_stderr() {
-            Some(_) => IsATTY::Yes,
-            None => IsATTY::No,
         };
 
         fn new_once<T>(val: T) -> OnceCell<T> {
@@ -165,63 +172,88 @@ impl Descriptors {
         d.push(Descriptor::Streams(Streams {
             input: new_once(stdin::get_stdin()),
             output: OnceCell::new(),
-            type_: StreamType::Stdio(stdin_isatty),
+            type_: StreamType::Stdio(Stdio::Stdin),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: OnceCell::new(),
             output: new_once(stdout::get_stdout()),
-            type_: StreamType::Stdio(stdout_isatty),
+            type_: StreamType::Stdio(Stdio::Stdout),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: OnceCell::new(),
             output: new_once(stderr::get_stderr()),
-            type_: StreamType::Stdio(stderr_isatty),
+            type_: StreamType::Stdio(Stdio::Stderr),
         }))
         .trapping_unwrap();
 
-        #[link(wasm_import_module = "wasi:filesystem/preopens")]
-        #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
-        extern "C" {
-            #[link_name = "get-directories"]
-            fn get_preopens_import(rval: *mut PreopenList);
-        }
-        let mut list = PreopenList {
-            base: std::ptr::null(),
-            len: 0,
-        };
-        import_alloc.with_arena(arena, || unsafe {
-            get_preopens_import(&mut list as *mut _)
-        });
-        let preopens: &'static [Preopen] = unsafe {
-            // allocation comes from long lived arena, so it is safe to
-            // cast this to a &'static slice:
-            std::slice::from_raw_parts(list.base, list.len)
-        };
-        for preopen in preopens {
-            // Acquire ownership of the descriptor, leaving the rest of the
-            // `Preopen` struct in place.
-            let descriptor = unsafe { preopen.descriptor.assume_init_read() };
-            // Expectation is that the descriptor index is initialized with
-            // stdio (0,1,2) and no others, so that preopens are 3..
-            let descriptor_type = descriptor.get_type().trapping_unwrap();
-            d.push(Descriptor::Streams(Streams {
-                input: OnceCell::new(),
-                output: OnceCell::new(),
-                type_: StreamType::File(File {
-                    fd: descriptor,
-                    descriptor_type,
-                    position: Cell::new(0),
-                    append: false,
-                    blocking_mode: BlockingMode::Blocking,
-                }),
-            }))
-            .trapping_unwrap();
-        }
-
-        d.preopens.set(Some(preopens));
+        #[cfg(not(feature = "proxy"))]
+        d.open_preopens(state);
         d
+    }
+
+    #[cfg(not(feature = "proxy"))]
+    fn open_preopens(&self, state: &State) {
+        unsafe {
+            let alloc = ImportAlloc::CountAndDiscardStrings {
+                strings_size: 0,
+                alloc: state.temporary_alloc(),
+            };
+            let (preopens, _) = state.with_import_alloc(alloc, || {
+                let mut preopens = PreopenList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_filesystem_get_directories(&mut preopens);
+                preopens
+            });
+            for i in 0..preopens.len {
+                let preopen = preopens.base.add(i).read();
+                // Expectation is that the descriptor index is initialized with
+                // stdio (0,1,2) and no others, so that preopens are 3..
+                let descriptor_type = preopen.descriptor.get_type().trapping_unwrap();
+                self.push(Descriptor::Streams(Streams {
+                    input: OnceCell::new(),
+                    output: OnceCell::new(),
+                    type_: StreamType::File(File {
+                        fd: preopen.descriptor,
+                        descriptor_type,
+                        position: Cell::new(0),
+                        append: false,
+                        blocking_mode: BlockingMode::Blocking,
+                        preopen_name_len: NonZeroUsize::new(preopen.path.len),
+                    }),
+                }))
+                .trapping_unwrap();
+            }
+        }
+    }
+
+    #[cfg(not(feature = "proxy"))]
+    pub unsafe fn get_preopen_path(&self, state: &State, fd: Fd, path: *mut u8, len: usize) {
+        let alloc = ImportAlloc::GetPreopenPath {
+            path: Some(BumpAlloc { base: path, len }),
+            nth: fd - 3,
+            alloc: state.temporary_alloc(),
+        };
+        let (preopens, _) = state.with_import_alloc(alloc, || {
+            let mut preopens = PreopenList {
+                base: std::ptr::null(),
+                len: 0,
+            };
+            wasi_filesystem_get_directories(&mut preopens);
+            preopens
+        });
+
+        // NB: we just got owned handles for all preopened directories. We're
+        // only interested in one individual string allocation, however, so
+        // discard all of the descriptors and close them since we otherwise
+        // don't want to leak them.
+        for i in 0..preopens.len {
+            let preopen = preopens.base.add(i).read();
+            drop(preopen.descriptor);
+        }
     }
 
     fn push(&self, desc: Descriptor) -> Result<Fd, Errno> {
@@ -266,7 +298,7 @@ impl Descriptors {
                     Descriptor::Closed(next) => *next,
                     _ => unreachable!("impossible: freelist points to a closed descriptor"),
                 };
-                // Write descriptor to the entry at the nead of the list
+                // Write descriptor to the entry at the head of the list
                 *freelist_desc = d;
                 // Point closed to the following item
                 self.closed = next_closed;
@@ -285,13 +317,6 @@ impl Descriptors {
         self.table_mut()
             .get_mut(usize::try_from(fd).trapping_unwrap())
             .ok_or(wasi::ERRNO_BADF)
-    }
-
-    pub fn get_preopen(&self, fd: Fd) -> Option<&Preopen> {
-        let preopens = self.preopens.get().trapping_unwrap();
-        // Subtract 3 for the stdio indices to compute the preopen index.
-        let index = fd.checked_sub(3)? as usize;
-        preopens.get(index)
     }
 
     // Internal: close a fd, returning the descriptor.
@@ -327,7 +352,7 @@ impl Descriptors {
         // First, ensure from_fd is in bounds:
         let _ = self.get(from_fd)?;
         // Expand table until to_fd is in bounds as well:
-        while self.table_len.get() as u32 <= to_fd as u32 {
+        while self.table_len.get() as u32 <= to_fd {
             self.push_closed()?;
         }
         // Then, close from_fd and put its contents into to_fd:
@@ -347,10 +372,11 @@ impl Descriptors {
     ) -> Result<&mut Streams, Errno> {
         match self.get_mut(fd)? {
             Descriptor::Streams(streams) => Ok(streams),
-            Descriptor::Closed(_) => Err(error),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(error),
         }
     }
 
+    #[cfg(not(feature = "proxy"))]
     pub fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
@@ -370,22 +396,12 @@ impl Descriptors {
         }
     }
 
-    #[allow(dead_code)] // until Socket is implemented
-    pub fn get_socket(&self, fd: Fd) -> Result<&tcp::TcpSocket, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::Socket(socket),
-                ..
-            }) => Ok(&*socket),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
-            _ => Err(wasi::ERRNO_INVAL),
-        }
-    }
-
+    #[cfg(not(feature = "proxy"))]
     pub fn get_file(&self, fd: Fd) -> Result<&File, Errno> {
         self.get_file_with_error(fd, wasi::ERRNO_INVAL)
     }
 
+    #[cfg(not(feature = "proxy"))]
     pub fn get_dir(&self, fd: Fd) -> Result<&File, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
@@ -406,6 +422,7 @@ impl Descriptors {
         }
     }
 
+    #[cfg(not(feature = "proxy"))]
     pub fn get_seekable_file(&self, fd: Fd) -> Result<&File, Errno> {
         self.get_file_with_error(fd, wasi::ERRNO_SPIPE)
     }
@@ -417,26 +434,26 @@ impl Descriptors {
     pub fn get_read_stream(&self, fd: Fd) -> Result<&InputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_read_stream(),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     }
 
     pub fn get_write_stream(&self, fd: Fd) -> Result<&OutputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_write_stream(),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     }
 }
 
+#[cfg(not(feature = "proxy"))]
 #[repr(C)]
 pub struct Preopen {
-    /// This is `MaybeUninit` because we take ownership of the `Descriptor` to
-    /// put it in our own table.
-    pub descriptor: MaybeUninit<filesystem::Descriptor>,
+    pub descriptor: filesystem::Descriptor,
     pub path: WasmStr,
 }
 
+#[cfg(not(feature = "proxy"))]
 #[repr(C)]
 pub struct PreopenList {
     pub base: *const Preopen,

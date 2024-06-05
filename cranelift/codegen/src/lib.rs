@@ -1,7 +1,5 @@
 //! Cranelift code generation library.
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
+#![deny(missing_docs)]
 #![no_std]
 // Various bits and pieces of this crate might only be used for one platform or
 // another, but it's not really too useful to learn about that all the time. On
@@ -20,9 +18,9 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap, HashSet};
+use hashbrown::{hash_map, HashMap};
 #[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap, HashSet};
+use std::collections::{hash_map, HashMap};
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
@@ -51,18 +49,19 @@ pub mod loop_analysis;
 pub mod print_errors;
 pub mod settings;
 pub mod timing;
+pub mod traversals;
 pub mod verifier;
 pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{
     FinalizedMachReloc, FinalizedRelocTarget, MachCallSite, MachSrcLoc, MachStackMap,
-    MachTextSectionBuilder, MachTrap,
+    MachTextSectionBuilder, MachTrap, OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
     CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
-    MachInstEmitState, MachLabel, Reg, TextSectionBuilder, VCodeConstantData, VCodeConstants,
-    Writable,
+    MachInstEmitState, MachLabel, RealReg, Reg, RelocDistance, TextSectionBuilder,
+    VCodeConstantData, VCodeConstants, Writable,
 };
 
 mod alias_analysis;
@@ -70,15 +69,14 @@ mod bitset;
 mod constant_hash;
 mod context;
 mod ctxhash;
-mod dce;
 mod egraph;
-mod fx;
 mod inst_predicates;
 mod isle_prelude;
 mod iterators;
 mod legalizer;
 mod nan_canonicalization;
 mod opts;
+mod ranges;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;

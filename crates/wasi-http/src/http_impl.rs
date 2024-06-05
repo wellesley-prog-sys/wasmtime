@@ -1,84 +1,80 @@
-use crate::bindings::http::{
-    outgoing_handler,
-    types::{RequestOptions, Scheme},
+//! Implementation of the `wasi:http/outgoing-handler` interface.
+
+use crate::{
+    bindings::http::{
+        outgoing_handler,
+        types::{self, Scheme},
+    },
+    error::internal_error,
+    http_request_error,
+    types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
+    WasiHttpView,
 };
-use crate::types::{self, HostFutureIncomingResponse, IncomingResponseInternal};
-use crate::WasiHttpView;
-use anyhow::Context;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
-use std::time::Duration;
-use tokio::net::TcpStream;
-use tokio::time::timeout;
-use types::HostOutgoingRequest;
 use wasmtime::component::Resource;
-use wasmtime_wasi::preview2;
 
-impl<T: WasiHttpView> outgoing_handler::Host for T {
+impl outgoing_handler::Host for dyn WasiHttpView + '_ {
     fn handle(
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
-        options: Option<RequestOptions>,
-    ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, outgoing_handler::Error>>
-    {
-        let connect_timeout = Duration::from_millis(
-            options
-                .and_then(|opts| opts.connect_timeout_ms)
-                .unwrap_or(600 * 1000) as u64,
-        );
+        options: Option<Resource<types::RequestOptions>>,
+    ) -> crate::HttpResult<Resource<HostFutureIncomingResponse>> {
+        let opts = options.and_then(|opts| self.table().get(&opts).ok());
 
-        let first_byte_timeout = Duration::from_millis(
-            options
-                .and_then(|opts| opts.first_byte_timeout_ms)
-                .unwrap_or(600 * 1000) as u64,
-        );
+        let connect_timeout = opts
+            .and_then(|opts| opts.connect_timeout)
+            .unwrap_or(std::time::Duration::from_secs(600));
 
-        let between_bytes_timeout = Duration::from_millis(
-            options
-                .and_then(|opts| opts.between_bytes_timeout_ms)
-                .unwrap_or(600 * 1000) as u64,
-        );
+        let first_byte_timeout = opts
+            .and_then(|opts| opts.first_byte_timeout)
+            .unwrap_or(std::time::Duration::from_secs(600));
 
-        let req = self.table().delete_resource(request_id)?;
+        let between_bytes_timeout = opts
+            .and_then(|opts| opts.between_bytes_timeout)
+            .unwrap_or(std::time::Duration::from_secs(600));
 
-        let method = match req.method {
-            crate::bindings::http::types::Method::Get => Method::GET,
-            crate::bindings::http::types::Method::Head => Method::HEAD,
-            crate::bindings::http::types::Method::Post => Method::POST,
-            crate::bindings::http::types::Method::Put => Method::PUT,
-            crate::bindings::http::types::Method::Delete => Method::DELETE,
-            crate::bindings::http::types::Method::Connect => Method::CONNECT,
-            crate::bindings::http::types::Method::Options => Method::OPTIONS,
-            crate::bindings::http::types::Method::Trace => Method::TRACE,
-            crate::bindings::http::types::Method::Patch => Method::PATCH,
-            crate::bindings::http::types::Method::Other(method) => {
-                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
-                    "unknown method {method}"
-                ))));
-            }
+        let req = self.table().delete(request_id)?;
+        let mut builder = hyper::Request::builder();
+
+        builder = builder.method(match req.method {
+            types::Method::Get => Method::GET,
+            types::Method::Head => Method::HEAD,
+            types::Method::Post => Method::POST,
+            types::Method::Put => Method::PUT,
+            types::Method::Delete => Method::DELETE,
+            types::Method::Connect => Method::CONNECT,
+            types::Method::Options => Method::OPTIONS,
+            types::Method::Trace => Method::TRACE,
+            types::Method::Patch => Method::PATCH,
+            types::Method::Other(m) => match hyper::Method::from_bytes(m.as_bytes()) {
+                Ok(method) => method,
+                Err(_) => return Err(types::ErrorCode::HttpRequestMethodInvalid.into()),
+            },
+        });
+
+        let (use_tls, scheme) = match req.scheme.unwrap_or(Scheme::Https) {
+            Scheme::Http => (false, http::uri::Scheme::HTTP),
+            Scheme::Https => (true, http::uri::Scheme::HTTPS),
+
+            // We can only support http/https
+            Scheme::Other(_) => return Err(types::ErrorCode::HttpProtocolError.into()),
         };
 
-        let (use_tls, scheme, port) = match req.scheme.unwrap_or(Scheme::Https) {
-            Scheme::Http => (false, "http://", 80),
-            Scheme::Https => (true, "https://", 443),
-            Scheme::Other(scheme) => {
-                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
-                    "unsupported scheme {scheme}"
-                ))))
-            }
-        };
+        let authority = req.authority.unwrap_or_else(String::new);
 
-        let authority = if req.authority.find(':').is_some() {
-            req.authority.clone()
-        } else {
-            format!("{}:{port}", req.authority)
-        };
+        builder = builder.header(hyper::header::HOST, &authority);
 
-        let mut builder = hyper::Request::builder()
-            .method(method)
-            .uri(format!("{scheme}{authority}{}", req.path_with_query))
-            .header(hyper::header::HOST, &authority);
+        let mut uri = http::Uri::builder()
+            .scheme(scheme)
+            .authority(authority.clone());
+
+        if let Some(path) = req.path_with_query {
+            uri = uri.path_and_query(path);
+        }
+
+        builder = builder.uri(uri.build().map_err(http_request_error)?);
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
@@ -86,126 +82,24 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
 
         let body = req.body.unwrap_or_else(|| {
             Empty::<Bytes>::new()
-                .map_err(|_| anyhow::anyhow!("empty error"))
+                .map_err(|_| unreachable!("Infallible error"))
                 .boxed()
         });
 
-        let request = builder.body(body).map_err(http_protocol_error)?;
+        let request = builder
+            .body(body)
+            .map_err(|err| internal_error(err.to_string()))?;
 
-        let handle = preview2::spawn(async move {
-            let tcp_stream = TcpStream::connect(authority.clone())
-                .await
-                .map_err(invalid_url)?;
-
-            let (mut sender, worker) = if use_tls {
-                #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
-                {
-                    anyhow::bail!(crate::bindings::http::types::Error::UnexpectedError(
-                        "unsupported architecture for SSL".to_string(),
-                    ));
-                }
-
-                #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-                {
-                    use tokio_rustls::rustls::OwnedTrustAnchor;
-
-                    // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
-                    let mut root_cert_store = rustls::RootCertStore::empty();
-                    root_cert_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(
-                        |ta| {
-                            OwnedTrustAnchor::from_subject_spki_name_constraints(
-                                ta.subject,
-                                ta.spki,
-                                ta.name_constraints,
-                            )
-                        },
-                    ));
-                    let config = rustls::ClientConfig::builder()
-                        .with_safe_defaults()
-                        .with_root_certificates(root_cert_store)
-                        .with_no_client_auth();
-                    let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
-                    let mut parts = authority.split(":");
-                    let host = parts.next().unwrap_or(&authority);
-                    let domain = rustls::ServerName::try_from(host)?;
-                    let stream = connector.connect(domain, tcp_stream).await.map_err(|e| {
-                        crate::bindings::http::types::Error::ProtocolError(e.to_string())
-                    })?;
-
-                    let (sender, conn) = timeout(
-                        connect_timeout,
-                        hyper::client::conn::http1::handshake(stream),
-                    )
-                    .await
-                    .map_err(|_| timeout_error("connection"))??;
-
-                    let worker = preview2::spawn(async move {
-                        conn.await.context("hyper connection failed")?;
-                        Ok::<_, anyhow::Error>(())
-                    });
-
-                    (sender, worker)
-                }
-            } else {
-                let (sender, conn) = timeout(
-                    connect_timeout,
-                    // TODO: we should plumb the builder through the http context, and use it here
-                    hyper::client::conn::http1::handshake(tcp_stream),
-                )
-                .await
-                .map_err(|_| timeout_error("connection"))??;
-
-                let worker = preview2::spawn(async move {
-                    conn.await.context("hyper connection failed")?;
-                    Ok::<_, anyhow::Error>(())
-                });
-
-                (sender, worker)
-            };
-
-            let resp = timeout(first_byte_timeout, sender.send_request(request))
-                .await
-                .map_err(|_| timeout_error("first byte"))?
-                .map_err(hyper_protocol_error)?
-                .map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed());
-
-            Ok(IncomingResponseInternal {
-                resp,
-                worker,
+        let future = self.send_request(
+            request,
+            OutgoingRequestConfig {
+                use_tls,
+                connect_timeout,
+                first_byte_timeout,
                 between_bytes_timeout,
-            })
-        });
+            },
+        )?;
 
-        let fut = self
-            .table()
-            .push_resource(HostFutureIncomingResponse::new(handle))?;
-
-        Ok(Ok(fut))
+        Ok(self.table().push(future)?)
     }
-}
-
-fn timeout_error(kind: &str) -> anyhow::Error {
-    anyhow::anyhow!(crate::bindings::http::types::Error::TimeoutError(format!(
-        "{kind} timed out"
-    )))
-}
-
-fn http_protocol_error(e: http::Error) -> anyhow::Error {
-    anyhow::anyhow!(crate::bindings::http::types::Error::ProtocolError(
-        e.to_string()
-    ))
-}
-
-fn hyper_protocol_error(e: hyper::Error) -> anyhow::Error {
-    anyhow::anyhow!(crate::bindings::http::types::Error::ProtocolError(
-        e.to_string()
-    ))
-}
-
-fn invalid_url(e: std::io::Error) -> anyhow::Error {
-    // TODO: DNS errors show up as a Custom io error, what subset of errors should we consider for
-    // InvalidUrl here?
-    anyhow::anyhow!(crate::bindings::http::types::Error::InvalidUrl(
-        e.to_string()
-    ))
 }

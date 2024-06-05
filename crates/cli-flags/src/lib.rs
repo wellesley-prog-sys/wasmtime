@@ -1,8 +1,5 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-#![deny(trivial_numeric_casts, unused_extern_crates, unstable_features)]
-#![warn(unused_import_braces)]
-
 use anyhow::Result;
 use clap::Parser;
 use std::time::Duration;
@@ -10,13 +7,16 @@ use wasmtime::Config;
 
 pub mod opt;
 
+#[cfg(feature = "logging")]
 fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
+    file_per_thread_logger::allow_uninitialized();
 
     // Extending behavior of default spawner:
     // https://docs.rs/rayon/1.1.0/rayon/struct.ThreadPoolBuilder.html#method.spawn_handler
     // Source code says DefaultSpawner is implementation detail and
     // shouldn't be used directly.
+    #[cfg(feature = "parallel-compilation")]
     rayon::ThreadPoolBuilder::new()
         .spawn_handler(move |thread| {
             let mut b = std::thread::Builder::new();
@@ -37,8 +37,9 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct OptimizeOptions {
-        /// Optimization level of generated code (0-2, s; default: 0)
+        /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
         /// Byte size of the guard region after dynamic memories are allocated
@@ -58,12 +59,73 @@ wasmtime_option_group! {
         /// memories.
         pub dynamic_memory_reserved_for_growth: Option<u64>,
 
+        /// Indicates whether an unmapped region of memory is placed before all
+        /// linear memories.
+        pub guard_before_linear_memory: Option<bool>,
+
+        /// Whether to initialize tables lazily, so that instantiation is
+        /// fast but indirect calls are a little slower. If no, tables are
+        /// initialized eagerly from any active element segments that apply to
+        /// them during instantiation. (default: yes)
+        pub table_lazy_init: Option<bool>,
+
         /// Enable the pooling allocator, in place of the on-demand allocator.
         pub pooling_allocator: Option<bool>,
+
+        /// The number of decommits to do per batch. A batch size of 1
+        /// effectively disables decommit batching. (default: 1)
+        pub pooling_decommit_batch_size: Option<u32>,
+
+        /// How many bytes to keep resident between instantiations for the
+        /// pooling allocator in linear memories.
+        pub pooling_memory_keep_resident: Option<usize>,
+
+        /// How many bytes to keep resident between instantiations for the
+        /// pooling allocator in tables.
+        pub pooling_table_keep_resident: Option<usize>,
+
+        /// Enable memory protection keys for the pooling allocator; this can
+        /// optimize the size of memory slots.
+        pub memory_protection_keys: Option<bool>,
 
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
         pub memory_init_cow: Option<bool>,
+
+        /// The maximum number of WebAssembly instances which can be created
+        /// with the pooling allocator.
+        pub pooling_total_core_instances: Option<u32>,
+
+        /// The maximum number of WebAssembly components which can be created
+        /// with the pooling allocator.
+        pub pooling_total_component_instances: Option<u32>,
+
+        /// The maximum number of WebAssembly memories which can be created with
+        /// the pooling allocator.
+        pub pooling_total_memories: Option<u32>,
+
+        /// The maximum number of WebAssembly tables which can be created with
+        /// the pooling allocator.
+        pub pooling_total_tables: Option<u32>,
+
+        /// The maximum number of WebAssembly stacks which can be created with
+        /// the pooling allocator.
+        pub pooling_total_stacks: Option<u32>,
+
+        /// The maximum runtime size of each linear memory in the pooling
+        /// allocator, in bytes.
+        pub pooling_max_memory_size: Option<usize>,
+
+        /// Whether to enable call-indirect caching.
+        pub cache_call_indirects: Option<bool>,
+
+        /// The maximum call-indirect cache slot count.
+        ///
+        /// One slot is allocated per indirect callsite; if the module
+        /// has more indirect callsites than this limit, then the
+        /// first callsites in linear order in the code section, up to
+        /// the limit, will receive a cache slot.
+        pub max_call_indirect_cache_slots: Option<usize>,
     }
 
     enum Optimize {
@@ -72,6 +134,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct CodegenOptions {
         /// Either `cranelift` or `winch`.
         ///
@@ -86,6 +149,8 @@ wasmtime_option_group! {
         pub cache_config: Option<String>,
         /// Whether or not to enable parallel compilation of modules.
         pub parallel_compilation: Option<bool>,
+        /// Whether to enable proof-carrying code (PCC)-based validation.
+        pub pcc: Option<bool>,
 
         #[prefixed = "cranelift"]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
@@ -99,6 +164,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
@@ -118,6 +184,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct WasmOptions {
         /// Enable canonicalization of all NaN values.
         pub nan_canonicalization: Option<bool>,
@@ -200,6 +267,8 @@ wasmtime_option_group! {
         pub component_model: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
+        /// Configure support for the GC proposal.
+        pub gc: Option<bool>,
     }
 
     enum Wasm {
@@ -208,21 +277,24 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct WasiOptions {
-        /// Enable support for WASI common APIs
+        /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
+        pub cli: Option<bool>,
+        /// Deprecated alias for `cli`
         pub common: Option<bool>,
-        /// Enable suport for WASI neural network API (experimental)
+        /// Enable support for WASI neural network API (experimental)
         pub nn: Option<bool>,
-        /// Enable suport for WASI threading API (experimental)
+        /// Enable support for WASI threading API (experimental)
         pub threads: Option<bool>,
-        /// Enable suport for WASI HTTP API (experimental)
+        /// Enable support for WASI HTTP API (experimental)
         pub http: Option<bool>,
         /// Inherit environment variables and file descriptors following the
         /// systemd listen fd specification (UNIX only)
         pub listenfd: Option<bool>,
         /// Grant access to the given TCP listen socket
         pub tcplisten: Vec<String>,
-        /// Implement WASI with preview2 primitives (experimental).
+        /// Implement WASI CLI APIs with preview2 primitives (experimental).
         ///
         /// Indicates that the implementation of WASI preview1 should be backed by
         /// the preview2 implementation for components.
@@ -244,7 +316,16 @@ wasmtime_option_group! {
         pub inherit_network: Option<bool>,
         /// Indicates whether `wasi:sockets/ip-name-lookup` is enabled or not.
         pub allow_ip_name_lookup: Option<bool>,
-
+        /// Indicates whether `wasi:sockets` TCP support is enabled or not.
+        pub tcp: Option<bool>,
+        /// Indicates whether `wasi:sockets` UDP support is enabled or not.
+        pub udp: Option<bool>,
+        /// Allows imports from the `wasi_unstable` core wasm module.
+        pub preview0: Option<bool>,
+        /// Inherit all environment variables from the parent process.
+        ///
+        /// This option can be further overwritten with `--env` flags.
+        pub inherit_env: Option<bool>,
     }
 
     enum Wasi {
@@ -252,14 +333,14 @@ wasmtime_option_group! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WasiNnGraph {
     pub format: String,
     pub dir: String,
 }
 
 /// Common options for commands that translate WebAssembly modules
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 pub struct CommonOptions {
     // These options groups are used to parse `-O` and such options but aren't
     // the raw form consumed by the CLI. Instead they're pushed into the `pub`
@@ -270,40 +351,61 @@ pub struct CommonOptions {
     // now.
     /// Optimization and tuning related options for wasm performance, `-O help` to
     /// see all.
-    #[clap(short = 'O', long = "optimize", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'O', long = "optimize", value_name = "KEY[=VAL[,..]]")]
     opts_raw: Vec<opt::CommaSeparated<Optimize>>,
 
     /// Codegen-related configuration options, `-C help` to see all.
-    #[clap(short = 'C', long = "codegen", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'C', long = "codegen", value_name = "KEY[=VAL[,..]]")]
     codegen_raw: Vec<opt::CommaSeparated<Codegen>>,
 
     /// Debug-related configuration options, `-D help` to see all.
-    #[clap(short = 'D', long = "debug", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'D', long = "debug", value_name = "KEY[=VAL[,..]]")]
     debug_raw: Vec<opt::CommaSeparated<Debug>>,
 
     /// Options for configuring semantic execution of WebAssembly, `-W help` to see
     /// all.
-    #[clap(short = 'W', long = "wasm", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'W', long = "wasm", value_name = "KEY[=VAL[,..]]")]
     wasm_raw: Vec<opt::CommaSeparated<Wasm>>,
 
     /// Options for configuring WASI and its proposals, `-S help` to see all.
-    #[clap(short = 'S', long = "wasi", value_name = "KEY[=VAL[,..]]")]
+    #[arg(short = 'S', long = "wasi", value_name = "KEY[=VAL[,..]]")]
     wasi_raw: Vec<opt::CommaSeparated<Wasi>>,
 
     // These fields are filled in by the `configure` method below via the
     // options parsed from the CLI above. This is what the CLI should use.
-    #[clap(skip)]
+    #[arg(skip)]
     configured: bool,
-    #[clap(skip)]
+    #[arg(skip)]
     pub opts: OptimizeOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub codegen: CodegenOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub debug: DebugOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub wasm: WasmOptions,
-    #[clap(skip)]
+    #[arg(skip)]
     pub wasi: WasiOptions,
+}
+
+macro_rules! match_feature {
+    (
+        [$feat:tt : $config:expr]
+        $val:ident => $e:expr,
+        $p:pat => err,
+    ) => {
+        #[cfg(feature = $feat)]
+        {
+            if let Some($val) = $config {
+                $e;
+            }
+        }
+        #[cfg(not(feature = $feat))]
+        {
+            if let Some($p) = $config {
+                anyhow::bail!(concat!("support for ", $feat, " disabled at compile time"));
+            }
+        }
+    };
 }
 
 impl CommonOptions {
@@ -319,51 +421,82 @@ impl CommonOptions {
         self.wasi.configure_with(&self.wasi_raw);
     }
 
-    pub fn init_logging(&mut self) {
+    pub fn init_logging(&mut self) -> Result<()> {
         self.configure();
         if self.debug.logging == Some(false) {
-            return;
+            return Ok(());
         }
+        #[cfg(feature = "logging")]
         if self.debug.log_to_files == Some(true) {
             let prefix = "wasmtime.dbg.";
             init_file_per_thread_logger(prefix);
         } else {
-            pretty_env_logger::init();
+            use std::io::IsTerminal;
+            use tracing_subscriber::{EnvFilter, FmtSubscriber};
+            let b = FmtSubscriber::builder()
+                .with_writer(std::io::stderr)
+                .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"))
+                .with_ansi(std::io::stderr().is_terminal());
+            b.init();
         }
+        #[cfg(not(feature = "logging"))]
+        if self.debug.log_to_files == Some(true) || self.debug.logging == Some(true) {
+            anyhow::bail!("support for logging disabled at compile time");
+        }
+        Ok(())
     }
 
-    pub fn config(&mut self, target: Option<&str>) -> Result<Config> {
+    pub fn config(
+        &mut self,
+        target: Option<&str>,
+        pooling_allocator_default: Option<bool>,
+    ) -> Result<Config> {
         self.configure();
         let mut config = Config::new();
 
-        if let Some(strategy) = self.codegen.compiler {
-            config.strategy(strategy);
+        match_feature! {
+            ["cranelift" : self.codegen.compiler]
+            strategy => config.strategy(strategy),
+            _ => err,
         }
-
-        // Set the target before setting any cranelift options, since the
-        // target will reset any target-specific options.
-        if let Some(target) = target {
-            config.target(target)?;
+        match_feature! {
+            ["cranelift" : target]
+            target => config.target(target)?,
+            _ => err,
         }
-
-        if let Some(enable) = self.codegen.cranelift_debug_verifier {
-            config.cranelift_debug_verifier(enable);
+        match_feature! {
+            ["cranelift" : self.codegen.cranelift_debug_verifier]
+            enable => config.cranelift_debug_verifier(enable),
+            true => err,
         }
         if let Some(enable) = self.debug.debug_info {
             config.debug_info(enable);
         }
         if self.debug.coredump.is_some() {
+            #[cfg(feature = "coredump")]
             config.coredump_on_trap(true);
+            #[cfg(not(feature = "coredump"))]
+            anyhow::bail!("support for coredumps disabled at compile time");
         }
-        if let Some(level) = self.opts.opt_level {
-            config.cranelift_opt_level(level);
+        match_feature! {
+            ["cranelift" : self.opts.opt_level]
+            level => config.cranelift_opt_level(level),
+            _ => err,
         }
-        if let Some(enable) = self.wasm.nan_canonicalization {
-            config.cranelift_nan_canonicalization(enable);
+        match_feature! {
+            ["cranelift" : self.wasm.nan_canonicalization]
+            enable => config.cranelift_nan_canonicalization(enable),
+            true => err,
+        }
+        match_feature! {
+            ["cranelift" : self.codegen.pcc]
+            enable => config.cranelift_pcc(enable),
+            true => err,
         }
 
         self.enable_wasm_features(&mut config)?;
 
+        #[cfg(feature = "cranelift")]
         for (name, value) in self.codegen.cranelift.iter() {
             let name = name.replace('-', "_");
             unsafe {
@@ -377,7 +510,12 @@ impl CommonOptions {
                 }
             }
         }
+        #[cfg(not(feature = "cranelift"))]
+        if !self.codegen.cranelift.is_empty() {
+            anyhow::bail!("support for cranelift disabled at compile time");
+        }
 
+        #[cfg(feature = "cache")]
         if self.codegen.cache != Some(false) {
             match &self.codegen.cache_config {
                 Some(path) => {
@@ -388,9 +526,15 @@ impl CommonOptions {
                 }
             }
         }
+        #[cfg(not(feature = "cache"))]
+        if self.codegen.cache == Some(true) {
+            anyhow::bail!("support for caching disabled at compile time");
+        }
 
-        if let Some(enable) = self.codegen.parallel_compilation {
-            config.parallel_compilation(enable);
+        match_feature! {
+            ["parallel-compilation" : self.codegen.parallel_compilation]
+            enable => config.parallel_compilation(enable),
+            true => err,
         }
 
         if let Some(max) = self.opts.static_memory_maximum_size {
@@ -411,6 +555,12 @@ impl CommonOptions {
         if let Some(size) = self.opts.dynamic_memory_reserved_for_growth {
             config.dynamic_memory_reserved_for_growth(size);
         }
+        if let Some(enable) = self.opts.guard_before_linear_memory {
+            config.guard_before_linear_memory(enable);
+        }
+        if let Some(enable) = self.opts.table_lazy_init {
+            config.table_lazy_init(enable);
+        }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
         if self.wasm.fuel.is_some() {
@@ -426,12 +576,57 @@ impl CommonOptions {
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
         }
+        if let Some(enable) = self.opts.cache_call_indirects {
+            config.cache_call_indirects(enable);
+        }
+        if let Some(max) = self.opts.max_call_indirect_cache_slots {
+            config.max_call_indirect_cache_slots(max);
+        }
 
-        if self.opts.pooling_allocator == Some(true) {
-            #[cfg(feature = "pooling-allocator")]
-            config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
-            #[cfg(not(feature = "pooling-allocator"))]
-            anyhow::bail!("support for the pooling allocator was disabled at compile-time");
+        match_feature! {
+            ["pooling-allocator" : self.opts.pooling_allocator.or(pooling_allocator_default)]
+            enable => {
+                if enable {
+                    let mut cfg = wasmtime::PoolingAllocationConfig::default();
+                    if let Some(size) = self.opts.pooling_memory_keep_resident {
+                        cfg.linear_memory_keep_resident(size);
+                    }
+                    if let Some(size) = self.opts.pooling_table_keep_resident {
+                        cfg.table_keep_resident(size);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_core_instances {
+                        cfg.total_core_instances(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_component_instances {
+                        cfg.total_component_instances(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_memories {
+                        cfg.total_memories(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_tables {
+                        cfg.total_tables(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_total_stacks {
+                        cfg.total_stacks(limit);
+                    }
+                    if let Some(limit) = self.opts.pooling_max_memory_size {
+                        cfg.max_memory_size(limit);
+                    }
+                    if let Some(enable) = self.opts.memory_protection_keys {
+                        if enable {
+                            cfg.memory_protection_keys(wasmtime::MpkEnabled::Enable);
+                        }
+                    }
+                    config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
+                }
+            },
+            true => err,
+        }
+
+        if self.opts.memory_protection_keys.unwrap_or(false)
+            && !self.opts.pooling_allocator.unwrap_or(false)
+        {
+            anyhow::bail!("memory protection keys require the pooling allocator");
         }
 
         if let Some(max) = self.wasm.max_wasm_stack {
@@ -441,8 +636,10 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.relaxed_simd_deterministic {
             config.relaxed_simd_deterministic(enable);
         }
-        if let Some(enable) = self.wasm.wmemcheck {
-            config.wmemcheck(enable);
+        match_feature! {
+            ["cranelift" : self.wasm.wmemcheck]
+            enable => config.wmemcheck(enable),
+            true => err,
         }
 
         Ok(config)
@@ -460,20 +657,11 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.bulk_memory.or(all) {
             config.wasm_bulk_memory(enable);
         }
-        if let Some(enable) = self.wasm.reference_types.or(all) {
-            config.wasm_reference_types(enable);
-        }
-        if let Some(enable) = self.wasm.function_references.or(all) {
-            config.wasm_function_references(enable);
-        }
         if let Some(enable) = self.wasm.multi_value.or(all) {
             config.wasm_multi_value(enable);
         }
         if let Some(enable) = self.wasm.tail_call.or(all) {
             config.wasm_tail_call(enable);
-        }
-        if let Some(enable) = self.wasm.threads.or(all) {
-            config.wasm_threads(enable);
         }
         if let Some(enable) = self.wasm.multi_memory.or(all) {
             config.wasm_multi_memory(enable);
@@ -481,14 +669,55 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.memory64.or(all) {
             config.wasm_memory64(enable);
         }
-        if let Some(enable) = self.wasm.component_model.or(all) {
-            #[cfg(feature = "component-model")]
-            config.wasm_component_model(enable);
-            #[cfg(not(feature = "component-model"))]
-            if enable && all.is_none() {
-                anyhow::bail!("support for the component model was disabled at compile-time");
-            }
+
+        macro_rules! handle_conditionally_compiled {
+            ($(($feature:tt, $field:tt, $method:tt))*) => ($(
+                if let Some(enable) = self.wasm.$field.or(all) {
+                    #[cfg(feature = $feature)]
+                    config.$method(enable);
+                    #[cfg(not(feature = $feature))]
+                    if enable && all.is_none() {
+                        anyhow::bail!("support for {} was disabled at compile-time", $feature);
+                    }
+                }
+            )*)
+        }
+
+        handle_conditionally_compiled! {
+            ("component-model", component_model, wasm_component_model)
+            ("threads", threads, wasm_threads)
+            ("gc", gc, wasm_gc)
+            ("gc", reference_types, wasm_reference_types)
+            ("gc", function_references, wasm_function_references)
         }
         Ok(())
+    }
+}
+
+impl PartialEq for CommonOptions {
+    fn eq(&self, other: &CommonOptions) -> bool {
+        let mut me = self.clone();
+        me.configure();
+        let mut other = other.clone();
+        other.configure();
+        let CommonOptions {
+            opts_raw: _,
+            codegen_raw: _,
+            debug_raw: _,
+            wasm_raw: _,
+            wasi_raw: _,
+            configured: _,
+
+            opts,
+            codegen,
+            debug,
+            wasm,
+            wasi,
+        } = me;
+        opts == other.opts
+            && codegen == other.codegen
+            && debug == other.debug
+            && wasm == other.wasm
+            && wasi == other.wasi
     }
 }

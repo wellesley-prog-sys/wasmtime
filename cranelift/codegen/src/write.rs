@@ -5,6 +5,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
+use crate::ir::pcc::Fact;
 use crate::ir::{Block, DataFlowGraph, Function, Inst, SigRef, Type, Value, ValueDef};
 use crate::packed_option::ReservedValue;
 use alloc::string::{String, ToString};
@@ -43,31 +44,30 @@ pub trait FuncWriter {
 
         for (ss, slot) in func.dynamic_stack_slots.iter() {
             any = true;
-            self.write_entity_definition(w, func, ss.into(), slot)?;
+            self.write_entity_definition(w, func, ss.into(), slot, None)?;
         }
 
         for (ss, slot) in func.sized_stack_slots.iter() {
             any = true;
-            self.write_entity_definition(w, func, ss.into(), slot)?;
+            self.write_entity_definition(w, func, ss.into(), slot, None)?;
         }
 
         for (gv, gv_data) in &func.global_values {
             any = true;
-            self.write_entity_definition(w, func, gv.into(), gv_data)?;
+            let maybe_fact = func.global_value_facts[gv].as_ref();
+            self.write_entity_definition(w, func, gv.into(), gv_data, maybe_fact)?;
         }
 
-        for (table, table_data) in &func.tables {
-            if !table_data.index_type.is_invalid() {
-                any = true;
-                self.write_entity_definition(w, func, table.into(), table_data)?;
-            }
+        for (mt, mt_data) in &func.memory_types {
+            any = true;
+            self.write_entity_definition(w, func, mt.into(), mt_data, None)?;
         }
 
         // Write out all signatures before functions since function declarations can refer to
         // signatures.
         for (sig, sig_data) in &func.dfg.signatures {
             any = true;
-            self.write_entity_definition(w, func, sig.into(), &sig_data)?;
+            self.write_entity_definition(w, func, sig.into(), &sig_data, None)?;
         }
 
         for (fnref, ext_func) in &func.dfg.ext_funcs {
@@ -78,18 +78,19 @@ pub trait FuncWriter {
                     func,
                     fnref.into(),
                     &ext_func.display(Some(&func.params)),
+                    None,
                 )?;
             }
         }
 
         for (&cref, cval) in func.dfg.constants.iter() {
             any = true;
-            self.write_entity_definition(w, func, cref.into(), cval)?;
+            self.write_entity_definition(w, func, cref.into(), cval, None)?;
         }
 
         if let Some(limit) = func.stack_limit {
             any = true;
-            self.write_entity_definition(w, func, AnyEntity::StackLimit, &limit)?;
+            self.write_entity_definition(w, func, AnyEntity::StackLimit, &limit, None)?;
         }
 
         Ok(any)
@@ -102,8 +103,9 @@ pub trait FuncWriter {
         func: &Function,
         entity: AnyEntity,
         value: &dyn fmt::Display,
+        maybe_fact: Option<&Fact>,
     ) -> fmt::Result {
-        self.super_entity_definition(w, func, entity, value)
+        self.super_entity_definition(w, func, entity, value, maybe_fact)
     }
 
     /// Default impl of `write_entity_definition`
@@ -114,8 +116,13 @@ pub trait FuncWriter {
         func: &Function,
         entity: AnyEntity,
         value: &dyn fmt::Display,
+        maybe_fact: Option<&Fact>,
     ) -> fmt::Result {
-        writeln!(w, "    {} = {}", entity, value)
+        if let Some(fact) = maybe_fact {
+            writeln!(w, "    {} ! {} = {}", entity, fact, value)
+        } else {
+            writeln!(w, "    {} = {}", entity, value)
+        }
     }
 }
 
@@ -199,14 +206,19 @@ fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
 // Basic blocks
 
 fn write_arg(w: &mut dyn Write, func: &Function, arg: Value) -> fmt::Result {
-    write!(w, "{}: {}", arg, func.dfg.value_type(arg))
+    let ty = func.dfg.value_type(arg);
+    if let Some(f) = &func.dfg.facts[arg] {
+        write!(w, "{} ! {}: {}", arg, f, ty)
+    } else {
+        write!(w, "{}: {}", arg, ty)
+    }
 }
 
 /// Write out the basic block header, outdented:
 ///
 ///    block1:
 ///    block1(v1: i32):
-///    block10(v4: f64, v5: b1):
+///    block10(v4: f64, v5: i8):
 ///
 pub fn write_block_header(
     w: &mut dyn Write,
@@ -346,6 +358,9 @@ fn write_instruction(
         } else {
             write!(w, ", {}", r)?;
         }
+        if let Some(f) = &func.dfg.facts[*r] {
+            write!(w, " ! {}", f)?;
+        }
     }
     if has_results {
         write!(w, " = ")?;
@@ -457,15 +472,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             dynamic_stack_slot,
             ..
         } => write!(w, " {}, {}", arg, dynamic_stack_slot),
-        TableAddr {
-            table, arg, offset, ..
-        } => {
-            if i32::from(offset) == 0 {
-                write!(w, " {}, {}", table, arg)
-            } else {
-                write!(w, " {}, {}{}", table, arg, offset)
-            }
-        }
         Load {
             flags, arg, offset, ..
         } => write!(w, "{} {}{}", flags, arg, offset),
@@ -529,7 +535,7 @@ mod tests {
         f.name = UserFuncName::testcase("foo");
         assert_eq!(f.to_string(), "function %foo() fast {\n}\n");
 
-        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));
+        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 0));
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n}\n"
@@ -562,6 +568,13 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n\nblock0(v0: i8, v1: f32x4):\n    return\n}\n"
+        );
+
+        let mut f = Function::new();
+        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 2));
+        assert_eq!(
+            f.to_string(),
+            "function u0:0() fast {\n    ss0 = explicit_slot 4, align = 4\n}\n"
         );
     }
 

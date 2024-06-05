@@ -2,7 +2,6 @@
 // but the original author did not have a machine available to test it.
 #![cfg(target_os = "linux")]
 
-use anyhow::Result;
 use wasmtime::*;
 
 #[derive(Default)]
@@ -46,7 +45,9 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
 
     // Default behavior of on-demand memory allocation so that a
     // memory grow will hit Linux for a larger mmap.
-    let engine = Engine::default();
+    let mut config = Config::new();
+    config.wasm_reference_types(false);
+    let engine = Engine::new(&config)?;
     let linker = Linker::new(&engine);
     let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#).unwrap();
 

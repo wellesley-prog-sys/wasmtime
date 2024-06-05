@@ -39,8 +39,8 @@
 //!         |                          by instruction emission code.
 //!         |                        - prologue and epilogue(s) built and emitted
 //!         |                          directly during emission.
-//!         |                        - nominal-SP-relative offsets resolved
-//!         |                          by tracking EmitState.)
+//!         |                        - SP-relative offsets resolved by tracking
+//!         |                          EmitState.)
 //!
 //! ```
 
@@ -56,7 +56,7 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
-use regalloc2::{Allocation, VReg};
+use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::string::String;
 
@@ -81,10 +81,12 @@ pub use buffer::*;
 pub mod helpers;
 pub use helpers::*;
 pub mod inst_common;
+#[allow(unused_imports)] // not used in all backends right now
 pub use inst_common::*;
 pub mod valueregs;
 pub use reg::*;
 pub use valueregs::*;
+pub mod pcc;
 pub mod reg;
 
 /// A machine instruction.
@@ -94,7 +96,7 @@ pub trait MachInst: Clone + Debug {
 
     /// Return the registers referenced by this machine instruction along with
     /// the modes of reference (use, def, modify).
-    fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>);
+    fn get_operands(&mut self, collector: &mut impl OperandVisitor);
 
     /// If this is a simple move, return the (source, destination) tuple of registers.
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)>;
@@ -111,6 +113,9 @@ pub trait MachInst: Clone + Debug {
 
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool;
+
+    /// Does this instruction access memory?
+    fn is_mem_access(&self) -> bool;
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
@@ -282,15 +287,9 @@ pub trait MachInstEmit: MachInst {
     /// Constant information used in `emit` invocations.
     type Info;
     /// Emit the instruction.
-    fn emit(
-        &self,
-        allocs: &[Allocation],
-        code: &mut MachBuffer<Self>,
-        info: &Self::Info,
-        state: &mut Self::State,
-    );
+    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String;
+    fn pretty_print_inst(&self, state: &mut Self::State) -> String;
 }
 
 /// A trait describing the emission state carried between MachInsts when
@@ -301,9 +300,6 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
-    /// Update the emission state to indicate instructions are associated with a
-    /// particular RelSourceLoc.
-    fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
     /// The emission state holds ownership of a control plane, so it doesn't
     /// have to be passed around explicitly too much. `ctrl_plane_mut` may
     /// be used if temporary access to the control plane is needed by some
@@ -315,6 +311,8 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// A hook that triggers when first emitting a new block.
     /// It is guaranteed to be called before any instructions are emitted.
     fn on_new_block(&mut self) {}
+    /// The [`FrameLayout`] for the function currently being compiled.
+    fn frame_layout(&self) -> &FrameLayout;
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine
@@ -425,7 +423,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
                 let end = i.address() + i.bytes().len() as u64;
                 let contains = |off| i.address() <= off && off < end;
 
-                if let Some(reloc) = relocs.iter().find(|reloc| contains(reloc.offset as u64)) {
+                for reloc in relocs.iter().filter(|reloc| contains(reloc.offset as u64)) {
                     write!(
                         buf,
                         " ; reloc_external {} {} {}",

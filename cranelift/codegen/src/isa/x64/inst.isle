@@ -90,20 +90,34 @@
              (dividend Gpr)
              (dst WritableGpr))
 
-       ;; The high (and low) bits of a (un)signed multiply: `RDX:RAX := RAX *
-       ;; rhs`.
-       (MulHi (size OperandSize)
-              (signed bool)
-              (src1 Gpr)
-              (src2 GprMem)
-              (dst_lo WritableGpr)
-              (dst_hi WritableGpr))
+       ;; Unsigned multiplication producing the high bits of the result in one
+       ;; register and the low bits in another register.
+       (Mul (size OperandSize)
+            (signed bool)
+            (src1 Gpr)
+            (src2 GprMem)
+            (dst_lo WritableGpr)
+            (dst_hi WritableGpr))
 
-       ;; x64 'mul' instruction but it only outputs the low half
-       (UMulLo    (size OperandSize)
-                  (src1 Gpr)
-                  (src2 GprMem)
-                  (dst WritableGpr))
+       ;; Same as `Mul` but the 16-bit multiplication result is stored in `AX`.
+       (Mul8 (signed bool)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst WritableGpr))
+
+       ;; The two-operand form of `imul` which produces a truncated same-size
+       ;; result as the operands.
+       (IMul (size OperandSize)
+             (src1 Gpr)
+             (src2 GprMem)
+             (dst WritableGpr))
+
+       ;; The three-operand form of `imul` where the third operand must be
+       ;; a constant.
+       (IMulImm (size OperandSize)
+                (src1 GprMem)
+                (src2 i32)
+                (dst WritableGpr))
 
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
@@ -191,7 +205,7 @@
                (kind ShiftKind)
                (src Gpr)
                ;; shift count: `Imm8Gpr::Imm8(0 .. #bits-in-type - 1)` or
-               ;; `Imm8Reg::Gpr(r)` where `r` get's move mitosis'd into `%cl`.
+               ;; `Imm8Reg::Gpr(r)` where `r` gets move mitosis'd into `%cl`.
                (num_bits Imm8Gpr)
                (dst WritableGpr))
 
@@ -204,8 +218,8 @@
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
        (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
                 (opcode CmpOpcode)
-                (src GprMemImm)
-                (dst Gpr))
+                (src1 Gpr)
+                (src2 GprMemImm))
 
        ;; Materializes the requested condition code in the destinaton reg.
        (Setcc (cc CC)
@@ -229,7 +243,7 @@
        ;; XMM conditional move; overwrites the destination register.
        (XmmCmove (ty Type)
                  (cc CC)
-                 (consequent XmmMemAligned)
+                 (consequent Xmm)
                  (alternative Xmm)
                  (dst WritableXmm))
 
@@ -289,7 +303,7 @@
                      (dst WritableXmm)
                      (imm u8))
 
-       ;; XMM instruction for `vpinsr{b,w,d,q}` which is separte from
+       ;; XMM instruction for `vpinsr{b,w,d,q}` which is separate from
        ;; `XmmRmRImmVex` because `src2` is a gpr, not xmm register.
        (XmmVexPinsr (op AvxOpcode)
                    (src1 Xmm)
@@ -353,6 +367,10 @@
                     (dst WritableGpr)
                     (dst_size OperandSize))
 
+       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+       (XmmCmpRmRVex (op AvxOpcode)
+                     (src1 Xmm)
+                     (src2 XmmMem))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
@@ -488,10 +506,13 @@
                      (rhs Xmm)
                      (dst WritableXmm))
 
-       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+       ;; Float comparisons/tests
+       ;;
+       ;; Compares `src1` against `src2` with `op`. Note that if you're testing
+       ;; `a < b` then `src1 == a` and `src2 == b`.
        (XmmCmpRmR (op SseOpcode)
-                  (src XmmMemAligned)
-                  (dst Xmm))
+                  (src1 Xmm)
+                  (src2 XmmMemAligned))
 
        ;; A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm
        ;; (reg addr) reg
@@ -511,10 +532,12 @@
 
        ;; Direct call: call simm32.
        (CallKnown (dest ExternalName)
+                  (opcode Opcode)
                   (info BoxCallInfo))
 
        ;; Indirect call: callq (reg mem)
        (CallUnknown (dest RegMem)
+                    (opcode Opcode)
                     (info BoxCallInfo))
 
        ;; Tail call to a direct destination.
@@ -522,7 +545,7 @@
                         (info BoxReturnCallInfo))
 
        ;; Tail call to an indirect destination.
-       (ReturnCallUnknown (callee RegMem)
+       (ReturnCallUnknown (callee Reg)
                           (info BoxReturnCallInfo))
 
        ;; A pseudo-instruction that captures register arguments in vregs.
@@ -664,11 +687,6 @@
        ;; =========================================
        ;; Meta-instructions generating no code.
 
-       ;; Marker, no-op in generated code: SP "virtual offset" is adjusted.
-       ;;
-       ;; This controls how `MemArg::NominalSPOffset` args are lowered.
-       (VirtualSPOffsetAdj (offset i64))
-
        ;; Provides a way to tell the register allocator that the upcoming
        ;; sequence of instructions will overwrite `dst` so it should be
        ;; considered as a `def`; use this with care.
@@ -750,8 +768,7 @@
             Sbb
             And
             Or
-            Xor
-            Mul))
+            Xor))
 
 (type AluRmROpcode
       (enum Andn
@@ -951,6 +968,7 @@
             Ucomiss
             Ucomisd
             Unpcklps
+            Unpcklpd
             Unpckhps
             Xorps
             Xorpd
@@ -1317,6 +1335,7 @@
             Vpunpckhwd
             Vpunpcklwd
             Vunpcklps
+            Vunpcklpd
             Vunpckhps
             Vandnps
             Vandnpd
@@ -1446,6 +1465,9 @@
             Vsqrtsd
             Vroundss
             Vroundsd
+            Vucomiss
+            Vucomisd
+            Vptest
           ))
 
 (type Avx512Opcode
@@ -1606,7 +1628,7 @@
 (extern constructor xmm_to_xmm_mem xmm_to_xmm_mem)
 
 ;; Construct a new `XmmMem` from an `RegMem`.
-(decl xmm_mem_to_reg_mem (XmmMem) RegMem)
+(decl pure xmm_mem_to_reg_mem (XmmMem) RegMem)
 (extern constructor xmm_mem_to_reg_mem xmm_mem_to_reg_mem)
 
 ;; Convert a `GprMem` to a `RegMem`.
@@ -1724,15 +1746,6 @@
 (decl xmi_imm (u32) XmmMemImm)
 (extern constructor xmi_imm xmi_imm)
 
-;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-
-;; This is a direct import of `IntCC::without_equal`.
-;; Get the corresponding IntCC with the equal component removed.
-;; For conditions without a zero component, this is a no-op.
-(decl intcc_without_eq (IntCC) IntCC)
-(extern constructor intcc_without_eq intcc_without_eq)
-
 ;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
 
 (type RegisterClass
@@ -1829,10 +1842,6 @@
 (decl simm32_from_value (GprMemImm) Value)
 (extern extractor simm32_from_value simm32_from_value)
 
-;; Extract a constant `RegMemImm.Imm` from an `Imm64` immediate.
-(decl simm32_from_imm64 (GprMemImm) Imm64)
-(extern extractor simm32_from_imm64 simm32_from_imm64)
-
 ;; A load that can be sunk into another operation.
 (type SinkableLoad extern (enum))
 
@@ -1882,7 +1891,7 @@
 ;;
 ;; These helpers are intended to assist in emitting instructions by taking
 ;; source operands and automatically creating output operands which are then
-;; returned. These are additionally deisgned to assist with SSA-like
+;; returned. These are additionally designed to assist with SSA-like
 ;; construction where the writable version of a register is only present in
 ;; an `MInst` and every other reference to it is a readonly version.
 
@@ -2110,22 +2119,6 @@
             (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
         dst))
 
-;; Helper for creating `MInst.MulHi` instructions.
-;;
-;; Returns the (lo, hi) register halves of the multiplication.
-(decl mul_hi (Type bool Gpr GprMem) ValueRegs)
-(rule (mul_hi ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.MulHi size
-                                       signed
-                                       src1
-                                       src2
-                                       dst_lo
-                                       dst_hi))))
-        (value_gprs dst_lo dst_hi)))
-
 ;; Helper for creating `MInst.UnaryRmR` instructions.
 (decl unary_rm_r (UnaryRmROpcode Gpr OperandSize) Gpr)
 (rule (unary_rm_r op src size)
@@ -2227,7 +2220,7 @@
 ;; even not generate a zero-extended move in this case.
 (rule 1 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
         (if-let $true (value32_zeros_upper32 src))
-        src)
+        (add_range_fact src 64 0 0xffff_ffff))
 
 (rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty
@@ -2291,7 +2284,7 @@
 ;; done for integers. This is because we're comparing a fresh register to itself
 ;; and we don't know the previous contents of the register. If a floating-point
 ;; comparison is used then it runs the risk of comparing NaN against NaN and not
-;; actually producing an all-ones mask. By using integer comparision operations
+;; actually producing an all-ones mask. By using integer comparison operations
 ;; we're guaranteeed that everything is equal to itself.
 (decl vector_all_ones () Xmm)
 (rule (vector_all_ones)
@@ -2567,6 +2560,15 @@
                         dst)
          dst)))
 
+(decl x64_alurmi_flags_side_effect (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_alurmi_flags_side_effect opc (fits_in_64 ty) src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRmiR (raw_operand_size_of_type ty)
+                      opc
+                      src1
+                      src2
+                      (temp_writable_gpr))))
+
 ;; Should only be used for Adc and Sbb
 (decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
 (rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
@@ -2623,31 +2625,55 @@
                         dst)
          dst)))
 
-;; Helper for creating `mul` instructions.
-(decl x64_mul (Type Gpr GprMemImm) Gpr)
-(rule (x64_mul ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Mul)
-                 src1
-                 src2))
-
-;; Helper for creating `umullo` instructions.
-(decl x64_umullo (Type Gpr GprMem) Gpr)
-(rule (x64_umullo ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`)
+(decl x64_mul (Type bool Gpr GprMem) ValueRegs)
+(rule (x64_mul ty signed src1 src2)
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
             (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.UMulLo size src1 src2 dst))))
+            (_ Unit (emit (MInst.Mul size signed src1 src2 dst_lo dst_hi))))
+        (value_gprs dst_lo dst_hi)))
+
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`) for 8-bit operands.
+(decl x64_mul8 (bool Gpr GprMem) Gpr)
+(rule (x64_mul8 signed src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Mul8 signed src1 src2 dst))))
         dst))
 
-(decl x64_umullo_with_flags_paired (Type Gpr GprMem) ProducesFlags)
-(rule (x64_umullo_with_flags_paired ty src1 src2)
+;; Helper for creating `imul` instructions.
+(decl x64_imul (Type Gpr GprMem) Gpr)
+(rule (x64_imul ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.IMul size src1 src2 dst))))
+        dst))
+
+;; Helper for creating `imul` instructions with an immediate operand.
+(decl x64_imul_imm (Type GprMem i32) Gpr)
+(rule (x64_imul_imm ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.IMulImm size src1 src2 dst))))
+        dst))
+
+(decl x64_mul8_with_flags_paired (bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul8_with_flags_paired signed src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
            (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-                 (MInst.UMulLo (raw_operand_size_of_type ty)
-                               src1
-                               src2
-                               dst)
-                  dst)))
+                 (MInst.Mul8 signed src1 src2 dst)
+                 dst)))
+
+(decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty)))
+           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+                 (MInst.Mul size signed src1 src2 dst_lo dst_hi)
+                 dst_lo)))
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
@@ -2829,7 +2855,7 @@
         dst))
 
 ;; Helper for creating `MInst.CmpRmiR` instructions.
-(decl cmp_rmi_r (OperandSize CmpOpcode GprMemImm Gpr) ProducesFlags)
+(decl cmp_rmi_r (OperandSize CmpOpcode Gpr GprMemImm) ProducesFlags)
 (rule (cmp_rmi_r size opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.CmpRmiR size
@@ -2838,39 +2864,52 @@
                       src2)))
 
 ;; Helper for creating `cmp` instructions.
-(decl x64_cmp (OperandSize GprMemImm Gpr) ProducesFlags)
+(decl x64_cmp (OperandSize Gpr GprMemImm) ProducesFlags)
 (rule (x64_cmp size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
 
 ;; Helper for creating `cmp` instructions with an immediate.
-(decl x64_cmp_imm (OperandSize u32 Gpr) ProducesFlags)
+(decl x64_cmp_imm (OperandSize Gpr u32) ProducesFlags)
 (rule (x64_cmp_imm size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) (RegMemImm.Imm src1) src2))
+      (x64_cmp size src1 (RegMemImm.Imm src2)))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
-(decl xmm_cmp_rm_r (SseOpcode XmmMemAligned Xmm) ProducesFlags)
+(decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
 (rule (xmm_cmp_rm_r opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
 
+;; Helper for creating `MInst.XmmCmpRmRVex` instructions.
+(decl xmm_cmp_rm_r_vex (AvxOpcode Xmm XmmMem) ProducesFlags)
+(rule (xmm_cmp_rm_r_vex opcode src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.XmmCmpRmRVex opcode src1 src2)))
+
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
-(decl x64_ucomis (Value Value) ProducesFlags)
-(rule (x64_ucomis src1 @ (value_type $F32) src2)
-      ;; N.B.: cmp can be generated more than once, so cannot do a
-      ;; load-op merge. So `put_in_xmm` for src1, not `put_in_xmm_mem`.
-      (xmm_cmp_rm_r (SseOpcode.Ucomiss) (put_in_xmm src1) (put_in_xmm src2)))
-(rule (x64_ucomis src1 @ (value_type $F64) src2)
-      (xmm_cmp_rm_r (SseOpcode.Ucomisd) (put_in_xmm src1) (put_in_xmm src2)))
+(decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
+(rule (x64_ucomis $F32 src1 src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomiss) src1 src2))
+(rule (x64_ucomis $F64 src1 src2)
+      (xmm_cmp_rm_r (SseOpcode.Ucomisd) src1 src2))
+(rule 1 (x64_ucomis $F32 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomiss) src1 src2))
+(rule 1 (x64_ucomis $F64 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomisd) src1 src2))
 
 ;; Helper for creating `test` instructions.
-(decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
+(decl x64_test (OperandSize Gpr GprMemImm) ProducesFlags)
 (rule (x64_test size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
 
 ;; Helper for creating `ptest` instructions.
-(decl x64_ptest (XmmMem Xmm) ProducesFlags)
+(decl x64_ptest (Xmm XmmMem) ProducesFlags)
 (rule (x64_ptest src1 src2)
       (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
+(rule 1 (x64_ptest src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vptest) src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps
@@ -2883,7 +2922,7 @@
          (MInst.Cmove size cc consequent alternative dst)
          dst)))
 
-(decl cmove_xmm (Type CC XmmMemAligned Xmm) ConsumesFlags)
+(decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -2936,7 +2975,7 @@
          cmove2
          dst)))
 
-(decl cmove_or_xmm (Type CC CC XmmMemAligned Xmm) ConsumesFlags)
+(decl cmove_or_xmm (Type CC CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm))
             (tmp WritableXmm (temp_writable_xmm))
@@ -3336,6 +3375,14 @@
 (rule 1 (x64_unpcklps src1 src2)
       (if-let $true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vunpcklps) src1 src2))
+
+;; Helper for creating `unpcklpd` instructions.
+(decl x64_unpcklpd (Xmm XmmMem) Xmm)
+(rule 0 (x64_unpcklpd src1 src2)
+      (xmm_rm_r (SseOpcode.Unpcklpd) src1 src2))
+(rule 1 (x64_unpcklpd src1 src2)
+      (if-let $true (use_avx))
+      (xmm_rmir_vex (AvxOpcode.Vunpcklpd) src1 src2))
 
 ;; Helper for creating `unpckhps` instructions.
 (decl x64_unpckhps (Xmm XmmMem) Xmm)
@@ -3792,20 +3839,51 @@
       (xmm_vex_pinsr (AvxOpcode.Vpinsrq) src1 src2 lane))
 
 ;; Helper for creating `roundss` instructions.
+;;
+;; NB: the non-AVX variant of this instruction does not require that the operand
+;; is aligned, but the instruction variant used here requires it to be aligned.
+;; This means that if the operand here points to memory then we'll eagerly load
+;; it, but the eager load will load too much (the full register width of 16
+;; bytes). To fix this a `put_xmm_mem_in_xmm` helper is used to force the
+;; operand to be a register where the load is done with the appropriate type if
+;; it's in memory.
+;;
+;; Some more discussion of this can be found on #8112. Ideally this would use
+;; a variant that allows an unaligned `XmmMem` in the instruction variant.
+;; Either that or the auto-conversion to aligned memory is removed and/or starts
+;; to require a type.
+;;
+;; Also note that the argument here isn't changed to `Xmm` instead of `XmmMem`
+;; because the AVX variant, when available, doesn't need alignment and can
+;; pass through the `src1` argument as-is.
 (decl x64_roundss (XmmMem RoundImm) Xmm)
 (rule (x64_roundss src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundss) src1 (encode_round_imm round)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundss) (put_xmm_mem_in_xmm $F32 src1) (encode_round_imm round)))
 (rule 1 (x64_roundss src1 round)
         (if-let $true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundss) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
+;;
+;; NB: see `x64_roundss` above for `put_xmm_mem_in_xmm` in call.
 (decl x64_roundsd (XmmMem RoundImm) Xmm)
 (rule (x64_roundsd src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) src1 (encode_round_imm round)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) (put_xmm_mem_in_xmm $F64 src1) (encode_round_imm round)))
 (rule 1 (x64_roundsd src1 round)
         (if-let $true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundsd) src1 (encode_round_imm round)))
+
+;; Helper for forcing an `XmmMem` to be placed into an `Xmm` register.
+;;
+;; If it's already in a register it stays there, otherwise it turns into a
+;; load instruction with the destination register as output.
+(decl put_xmm_mem_in_xmm (Type XmmMem) Xmm)
+(rule (put_xmm_mem_in_xmm ty xmm_mem)
+      (if-let (RegMem.Reg r) (xmm_mem_to_reg_mem xmm_mem))
+      (xmm_new r))
+(rule (put_xmm_mem_in_xmm ty xmm_mem)
+      (if-let (RegMem.Mem amode) (xmm_mem_to_reg_mem xmm_mem))
+      (x64_load ty amode (ExtKind.None)))
 
 ;; Helper for creating `roundps` instructions.
 (decl x64_roundps (XmmMem RoundImm) Xmm)
@@ -3954,12 +4032,6 @@
                                              src3
                                              dst))))
         dst))
-
-;; Helper for creating `mul` instructions that return both the lower and
-;; (unsigned) higher halves of the result.
-(decl mulhi_u (Type Gpr GprMem) ValueRegs)
-(rule (mulhi_u ty src1 src2)
-      (mul_hi ty $false src1 src2))
 
 ;; Helper for creating `psllw` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)
@@ -4350,18 +4422,27 @@
 (rule (x64_vfnmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132pd) a b c))
 
 ;; Helper for creating `sqrtss` instructions.
-(decl x64_sqrtss (XmmMem) Xmm)
-(rule (x64_sqrtss x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtss) x))
-(rule 1 (x64_sqrtss x)
+;;
+;; NB: the square-root operation technically only has one operand but this
+;; instruction has two. This is to reflect how the square root operation copies
+;; the upper bits of the first register and only performs the square root
+;; operation on the low bits of the second register. This introduces
+;; a data-dependency on the contents of the first register which is modeled
+;; here.
+(decl x64_sqrtss (Xmm XmmMem) Xmm)
+(rule (x64_sqrtss x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtss) x y))
+(rule 1 (x64_sqrtss x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtss) x))
+        (xmm_rmir_vex (AvxOpcode.Vsqrtss) x y))
 
 ;; Helper for creating `sqrtsd` instructions.
-(decl x64_sqrtsd (XmmMem) Xmm)
-(rule (x64_sqrtsd x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtsd) x))
-(rule 1 (x64_sqrtsd x)
+;;
+;; NB: see `x64_sqrtss` for explanation of why this has two args.
+(decl x64_sqrtsd (Xmm XmmMem) Xmm)
+(rule (x64_sqrtsd x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtsd) x y))
+(rule 1 (x64_sqrtsd x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtsd) x))
+        (xmm_rmir_vex (AvxOpcode.Vsqrtsd) x y))
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
@@ -4378,18 +4459,22 @@
         (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtpd) x))
 
 ;; Helper for creating `cvtss2sd` instructions.
-(decl x64_cvtss2sd (XmmMem) Xmm)
-(rule (x64_cvtss2sd x) (xmm_unary_rm_r_unaligned (SseOpcode.Cvtss2sd) x))
-(rule 1 (x64_cvtss2sd x)
+;;
+;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
+(decl x64_cvtss2sd (Xmm XmmMem) Xmm)
+(rule (x64_cvtss2sd x y) (xmm_rm_r_unaligned (SseOpcode.Cvtss2sd) x y))
+(rule 1 (x64_cvtss2sd x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vcvtss2sd) x))
+        (xmm_rmir_vex (AvxOpcode.Vcvtss2sd) x y))
 
 ;; Helper for creating `cvtsd2ss` instructions.
-(decl x64_cvtsd2ss (XmmMem) Xmm)
-(rule (x64_cvtsd2ss x) (xmm_unary_rm_r_unaligned (SseOpcode.Cvtsd2ss) x))
-(rule 1 (x64_cvtsd2ss x)
+;;
+;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
+(decl x64_cvtsd2ss (Xmm XmmMem) Xmm)
+(rule (x64_cvtsd2ss x y) (xmm_rm_r_unaligned (SseOpcode.Cvtsd2ss) x y))
+(rule 1 (x64_cvtsd2ss x y)
         (if-let $true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vcvtsd2ss) x))
+        (xmm_rmir_vex (AvxOpcode.Vcvtsd2ss) x y))
 
 ;; Helper for creating `cvtdq2ps` instructions.
 (decl x64_cvtdq2ps (XmmMem) Xmm)
@@ -4741,17 +4826,16 @@
 
 ;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
 ;; Cranelift's verification that `a` and `b` are of the same type.
-;; Unfortunately for clarity, the registers are flipped here (TODO).
 (rule 0 (emit_cmp cc a @ (value_type ty) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size b a) cc)))
+        (icmp_cond_result (x64_cmp size a b) cc)))
 
 ;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
 (rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) (intcc_swap_args cc))))
+        (icmp_cond_result (x64_cmp size b a) (intcc_swap_args cc))))
 
 ;; Special case: use the test instruction for comparisons with 0.
 (rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
@@ -4766,62 +4850,42 @@
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
-(rule 5 (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
-      (let ((a_lo Gpr (value_regs_get_gpr a 0))
-            (a_hi Gpr (value_regs_get_gpr a 1))
-            (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.Z))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.Z))))
-            ;; At this point, `cmp_lo` and `cmp_hi` contain either 0 or 1 in the
-            ;; lowest 8 bits--`SETcc` guarantees this. The upper bits may be
-            ;; unchanged so we must compare against 1 below; this instruction
-            ;; combines `cmp_lo` and `cmp_hi` for that final comparison.
-            (cmp Reg (x64_and $I64 cmp_lo cmp_hi)))
-        ;; We must compare one more time against the immediate value 1 to
-        ;; check if both `cmp_lo` and `cmp_hi` are true. If `cmp AND 1 == 0`
-        ;; then the `ZF` will be set (see `TEST` definition); if either of
-        ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
-        ;; with `NZ`.
-        (icmp_cond_result
-          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
-          (CC.NZ))))
-
-(rule 5 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
-      (let ((a_lo Gpr (value_regs_get_gpr a 0))
-            (a_hi Gpr (value_regs_get_gpr a 1))
-            (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.NZ))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.NZ))))
-            ;; See comments for `IntCC.Equal`.
-            (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
-           (icmp_cond_result
-             (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
-             (CC.NZ))))
-
-;; Result = (a_hi <> b_hi) ||
-;;          (a_hi == b_hi && a_lo <> b_lo)
 (rule 4 (emit_cmp cc a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) b_hi a_hi)
-                                       (consumes_flags_concat
-                                                 (x64_setcc (intcc_without_eq cc))
-                                                 (x64_setcc (CC.Z)))))
-            (cc_hi Reg (value_regs_get cmp_hi 0))
-            (eq_hi Reg (value_regs_get cmp_hi 1))
+            (b_hi Gpr (value_regs_get_gpr b 1)))
+      (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)))
 
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo)
-                                        (x64_setcc (intcc_unsigned cc))))
+(decl emit_cmp_i128 (CC Gpr Gpr Gpr Gpr) IcmpCondResult)
+;; Eliminate cases which compare something "or equal" by swapping arguments.
+(rule 2 (emit_cmp_i128 (CC.NLE) a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.L)   b_hi b_lo a_hi a_lo))
+(rule 2 (emit_cmp_i128 (CC.LE)  a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.NL)  b_hi b_lo a_hi a_lo))
+(rule 2 (emit_cmp_i128 (CC.NBE) a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.B)   b_hi b_lo a_hi a_lo))
+(rule 2 (emit_cmp_i128 (CC.BE)  a_hi a_lo b_hi b_lo)
+        (emit_cmp_i128 (CC.NB)  b_hi b_lo a_hi a_lo))
 
-            (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
-            (res Reg (x64_or $I64 cc_hi res_lo)))
+;; 128-bit strict equality/inequality can't be easily tested using subtraction
+;; but we can quickly determine whether any bits are different instead.
+(rule 1 (emit_cmp_i128 (cc_nz_or_z cc) a_hi a_lo b_hi b_lo)
+        (let ((same_lo Reg (x64_xor $I64 a_lo b_lo))
+              (same_hi Reg (x64_xor $I64 a_hi b_hi)))
+          (icmp_cond_result
+            (x64_alurmi_flags_side_effect (AluRmiROpcode.Or) $I64 same_lo same_hi)
+            cc)))
+
+;; The only cases left are L/NL/B/NB which we can implement with a sub/sbb
+;; sequence. But since we don't care about anything but the flags we can
+;; replace the sub with cmp, which avoids clobbering one of the registers.
+(rule 0 (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)
         (icmp_cond_result
-          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) res)
-          (CC.NZ))))
+          (produces_flags_concat
+            (x64_cmp (OperandSize.Size64) a_lo b_lo)
+            (x64_alurmi_flags_side_effect (AluRmiROpcode.Sbb) $I64 a_hi b_hi))
+          cc))
 
 (type FcmpCondResult
       (enum
@@ -4876,46 +4940,46 @@
 ;;  - equal assigns        Z = 1, P = 0, C = 0
 (decl emit_fcmp (FloatCC Value Value) FcmpCondResult)
 
-(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.AndCondition (x64_ucomis b a) (CC.NP) (CC.Z)))
+(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.AndCondition (x64_ucomis ty a b) (CC.NP) (CC.Z)))
 
-(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float _)) b)
-      (FcmpCondResult.OrCondition (x64_ucomis b a) (CC.P) (CC.NZ)))
+(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.OrCondition (x64_ucomis ty a b) (CC.P) (CC.NZ)))
 
 ;; Some scalar lowerings correspond to one condition code.
 
 (rule (emit_fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NP)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NP)))
 (rule (emit_fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.P)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.P)))
 (rule (emit_fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NZ)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NZ)))
 (rule (emit_fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.Z)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.Z)))
 (rule (emit_fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis b a) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.BE)))
 
 ;; Other scalar lowerings are made possible by flipping the operands and
 ;; reversing the condition code.
 
 (rule (emit_fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThan`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NBE)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NB)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThan`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.B)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
+      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.BE)))
 
 ;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -5223,6 +5287,20 @@
 (rule (synthetic_amode_to_xmm_mem_aligned mode) (synthetic_amode_to_xmm_mem mode))
 (decl put_in_xmm_mem_aligned (Value) XmmMemAligned)
 (rule (put_in_xmm_mem_aligned val) (put_in_xmm_mem val))
+
+;; Copy a GPR of the given type to a new GPR.
+;;
+;; Generally, regalloc should take care of this kind of thing for us. This is
+;; only useful for implementing things like `bitcast` from an `r64` to an `i64`
+;; to avoid conflicting constraints on a single aliased value by splitting the
+;; value into two parts.
+(decl copy_gpr (Type Gpr) Gpr)
+(rule (copy_gpr ty src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovRR (operand_size_of_type_32_64 ty)
+                                       src
+                                       dst))))
+        dst))
 
 (decl mov_to_preg (PReg Gpr) SideEffectNoResult)
 (rule (mov_to_preg dst src)

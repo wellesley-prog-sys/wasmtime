@@ -1,135 +1,417 @@
-//! `wasmtime-wasi` now supports using multiple snapshots to interface to the
-//! same `WasiCtx`!
+//! # Wasmtime's WASI Implementation
 //!
-//! `wasmtime_wasi::Wasi::new(&Store, WasiCtx)` is a struct which owns your
-//! `WasiCtx` and provides linkage to every available snapshot.
+//! This crate provides a Wasmtime host implementation of WASI 0.2 (aka WASIp2
+//! aka Preview 2) and WASI 0.1 (aka WASIp1 aka Preview 1). WASI is implemented
+//! with the Rust crates [`tokio`] and [`cap-std`] primarily, meaning that
+//! operations are implemented in terms of their native platform equivalents by
+//! default.
 //!
-//! Individual snapshots are available through
-//! `wasmtime_wasi::snapshots::preview_{0, 1}::Wasi::new(&Store, Rc<RefCell<WasiCtx>>)`.
+//! For components and WASIp2, continue reading below. For WASIp1 and core
+//! modules, see the [`preview1`] module documentation.
+//!
+//! # WASIp2 interfaces
+//!
+//! This crate contains implementations of the following interfaces:
+//!
+//! * [`wasi:cli/environment`]
+//! * [`wasi:cli/exit`]
+//! * [`wasi:cli/stderr`]
+//! * [`wasi:cli/stdin`]
+//! * [`wasi:cli/stdout`]
+//! * [`wasi:cli/terminal-input`]
+//! * [`wasi:cli/terminal-output`]
+//! * [`wasi:cli/terminal-stderr`]
+//! * [`wasi:cli/terminal-stdin`]
+//! * [`wasi:cli/terminal-stdout`]
+//! * [`wasi:clocks/monotonic-clock`]
+//! * [`wasi:clocks/wall-clock`]
+//! * [`wasi:filesystem/preopens`]
+//! * [`wasi:filesystem/types`]
+//! * [`wasi:io/error`]
+//! * [`wasi:io/poll`]
+//! * [`wasi:io/streams`]
+//! * [`wasi:random/insecure-seed`]
+//! * [`wasi:random/insecure`]
+//! * [`wasi:random/random`]
+//! * [`wasi:sockets/instance-network`]
+//! * [`wasi:sockets/ip-name-lookup`]
+//! * [`wasi:sockets/network`]
+//! * [`wasi:sockets/tcp-create-socket`]
+//! * [`wasi:sockets/tcp`]
+//! * [`wasi:sockets/udp-create-socket`]
+//! * [`wasi:sockets/udp`]
+//!
+//! All traits are implemented in terms of a [`WasiView`] trait which provides
+//! basic access to [`WasiCtx`], configuration for WASI, and [`ResourceTable`],
+//! the state for all host-defined component model resources.
+//!
+//! # Generated Bindings
+//!
+//! This crate uses [`wasmtime::component::bindgen!`] to generate bindings for
+//! all WASI interfaces. Raw bindings are available in the [`bindings`] module
+//! of this crate. Downstream users can either implement these traits themselves
+//! or you can use the built-in implementations in this crate for all
+//! `T: WasiVew`
+//!
+//! # The `WasiView` trait
+//!
+//! This crate's implementation of WASI is done in terms of an implementation of
+//! [`WasiView`]. This trait provides a "view" into WASI-related state that is
+//! contained within a [`Store<T>`](wasmtime::Store). All implementations of
+//! traits look like:
+//!
+//! ```
+//! # trait WasiView {}
+//! # mod bindings { pub mod wasi { pub trait Host {} } }
+//! impl<T: WasiView> bindings::wasi::Host for T {
+//!     // ...
+//! }
+//! ```
+//!
+//! The [`add_to_linker_sync`] and [`add_to_linker_async`] function then require
+//! that `T: WasiView` with [`Linker<T>`](wasmtime::component::Linker).
+//!
+//! To implement the [`WasiView`] trait you will first select a `T` to put in
+//! `Store<T>`. Next you'll implement the [`WasiView`] trait for `T`. Somewhere
+//! within `T` you'll store:
+//!
+//! * [`WasiCtx`] - created through [`WasiCtxBuilder`].
+//! * [`ResourceTable`] - created through default constructors.
+//!
+//! These two fields are then accessed through the methods of [`WasiView`].
+//!
+//! # Async and Sync
+//!
+//! Many WASI functions are not blocking from WebAssembly's point of view, but
+//! for those that do they're provided in two flavors: asynchronous and
+//! synchronous. Which version you will use depends on how
+//! [`Config::async_support`][async] is set.
+//!
+//! * For non-async users (the default of `Config`), use [`add_to_linker_sync`].
+//! * For async users, use [`add_to_linker_async`].
+//!
+//! Note that bindings are generated once for async and once for sync. Most
+//! interfaces do not change, however, so only interfaces with blocking
+//! functions have bindings generated twice. Bindings are organized as:
+//!
+//! * [`bindings`] - default location of all bindings, blocking functions are
+//!   `async`
+//! * [`bindings::sync`] - blocking interfaces have synchronous versions here.
+//!
+//! # Crate-specific traits
+//!
+//! This crate's default implementation of WASI bindings to native primitives
+//! for the platform that it is compiled for. For example opening a TCP socket
+//! uses the native platform to open a TCP socket (so long as [`WasiCtxBuilder`]
+//! allows it). There are a few important traits, however, that are specific to
+//! this crate.
+//!
+//! * [`HostInputStream`] and [`HostOutputStream`] - these are the host traits
+//!   behind the WASI `input-stream` and `output-stream` types in the
+//!   `wasi:io/streams` interface. These enable embedders to build their own
+//!   custom stream and insert them into a [`ResourceTable`] to be used from
+//!   wasm.
+//!
+//! * [`Subscribe`] - this trait enables building arbitrary logic to get hooked
+//!   into a `pollable` resource from `wasi:io/poll`. A pollable resource is
+//!   created through the [`subscribe`] function.
+//!
+//! * [`HostWallClock`] and [`HostMonotonicClock`] are used in conjunction with
+//!   [`WasiCtxBuilder::wall_clock`] and [`WasiCtxBuilder::monotonic_clock`] if
+//!   the defaults host's clock should not be used.
+//!
+//! * [`StdinStream`] and [`StdoutStream`] are used to provide custom
+//!   stdin/stdout streams if they're not inherited (or null, which is the
+//!   default).
+//!
+//! These traits enable embedders to customize small portions of WASI interfaces
+//! provided while still providing all other interfaces.
+//!
+//! # Examples
+//!
+//! Usage of this crate is done through a few steps to get everything hooked up:
+//!
+//! 1. First implement [`WasiView`] for your type which is the `T` in
+//!    `Store<T>`.
+//! 2. Add WASI interfaces to a `wasmtime::component::Linker<T>`. This is either
+//!    done through top-level functions like [`add_to_linker_sync`] or through
+//!    individual `add_to_linker` functions in generated bindings throughout
+//!    this crate.
+//! 3. Create a [`WasiCtx`] for each `Store<T>` through [`WasiCtxBuilder`]. Each
+//!    WASI context is "null" or "empty" by default, so items must be explicitly
+//!    added to get accessed by wasm (such as env vars or program arguments).
+//! 4. Use the previous `Linker<T>` to instantiate a `Component` within a
+//!    `Store<T>`.
+//!
+//! For examples see each of [`WasiView`], [`WasiCtx`], [`WasiCtxBuilder`],
+//! [`add_to_linker_sync`], and [`bindings::Command`].
+//!
+//! [`wasmtime::component::bindgen!`]: https://docs.rs/wasmtime/latest/wasmtime/component/macro.bindgen.html
+//! [`tokio`]: https://crates.io/crates/tokio
+//! [`cap-std`]: https://crates.io/crates/cap-std
+//! [`wasi:cli/environment`]: bindings::cli::environment::Host
+//! [`wasi:cli/exit`]: bindings::cli::exit::Host
+//! [`wasi:cli/stderr`]: bindings::cli::stderr::Host
+//! [`wasi:cli/stdin`]: bindings::cli::stdin::Host
+//! [`wasi:cli/stdout`]: bindings::cli::stdout::Host
+//! [`wasi:cli/terminal-input`]: bindings::cli::terminal_input::Host
+//! [`wasi:cli/terminal-output`]: bindings::cli::terminal_output::Host
+//! [`wasi:cli/terminal-stdin`]: bindings::cli::terminal_stdin::Host
+//! [`wasi:cli/terminal-stdout`]: bindings::cli::terminal_stdout::Host
+//! [`wasi:cli/terminal-stderr`]: bindings::cli::terminal_stderr::Host
+//! [`wasi:clocks/monotonic-clock`]: bindings::clocks::monotonic_clock::Host
+//! [`wasi:clocks/wall-clock`]: bindings::clocks::wall_clock::Host
+//! [`wasi:filesystem/preopens`]: bindings::filesystem::preopens::Host
+//! [`wasi:filesystem/types`]: bindings::filesystem::types::Host
+//! [`wasi:io/error`]: bindings::io::error::Host
+//! [`wasi:io/poll`]: bindings::io::poll::Host
+//! [`wasi:io/streams`]: bindings::io::streams::Host
+//! [`wasi:random/insecure-seed`]: bindings::random::insecure_seed::Host
+//! [`wasi:random/insecure`]: bindings::random::insecure::Host
+//! [`wasi:random/random`]: bindings::random::random::Host
+//! [`wasi:sockets/instance-network`]: bindings::sockets::instance_network::Host
+//! [`wasi:sockets/ip-name-lookup`]: bindings::sockets::ip_name_lookup::Host
+//! [`wasi:sockets/network`]: bindings::sockets::network::Host
+//! [`wasi:sockets/tcp-create-socket`]: bindings::sockets::tcp_create_socket::Host
+//! [`wasi:sockets/tcp`]: bindings::sockets::tcp::Host
+//! [`wasi:sockets/udp-create-socket`]: bindings::sockets::udp_create_socket::Host
+//! [`wasi:sockets/udp`]: bindings::sockets::udp::Host
+//! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 
-#[cfg(feature = "preview2")]
-pub mod preview2;
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-pub use wasi_common::{Error, I32Exit, WasiCtx, WasiDir, WasiFile};
+use wasmtime::component::Linker;
 
-/// Re-export the commonly used wasi-cap-std-sync crate here. This saves
-/// consumers of this library from having to keep additional dependencies
-/// in sync.
-#[cfg(feature = "sync")]
-pub mod sync {
-    pub use wasi_cap_std_sync::*;
-    super::define_wasi!(block_on);
-}
+pub mod bindings;
+mod clocks;
+mod ctx;
+mod error;
+mod filesystem;
+mod host;
+mod ip_name_lookup;
+mod network;
+pub mod pipe;
+mod poll;
+#[cfg(feature = "preview1")]
+pub mod preview0;
+#[cfg(feature = "preview1")]
+pub mod preview1;
+mod random;
+pub mod runtime;
+mod stdio;
+mod stream;
+mod tcp;
+mod udp;
+mod write_stream;
 
-/// Sync mode is the "default" of this crate, so we also export it at the top
-/// level.
-#[cfg(feature = "sync")]
-pub use sync::*;
+pub use self::clocks::{HostMonotonicClock, HostWallClock};
+pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
+pub use self::error::{I32Exit, TrappableError};
+pub use self::filesystem::{DirPerms, FileInputStream, FilePerms, FsError, FsResult};
+pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
+pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
+pub use self::random::{thread_rng, Deterministic};
+pub use self::stdio::{
+    stderr, stdin, stdout, AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin,
+    StdinStream, Stdout, StdoutStream,
+};
+pub use self::stream::{
+    HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
+};
+#[doc(no_inline)]
+pub use async_trait::async_trait;
+#[doc(no_inline)]
+pub use cap_fs_ext::SystemTimeSpec;
+#[doc(no_inline)]
+pub use cap_rand::RngCore;
+#[doc(no_inline)]
+pub use wasmtime::component::{ResourceTable, ResourceTableError};
 
-/// Re-export the wasi-tokio crate here. This saves consumers of this library from having
-/// to keep additional dependencies in sync.
-#[cfg(feature = "tokio")]
-pub mod tokio {
-    pub use wasi_tokio::*;
-    super::define_wasi!(async T: Send);
-}
+/// Add all WASI interfaces from this crate into the `linker` provided.
+///
+/// This function will add the `async` variant of all interfaces into the
+/// [`Linker`] provided. By `async` this means that this function is only
+/// compatible with [`Config::async_support(true)`][async]. For embeddings with
+/// async support disabled see [`add_to_linker_sync`] instead.
+///
+/// This function will add all interfaces implemented by this crate to the
+/// [`Linker`], which corresponds to the `wasi:cli/imports` world supported by
+/// this crate.
+///
+/// [async]: wasmtime::Config::async_support
+///
+/// # Example
+///
+/// ```
+/// use wasmtime::{Engine, Result, Store, Config};
+/// use wasmtime::component::{ResourceTable, Linker};
+/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///
+///     let mut linker = Linker::<MyState>::new(&engine);
+///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+///     // ... add any further functionality to `linker` if desired ...
+///
+///     let mut builder = WasiCtxBuilder::new();
+///
+///     // ... configure `builder` more to add env vars, args, etc ...
+///
+///     let mut store = Store::new(
+///         &engine,
+///         MyState {
+///             ctx: builder.build(),
+///             table: ResourceTable::new(),
+///         },
+///     );
+///
+///     // ... use `linker` to instantiate within `store` ...
+///
+///     Ok(())
+/// }
+///
+/// struct MyState {
+///     ctx: WasiCtx,
+///     table: ResourceTable,
+/// }
+///
+/// impl WasiView for MyState {
+///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
+/// ```
+pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
+    let l = linker;
+    let closure = type_annotate::<T, _>(|t| t);
 
-// The only difference between these definitions for sync vs async is whether
-// the wasmtime::Funcs generated are async (& therefore need an async Store and an executor to run)
-// or whether they have an internal "dummy executor" that expects the implementation of all
-// the async funcs to poll to Ready immediately.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! define_wasi {
-    ($async_mode:tt $($bounds:tt)*) => {
-
-use wasmtime::Linker;
-
-pub fn add_to_linker<T, U>(
-    linker: &mut Linker<T>,
-    get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-) -> anyhow::Result<()>
-    where U: Send
-            + wasi_common::snapshots::preview_0::wasi_unstable::WasiUnstable
-            + wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1,
-        $($bounds)*
-{
-    snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker, get_cx)?;
-    snapshots::preview_0::add_wasi_unstable_to_linker(linker, get_cx)?;
+    crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    crate::bindings::filesystem::types::add_to_linker_get_host(l, closure)?;
+    crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::error::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::poll::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::streams::add_to_linker_get_host(l, closure)?;
+    crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
+    crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::exit::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::tcp::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::udp::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::network::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
     Ok(())
 }
 
-pub mod snapshots {
-    pub mod preview_1 {
-        wiggle::wasmtime_integration!({
-            // The wiggle code to integrate with lives here:
-            target: wasi_common::snapshots::preview_1,
-            // This must be the same witx document as used above. This should be ensured by
-            // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
-            witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
-            errors: { errno => trappable Error },
-            $async_mode: *
-        });
-    }
-    pub mod preview_0 {
-        wiggle::wasmtime_integration!({
-            // The wiggle code to integrate with lives here:
-            target: wasi_common::snapshots::preview_0,
-            // This must be the same witx document as used above. This should be ensured by
-            // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
-            witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
-            errors: { errno => trappable Error },
-            $async_mode: *
-        });
-    }
-}
-}
-}
-
-/// Exit the process with a conventional OS error code as long as Wasmtime
-/// understands the error. If the error is not an `I32Exit` or `Trap`, return
-/// the error back to the caller for it to decide what to do.
+/// Add all WASI interfaces from this crate into the `linker` provided.
 ///
-/// Note: this function is designed for usage where it is acceptable for
-/// Wasmtime failures to terminate the parent process, such as in the Wasmtime
-/// CLI; this would not be suitable for use in multi-tenant embeddings.
-#[cfg(feature = "exit")]
-pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
-    use std::process;
-    use wasmtime::Trap;
+/// This function will add the synchronous variant of all interfaces into the
+/// [`Linker`] provided. By synchronous this means that this function is only
+/// compatible with [`Config::async_support(false)`][async]. For embeddings
+/// with async support enabled see [`add_to_linker_async`] instead.
+///
+/// This function will add all interfaces implemented by this crate to the
+/// [`Linker`], which corresponds to the `wasi:cli/imports` world supported by
+/// this crate.
+///
+/// [async]: wasmtime::Config::async_support
+///
+/// # Example
+///
+/// ```
+/// use wasmtime::{Engine, Result, Store, Config};
+/// use wasmtime::component::{ResourceTable, Linker};
+/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///
+///     let mut linker = Linker::<MyState>::new(&engine);
+///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+///     // ... add any further functionality to `linker` if desired ...
+///
+///     let mut builder = WasiCtxBuilder::new();
+///
+///     // ... configure `builder` more to add env vars, args, etc ...
+///
+///     let mut store = Store::new(
+///         &engine,
+///         MyState {
+///             ctx: builder.build(),
+///             table: ResourceTable::new(),
+///         },
+///     );
+///
+///     // ... use `linker` to instantiate within `store` ...
+///
+///     Ok(())
+/// }
+///
+/// struct MyState {
+///     ctx: WasiCtx,
+///     table: ResourceTable,
+/// }
+///
+/// impl WasiView for MyState {
+///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
+/// ```
+pub fn add_to_linker_sync<T: WasiView>(
+    linker: &mut wasmtime::component::Linker<T>,
+) -> anyhow::Result<()> {
+    let l = linker;
+    let closure = type_annotate::<T, _>(|t| t);
 
-    // If a specific WASI error code was requested then that's
-    // forwarded through to the process here without printing any
-    // extra error information.
-    let code = e
-        .downcast_ref::<I32Exit>()
-        .map(|e| e.0)
-        .or_else(|| e.downcast_ref::<preview2::I32Exit>().map(|e| e.0));
-    if let Some(exit) = code {
-        // Print the error message in the usual way.
-        // On Windows, exit status 3 indicates an abort (see below),
-        // so return 1 indicating a non-zero status to avoid ambiguity.
-        if cfg!(windows) && exit >= 3 {
-            process::exit(1);
-        }
-        process::exit(exit);
-    }
+    crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sync::filesystem::types::add_to_linker_get_host(l, closure)?;
+    crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::error::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sync::io::poll::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sync::io::streams::add_to_linker_get_host(l, closure)?;
+    crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
+    crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::exit::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
+    crate::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sync::sockets::tcp::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sync::sockets::udp::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::network::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
+    Ok(())
+}
 
-    // If the program exited because of a trap, return an error code
-    // to the outside environment indicating a more severe problem
-    // than a simple failure.
-    if e.is::<Trap>() {
-        eprintln!("Error: {:?}", e);
-
-        if cfg!(unix) {
-            // On Unix, return the error code of an abort.
-            process::exit(128 + libc::SIGABRT);
-        } else if cfg!(windows) {
-            // On Windows, return 3.
-            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
-            process::exit(3);
-        }
-    }
-
-    e
+// NB: workaround some rustc inference - a future refactoring may make this
+// obsolete.
+fn type_annotate<T: WasiView, F>(val: F) -> F
+where
+    F: Fn(&mut T) -> &mut dyn WasiView,
+{
+    val
 }

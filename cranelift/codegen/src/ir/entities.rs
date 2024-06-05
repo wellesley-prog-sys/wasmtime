@@ -174,7 +174,7 @@ impl DynamicType {
 
 /// An opaque reference to a global value.
 ///
-/// A `GlobalValue` is a [`Value`](Value) that will be live across the entire
+/// A `GlobalValue` is a [`Value`] that will be live across the entire
 /// function lifetime. It can be preloaded from other global values.
 ///
 /// You can create a `GlobalValue` in the following ways:
@@ -198,6 +198,29 @@ entity_impl!(GlobalValue, "gv");
 
 impl GlobalValue {
     /// Create a new global value reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Self(n))
+        } else {
+            None
+        }
+    }
+}
+
+/// An opaque reference to a memory type.
+///
+/// A `MemoryType` is a descriptor of a struct layout in memory, with
+/// types and proof-carrying-code facts optionally attached to the
+/// fields.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct MemoryType(u32);
+entity_impl!(MemoryType, "mt");
+
+impl MemoryType {
+    /// Create a new memory type reference from its number.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
@@ -365,33 +388,6 @@ impl SigRef {
     }
 }
 
-/// An opaque reference to a [WebAssembly
-/// table](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format#WebAssembly_tables).
-///
-/// `Table`s are used to store a list of function references.
-/// They can be created with [`FuncEnvironment::make_table`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_table).
-/// They can be used with
-/// [`FuncEnvironment::translate_call_indirect`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.translate_call_indirect).
-///
-/// While the order is stable, it is arbitrary.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Table(u32);
-entity_impl!(Table, "table");
-
-impl Table {
-    /// Create a new table reference from its number.
-    ///
-    /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX {
-            Some(Self(n))
-        } else {
-            None
-        }
-    }
-}
-
 /// An opaque reference to any of the entities defined in this module that can appear in CLIF IR.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -412,6 +408,8 @@ pub enum AnyEntity {
     DynamicType(DynamicType),
     /// A Global value.
     GlobalValue(GlobalValue),
+    /// A memory type.
+    MemoryType(MemoryType),
     /// A jump table.
     JumpTable(JumpTable),
     /// A constant.
@@ -420,8 +418,6 @@ pub enum AnyEntity {
     FuncRef(FuncRef),
     /// A function call signature.
     SigRef(SigRef),
-    /// A table.
-    Table(Table),
     /// A function's stack limit
     StackLimit,
 }
@@ -437,11 +433,11 @@ impl fmt::Display for AnyEntity {
             Self::DynamicStackSlot(r) => r.fmt(f),
             Self::DynamicType(r) => r.fmt(f),
             Self::GlobalValue(r) => r.fmt(f),
+            Self::MemoryType(r) => r.fmt(f),
             Self::JumpTable(r) => r.fmt(f),
             Self::Constant(r) => r.fmt(f),
             Self::FuncRef(r) => r.fmt(f),
             Self::SigRef(r) => r.fmt(f),
-            Self::Table(r) => r.fmt(f),
             Self::StackLimit => write!(f, "stack_limit"),
         }
     }
@@ -495,6 +491,12 @@ impl From<GlobalValue> for AnyEntity {
     }
 }
 
+impl From<MemoryType> for AnyEntity {
+    fn from(r: MemoryType) -> Self {
+        Self::MemoryType(r)
+    }
+}
+
 impl From<JumpTable> for AnyEntity {
     fn from(r: JumpTable) -> Self {
         Self::JumpTable(r)
@@ -519,17 +521,10 @@ impl From<SigRef> for AnyEntity {
     }
 }
 
-impl From<Table> for AnyEntity {
-    fn from(r: Table) -> Self {
-        Self::Table(r)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::string::ToString;
-    use core::u32;
 
     #[test]
     fn value_with_number() {

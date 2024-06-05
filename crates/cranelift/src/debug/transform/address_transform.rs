@@ -1,8 +1,6 @@
-use crate::CompiledFunctionsMetadata;
+use crate::{CompiledFunctionsMetadata, FunctionAddressMap};
 use gimli::write;
 use std::collections::BTreeMap;
-use std::iter::FromIterator;
-use wasmtime_cranelift_shared::FunctionAddressMap;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef, FilePos, PrimaryMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;
@@ -385,7 +383,7 @@ impl<'a> Iterator for TransformRangeIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             // Merge TransformRangeStartIter and TransformRangeEndIter data using
-            // FuncLookup index's field propery to be sorted by RangeIndex.
+            // FuncLookup index's field property to be sorted by RangeIndex.
             let (start, end, range_index): (
                 Option<GeneratedAddress>,
                 Option<GeneratedAddress>,
@@ -606,11 +604,10 @@ impl AddressTransform {
 #[cfg(test)]
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
+    use crate::{CompiledFunctionMetadata, FunctionAddressMap};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
-    use std::iter::FromIterator;
     use std::mem;
-    use wasmtime_cranelift_shared::{CompiledFunctionMetadata, FunctionAddressMap};
     use wasmtime_environ::{FilePos, InstructionAddressMap, WasmFileInfo};
 
     #[test]

@@ -7,7 +7,7 @@
 #![cfg_attr(not(feature = "all-arch"), allow(dead_code))]
 
 mod abi;
-pub use codegen::FuncEnv;
+pub use codegen::{BuiltinFunctions, FuncEnv};
 mod codegen;
 mod frame;
 pub mod isa;
@@ -16,6 +16,4 @@ mod masm;
 mod regalloc;
 mod regset;
 mod stack;
-mod trampoline;
-pub use trampoline::TrampolineKind;
 mod visitor;

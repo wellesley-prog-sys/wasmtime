@@ -1,11 +1,13 @@
 //! Implements a `wasi-nn` [`BackendInner`] using OpenVINO.
 
-use super::{BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
+use super::{
+    read, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner,
+};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::{fs::File, io::Read, path::Path};
 
 #[derive(Default)]
 pub struct OpenvinoBackend(Option<openvino::Core>);
@@ -163,16 +165,10 @@ fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::Precision 
     match tensor_type {
         TensorType::Fp16 => Precision::FP16,
         TensorType::Fp32 => Precision::FP32,
+        TensorType::Fp64 => Precision::FP64,
         TensorType::U8 => Precision::U8,
         TensorType::I32 => Precision::I32,
+        TensorType::I64 => Precision::I64,
         TensorType::Bf16 => todo!("not yet supported in `openvino` bindings"),
     }
-}
-
-/// Read a file into a byte vector.
-fn read(path: &Path) -> anyhow::Result<Vec<u8>> {
-    let mut file = File::open(path)?;
-    let mut buffer = vec![];
-    file.read_to_end(&mut buffer)?;
-    Ok(buffer)
 }

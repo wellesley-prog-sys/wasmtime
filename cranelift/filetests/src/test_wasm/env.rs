@@ -20,6 +20,7 @@ pub struct ModuleEnv {
     pub inner: DummyEnvironment,
     pub config: TestConfig,
     pub heap_access_spectre_mitigation: bool,
+    pub proof_carrying_code: bool,
 }
 
 impl ModuleEnv {
@@ -31,6 +32,7 @@ impl ModuleEnv {
             heap_access_spectre_mitigation: target_isa
                 .flags()
                 .enable_heap_access_spectre_mitigation(),
+            proof_carrying_code: target_isa.flags().enable_pcc(),
         }
     }
 }
@@ -51,6 +53,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
                 self.inner.expected_reachability.clone(),
                 self.config.clone(),
                 self.heap_access_spectre_mitigation,
+                self.proof_carrying_code,
             );
             let func_index = FuncIndex::new(
                 self.inner.get_num_func_imports() + self.inner.info.function_bodies.len(),
@@ -76,12 +79,10 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
     }
 
     fn wasm_features(&self) -> wasmparser::WasmFeatures {
-        wasmparser::WasmFeatures {
-            memory64: true,
-            multi_memory: true,
-            relaxed_simd: true,
-            ..self.inner.wasm_features()
-        }
+        self.inner.wasm_features()
+            | wasmparser::WasmFeatures::MEMORY64
+            | wasmparser::WasmFeatures::MULTI_MEMORY
+            | wasmparser::WasmFeatures::RELAXED_SIMD
     }
 
     // ================================================================
@@ -233,7 +234,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
 }
 
 impl TypeConvert for ModuleEnv {
-    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+    fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
         todo!()
     }
 }
@@ -244,6 +245,7 @@ pub struct FuncEnv<'a> {
     pub name_to_ir_global: BTreeMap<String, ir::GlobalValue>,
     pub next_heap: usize,
     pub heap_access_spectre_mitigation: bool,
+    pub proof_carrying_code: bool,
 }
 
 impl<'a> FuncEnv<'a> {
@@ -252,6 +254,7 @@ impl<'a> FuncEnv<'a> {
         expected_reachability: Option<cranelift_wasm::ExpectedReachability>,
         config: TestConfig,
         heap_access_spectre_mitigation: bool,
+        proof_carrying_code: bool,
     ) -> Self {
         let inner = cranelift_wasm::DummyFuncEnvironment::new(mod_info, expected_reachability);
         Self {
@@ -260,12 +263,13 @@ impl<'a> FuncEnv<'a> {
             name_to_ir_global: Default::default(),
             next_heap: 0,
             heap_access_spectre_mitigation,
+            proof_carrying_code,
         }
     }
 }
 
 impl TypeConvert for FuncEnv<'_> {
-    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+    fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
         todo!()
     }
 }
@@ -277,6 +281,10 @@ impl<'a> TargetEnvironment for FuncEnv<'a> {
 
     fn heap_access_spectre_mitigation(&self) -> bool {
         self.heap_access_spectre_mitigation
+    }
+
+    fn proof_carrying_code(&self) -> bool {
+        self.proof_carrying_code
     }
 }
 
@@ -675,6 +683,30 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         _func: ir::Value,
         _args: &[ir::Value],
     ) -> cranelift_wasm::WasmResult<ir::Inst> {
+        unimplemented!()
+    }
+
+    fn translate_ref_i31(
+        &mut self,
+        _pos: cranelift_codegen::cursor::FuncCursor,
+        _val: ir::Value,
+    ) -> cranelift_wasm::WasmResult<ir::Value> {
+        unimplemented!()
+    }
+
+    fn translate_i31_get_s(
+        &mut self,
+        _pos: cranelift_codegen::cursor::FuncCursor,
+        _i31ref: ir::Value,
+    ) -> cranelift_wasm::WasmResult<ir::Value> {
+        unimplemented!()
+    }
+
+    fn translate_i31_get_u(
+        &mut self,
+        _pos: cranelift_codegen::cursor::FuncCursor,
+        _i31ref: ir::Value,
+    ) -> cranelift_wasm::WasmResult<ir::Value> {
         unimplemented!()
     }
 }

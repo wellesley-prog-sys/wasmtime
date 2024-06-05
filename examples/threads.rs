@@ -3,7 +3,6 @@
 
 // You can execute this example with `cargo run --example threads`
 
-use anyhow::Result;
 use std::sync::Arc;
 use std::thread;
 use std::time;
@@ -15,7 +14,7 @@ const N_REPS: i32 = 3;
 fn main() -> Result<()> {
     println!("Initializing...");
 
-    // Initialize global per-process state. This state will be shared amonst all
+    // Initialize global per-process state. This state will be shared amongst all
     // threads. Notably this includes the compiled module as well as a `Linker`,
     // which contains all our host functions we want to define.
     let engine = Engine::default();

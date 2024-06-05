@@ -15,6 +15,7 @@ pub trait RustGenerator<'a> {
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
     fn is_imported_interface(&self, interface: InterfaceId) -> bool;
+    fn wasmtime_path(&self) -> String;
 
     /// This determines whether we generate owning types or (where appropriate)
     /// borrowing types.
@@ -39,8 +40,8 @@ pub trait RustGenerator<'a> {
             Type::S16 => self.push_str("i16"),
             Type::S32 => self.push_str("i32"),
             Type::S64 => self.push_str("i64"),
-            Type::Float32 => self.push_str("f32"),
-            Type::Float64 => self.push_str("f64"),
+            Type::F32 => self.push_str("f32"),
+            Type::F64 => self.push_str("f64"),
             Type::Char => self.push_str("char"),
             Type::String => match mode {
                 TypeMode::AllBorrowed(lt) => {
@@ -51,7 +52,10 @@ pub trait RustGenerator<'a> {
                     }
                     self.push_str("str");
                 }
-                TypeMode::Owned => self.push_str("String"),
+                TypeMode::Owned => {
+                    let wt = self.wasmtime_path();
+                    self.push_str(&format!("{wt}::component::__internal::String"))
+                }
             },
         }
     }
@@ -212,7 +216,8 @@ pub trait RustGenerator<'a> {
                 self.push_str("]");
             }
             TypeMode::Owned => {
-                self.push_str("Vec<");
+                let wt = self.wasmtime_path();
+                self.push_str(&format!("{wt}::component::__internal::Vec<"));
                 self.print_ty(ty, next_mode);
                 self.push_str(">");
             }
@@ -242,15 +247,16 @@ pub trait RustGenerator<'a> {
             TypeOwner::Interface(i) => self.is_imported_interface(i),
             _ => true,
         };
+        let wt = self.wasmtime_path();
         if is_host_defined {
-            self.push_str("wasmtime::component::Resource<");
+            self.push_str(&format!("{wt}::component::Resource<"));
             self.print_type_name_in_interface(
                 ty.owner,
                 &ty.name.as_ref().unwrap().to_upper_camel_case(),
             );
             self.push_str(">");
         } else {
-            self.push_str("wasmtime::component::ResourceAny");
+            self.push_str(&format!("{wt}::component::ResourceAny"));
         }
     }
 
@@ -284,75 +290,6 @@ pub trait RustGenerator<'a> {
             result.push((self.param_name(ty), TypeMode::AllBorrowed("'a")));
         }
         result
-    }
-
-    /// Writes the camel-cased 'name' of the passed type to `out`, as used to name union variants.
-    fn write_name(&self, ty: &Type, out: &mut String) {
-        match ty {
-            Type::Bool => out.push_str("Bool"),
-            Type::U8 => out.push_str("U8"),
-            Type::U16 => out.push_str("U16"),
-            Type::U32 => out.push_str("U32"),
-            Type::U64 => out.push_str("U64"),
-            Type::S8 => out.push_str("I8"),
-            Type::S16 => out.push_str("I16"),
-            Type::S32 => out.push_str("I32"),
-            Type::S64 => out.push_str("I64"),
-            Type::Float32 => out.push_str("F32"),
-            Type::Float64 => out.push_str("F64"),
-            Type::Char => out.push_str("Char"),
-            Type::String => out.push_str("String"),
-            Type::Id(id) => {
-                let ty = &self.resolve().types[*id];
-                match &ty.name {
-                    Some(name) => out.push_str(&name.to_upper_camel_case()),
-                    None => match &ty.kind {
-                        TypeDefKind::Option(ty) => {
-                            out.push_str("Optional");
-                            self.write_name(ty, out);
-                        }
-                        TypeDefKind::Result(_) => out.push_str("Result"),
-                        TypeDefKind::Tuple(_) => out.push_str("Tuple"),
-                        TypeDefKind::List(ty) => {
-                            self.write_name(ty, out);
-                            out.push_str("List")
-                        }
-                        TypeDefKind::Future(ty) => {
-                            self.write_optional_name(ty.as_ref(), out);
-                            out.push_str("Future");
-                        }
-                        TypeDefKind::Stream(s) => {
-                            self.write_optional_name(s.element.as_ref(), out);
-                            self.write_optional_name(s.end.as_ref(), out);
-                            out.push_str("Stream");
-                        }
-
-                        TypeDefKind::Type(ty) => self.write_name(ty, out),
-                        TypeDefKind::Record(_) => out.push_str("Record"),
-                        TypeDefKind::Flags(_) => out.push_str("Flags"),
-                        TypeDefKind::Variant(_) => out.push_str("Variant"),
-                        TypeDefKind::Enum(_) => out.push_str("Enum"),
-                        TypeDefKind::Handle(Handle::Borrow(id)) => {
-                            out.push_str("Borrow");
-                            self.write_name(&Type::Id(*id), out);
-                        }
-                        TypeDefKind::Handle(Handle::Own(id)) => {
-                            out.push_str("Own");
-                            self.write_name(&Type::Id(*id), out);
-                        }
-                        TypeDefKind::Resource => unreachable!(),
-                        TypeDefKind::Unknown => unreachable!(),
-                    },
-                }
-            }
-        }
-    }
-
-    fn write_optional_name(&self, ty: Option<&Type>, out: &mut String) {
-        match ty {
-            Some(ty) => self.write_name(ty, out),
-            None => out.push_str("()"),
-        }
     }
 
     fn param_name(&self, ty: TypeId) -> String {

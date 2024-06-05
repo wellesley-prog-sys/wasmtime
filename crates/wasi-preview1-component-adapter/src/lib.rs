@@ -1,24 +1,45 @@
-use crate::bindings::wasi::cli::exit;
+// The proxy world has no filesystem which most of this file is concerned with,
+// so disable many warnings to avoid having to contort code too much for the
+// proxy world.
+#![cfg_attr(
+    feature = "proxy",
+    allow(
+        unused_mut,
+        unused_variables,
+        dead_code,
+        unused_imports,
+        unreachable_code
+    )
+)]
+
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
-use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::poll;
 use crate::bindings::wasi::io::streams;
 use crate::bindings::wasi::random::random;
-use crate::bindings::wasi::sockets::network;
 use core::cell::OnceCell;
 use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
 use core::mem::{self, align_of, forget, size_of, ManuallyDrop, MaybeUninit};
+use core::num::NonZeroUsize;
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
 use core::slice;
 use poll::Pollable;
 use wasi::*;
 
-#[cfg(all(feature = "command", feature = "reactor"))]
-compile_error!("only one of the `command` and `reactor` features may be selected at a time");
+#[cfg(not(feature = "proxy"))]
+use crate::bindings::wasi::filesystem::types as filesystem;
+
+#[cfg(any(
+    all(feature = "command", feature = "reactor"),
+    all(feature = "reactor", feature = "proxy"),
+    all(feature = "command", feature = "proxy"),
+))]
+compile_error!(
+    "only one of the `command`, `reactor` or `proxy` features may be selected at a time"
+);
 
 #[macro_use]
 mod macros;
@@ -28,37 +49,66 @@ use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 
 pub mod bindings {
     #[cfg(feature = "command")]
-    wit_bindgen::generate!({
+    wit_bindgen_rust_macro::generate!({
         path: "../wasi/wit",
         world: "wasi:cli/command",
         std_feature,
         raw_strings,
+        runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         // Automatically generated bindings for these functions will allocate
         // Vecs, which in turn pulls in the panic machinery from std, which
         // creates vtables that end up in the wasm elem section, which we
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["run", "get-environment", "poll-list"],
+        skip: ["run", "get-environment", "poll"],
     });
 
     #[cfg(feature = "reactor")]
-    wit_bindgen::generate!({
+    wit_bindgen_rust_macro::generate!({
         path: "../wasi/wit",
-        world: "wasmtime:wasi/preview1-adapter-reactor",
+        world: "wasi:cli/imports",
         std_feature,
         raw_strings,
+        runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         // Automatically generated bindings for these functions will allocate
         // Vecs, which in turn pulls in the panic machinery from std, which
         // creates vtables that end up in the wasm elem section, which we
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["get-environment", "poll-list"],
+        skip: ["get-environment", "poll"],
     });
+
+    #[cfg(feature = "proxy")]
+    wit_bindgen_rust_macro::generate!({
+        path: "../wasi-http/wit",
+        inline: r#"
+            package wasmtime:adapter;
+
+            world adapter {
+                import wasi:clocks/wall-clock@0.2.0;
+                import wasi:clocks/monotonic-clock@0.2.0;
+                import wasi:random/random@0.2.0;
+                import wasi:cli/stdout@0.2.0;
+                import wasi:cli/stderr@0.2.0;
+                import wasi:cli/stdin@0.2.0;
+            }
+        "#,
+        std_feature,
+        raw_strings,
+        runtime_path: "crate::bindings::wit_bindgen_rt_shim",
+        skip: ["poll"],
+    });
+
+    pub mod wit_bindgen_rt_shim {
+        pub use bitflags;
+
+        pub fn maybe_link_cabi_realloc() {}
+    }
 }
 
-#[export_name = "wasi:cli/run#run"]
+#[export_name = "wasi:cli/run@0.2.0#run"]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -67,6 +117,17 @@ pub unsafe extern "C" fn run() -> u32 {
     }
     _start();
     0
+}
+
+#[cfg(feature = "proxy")]
+macro_rules! cfg_filesystem_available {
+    ($($t:tt)*) => {
+        wasi::ERRNO_NOTSUP
+    };
+}
+#[cfg(not(feature = "proxy"))]
+macro_rules! cfg_filesystem_available {
+    ($($t:tt)*) => ($($t)*);
 }
 
 // The unwrap/expect methods in std pull panic when they fail, which pulls
@@ -94,6 +155,34 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
     }
 }
 
+/// Allocate a file descriptor which will generate an `ERRNO_BADF` if passed to
+/// any WASI Preview 1 function implemented by this adapter.
+///
+/// This is intended for use by `wasi-libc` during its incremental transition
+/// from WASI Preview 1 to Preview 2.  It will use this function to reserve
+/// descriptors for its own use, valid only for use with libc functions.
+#[no_mangle]
+pub unsafe extern "C" fn adapter_open_badfd(fd: *mut u32) -> Errno {
+    State::with(|state| {
+        *fd = state.descriptors_mut().open(Descriptor::Bad)?;
+        Ok(())
+    })
+}
+
+/// Close a descriptor previously opened using `adapter_open_badfd`.
+#[no_mangle]
+pub unsafe extern "C" fn adapter_close_badfd(fd: u32) -> Errno {
+    State::with(|state| state.descriptors_mut().close(fd))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn reset_adapter_state() {
+    let state = get_state_ptr();
+    if !state.is_null() {
+        State::init(state)
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
@@ -106,166 +195,230 @@ pub unsafe extern "C" fn cabi_import_realloc(
     }
     let mut ptr = null_mut::<u8>();
     State::with(|state| {
-        ptr = state.import_alloc.alloc(align, new_size);
+        let mut alloc = state.import_alloc.replace(ImportAlloc::None);
+        ptr = alloc.alloc(align, new_size);
+        state.import_alloc.set(alloc);
         Ok(())
     });
     ptr
 }
 
-/// Bump-allocated memory arena. This is a singleton - the
-/// memory will be sized according to `bump_arena_size()`.
-pub struct BumpArena {
-    data: MaybeUninit<[u8; bump_arena_size()]>,
-    position: Cell<usize>,
-}
+/// Different ways that calling imports can allocate memory.
+///
+/// This behavior is used to customize the behavior of `cabi_import_realloc`.
+/// This is configured within `State` whenever an import is called that may
+/// invoke `cabi_import_realloc`.
+///
+/// The general idea behind these various behaviors of import allocation is
+/// that we're limited for space in the adapter here to 1 page of memory but
+/// that may not fit the total sum of arguments, environment variables, and
+/// preopens. WASIp1 APIs all provide user-provided buffers as well for these
+/// allocations so we technically don't need to store them in the adapter
+/// itself. Instead what this does is it tries to copy strings and such directly
+/// into their destination pointers where possible.
+///
+/// The types requiring allocation in the WASIp2 APIs that the WASIp1 APIs call
+/// are relatively simple. They all look like `list<T>` where `T` only has
+/// indirections in the form of `String`. This means that we can apply a
+/// "clever" hack where the alignment of an allocation is used to disambiguate
+/// whether we're allocating a string or allocating the `list<T>` allocation.
+/// This signal with alignment means that we can configure where everything
+/// goes.
+///
+/// For example consider `args_sizes_get` and `args_get`. When `args_sizes_get`
+/// is called the `list<T>` allocation happens first with alignment 4. This
+/// must be valid for the rest of the strings since the canonical ABI will fill
+/// it in, so it's allocated from `State::temporary_data`. Next all other
+/// arguments will be `string` type with alignment 1. These are also allocated
+/// within `State::temporary_data` but they're "allocated on top of one
+/// another" meaning that internal allocator state isn't updated after a string
+/// is allocated. While these strings are discarded their sizes are all summed
+/// up and returned from `args_sizes_get`.
+///
+/// Later though when `args_get` is called it's a similar allocation strategy
+/// except that strings are instead redirected to the allocation provided to
+/// `args_get` itself. This enables strings to be directly allocated into their
+/// destinations.
+///
+/// Overall this means that we're limiting the maximum number of arguments plus
+/// the size of the largest string, but otherwise we're not limiting the total
+/// size of all arguments (or env vars, preopens, etc).
+enum ImportAlloc {
+    /// A single allocation from the provided `BumpAlloc` is supported. After
+    /// the single allocation is performed all future allocations will fail.
+    OneAlloc(BumpAlloc),
 
-impl BumpArena {
-    fn new() -> Self {
-        BumpArena {
-            data: MaybeUninit::uninit(),
-            position: Cell::new(0),
-        }
-    }
-    fn alloc(&self, align: usize, size: usize) -> *mut u8 {
-        let start = self.data.as_ptr() as usize;
-        let next = start + self.position.get();
-        let alloc = align_to(next, align);
-        let offset = alloc - start;
-        if offset + size > bump_arena_size() {
-            unreachable!("out of memory");
-        }
-        self.position.set(offset + size);
-        alloc as *mut u8
-    }
-}
-fn align_to(ptr: usize, align: usize) -> usize {
-    (ptr + (align - 1)) & !(align - 1)
-}
+    /// An allocator intended for `list<T>` where `T` has string types but no
+    /// other indirections. String allocations are discarded but counted for
+    /// size.
+    ///
+    /// This allocator will use `alloc` for all allocations. Any string-related
+    /// allocation, detected via an alignment of 1, is considered "temporary"
+    /// and doesn't affect the internal state of the allocator. The allocation
+    /// is assumed to not be used after the import call returns.
+    ///
+    /// The total sum of all string sizes, however, is accumulated within
+    /// `strings_size`.
+    CountAndDiscardStrings {
+        strings_size: usize,
+        alloc: BumpAlloc,
+    },
 
-// Invariant: buffer not-null and arena is-some are never true at the same
-// time. We did not use an enum to make this invalid behavior unrepresentable
-// because we can't use RefCell to borrow() the variants of the enum - only
-// Cell provides mutability without pulling in panic machinery - so it would
-// make the accessors a lot more awkward to write.
-pub struct ImportAlloc {
-    // When not-null, allocator should use this buffer/len pair at most once
-    // to satisfy allocations.
-    buffer: Cell<*mut u8>,
-    len: Cell<usize>,
-    // When not-empty, allocator should use this arena to satisfy allocations.
-    arena: Cell<Option<&'static BumpArena>>,
+    /// An allocator intended for `list<T>` where `T` has string types but no
+    /// other indirections. String allocations go into `strings` and the
+    /// `list<..>` allocation goes into `pointers`.
+    ///
+    /// This allocator enables placing strings within a caller-supplied buffer
+    /// configured with `strings`. The `pointers` allocation is
+    /// `State::temporary_data`.
+    ///
+    /// This will additionally over-allocate strings with one extra byte to be
+    /// nul-terminated or `=`-terminated in the case of env vars.
+    SeparateStringsAndPointers {
+        strings: BumpAlloc,
+        pointers: BumpAlloc,
+    },
+
+    /// An allocator specifically for getting the nth string allocation used
+    /// for preopens.
+    ///
+    /// This will allocate the `nth` string allocation within the `path`
+    /// allocator. Otherwise all string allocations are discarded but
+    /// temoprarily placed into `alloc`.
+    GetPreopenPath {
+        path: Option<BumpAlloc>,
+        nth: u32,
+        alloc: BumpAlloc,
+    },
+
+    /// No import allocator is configured and if an allocation happens then
+    /// this will abort.
+    None,
 }
 
 impl ImportAlloc {
-    fn new() -> Self {
-        ImportAlloc {
-            buffer: Cell::new(std::ptr::null_mut()),
-            len: Cell::new(0),
-            arena: Cell::new(None),
-        }
-    }
-
-    /// Expect at most one import allocation during execution of the provided closure.
-    /// Use the provided buffer to satisfy that import allocation. The user is responsible
-    /// for making sure allocated imports are not used beyond the lifetime of the buffer.
-    fn with_buffer<T>(&self, buffer: *mut u8, len: usize, f: impl FnOnce() -> T) -> T {
-        if self.arena.get().is_some() {
-            unreachable!("arena mode")
-        }
-        let prev = self.buffer.replace(buffer);
-        if !prev.is_null() {
-            unreachable!("overwrote another buffer")
-        }
-        self.len.set(len);
-        let r = f();
-        self.buffer.set(std::ptr::null_mut());
-        r
-    }
-
-    /// Permit many import allocations during execution of the provided closure.
-    /// Use the provided BumpArena to satisfry those allocations. The user is responsible
-    /// for making sure allocated imports are not used beyond the lifetime of the arena.
-    fn with_arena<T>(&self, arena: &BumpArena, f: impl FnOnce() -> T) -> T {
-        if !self.buffer.get().is_null() {
-            unreachable!("buffer mode")
-        }
-        let prev = self.arena.replace(Some(unsafe {
-            // Safety: Need to erase the lifetime to store in the arena cell.
-            std::mem::transmute::<&'_ BumpArena, &'static BumpArena>(arena)
-        }));
-        if prev.is_some() {
-            unreachable!("overwrote another arena")
-        }
-        let r = f();
-        self.arena.set(None);
-        r
-    }
-
     /// To be used by cabi_import_realloc only!
-    fn alloc(&self, align: usize, size: usize) -> *mut u8 {
-        if let Some(arena) = self.arena.get() {
-            arena.alloc(align, size)
-        } else {
-            let buffer = self.buffer.get();
-            if buffer.is_null() {
-                unreachable!("buffer not provided, or already used")
+    unsafe fn alloc(&mut self, align: usize, size: usize) -> *mut u8 {
+        match self {
+            ImportAlloc::OneAlloc(alloc) => {
+                let ret = alloc.alloc(align, size);
+                *self = ImportAlloc::None;
+                ret
             }
-            let buffer = buffer as usize;
-            let alloc = align_to(buffer, align);
-            if alloc.checked_add(size).trapping_unwrap()
-                > buffer.checked_add(self.len.get()).trapping_unwrap()
-            {
-                unreachable!("out of memory")
+            ImportAlloc::SeparateStringsAndPointers { strings, pointers } => {
+                if align == 1 {
+                    strings.alloc(align, size + 1)
+                } else {
+                    pointers.alloc(align, size)
+                }
             }
-            self.buffer.set(std::ptr::null_mut());
-            alloc as *mut u8
+            ImportAlloc::CountAndDiscardStrings {
+                strings_size,
+                alloc,
+            } => {
+                if align == 1 {
+                    *strings_size += size;
+                    alloc.clone().alloc(align, size)
+                } else {
+                    alloc.alloc(align, size)
+                }
+            }
+            ImportAlloc::GetPreopenPath { path, nth, alloc } => {
+                if align == 1 {
+                    if *nth == 0 {
+                        if let Some(a) = path {
+                            let ret = a.alloc(align, size);
+                            *path = None;
+                            return ret;
+                        }
+                    } else {
+                        *nth -= 1;
+                    }
+                    alloc.clone().alloc(align, size)
+                } else {
+                    alloc.alloc(align, size)
+                }
+            }
+            ImportAlloc::None => unreachable!("no allocator configured"),
         }
     }
 }
 
-/// This allocator is only used for the `run` entrypoint.
+/// Helper type to manage allocations from a `base`/`len` combo.
 ///
-/// The implementation here is a bump allocator into `State::long_lived_arena` which
-/// traps when it runs out of data. This means that the total size of
-/// arguments/env/etc coming into a component is bounded by the current 64k
-/// (ish) limit. That's just an implementation limit though which can be lifted
-/// by dynamically calling the main module's allocator as necessary for more data.
-#[no_mangle]
-pub unsafe extern "C" fn cabi_export_realloc(
-    old_ptr: *mut u8,
-    old_size: usize,
-    align: usize,
-    new_size: usize,
-) -> *mut u8 {
-    if !old_ptr.is_null() || old_size != 0 {
-        unreachable!();
+/// This isn't really used much in an arena-style per se but it's used in
+/// combination with the `ImportAlloc` flavors above.
+#[derive(Clone)]
+struct BumpAlloc {
+    base: *mut u8,
+    len: usize,
+}
+
+impl BumpAlloc {
+    unsafe fn alloc(&mut self, align: usize, size: usize) -> *mut u8 {
+        self.align_to(align);
+        if size > self.len {
+            unreachable!("allocation size is too large")
+        }
+        self.len -= size;
+        let ret = self.base;
+        self.base = ret.add(size);
+        ret
     }
-    let mut ret = null_mut::<u8>();
-    State::with(|state| {
-        ret = state.long_lived_arena.alloc(align, new_size);
-        Ok(())
-    });
-    ret
+
+    unsafe fn align_to(&mut self, align: usize) {
+        if !align.is_power_of_two() {
+            unreachable!("invalid alignment");
+        }
+        let align_offset = self.base.align_offset(align);
+        if align_offset >= self.len {
+            unreachable!("failed to allocate")
+        }
+        self.len -= align_offset;
+        self.base = self.base.add(align_offset);
+    }
+}
+
+#[cfg(not(feature = "proxy"))]
+#[link(wasm_import_module = "wasi:cli/environment@0.2.0")]
+extern "C" {
+    #[link_name = "get-arguments"]
+    fn wasi_cli_get_arguments(rval: *mut WasmStrList);
+    #[link_name = "get-environment"]
+    fn wasi_cli_get_environment(rval: *mut StrTupleList);
 }
 
 /// Read command-line argument data.
 /// The size of the array should match that returned by `args_sizes_get`
 #[no_mangle]
-pub unsafe extern "C" fn args_get(mut argv: *mut *mut u8, mut argv_buf: *mut u8) -> Errno {
+pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errno {
     State::with(|state| {
-        for arg in state.get_args() {
-            // Copy the argument into `argv_buf` which must be sized
-            // appropriately by the caller.
-            ptr::copy_nonoverlapping(arg.ptr, argv_buf, arg.len);
-            *argv_buf.add(arg.len) = 0;
+        #[cfg(not(feature = "proxy"))]
+        {
+            let alloc = ImportAlloc::SeparateStringsAndPointers {
+                strings: BumpAlloc {
+                    base: argv_buf,
+                    len: usize::MAX,
+                },
+                pointers: state.temporary_alloc(),
+            };
+            let (list, _) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = WasmStrList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_arguments(&mut list);
+                list
+            });
 
-            // Copy the argument pointer into the `argv` buf
-            *argv = argv_buf;
-
-            // Update our pointers past what's written to prepare for the
-            // next argument.
-            argv = argv.add(1);
-            argv_buf = argv_buf.add(arg.len + 1);
+            // Fill in `argv` by walking over the returned `list` and then
+            // additionally apply the nul-termination for each argument itself
+            // here.
+            for i in 0..list.len {
+                let s = list.base.add(i).read();
+                *argv.add(i) = s.ptr.cast_mut();
+                *s.ptr.add(s.len).cast_mut() = 0;
+            }
         }
         Ok(())
     })
@@ -275,11 +428,38 @@ pub unsafe extern "C" fn args_get(mut argv: *mut *mut u8, mut argv_buf: *mut u8)
 #[no_mangle]
 pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Size) -> Errno {
     State::with(|state| {
-        let args = state.get_args();
-        *argc = args.len();
-        // Add one to each length for the terminating nul byte added by
-        // the `args_get` function.
-        *argv_buf_size = args.iter().map(|s| s.len + 1).sum();
+        #[cfg(feature = "proxy")]
+        {
+            *argc = 0;
+            *argv_buf_size = 0;
+        }
+        #[cfg(not(feature = "proxy"))]
+        {
+            let alloc = ImportAlloc::CountAndDiscardStrings {
+                strings_size: 0,
+                alloc: state.temporary_alloc(),
+            };
+            let (len, alloc) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = WasmStrList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_arguments(&mut list);
+                list.len
+            });
+            match alloc {
+                ImportAlloc::CountAndDiscardStrings {
+                    strings_size,
+                    alloc: _,
+                } => {
+                    *argc = len;
+                    // add in bytes needed for a 0-byte at the end of each
+                    // argument.
+                    *argv_buf_size = strings_size + len;
+                }
+                _ => unreachable!(),
+            }
+        }
         Ok(())
     })
 }
@@ -287,25 +467,36 @@ pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Siz
 /// Read environment variable data.
 /// The sizes of the buffers should match that returned by `environ_sizes_get`.
 #[no_mangle]
-pub unsafe extern "C" fn environ_get(environ: *mut *mut u8, environ_buf: *mut u8) -> Errno {
+pub unsafe extern "C" fn environ_get(environ: *mut *const u8, environ_buf: *mut u8) -> Errno {
     State::with(|state| {
-        let mut offsets = environ;
-        let mut buffer = environ_buf;
-        for var in state.get_environment() {
-            ptr::write(offsets, buffer);
-            offsets = offsets.add(1);
+        #[cfg(not(feature = "proxy"))]
+        {
+            let alloc = ImportAlloc::SeparateStringsAndPointers {
+                strings: BumpAlloc {
+                    base: environ_buf,
+                    len: usize::MAX,
+                },
+                pointers: state.temporary_alloc(),
+            };
+            let (list, _) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = StrTupleList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_environment(&mut list);
+                list
+            });
 
-            ptr::copy_nonoverlapping(var.key.ptr, buffer, var.key.len);
-            buffer = buffer.add(var.key.len);
-
-            ptr::write(buffer, b'=');
-            buffer = buffer.add(1);
-
-            ptr::copy_nonoverlapping(var.value.ptr, buffer, var.value.len);
-            buffer = buffer.add(var.value.len);
-
-            ptr::write(buffer, 0);
-            buffer = buffer.add(1);
+            // Fill in `environ` by walking over the returned `list`. Strings
+            // are guaranteed to be allocated next to each other with one
+            // extra byte at the end, so also insert the `=` between keys and
+            // the `\0` at the end of the env var.
+            for i in 0..list.len {
+                let s = list.base.add(i).read();
+                *environ.add(i) = s.key.ptr;
+                *s.key.ptr.add(s.key.len).cast_mut() = b'=';
+                *s.value.ptr.add(s.value.len).cast_mut() = 0;
+            }
         }
 
         Ok(())
@@ -318,28 +509,51 @@ pub unsafe extern "C" fn environ_sizes_get(
     environc: *mut Size,
     environ_buf_size: *mut Size,
 ) -> Errno {
-    if matches!(
+    if !matches!(
         get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
-        State::with(|state| {
-            let vars = state.get_environment();
-            *environc = vars.len();
-            *environ_buf_size = {
-                let mut sum = 0;
-                for var in vars {
-                    sum += var.key.len + var.value.len + 2;
-                }
-                sum
-            };
-
-            Ok(())
-        })
-    } else {
         *environc = 0;
         *environ_buf_size = 0;
-        ERRNO_SUCCESS
+        return ERRNO_SUCCESS;
     }
+
+    State::with(|state| {
+        #[cfg(feature = "proxy")]
+        {
+            *environc = 0;
+            *environ_buf_size = 0;
+        }
+        #[cfg(not(feature = "proxy"))]
+        {
+            let alloc = ImportAlloc::CountAndDiscardStrings {
+                strings_size: 0,
+                alloc: state.temporary_alloc(),
+            };
+            let (len, alloc) = state.with_import_alloc(alloc, || unsafe {
+                let mut list = StrTupleList {
+                    base: std::ptr::null(),
+                    len: 0,
+                };
+                wasi_cli_get_environment(&mut list);
+                list.len
+            });
+            match alloc {
+                ImportAlloc::CountAndDiscardStrings {
+                    strings_size,
+                    alloc: _,
+                } => {
+                    *environc = len;
+                    // Account for `=` between keys and a 0-byte at the end of
+                    // each key.
+                    *environ_buf_size = strings_size + 2 * len;
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        Ok(())
+    })
 }
 
 /// Return the resolution of a clock.
@@ -405,34 +619,38 @@ pub unsafe extern "C" fn fd_advise(
     len: Filesize,
     advice: Advice,
 ) -> Errno {
-    let advice = match advice {
-        ADVICE_NORMAL => filesystem::Advice::Normal,
-        ADVICE_SEQUENTIAL => filesystem::Advice::Sequential,
-        ADVICE_RANDOM => filesystem::Advice::Random,
-        ADVICE_WILLNEED => filesystem::Advice::WillNeed,
-        ADVICE_DONTNEED => filesystem::Advice::DontNeed,
-        ADVICE_NOREUSE => filesystem::Advice::NoReuse,
-        _ => return ERRNO_INVAL,
-    };
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_seekable_file(fd)?;
-        file.fd.advise(offset, len, advice)?;
-        Ok(())
-    })
+    cfg_filesystem_available! {
+        let advice = match advice {
+            ADVICE_NORMAL => filesystem::Advice::Normal,
+            ADVICE_SEQUENTIAL => filesystem::Advice::Sequential,
+            ADVICE_RANDOM => filesystem::Advice::Random,
+            ADVICE_WILLNEED => filesystem::Advice::WillNeed,
+            ADVICE_DONTNEED => filesystem::Advice::DontNeed,
+            ADVICE_NOREUSE => filesystem::Advice::NoReuse,
+            _ => return ERRNO_INVAL,
+        };
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_seekable_file(fd)?;
+            file.fd.advise(offset, len, advice)?;
+            Ok(())
+        })
+    }
 }
 
 /// Force the allocation of space in a file.
 /// Note: This is similar to `posix_fallocate` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        // For not-files, fail with BADF
-        ds.get_file(fd)?;
-        // For all files, fail with NOTSUP, because this call does not exist in preview 2.
-        Err(wasi::ERRNO_NOTSUP)
-    })
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            // For not-files, fail with BADF
+            ds.get_file(fd)?;
+            // For all files, fail with NOTSUP, because this call does not exist in preview 2.
+            Err(wasi::ERRNO_NOTSUP)
+        })
+    }
 }
 
 /// Close a file descriptor.
@@ -440,9 +658,14 @@ pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) 
 #[no_mangle]
 pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
     State::with(|state| {
+        if let Descriptor::Bad = state.descriptors().get(fd)? {
+            return Err(wasi::ERRNO_BADF);
+        }
+
         // If there's a dirent cache entry for this file descriptor then drop
         // it since the descriptor is being closed and future calls to
         // `fd_readdir` should return an error.
+        #[cfg(not(feature = "proxy"))]
         if fd == state.dirent_cache.for_fd.get() {
             drop(state.dirent_cache.stream.replace(None));
         }
@@ -456,138 +679,137 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 /// Note: This is similar to `fdatasync` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
-        file.fd.sync_data()?;
-        Ok(())
-    })
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_file(fd)?;
+            file.fd.sync_data()?;
+            Ok(())
+        })
+    }
 }
 
 /// Get the attributes of a file descriptor.
 /// Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        match ds.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::File(file),
-                ..
-            }) => {
-                let flags = file.fd.get_flags()?;
-                let type_ = file.fd.get_type()?;
-                match type_ {
-                    filesystem::DescriptorType::Directory => {
-                        // Hard-coded set of rights expected by many userlands:
-                        let fs_rights_base = wasi::RIGHTS_PATH_CREATE_DIRECTORY
-                            | wasi::RIGHTS_PATH_CREATE_FILE
-                            | wasi::RIGHTS_PATH_LINK_SOURCE
-                            | wasi::RIGHTS_PATH_LINK_TARGET
-                            | wasi::RIGHTS_PATH_OPEN
-                            | wasi::RIGHTS_FD_READDIR
-                            | wasi::RIGHTS_PATH_READLINK
-                            | wasi::RIGHTS_PATH_RENAME_SOURCE
-                            | wasi::RIGHTS_PATH_RENAME_TARGET
-                            | wasi::RIGHTS_PATH_SYMLINK
-                            | wasi::RIGHTS_PATH_REMOVE_DIRECTORY
-                            | wasi::RIGHTS_PATH_UNLINK_FILE
-                            | wasi::RIGHTS_PATH_FILESTAT_GET
-                            | wasi::RIGHTS_PATH_FILESTAT_SET_TIMES
-                            | wasi::RIGHTS_FD_FILESTAT_GET
-                            | wasi::RIGHTS_FD_FILESTAT_SET_TIMES;
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            match ds.get(fd)? {
+                Descriptor::Streams(Streams {
+                    type_: StreamType::File(file),
+                    ..
+                }) => {
+                    let flags = file.fd.get_flags()?;
+                    let type_ = file.fd.get_type()?;
+                    match type_ {
+                        filesystem::DescriptorType::Directory => {
+                            // Hard-coded set of rights expected by many userlands:
+                            let fs_rights_base = wasi::RIGHTS_PATH_CREATE_DIRECTORY
+                                | wasi::RIGHTS_PATH_CREATE_FILE
+                                | wasi::RIGHTS_PATH_LINK_SOURCE
+                                | wasi::RIGHTS_PATH_LINK_TARGET
+                                | wasi::RIGHTS_PATH_OPEN
+                                | wasi::RIGHTS_FD_READDIR
+                                | wasi::RIGHTS_PATH_READLINK
+                                | wasi::RIGHTS_PATH_RENAME_SOURCE
+                                | wasi::RIGHTS_PATH_RENAME_TARGET
+                                | wasi::RIGHTS_PATH_SYMLINK
+                                | wasi::RIGHTS_PATH_REMOVE_DIRECTORY
+                                | wasi::RIGHTS_PATH_UNLINK_FILE
+                                | wasi::RIGHTS_PATH_FILESTAT_GET
+                                | wasi::RIGHTS_PATH_FILESTAT_SET_TIMES
+                                | wasi::RIGHTS_FD_FILESTAT_GET
+                                | wasi::RIGHTS_FD_FILESTAT_SET_TIMES;
 
-                        let fs_rights_inheriting = fs_rights_base
-                            | wasi::RIGHTS_FD_DATASYNC
-                            | wasi::RIGHTS_FD_READ
-                            | wasi::RIGHTS_FD_SEEK
-                            | wasi::RIGHTS_FD_FDSTAT_SET_FLAGS
-                            | wasi::RIGHTS_FD_SYNC
-                            | wasi::RIGHTS_FD_TELL
-                            | wasi::RIGHTS_FD_WRITE
-                            | wasi::RIGHTS_FD_ADVISE
-                            | wasi::RIGHTS_FD_ALLOCATE
-                            | wasi::RIGHTS_FD_FILESTAT_GET
-                            | wasi::RIGHTS_FD_FILESTAT_SET_SIZE
-                            | wasi::RIGHTS_FD_FILESTAT_SET_TIMES
-                            | wasi::RIGHTS_POLL_FD_READWRITE;
+                            let fs_rights_inheriting = fs_rights_base
+                                | wasi::RIGHTS_FD_DATASYNC
+                                | wasi::RIGHTS_FD_READ
+                                | wasi::RIGHTS_FD_SEEK
+                                | wasi::RIGHTS_FD_FDSTAT_SET_FLAGS
+                                | wasi::RIGHTS_FD_SYNC
+                                | wasi::RIGHTS_FD_TELL
+                                | wasi::RIGHTS_FD_WRITE
+                                | wasi::RIGHTS_FD_ADVISE
+                                | wasi::RIGHTS_FD_ALLOCATE
+                                | wasi::RIGHTS_FD_FILESTAT_GET
+                                | wasi::RIGHTS_FD_FILESTAT_SET_SIZE
+                                | wasi::RIGHTS_FD_FILESTAT_SET_TIMES
+                                | wasi::RIGHTS_POLL_FD_READWRITE;
 
-                        stat.write(Fdstat {
-                            fs_filetype: wasi::FILETYPE_DIRECTORY,
-                            fs_flags: 0,
-                            fs_rights_base,
-                            fs_rights_inheriting,
-                        });
-                        Ok(())
+                            stat.write(Fdstat {
+                                fs_filetype: wasi::FILETYPE_DIRECTORY,
+                                fs_flags: 0,
+                                fs_rights_base,
+                                fs_rights_inheriting,
+                            });
+                            Ok(())
+                        }
+                        _ => {
+                            let fs_filetype = type_.into();
+
+                            let mut fs_flags = 0;
+                            let mut fs_rights_base = !0;
+                            if !flags.contains(filesystem::DescriptorFlags::READ) {
+                                fs_rights_base &= !RIGHTS_FD_READ;
+                            }
+                            if !flags.contains(filesystem::DescriptorFlags::WRITE) {
+                                fs_rights_base &= !RIGHTS_FD_WRITE;
+                            }
+                            if flags.contains(filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
+                                fs_flags |= FDFLAGS_DSYNC;
+                            }
+                            if flags.contains(filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
+                                fs_flags |= FDFLAGS_RSYNC;
+                            }
+                            if flags.contains(filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+                                fs_flags |= FDFLAGS_SYNC;
+                            }
+                            if file.append {
+                                fs_flags |= FDFLAGS_APPEND;
+                            }
+                            if matches!(file.blocking_mode, BlockingMode::NonBlocking) {
+                                fs_flags |= FDFLAGS_NONBLOCK;
+                            }
+                            let fs_rights_inheriting = fs_rights_base;
+
+                            stat.write(Fdstat {
+                                fs_filetype,
+                                fs_flags,
+                                fs_rights_base,
+                                fs_rights_inheriting,
+                            });
+                            Ok(())
+                        }
                     }
-                    _ => {
-                        let fs_filetype = type_.into();
-
-                        let mut fs_flags = 0;
-                        let mut fs_rights_base = !0;
-                        if !flags.contains(filesystem::DescriptorFlags::READ) {
-                            fs_rights_base &= !RIGHTS_FD_READ;
-                        }
-                        if !flags.contains(filesystem::DescriptorFlags::WRITE) {
-                            fs_rights_base &= !RIGHTS_FD_WRITE;
-                        }
-                        if flags.contains(filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
-                            fs_flags |= FDFLAGS_DSYNC;
-                        }
-                        if flags.contains(filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
-                            fs_flags |= FDFLAGS_RSYNC;
-                        }
-                        if flags.contains(filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
-                            fs_flags |= FDFLAGS_SYNC;
-                        }
-                        if file.append {
-                            fs_flags |= FDFLAGS_APPEND;
-                        }
-                        if matches!(file.blocking_mode, BlockingMode::NonBlocking) {
-                            fs_flags |= FDFLAGS_NONBLOCK;
-                        }
-                        let fs_rights_inheriting = fs_rights_base;
-
-                        stat.write(Fdstat {
-                            fs_filetype,
-                            fs_flags,
-                            fs_rights_base,
-                            fs_rights_inheriting,
-                        });
-                        Ok(())
+                }
+                Descriptor::Streams(Streams {
+                    input,
+                    output,
+                    type_: StreamType::Stdio(stdio),
+                }) => {
+                    let fs_flags = 0;
+                    let mut fs_rights_base = 0;
+                    if input.get().is_some() {
+                        fs_rights_base |= RIGHTS_FD_READ;
                     }
+                    if output.get().is_some() {
+                        fs_rights_base |= RIGHTS_FD_WRITE;
+                    }
+                    let fs_rights_inheriting = fs_rights_base;
+                    stat.write(Fdstat {
+                        fs_filetype: stdio.filetype(),
+                        fs_flags,
+                        fs_rights_base,
+                        fs_rights_inheriting,
+                    });
+                    Ok(())
                 }
+                Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
             }
-            Descriptor::Streams(Streams {
-                input,
-                output,
-                type_: StreamType::Stdio(isatty),
-            }) => {
-                let fs_flags = 0;
-                let mut fs_rights_base = 0;
-                if input.get().is_some() {
-                    fs_rights_base |= RIGHTS_FD_READ;
-                }
-                if output.get().is_some() {
-                    fs_rights_base |= RIGHTS_FD_WRITE;
-                }
-                let fs_rights_inheriting = fs_rights_base;
-                stat.write(Fdstat {
-                    fs_filetype: isatty.filetype(),
-                    fs_flags,
-                    fs_rights_base,
-                    fs_rights_inheriting,
-                });
-                Ok(())
-            }
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
-            Descriptor::Streams(Streams {
-                input: _,
-                output: _,
-                type_: StreamType::Socket(_),
-            }) => unreachable!(),
-        }
-    })
+        })
+    }
 }
 
 /// Adjust the flags associated with a file descriptor.
@@ -599,23 +821,25 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
         return wasi::ERRNO_INVAL;
     }
 
-    State::with(|state| {
-        let mut ds = state.descriptors_mut();
-        let file = match ds.get_mut(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::File(file),
-                ..
-            }) if !file.is_dir() => file,
-            _ => Err(wasi::ERRNO_BADF)?,
-        };
-        file.append = flags & FDFLAGS_APPEND == FDFLAGS_APPEND;
-        file.blocking_mode = if flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK {
-            BlockingMode::NonBlocking
-        } else {
-            BlockingMode::Blocking
-        };
-        Ok(())
-    })
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let mut ds = state.descriptors_mut();
+            let file = match ds.get_mut(fd)? {
+                Descriptor::Streams(Streams {
+                    type_: StreamType::File(file),
+                    ..
+                }) if !file.is_dir() => file,
+                _ => Err(wasi::ERRNO_BADF)?,
+            };
+            file.append = flags & FDFLAGS_APPEND == FDFLAGS_APPEND;
+            file.blocking_mode = if flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK {
+                BlockingMode::NonBlocking
+            } else {
+                BlockingMode::Blocking
+            };
+            Ok(())
+        })
+    }
 }
 
 /// Does not do anything if `fd` corresponds to a valid descriptor and returns [`wasi::ERRNO_BADF`] otherwise.
@@ -629,7 +853,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
         let ds = state.descriptors();
         match ds.get(fd)? {
             Descriptor::Streams(..) => Ok(()),
-            Descriptor::Closed(..) => Err(wasi::ERRNO_BADF),
+            Descriptor::Closed(..) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     })
 }
@@ -637,62 +861,67 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 /// Return the attributes of an open file.
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        match ds.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::File(file),
-                ..
-            }) => {
-                let stat = file.fd.stat()?;
-                let metadata_hash = file.fd.metadata_hash()?;
-                let filetype = stat.type_.into();
-                *buf = Filestat {
-                    dev: 1,
-                    ino: metadata_hash.lower,
-                    filetype,
-                    nlink: stat.link_count,
-                    size: stat.size,
-                    atim: datetime_to_timestamp(stat.data_access_timestamp),
-                    mtim: datetime_to_timestamp(stat.data_modification_timestamp),
-                    ctim: datetime_to_timestamp(stat.status_change_timestamp),
-                };
-                Ok(())
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            match ds.get(fd)? {
+                Descriptor::Streams(Streams {
+                    type_: StreamType::File(file),
+                    ..
+                }) => {
+                    let stat = file.fd.stat()?;
+                    let metadata_hash = file.fd.metadata_hash()?;
+                    let filetype = stat.type_.into();
+                    *buf = Filestat {
+                        dev: 1,
+                        ino: metadata_hash.lower,
+                        filetype,
+                        nlink: stat.link_count,
+                        size: stat.size,
+                        atim: datetime_to_timestamp(stat.data_access_timestamp),
+                        mtim: datetime_to_timestamp(stat.data_modification_timestamp),
+                        ctim: datetime_to_timestamp(stat.status_change_timestamp),
+                    };
+                    Ok(())
+                }
+                // Stdio is all zero fields, except for filetype character device
+                Descriptor::Streams(Streams {
+                    type_: StreamType::Stdio(stdio),
+                    ..
+                }) => {
+                    *buf = Filestat {
+                        dev: 0,
+                        ino: 0,
+                        filetype: stdio.filetype(),
+                        nlink: 0,
+                        size: 0,
+                        atim: 0,
+                        mtim: 0,
+                        ctim: 0,
+                    };
+                    Ok(())
+                }
+                _ => Err(wasi::ERRNO_BADF),
             }
-            // Stdio is all zero fields, except for filetype character device
-            Descriptor::Streams(Streams {
-                type_: StreamType::Stdio(isatty),
-                ..
-            }) => {
-                *buf = Filestat {
-                    dev: 0,
-                    ino: 0,
-                    filetype: isatty.filetype(),
-                    nlink: 0,
-                    size: 0,
-                    atim: 0,
-                    mtim: 0,
-                    ctim: 0,
-                };
-                Ok(())
-            }
-            _ => Err(wasi::ERRNO_BADF),
-        }
-    })
+        })
+    }
 }
 
 /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
 /// Note: This is similar to `ftruncate` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
-        file.fd.set_size(size)?;
-        Ok(())
-    })
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_file(fd)?;
+            file.fd.set_size(size)?;
+            Ok(())
+        })
+    }
 }
 
+#[cfg(not(feature = "proxy"))]
 fn systimespec(set: bool, ts: Timestamp, now: bool) -> Result<filesystem::NewTimestamp, Errno> {
     if set && now {
         Err(wasi::ERRNO_INVAL)
@@ -717,22 +946,24 @@ pub unsafe extern "C" fn fd_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    State::with(|state| {
-        let atim = systimespec(
-            fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM,
-            atim,
-            fst_flags & FSTFLAGS_ATIM_NOW == FSTFLAGS_ATIM_NOW,
-        )?;
-        let mtim = systimespec(
-            fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM,
-            mtim,
-            fst_flags & FSTFLAGS_MTIM_NOW == FSTFLAGS_MTIM_NOW,
-        )?;
-        let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
-        file.fd.set_times(atim, mtim)?;
-        Ok(())
-    })
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let atim = systimespec(
+                fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM,
+                atim,
+                fst_flags & FSTFLAGS_ATIM_NOW == FSTFLAGS_ATIM_NOW,
+            )?;
+            let mtim = systimespec(
+                fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM,
+                mtim,
+                fst_flags & FSTFLAGS_MTIM_NOW == FSTFLAGS_MTIM_NOW,
+            )?;
+            let ds = state.descriptors();
+            let file = ds.get_file(fd)?;
+            file.fd.set_times(atim, mtim)?;
+            Ok(())
+        })
+    }
 }
 
 /// Read from a file descriptor, without using and updating the file descriptor's offset.
@@ -745,84 +976,109 @@ pub unsafe extern "C" fn fd_pread(
     offset: Filesize,
     nread: *mut Size,
 ) -> Errno {
-    // Advance to the first non-empty buffer.
-    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
-        iovs_ptr = iovs_ptr.add(1);
-        iovs_len -= 1;
-    }
-    if iovs_len == 0 {
-        *nread = 0;
-        return ERRNO_SUCCESS;
-    }
-
-    State::with(|state| {
-        let ptr = (*iovs_ptr).buf;
-        let len = (*iovs_ptr).buf_len;
-
-        let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
-        let (data, end) = state
-            .import_alloc
-            .with_buffer(ptr, len, || file.fd.read(len as u64, offset))?;
-        assert_eq!(data.as_ptr(), ptr);
-        assert!(data.len() <= len);
-
-        let len = data.len();
-        forget(data);
-        if !end && len == 0 {
-            Err(ERRNO_INTR)
-        } else {
-            *nread = len;
-            Ok(())
+    cfg_filesystem_available! {
+        // Advance to the first non-empty buffer.
+        while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+            iovs_ptr = iovs_ptr.add(1);
+            iovs_len -= 1;
         }
-    })
+        if iovs_len == 0 {
+            *nread = 0;
+            return ERRNO_SUCCESS;
+        }
+
+        State::with(|state| {
+            let ptr = (*iovs_ptr).buf;
+            let len = (*iovs_ptr).buf_len;
+
+            let ds = state.descriptors();
+            let file = ds.get_file(fd)?;
+            let (data, end) = state
+                .with_one_import_alloc(ptr, len, || file.fd.read(len as u64, offset))?;
+            assert_eq!(data.as_ptr(), ptr);
+            assert!(data.len() <= len);
+
+            let len = data.len();
+            forget(data);
+            if !end && len == 0 {
+                Err(ERRNO_INTR)
+            } else {
+                *nread = len;
+                Ok(())
+            }
+        })
+    }
 }
 
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
-    if matches!(
+    if !matches!(
         get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
+        return ERRNO_BADF;
+    }
+
+    // For the proxy adapter don't return `ERRNO_NOTSUP` through below, instead
+    // always return `ERRNO_BADF` which is the indicator that prestats aren't
+    // available.
+    if cfg!(feature = "proxy") {
+        return ERRNO_BADF;
+    }
+
+    cfg_filesystem_available! {
         State::with(|state| {
             let ds = state.descriptors();
-            if let Some(preopen) = ds.get_preopen(fd) {
-                buf.write(Prestat {
-                    tag: 0,
-                    u: PrestatU {
-                        dir: PrestatDir {
-                            pr_name_len: preopen.path.len,
+            match ds.get(fd)? {
+                Descriptor::Streams(Streams {
+                    type_: StreamType::File(File {
+                        preopen_name_len: Some(len),
+                        ..
+                    }),
+                    ..
+                }) => {
+                    buf.write(Prestat {
+                        tag: 0,
+                        u: PrestatU {
+                            dir: PrestatDir {
+                                pr_name_len: len.get(),
+                            },
                         },
-                    },
-                });
+                    });
 
-                Ok(())
-            } else {
-                Err(ERRNO_BADF)
+                    Ok(())
+                }
+                _ => Err(ERRNO_BADF),
             }
         })
-    } else {
-        ERRNO_BADF
     }
 }
 
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_max_len: Size) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        if let Some(preopen) = ds.get_preopen(fd) {
-            if preopen.path.len > path_max_len as usize {
-                Err(ERRNO_NAMETOOLONG)
-            } else {
-                ptr::copy_nonoverlapping(preopen.path.ptr, path, preopen.path.len);
-                Ok(())
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            let preopen_len = match ds.get(fd)? {
+                Descriptor::Streams(Streams {
+                    type_: StreamType::File(File {
+                        preopen_name_len: Some(len),
+                        ..
+                    }),
+                    ..
+                }) => len.get(),
+                _ => return Err(ERRNO_BADF),
+            };
+            if preopen_len > path_max_len {
+                return Err(ERRNO_NAMETOOLONG)
             }
-        } else {
-            Err(ERRNO_NOTDIR)
-        }
-    })
+
+            ds.get_preopen_path(state, fd, path, path_max_len);
+            Ok(())
+        })
+    }
 }
 
 /// Write to a file descriptor, without using and updating the file descriptor's offset.
@@ -835,26 +1091,28 @@ pub unsafe extern "C" fn fd_pwrite(
     offset: Filesize,
     nwritten: *mut Size,
 ) -> Errno {
-    // Advance to the first non-empty buffer.
-    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
-        iovs_ptr = iovs_ptr.add(1);
-        iovs_len -= 1;
-    }
-    if iovs_len == 0 {
-        *nwritten = 0;
-        return ERRNO_SUCCESS;
-    }
+    cfg_filesystem_available! {
+        // Advance to the first non-empty buffer.
+        while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+            iovs_ptr = iovs_ptr.add(1);
+            iovs_len -= 1;
+        }
+        if iovs_len == 0 {
+            *nwritten = 0;
+            return ERRNO_SUCCESS;
+        }
 
-    let ptr = (*iovs_ptr).buf;
-    let len = (*iovs_ptr).buf_len;
+        let ptr = (*iovs_ptr).buf;
+        let len = (*iovs_ptr).buf_len;
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_seekable_file(fd)?;
-        let bytes = file.fd.write(slice::from_raw_parts(ptr, len), offset)?;
-        *nwritten = bytes as usize;
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_seekable_file(fd)?;
+            let bytes = file.fd.write(slice::from_raw_parts(ptr, len), offset)?;
+            *nwritten = bytes as usize;
+            Ok(())
+        })
+    }
 }
 
 /// Read from a file descriptor.
@@ -883,30 +1141,35 @@ pub unsafe extern "C" fn fd_read(
         let ds = state.descriptors();
         match ds.get(fd)? {
             Descriptor::Streams(streams) => {
+                #[cfg(not(feature = "proxy"))]
                 let blocking_mode = if let StreamType::File(file) = &streams.type_ {
                     file.blocking_mode
                 } else {
                     BlockingMode::Blocking
                 };
+                #[cfg(feature = "proxy")]
+                let blocking_mode = BlockingMode::Blocking;
 
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
                 let data = match state
-                    .import_alloc
-                    .with_buffer(ptr, len, || blocking_mode.read(wasi_stream, read_len))
+                    .with_one_import_alloc(ptr, len, || blocking_mode.read(wasi_stream, read_len))
                 {
                     Ok(data) => data,
                     Err(streams::StreamError::Closed) => {
                         *nread = 0;
                         return Ok(());
                     }
-                    Err(_) => Err(ERRNO_IO)?,
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        Err(stream_error_to_errno(e))?
+                    }
                 };
 
                 assert_eq!(data.as_ptr(), ptr);
                 assert!(data.len() <= len);
 
                 // If this is a file, keep the current-position pointer up to date.
+                #[cfg(not(feature = "proxy"))]
                 if let StreamType::File(file) = &streams.type_ {
                     file.position
                         .set(file.position.get() + data.len() as filesystem::Filesize);
@@ -920,9 +1183,19 @@ pub unsafe extern "C" fn fd_read(
                 forget(data);
                 Ok(())
             }
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
+            Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
         }
     })
+}
+
+fn stream_error_to_errno(err: streams::Error) -> Errno {
+    #[cfg(feature = "proxy")]
+    return ERRNO_IO;
+    #[cfg(not(feature = "proxy"))]
+    match filesystem::filesystem_error_code(&err) {
+        Some(code) => code.into(),
+        None => ERRNO_IO,
+    }
 }
 
 /// Read directory entries from a directory.
@@ -935,6 +1208,19 @@ pub unsafe extern "C" fn fd_read(
 /// read buffer size in case it's too small to fit a single large directory
 /// entry, or skip the oversized directory entry.
 #[no_mangle]
+#[cfg(feature = "proxy")]
+pub unsafe extern "C" fn fd_readdir(
+    fd: Fd,
+    buf: *mut u8,
+    buf_len: Size,
+    cookie: Dircookie,
+    bufused: *mut Size,
+) -> Errno {
+    wasi::ERRNO_NOTSUP
+}
+
+#[no_mangle]
+#[cfg(not(feature = "proxy"))]
 pub unsafe extern "C" fn fd_readdir(
     fd: Fd,
     buf: *mut u8,
@@ -1126,11 +1412,9 @@ pub unsafe extern "C" fn fd_readdir(
                     Ok((dirent, buffer))
                 });
             }
-            let entry = self.state.import_alloc.with_buffer(
-                self.state.path_buf.get().cast(),
-                PATH_MAX,
-                || self.stream.0.read_directory_entry(),
-            );
+            let entry = self
+                .state
+                .with_one_temporary_alloc(|| self.stream.0.read_directory_entry());
             let entry = match entry {
                 Ok(Some(entry)) => entry,
                 Ok(None) => return None,
@@ -1153,7 +1437,7 @@ pub unsafe extern "C" fn fd_readdir(
             // Extend the lifetime of `name` to the `self.state` lifetime for
             // this iterator since the data for the name lives within state.
             let name = unsafe {
-                assert_eq!(name.as_ptr(), self.state.path_buf.get().cast());
+                assert_eq!(name.as_ptr(), self.state.temporary_data.get().cast());
                 slice::from_raw_parts(name.as_ptr().cast(), name.len())
             };
             Some(Ok((dirent, name)))
@@ -1183,62 +1467,68 @@ pub unsafe extern "C" fn fd_seek(
     whence: Whence,
     newoffset: *mut Filesize,
 ) -> Errno {
-    State::with(|state| {
-        let mut ds = state.descriptors_mut();
-        let stream = ds.get_seekable_stream_mut(fd)?;
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let mut ds = state.descriptors_mut();
+            let stream = ds.get_seekable_stream_mut(fd)?;
 
-        // Seeking only works on files.
-        if let StreamType::File(file) = &mut stream.type_ {
-            if let filesystem::DescriptorType::Directory = file.descriptor_type {
-                // This isn't really the "right" errno, but it is consistient with wasmtime's
-                // preview 1 tests.
-                return Err(ERRNO_BADF);
+            // Seeking only works on files.
+            if let StreamType::File(file) = &mut stream.type_ {
+                if let filesystem::DescriptorType::Directory = file.descriptor_type {
+                    // This isn't really the "right" errno, but it is consistient with wasmtime's
+                    // preview 1 tests.
+                    return Err(ERRNO_BADF);
+                }
+                let from = match whence {
+                    WHENCE_SET if offset >= 0 => offset,
+                    WHENCE_CUR => match (file.position.get() as i64).checked_add(offset) {
+                        Some(pos) if pos >= 0 => pos,
+                        _ => return Err(ERRNO_INVAL),
+                    },
+                    WHENCE_END => match (file.fd.stat()?.size as i64).checked_add(offset) {
+                        Some(pos) if pos >= 0 => pos,
+                        _ => return Err(ERRNO_INVAL),
+                    },
+                    _ => return Err(ERRNO_INVAL),
+                };
+                drop(stream.input.take());
+                drop(stream.output.take());
+                file.position.set(from as filesystem::Filesize);
+                *newoffset = from as filesystem::Filesize;
+                Ok(())
+            } else {
+                Err(ERRNO_SPIPE)
             }
-            let from = match whence {
-                WHENCE_SET if offset >= 0 => offset,
-                WHENCE_CUR => match (file.position.get() as i64).checked_add(offset) {
-                    Some(pos) if pos >= 0 => pos,
-                    _ => return Err(ERRNO_INVAL),
-                },
-                WHENCE_END => match (file.fd.stat()?.size as i64).checked_add(offset) {
-                    Some(pos) if pos >= 0 => pos,
-                    _ => return Err(ERRNO_INVAL),
-                },
-                _ => return Err(ERRNO_INVAL),
-            };
-            drop(stream.input.take());
-            drop(stream.output.take());
-            file.position.set(from as filesystem::Filesize);
-            *newoffset = from as filesystem::Filesize;
-            Ok(())
-        } else {
-            Err(ERRNO_SPIPE)
-        }
-    })
+        })
+    }
 }
 
 /// Synchronize the data and metadata of a file to disk.
 /// Note: This is similar to `fsync` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
-        file.fd.sync()?;
-        Ok(())
-    })
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_file(fd)?;
+            file.fd.sync()?;
+            Ok(())
+        })
+    }
 }
 
 /// Return the current offset of a file descriptor.
 /// Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_seekable_file(fd)?;
-        *offset = file.position.get() as Filesize;
-        Ok(())
-    })
+    cfg_filesystem_available! {
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_seekable_file(fd)?;
+            *offset = file.position.get();
+            Ok(())
+        })
+    }
 }
 
 /// Write to a file descriptor.
@@ -1250,58 +1540,68 @@ pub unsafe extern "C" fn fd_write(
     mut iovs_len: usize,
     nwritten: *mut Size,
 ) -> Errno {
-    if matches!(
+    if !matches!(
         get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
-        // Advance to the first non-empty buffer.
-        while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
-            iovs_ptr = iovs_ptr.add(1);
-            iovs_len -= 1;
-        }
-        if iovs_len == 0 {
-            *nwritten = 0;
-            return ERRNO_SUCCESS;
-        }
-
-        let ptr = (*iovs_ptr).buf;
-        let len = (*iovs_ptr).buf_len;
-        let bytes = slice::from_raw_parts(ptr, len);
-
-        State::with(|state| {
-            let ds = state.descriptors();
-            match ds.get(fd)? {
-                Descriptor::Streams(streams) => {
-                    let wasi_stream = streams.get_write_stream()?;
-
-                    let nbytes = if let StreamType::File(file) = &streams.type_ {
-                        file.blocking_mode.write(wasi_stream, bytes)?
-                    } else {
-                        // Use blocking writes on non-file streams (stdout, stderr, as sockets
-                        // aren't currently used).
-                        BlockingMode::Blocking.write(wasi_stream, bytes)?
-                    };
-
-                    // If this is a file, keep the current-position pointer up to date.
-                    if let StreamType::File(file) = &streams.type_ {
-                        // But don't update if we're in append mode. Strictly speaking,
-                        // we should set the position to the new end of the file, but
-                        // we don't have an API to do that atomically.
-                        if !file.append {
-                            file.position.set(file.position.get() + nbytes as u64);
-                        }
-                    }
-
-                    *nwritten = nbytes;
-                    Ok(())
-                }
-                Descriptor::Closed(_) => Err(ERRNO_BADF),
-            }
-        })
-    } else {
         *nwritten = 0;
-        ERRNO_IO
+        return ERRNO_IO;
     }
+
+    // Advance to the first non-empty buffer.
+    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+        iovs_ptr = iovs_ptr.add(1);
+        iovs_len -= 1;
+    }
+    if iovs_len == 0 {
+        *nwritten = 0;
+        return ERRNO_SUCCESS;
+    }
+
+    let ptr = (*iovs_ptr).buf;
+    let len = (*iovs_ptr).buf_len;
+    let bytes = slice::from_raw_parts(ptr, len);
+
+    State::with(|state| {
+        let ds = state.descriptors();
+        match ds.get(fd)? {
+            Descriptor::Streams(streams) => {
+                let wasi_stream = streams.get_write_stream()?;
+
+                #[cfg(not(feature = "proxy"))]
+                let nbytes = if let StreamType::File(file) = &streams.type_ {
+                    file.blocking_mode.write(wasi_stream, bytes)?
+                } else {
+                    // Use blocking writes on non-file streams (stdout, stderr, as sockets
+                    // aren't currently used).
+                    BlockingMode::Blocking.write(wasi_stream, bytes)?
+                };
+                #[cfg(feature = "proxy")]
+                let nbytes = BlockingMode::Blocking.write(wasi_stream, bytes)?;
+
+                // If this is a file, keep the current-position pointer up
+                // to date. Note that for files that perform appending
+                // writes this function will always update the current
+                // position to the end of the file.
+                //
+                // NB: this isn't "atomic" as it doesn't necessarily account
+                // for concurrent writes, but there's not much that can be
+                // done about that.
+                #[cfg(not(feature = "proxy"))]
+                if let StreamType::File(file) = &streams.type_ {
+                    if file.append {
+                        file.position.set(file.fd.stat()?.size);
+                    } else {
+                        file.position.set(file.position.get() + nbytes as u64);
+                    }
+                }
+
+                *nwritten = nbytes;
+                Ok(())
+            }
+            Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
+        }
+    })
 }
 
 /// Create a directory.
@@ -1312,14 +1612,16 @@ pub unsafe extern "C" fn path_create_directory(
     path_ptr: *const u8,
     path_len: usize,
 ) -> Errno {
-    let path = slice::from_raw_parts(path_ptr, path_len);
+    cfg_filesystem_available! {
+        let path = slice::from_raw_parts(path_ptr, path_len);
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_dir(fd)?;
-        file.fd.create_directory_at(path)?;
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_dir(fd)?;
+            file.fd.create_directory_at(path)?;
+            Ok(())
+        })
+    }
 }
 
 /// Return the attributes of a file or directory.
@@ -1332,27 +1634,29 @@ pub unsafe extern "C" fn path_filestat_get(
     path_len: usize,
     buf: *mut Filestat,
 ) -> Errno {
-    let path = slice::from_raw_parts(path_ptr, path_len);
-    let at_flags = at_flags_from_lookupflags(flags);
+    cfg_filesystem_available! {
+        let path = slice::from_raw_parts(path_ptr, path_len);
+        let at_flags = at_flags_from_lookupflags(flags);
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_dir(fd)?;
-        let stat = file.fd.stat_at(at_flags, path)?;
-        let metadata_hash = file.fd.metadata_hash_at(at_flags, path)?;
-        let filetype = stat.type_.into();
-        *buf = Filestat {
-            dev: 1,
-            ino: metadata_hash.lower,
-            filetype,
-            nlink: stat.link_count,
-            size: stat.size,
-            atim: datetime_to_timestamp(stat.data_access_timestamp),
-            mtim: datetime_to_timestamp(stat.data_modification_timestamp),
-            ctim: datetime_to_timestamp(stat.status_change_timestamp),
-        };
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_dir(fd)?;
+            let stat = file.fd.stat_at(at_flags, path)?;
+            let metadata_hash = file.fd.metadata_hash_at(at_flags, path)?;
+            let filetype = stat.type_.into();
+            *buf = Filestat {
+                dev: 1,
+                ino: metadata_hash.lower,
+                filetype,
+                nlink: stat.link_count,
+                size: stat.size,
+                atim: datetime_to_timestamp(stat.data_access_timestamp),
+                mtim: datetime_to_timestamp(stat.data_modification_timestamp),
+                ctim: datetime_to_timestamp(stat.status_change_timestamp),
+            };
+            Ok(())
+        })
+    }
 }
 
 /// Adjust the timestamps of a file or directory.
@@ -1367,26 +1671,28 @@ pub unsafe extern "C" fn path_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    let path = slice::from_raw_parts(path_ptr, path_len);
-    let at_flags = at_flags_from_lookupflags(flags);
+    cfg_filesystem_available! {
+        let path = slice::from_raw_parts(path_ptr, path_len);
+        let at_flags = at_flags_from_lookupflags(flags);
 
-    State::with(|state| {
-        let atim = systimespec(
-            fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM,
-            atim,
-            fst_flags & FSTFLAGS_ATIM_NOW == FSTFLAGS_ATIM_NOW,
-        )?;
-        let mtim = systimespec(
-            fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM,
-            mtim,
-            fst_flags & FSTFLAGS_MTIM_NOW == FSTFLAGS_MTIM_NOW,
-        )?;
+        State::with(|state| {
+            let atim = systimespec(
+                fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM,
+                atim,
+                fst_flags & FSTFLAGS_ATIM_NOW == FSTFLAGS_ATIM_NOW,
+            )?;
+            let mtim = systimespec(
+                fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM,
+                mtim,
+                fst_flags & FSTFLAGS_MTIM_NOW == FSTFLAGS_MTIM_NOW,
+            )?;
 
-        let ds = state.descriptors();
-        let file = ds.get_dir(fd)?;
-        file.fd.set_times_at(at_flags, path, atim, mtim)?;
-        Ok(())
-    })
+            let ds = state.descriptors();
+            let file = ds.get_dir(fd)?;
+            file.fd.set_times_at(at_flags, path, atim, mtim)?;
+            Ok(())
+        })
+    }
 }
 
 /// Create a hard link.
@@ -1401,17 +1707,19 @@ pub unsafe extern "C" fn path_link(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
-    let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
-    let at_flags = at_flags_from_lookupflags(old_flags);
+    cfg_filesystem_available! {
+        let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
+        let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+        let at_flags = at_flags_from_lookupflags(old_flags);
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let old = &ds.get_dir(old_fd)?.fd;
-        let new = &ds.get_dir(new_fd)?.fd;
-        old.link_at(at_flags, old_path, new, new_path)?;
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let old = &ds.get_dir(old_fd)?.fd;
+            let new = &ds.get_dir(new_fd)?.fd;
+            old.link_at(at_flags, old_path, new, new_path)?;
+            Ok(())
+        })
+    }
 }
 
 /// Open a file or directory.
@@ -1433,42 +1741,48 @@ pub unsafe extern "C" fn path_open(
     fdflags: Fdflags,
     opened_fd: *mut Fd,
 ) -> Errno {
-    let _ = fs_rights_inheriting;
+    cfg_filesystem_available! {
+        let _ = fs_rights_inheriting;
 
-    let path = slice::from_raw_parts(path_ptr, path_len);
-    let at_flags = at_flags_from_lookupflags(dirflags);
-    let o_flags = o_flags_from_oflags(oflags);
-    let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
-    let mode = filesystem::Modes::READABLE | filesystem::Modes::WRITABLE;
-    let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
+        let path = slice::from_raw_parts(path_ptr, path_len);
+        let at_flags = at_flags_from_lookupflags(dirflags);
+        let o_flags = o_flags_from_oflags(oflags);
+        let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
+        let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
-    State::with(|state| {
-        let result = state
-            .descriptors()
-            .get_dir(fd)?
-            .fd
-            .open_at(at_flags, path, o_flags, flags, mode)?;
-        let descriptor_type = result.get_type()?;
-        let desc = Descriptor::Streams(Streams {
-            input: OnceCell::new(),
-            output: OnceCell::new(),
-            type_: StreamType::File(File {
-                fd: result,
-                descriptor_type,
-                position: Cell::new(0),
-                append,
-                blocking_mode: if fdflags & wasi::FDFLAGS_NONBLOCK == 0 {
-                    BlockingMode::Blocking
-                } else {
-                    BlockingMode::NonBlocking
-                },
-            }),
-        });
+        #[cfg(feature = "proxy")]
+        return wasi::ERRNO_NOTSUP;
 
-        let fd = state.descriptors_mut().open(desc)?;
-        *opened_fd = fd;
-        Ok(())
-    })
+        #[cfg(not(feature = "proxy"))]
+        State::with(|state| {
+            let result = state
+                .descriptors()
+                .get_dir(fd)?
+                .fd
+                .open_at(at_flags, path, o_flags, flags)?;
+            let descriptor_type = result.get_type()?;
+            let desc = Descriptor::Streams(Streams {
+                input: OnceCell::new(),
+                output: OnceCell::new(),
+                type_: StreamType::File(File {
+                    fd: result,
+                    descriptor_type,
+                    position: Cell::new(0),
+                    append,
+                    blocking_mode: if fdflags & wasi::FDFLAGS_NONBLOCK == 0 {
+                        BlockingMode::Blocking
+                    } else {
+                        BlockingMode::NonBlocking
+                    },
+                    preopen_name_len: None,
+                }),
+            });
+
+            let fd = state.descriptors_mut().open(desc)?;
+            *opened_fd = fd;
+            Ok(())
+        })
+    }
 }
 
 /// Read the contents of a symbolic link.
@@ -1482,44 +1796,44 @@ pub unsafe extern "C" fn path_readlink(
     buf_len: Size,
     bufused: *mut Size,
 ) -> Errno {
-    let path = slice::from_raw_parts(path_ptr, path_len);
+    cfg_filesystem_available! {
+        let path = slice::from_raw_parts(path_ptr, path_len);
 
-    State::with(|state| {
-        // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
-        // long enough to accept the actual path. `cabi_realloc` can't fail,
-        // so instead we handle this case specially.
-        let use_state_buf = buf_len < PATH_MAX;
+        State::with(|state| {
+            // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
+            // long enough to accept the actual path. `cabi_realloc` can't fail,
+            // so instead we handle this case specially.
+            let use_state_buf = buf_len < PATH_MAX;
 
-        let ds = state.descriptors();
-        let file = ds.get_dir(fd)?;
-        let path = if use_state_buf {
-            state
-                .import_alloc
-                .with_buffer(state.path_buf.get().cast(), PATH_MAX, || {
-                    file.fd.readlink_at(path)
-                })?
-        } else {
-            state
-                .import_alloc
-                .with_buffer(buf, buf_len, || file.fd.readlink_at(path))?
-        };
+            let ds = state.descriptors();
+            let file = ds.get_dir(fd)?;
+            let path = if use_state_buf {
+                state
+                    .with_one_temporary_alloc( || {
+                        file.fd.readlink_at(path)
+                    })?
+            } else {
+                state
+                    .with_one_import_alloc(buf, buf_len, || file.fd.readlink_at(path))?
+            };
 
-        if use_state_buf {
-            // Preview1 follows POSIX in truncating the returned path if it
-            // doesn't fit.
-            let len = min(path.len(), buf_len);
-            ptr::copy_nonoverlapping(path.as_ptr().cast(), buf, len);
-            *bufused = len;
-        } else {
-            *bufused = path.len();
-        }
+            if use_state_buf {
+                // Preview1 follows POSIX in truncating the returned path if it
+                // doesn't fit.
+                let len = min(path.len(), buf_len);
+                ptr::copy_nonoverlapping(path.as_ptr().cast(), buf, len);
+                *bufused = len;
+            } else {
+                *bufused = path.len();
+            }
 
-        // The returned string's memory was allocated in `buf`, so don't separately
-        // free it.
-        forget(path);
+            // The returned string's memory was allocated in `buf`, so don't separately
+            // free it.
+            forget(path);
 
-        Ok(())
-    })
+            Ok(())
+        })
+    }
 }
 
 /// Remove a directory.
@@ -1531,14 +1845,16 @@ pub unsafe extern "C" fn path_remove_directory(
     path_ptr: *const u8,
     path_len: usize,
 ) -> Errno {
-    let path = slice::from_raw_parts(path_ptr, path_len);
+    cfg_filesystem_available! {
+        let path = slice::from_raw_parts(path_ptr, path_len);
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_dir(fd)?;
-        file.fd.remove_directory_at(path)?;
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_dir(fd)?;
+            file.fd.remove_directory_at(path)?;
+            Ok(())
+        })
+    }
 }
 
 /// Rename a file or directory.
@@ -1552,16 +1868,18 @@ pub unsafe extern "C" fn path_rename(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
-    let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+    cfg_filesystem_available! {
+        let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
+        let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let old = &ds.get_dir(old_fd)?.fd;
-        let new = &ds.get_dir(new_fd)?.fd;
-        old.rename_at(old_path, new, new_path)?;
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let old = &ds.get_dir(old_fd)?.fd;
+            let new = &ds.get_dir(new_fd)?.fd;
+            old.rename_at(old_path, new, new_path)?;
+            Ok(())
+        })
+    }
 }
 
 /// Create a symbolic link.
@@ -1574,15 +1892,17 @@ pub unsafe extern "C" fn path_symlink(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
-    let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+    cfg_filesystem_available! {
+        let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
+        let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_dir(fd)?;
-        file.fd.symlink_at(old_path, new_path)?;
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_dir(fd)?;
+            file.fd.symlink_at(old_path, new_path)?;
+            Ok(())
+        })
+    }
 }
 
 /// Unlink a file.
@@ -1590,14 +1910,16 @@ pub unsafe extern "C" fn path_symlink(
 /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
-    let path = slice::from_raw_parts(path_ptr, path_len);
+    cfg_filesystem_available! {
+        let path = slice::from_raw_parts(path_ptr, path_len);
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_dir(fd)?;
-        file.fd.unlink_file_at(path)?;
-        Ok(())
-    })
+        State::with(|state| {
+            let ds = state.descriptors();
+            let file = ds.get_dir(fd)?;
+            file.fd.unlink_file_at(path)?;
+            Ok(())
+        })
+    }
 }
 
 struct Pollables {
@@ -1625,26 +1947,6 @@ impl Drop for Pollables {
             unsafe {
                 core::ptr::drop_in_place(self.pointer.add(self.index));
             }
-        }
-    }
-}
-
-impl From<network::ErrorCode> for Errno {
-    fn from(error: network::ErrorCode) -> Errno {
-        match error {
-            network::ErrorCode::Unknown => unreachable!(), // TODO
-            /* TODO
-            // Use a black box to prevent the optimizer from generating a
-            // lookup table, which would require a static initializer.
-            ConnectionAborted => black_box(ERRNO_CONNABORTED),
-            ConnectionRefused => ERRNO_CONNREFUSED,
-            ConnectionReset => ERRNO_CONNRESET,
-            HostUnreachable => ERRNO_HOSTUNREACH,
-            NetworkDown => ERRNO_NETDOWN,
-            NetworkUnreachable => ERRNO_NETUNREACH,
-            Timedout => ERRNO_TIMEDOUT,
-            */
-            _ => unreachable!(),
         }
     }
 }
@@ -1683,7 +1985,7 @@ pub unsafe extern "C" fn poll_oneoff(
                 .trapping_unwrap()
     );
     // Store the pollable handles at the beginning, and the bool results at the
-    // end, so that we don't clobber the bool results when writting the events.
+    // end, so that we don't clobber the bool results when writing the events.
     let pollables = out as *mut c_void as *mut Pollable;
     let results = out.add(nsubscriptions).cast::<u32>().sub(nsubscriptions);
 
@@ -1739,12 +2041,15 @@ pub unsafe extern "C" fn poll_oneoff(
                                 clock.timeout
                             };
 
-                            monotonic_clock::subscribe(timeout, false)
+                            monotonic_clock::subscribe_duration(timeout)
                         }
 
                         CLOCKID_MONOTONIC => {
-                            let s = monotonic_clock::subscribe(clock.timeout, absolute);
-                            s
+                            if absolute {
+                                monotonic_clock::subscribe_instant(clock.timeout)
+                            } else {
+                                monotonic_clock::subscribe_duration(clock.timeout)
+                            }
                         }
 
                         _ => return Err(ERRNO_INVAL),
@@ -1765,24 +2070,24 @@ pub unsafe extern "C" fn poll_oneoff(
             });
         }
 
-        #[link(wasm_import_module = "wasi:io/poll")]
+        #[link(wasm_import_module = "wasi:io/poll@0.2.0")]
         #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
-            #[link_name = "poll-list"]
-            fn poll_list_import(pollables: *const Pollable, len: usize, rval: *mut ReadyList);
+            #[link_name = "poll"]
+            fn poll_import(pollables: *const Pollable, len: usize, rval: *mut ReadyList);
         }
         let mut ready_list = ReadyList {
             base: std::ptr::null(),
             len: 0,
         };
 
-        state.import_alloc.with_buffer(
+        state.with_one_import_alloc(
             results.cast(),
             nsubscriptions
                 .checked_mul(size_of::<u32>())
                 .trapping_unwrap(),
             || {
-                poll_list_import(
+                poll_import(
                     pollables.pointer,
                     pollables.length,
                     &mut ready_list as *mut _,
@@ -1818,6 +2123,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match &streams.type_ {
+                            #[cfg(not(feature = "proxy"))]
                             StreamType::File(file) => match file.fd.stat() {
                                 Ok(stat) => {
                                     let nbytes = stat.size.saturating_sub(file.position.get());
@@ -1833,25 +2139,6 @@ pub unsafe extern "C" fn poll_oneoff(
                                 }
                                 Err(e) => (e.into(), 1, 0),
                             },
-                            StreamType::Socket(_connection) => {
-                                unreachable!() // TODO
-                                               /*
-                                               match tcp::bytes_readable(*connection) {
-                                                   Ok(result) => (
-                                                       ERRNO_SUCCESS,
-                                                       result.0,
-                                                       if result.1 {
-                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                       } else {
-                                                           0
-                                                       }
-                                                   )
-                                                   Err(e) => {
-                                                       (e.into(), 1, 0)
-                                                   }
-                                               }
-                                               */
-                            }
                             StreamType::Stdio(_) => (ERRNO_SUCCESS, 1, 0),
                         },
                         _ => unreachable!(),
@@ -1865,26 +2152,9 @@ pub unsafe extern "C" fn poll_oneoff(
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match &streams.type_ {
-                            StreamType::File(_) | StreamType::Stdio(_) => (ERRNO_SUCCESS, 1, 0),
-                            StreamType::Socket(_connection) => {
-                                unreachable!() // TODO
-                                               /*
-                                               match tcp::bytes_writable(connection) {
-                                                   Ok(result) => (
-                                                       ERRNO_SUCCESS,
-                                                       result.0,
-                                                       if result.1 {
-                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                       } else {
-                                                            0
-                                                       }
-                                                   )
-                                                   Err(e) => {
-                                                       (e.into(), 0, 0)
-                                                   }
-                                               }
-                                               */
-                            }
+                            #[cfg(not(feature = "proxy"))]
+                            StreamType::File(_) => (ERRNO_SUCCESS, 1, 0),
+                            StreamType::Stdio(_) => (ERRNO_SUCCESS, 1, 0),
                         },
                         _ => unreachable!(),
                     }
@@ -1914,9 +2184,16 @@ pub unsafe extern "C" fn poll_oneoff(
 /// the environment.
 #[no_mangle]
 pub unsafe extern "C" fn proc_exit(rval: Exitcode) -> ! {
-    let status = if rval == 0 { Ok(()) } else { Err(()) };
-    exit::exit(status); // does not return
-    unreachable!("host exit implementation didn't exit!") // actually unreachable
+    #[cfg(feature = "proxy")]
+    {
+        unreachable!("no other implementation available in proxy world");
+    }
+    #[cfg(not(feature = "proxy"))]
+    {
+        let status = if rval == 0 { Ok(()) } else { Err(()) };
+        crate::bindings::wasi::cli::exit::exit(status); // does not return
+        unreachable!("host exit implementation didn't exit!") // actually unreachable
+    }
 }
 
 /// Send a signal to the process of the calling thread.
@@ -1950,8 +2227,7 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
         State::with(|state| {
             assert_eq!(buf_len as u32 as Size, buf_len);
             let result = state
-                .import_alloc
-                .with_buffer(buf, buf_len, || random::get_random_bytes(buf_len as u64));
+                .with_one_import_alloc(buf, buf_len, || random::get_random_bytes(buf_len as u64));
             assert_eq!(result.as_ptr(), buf);
 
             // The returned buffer's memory was allocated in `buf`, so don't separately
@@ -2008,6 +2284,7 @@ pub unsafe extern "C" fn sock_shutdown(_fd: Fd, _how: Sdflags) -> Errno {
     unreachable!()
 }
 
+#[cfg(not(feature = "proxy"))]
 fn datetime_to_timestamp(datetime: Option<filesystem::Datetime>) -> Timestamp {
     match datetime {
         Some(datetime) => u64::from(datetime.nanoseconds)
@@ -2016,6 +2293,7 @@ fn datetime_to_timestamp(datetime: Option<filesystem::Datetime>) -> Timestamp {
     }
 }
 
+#[cfg(not(feature = "proxy"))]
 fn at_flags_from_lookupflags(flags: Lookupflags) -> filesystem::PathFlags {
     if flags & LOOKUPFLAGS_SYMLINK_FOLLOW == LOOKUPFLAGS_SYMLINK_FOLLOW {
         filesystem::PathFlags::SYMLINK_FOLLOW
@@ -2024,6 +2302,7 @@ fn at_flags_from_lookupflags(flags: Lookupflags) -> filesystem::PathFlags {
     }
 }
 
+#[cfg(not(feature = "proxy"))]
 fn o_flags_from_oflags(flags: Oflags) -> filesystem::OpenFlags {
     let mut o_flags = filesystem::OpenFlags::empty();
     if flags & OFLAGS_CREAT == OFLAGS_CREAT {
@@ -2041,6 +2320,7 @@ fn o_flags_from_oflags(flags: Oflags) -> filesystem::OpenFlags {
     o_flags
 }
 
+#[cfg(not(feature = "proxy"))]
 fn descriptor_flags_from_flags(rights: Rights, fdflags: Fdflags) -> filesystem::DescriptorFlags {
     let mut flags = filesystem::DescriptorFlags::empty();
     if rights & wasi::RIGHTS_FD_READ == wasi::RIGHTS_FD_READ {
@@ -2061,6 +2341,7 @@ fn descriptor_flags_from_flags(rights: Rights, fdflags: Fdflags) -> filesystem::
     flags
 }
 
+#[cfg(not(feature = "proxy"))]
 impl From<filesystem::ErrorCode> for Errno {
     #[inline(never)] // Disable inlining as this is bulky and relatively cold.
     fn from(err: filesystem::ErrorCode) -> Errno {
@@ -2108,6 +2389,7 @@ impl From<filesystem::ErrorCode> for Errno {
     }
 }
 
+#[cfg(not(feature = "proxy"))]
 impl From<filesystem::DescriptorType> for wasi::Filetype {
     fn from(ty: filesystem::DescriptorType) -> wasi::Filetype {
         match ty {
@@ -2160,7 +2442,10 @@ impl BlockingMode {
                     bytes = rest;
                     match output_stream.blocking_write_and_flush(chunk) {
                         Ok(()) => {}
-                        Err(_) => return Err(ERRNO_IO),
+                        Err(streams::StreamError::Closed) => return Err(ERRNO_IO),
+                        Err(streams::StreamError::LastOperationFailed(e)) => {
+                            return Err(stream_error_to_errno(e))
+                        }
                     }
                 }
                 Ok(total)
@@ -2170,7 +2455,9 @@ impl BlockingMode {
                 let permit = match output_stream.check_write() {
                     Ok(n) => n,
                     Err(streams::StreamError::Closed) => 0,
-                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        return Err(stream_error_to_errno(e))
+                    }
                 };
 
                 let len = bytes.len().min(permit as usize);
@@ -2181,13 +2468,17 @@ impl BlockingMode {
                 match output_stream.write(&bytes[..len]) {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
-                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        return Err(stream_error_to_errno(e))
+                    }
                 }
 
                 match output_stream.blocking_flush() {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
-                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        return Err(stream_error_to_errno(e))
+                    }
                 }
 
                 Ok(len)
@@ -2197,6 +2488,7 @@ impl BlockingMode {
 }
 
 #[repr(C)]
+#[cfg(not(feature = "proxy"))]
 pub struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
     fd: filesystem::Descriptor,
@@ -2214,8 +2506,12 @@ pub struct File {
     /// blocking_check_write on the underlying streams. When false, read and write
     /// dispatch to stream's plain read and check_write.
     blocking_mode: BlockingMode,
+
+    /// TODO
+    preopen_name_len: Option<NonZeroUsize>,
 }
 
+#[cfg(not(feature = "proxy"))]
 impl File {
     fn is_dir(&self) -> bool {
         match self.descriptor_type {
@@ -2245,7 +2541,7 @@ struct State {
     magic1: u32,
 
     /// Used to coordinate allocations of `cabi_import_realloc`
-    import_alloc: ImportAlloc,
+    import_alloc: Cell<ImportAlloc>,
 
     /// Storage of mapping from preview1 file descriptors to preview2 file
     /// descriptors.
@@ -2254,30 +2550,16 @@ struct State {
     /// lazy initialization happens.
     descriptors: RefCell<Option<Descriptors>>,
 
-    /// Auxiliary storage to handle the `path_readlink` function.
-    path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
-
-    /// Long-lived bump allocated memory arena.
-    ///
-    /// This is used for the cabi_export_realloc to allocate data passed to the
-    /// `run` entrypoint. Allocations in this arena are safe to use for
-    /// the lifetime of the State struct. It may also be used for import allocations
-    /// which need to be long-lived, by using `import_alloc.with_arena`.
-    long_lived_arena: BumpArena,
-
-    /// Arguments. Initialized lazily. Access with `State::get_args` to take care of
-    /// initialization.
-    args: Cell<Option<&'static [WasmStr]>>,
-
-    /// Environment variables. Initialized lazily. Access with `State::get_environment`
-    /// to take care of initialization.
-    env_vars: Cell<Option<&'static [StrTuple]>>,
+    /// TODO
+    temporary_data: UnsafeCell<MaybeUninit<[u8; temporary_data_size()]>>,
 
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
+    #[cfg(not(feature = "proxy"))]
     dirent_cache: DirentCache,
 
     /// The string `..` for use by the directory iterator.
+    #[cfg(not(feature = "proxy"))]
     dotdot: [UnsafeCell<u8>; 2],
 
     /// Another canary constant located at the end of the structure to catch
@@ -2285,6 +2567,7 @@ struct State {
     magic2: u32,
 }
 
+#[cfg(not(feature = "proxy"))]
 struct DirentCache {
     stream: Cell<Option<DirectoryEntryStream>>,
     for_fd: Cell<wasi::Fd>,
@@ -2293,6 +2576,7 @@ struct DirentCache {
     path_data: UnsafeCell<MaybeUninit<[u8; DIRENT_CACHE]>>,
 }
 
+#[cfg(not(feature = "proxy"))]
 struct DirectoryEntryStream(filesystem::DirectoryEntryStream);
 
 #[repr(C)]
@@ -2327,18 +2611,20 @@ pub struct ReadyList {
     len: usize,
 }
 
-const fn bump_arena_size() -> usize {
+const fn temporary_data_size() -> usize {
     // The total size of the struct should be a page, so start there
     let mut start = PAGE_SIZE;
 
-    // Remove the big chunks of the struct, the `path_buf` and `descriptors`
-    // fields.
-    start -= PATH_MAX;
+    // Remove big chunks of the struct for its various fields.
     start -= size_of::<Descriptors>();
-    start -= size_of::<DirentCache>();
+    #[cfg(not(feature = "proxy"))]
+    {
+        start -= size_of::<DirentCache>();
+    }
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 14 * size_of::<usize>();
+    let misc = if cfg!(feature = "proxy") { 9 } else { 12 };
+    start -= misc * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2364,8 +2650,8 @@ enum AllocationState {
 
 #[allow(improper_ctypes)]
 extern "C" {
-    fn get_state_ptr() -> *const State;
-    fn set_state_ptr(state: *const State);
+    fn get_state_ptr() -> *mut State;
+    fn set_state_ptr(state: *mut State);
     fn get_allocation_state() -> AllocationState;
     fn set_allocation_state(state: AllocationState);
 }
@@ -2394,7 +2680,7 @@ impl State {
     }
 
     #[cold]
-    fn new() -> &'static State {
+    fn new() -> *mut State {
         #[link(wasm_import_module = "__main_module__")]
         extern "C" {
             fn cabi_realloc(
@@ -2424,31 +2710,36 @@ impl State {
         unsafe { set_allocation_state(AllocationState::StateAllocated) };
 
         unsafe {
-            ret.write(State {
-                magic1: MAGIC,
-                magic2: MAGIC,
-                import_alloc: ImportAlloc::new(),
-                descriptors: RefCell::new(None),
-                path_buf: UnsafeCell::new(MaybeUninit::uninit()),
-                long_lived_arena: BumpArena::new(),
-                args: Cell::new(None),
-                env_vars: Cell::new(None),
-                dirent_cache: DirentCache {
-                    stream: Cell::new(None),
-                    for_fd: Cell::new(0),
-                    cookie: Cell::new(wasi::DIRCOOKIE_START),
-                    cached_dirent: Cell::new(wasi::Dirent {
-                        d_next: 0,
-                        d_ino: 0,
-                        d_type: FILETYPE_UNKNOWN,
-                        d_namlen: 0,
-                    }),
-                    path_data: UnsafeCell::new(MaybeUninit::uninit()),
-                },
-                dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
-            });
-            &*ret
+            Self::init(ret);
         }
+
+        ret
+    }
+
+    #[cold]
+    unsafe fn init(state: *mut State) {
+        state.write(State {
+            magic1: MAGIC,
+            magic2: MAGIC,
+            import_alloc: Cell::new(ImportAlloc::None),
+            descriptors: RefCell::new(None),
+            temporary_data: UnsafeCell::new(MaybeUninit::uninit()),
+            #[cfg(not(feature = "proxy"))]
+            dirent_cache: DirentCache {
+                stream: Cell::new(None),
+                for_fd: Cell::new(0),
+                cookie: Cell::new(wasi::DIRCOOKIE_START),
+                cached_dirent: Cell::new(wasi::Dirent {
+                    d_next: 0,
+                    d_ino: 0,
+                    d_type: FILETYPE_UNKNOWN,
+                    d_namlen: 0,
+                }),
+                path_data: UnsafeCell::new(MaybeUninit::uninit()),
+            },
+            #[cfg(not(feature = "proxy"))]
+            dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
+        });
     }
 
     /// Accessor for the descriptors member that ensures it is properly initialized
@@ -2458,7 +2749,7 @@ impl State {
             .try_borrow_mut()
             .unwrap_or_else(|_| unreachable!());
         if d.is_none() {
-            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+            *d = Some(Descriptors::new(self));
         }
         RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
@@ -2470,56 +2761,47 @@ impl State {
             .try_borrow_mut()
             .unwrap_or_else(|_| unreachable!());
         if d.is_none() {
-            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+            *d = Some(Descriptors::new(self));
         }
         RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
 
-    fn get_environment(&self) -> &[StrTuple] {
-        if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment")]
-            extern "C" {
-                #[link_name = "get-environment"]
-                fn get_environment_import(rval: *mut StrTupleList);
-            }
-            let mut list = StrTupleList {
-                base: std::ptr::null(),
-                len: 0,
-            };
-            self.import_alloc
-                .with_arena(&self.long_lived_arena, || unsafe {
-                    get_environment_import(&mut list as *mut _)
-                });
-            self.env_vars.set(Some(unsafe {
-                /* allocation comes from long lived arena, so it is safe to
-                 * cast this to a &'static slice: */
-                std::slice::from_raw_parts(list.base, list.len)
-            }));
+    unsafe fn temporary_alloc(&self) -> BumpAlloc {
+        BumpAlloc {
+            base: self.temporary_data.get().cast(),
+            len: mem::size_of_val(&self.temporary_data),
         }
-        self.env_vars.get().trapping_unwrap()
     }
 
-    fn get_args(&self) -> &[WasmStr] {
-        if self.args.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment")]
-            extern "C" {
-                #[link_name = "get-arguments"]
-                fn get_args_import(rval: *mut WasmStrList);
-            }
-            let mut list = WasmStrList {
-                base: std::ptr::null(),
-                len: 0,
-            };
-            self.import_alloc
-                .with_arena(&self.long_lived_arena, || unsafe {
-                    get_args_import(&mut list as *mut _)
-                });
-            self.args.set(Some(unsafe {
-                /* allocation comes from long lived arena, so it is safe to
-                 * cast this to a &'static slice: */
-                std::slice::from_raw_parts(list.base, list.len)
-            }));
+    /// Configure that `cabi_import_realloc` will allocate once from
+    /// `self.temporary_data` for the duration of the closure `f`.
+    ///
+    /// Panics if the import allocator is already configured.
+    fn with_one_temporary_alloc<T>(&self, f: impl FnOnce() -> T) -> T {
+        let alloc = unsafe { self.temporary_alloc() };
+        self.with_import_alloc(ImportAlloc::OneAlloc(alloc), f).0
+    }
+
+    /// Configure that `cabi_import_realloc` will allocate once from
+    /// `base` with at most `len` bytes for the duration of `f`.
+    ///
+    /// Panics if the import allocator is already configured.
+    fn with_one_import_alloc<T>(&self, base: *mut u8, len: usize, f: impl FnOnce() -> T) -> T {
+        let alloc = BumpAlloc { base, len };
+        self.with_import_alloc(ImportAlloc::OneAlloc(alloc), f).0
+    }
+
+    /// Configures the `alloc` specified to be the allocator for
+    /// `cabi_import_realloc` for the duration of `f`.
+    ///
+    /// Panics if the import allocator is already configured.
+    fn with_import_alloc<T>(&self, alloc: ImportAlloc, f: impl FnOnce() -> T) -> (T, ImportAlloc) {
+        match self.import_alloc.replace(alloc) {
+            ImportAlloc::None => {}
+            _ => unreachable!("import allocator already set"),
         }
-        self.args.get().trapping_unwrap()
+        let r = f();
+        let alloc = self.import_alloc.replace(ImportAlloc::None);
+        (r, alloc)
     }
 }

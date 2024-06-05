@@ -5,6 +5,7 @@ use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
+use crate::ir::pcc::Fact;
 use crate::ir::{
     types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
     Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
@@ -125,12 +126,12 @@ pub struct DataFlowGraph {
     /// Primary value table with entries for all values.
     values: PrimaryMap<Value, ValueDataPacked>,
 
+    /// Facts: proof-carrying-code assertions about values.
+    pub facts: SecondaryMap<Value, Option<Fact>>,
+
     /// Function signature table. These signatures are referenced by indirect call instructions as
     /// well as the external function references.
     pub signatures: PrimaryMap<SigRef, Signature>,
-
-    /// The pre-legalization signature for each entry in `signatures`, if any.
-    pub old_signatures: SecondaryMap<SigRef, Option<Signature>>,
 
     /// External function references. These are functions that can be called directly.
     pub ext_funcs: PrimaryMap<FuncRef, ExtFuncData>,
@@ -158,8 +159,8 @@ impl DataFlowGraph {
             dynamic_types: DynamicTypes::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
+            facts: SecondaryMap::new(),
             signatures: PrimaryMap::new(),
-            old_signatures: SecondaryMap::new(),
             ext_funcs: PrimaryMap::new(),
             values_labels: None,
             constants: ConstantPool::new(),
@@ -177,12 +178,12 @@ impl DataFlowGraph {
         self.value_lists.clear();
         self.values.clear();
         self.signatures.clear();
-        self.old_signatures.clear();
         self.ext_funcs.clear();
         self.values_labels = None;
         self.constants.clear();
         self.immediates.clear();
         self.jump_tables.clear();
+        self.facts.clear();
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
@@ -327,6 +328,13 @@ impl DataFlowGraph {
         self.values.is_valid(v)
     }
 
+    /// Check whether a value is valid and not an alias.
+    pub fn value_is_real(&self, value: Value) -> bool {
+        // Deleted or unused values are also stored as aliases so this excludes
+        // those as well.
+        self.value_is_valid(value) && !matches!(self.values[value].into(), ValueData::Alias { .. })
+    }
+
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
         self.values[v].ty()
@@ -372,12 +380,109 @@ impl DataFlowGraph {
         resolve_aliases(&self.values, value)
     }
 
-    /// Resolve all aliases among inst's arguments.
-    ///
-    /// For each argument of inst which is defined by an alias, replace the
-    /// alias with the aliased value.
-    pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        self.map_inst_values(inst, |dfg, arg| resolve_aliases(&dfg.values, arg));
+    /// Replace all uses of value aliases with their resolved values, and delete
+    /// the aliases.
+    pub fn resolve_all_aliases(&mut self) {
+        let invalid_value = ValueDataPacked::from(ValueData::Alias {
+            ty: types::INVALID,
+            original: Value::reserved_value(),
+        });
+
+        // Rewrite each chain of aliases. Update every alias along the chain
+        // into an alias directly to the final value. Due to updating every
+        // alias that it looks at, this loop runs in time linear in the number
+        // of values.
+        for mut src in self.values.keys() {
+            let value_data = self.values[src];
+            if value_data == invalid_value {
+                continue;
+            }
+            if let ValueData::Alias { mut original, .. } = value_data.into() {
+                // We don't use the type after this, we just need some place to
+                // store the resolved aliases temporarily.
+                let resolved = ValueDataPacked::from(ValueData::Alias {
+                    ty: types::INVALID,
+                    original: resolve_aliases(&self.values, original),
+                });
+                // Walk the chain again, splatting the new alias everywhere.
+                // resolve_aliases panics if there's an alias cycle, so we don't
+                // need to guard against cycles here.
+                loop {
+                    self.values[src] = resolved;
+                    src = original;
+                    if let ValueData::Alias { original: next, .. } = self.values[src].into() {
+                        original = next;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Now aliases don't point to other aliases, so we can replace any use
+        // of an alias with the final value in constant time.
+
+        // Rewrite InstructionData in `self.insts`.
+        for inst in self.insts.0.values_mut() {
+            inst.map_values(&mut self.value_lists, &mut self.jump_tables, |arg| {
+                if let ValueData::Alias { original, .. } = self.values[arg].into() {
+                    original
+                } else {
+                    arg
+                }
+            });
+        }
+
+        // - `results` and block-params in `blocks` are not aliases, by
+        //   definition.
+        // - `dynamic_types` has no values.
+        // - `value_lists` can only be accessed via references from elsewhere.
+        // - `values` only has value references in aliases (which we've
+        //   removed), and unions (but the egraph pass ensures there are no
+        //   aliases before creating unions).
+
+        // Merge `facts` from any alias onto the aliased value. Note that if
+        // there was a chain of aliases, at this point every alias that was in
+        // the chain points to the same final value, so their facts will all be
+        // merged together.
+        for value in self.facts.keys() {
+            if let ValueData::Alias { original, .. } = self.values[value].into() {
+                if let Some(new_fact) = self.facts[value].take() {
+                    match &mut self.facts[original] {
+                        Some(old_fact) => *old_fact = Fact::intersect(old_fact, &new_fact),
+                        old_fact => *old_fact = Some(new_fact),
+                    }
+                }
+            }
+        }
+
+        // - `signatures` and `ext_funcs` have no values.
+
+        if let Some(values_labels) = &mut self.values_labels {
+            // Debug info is best-effort. If any is attached to value aliases,
+            // just discard it.
+            values_labels.retain(|&k, _| !matches!(self.values[k].into(), ValueData::Alias { .. }));
+
+            // If debug-info says a value should have the same labels as another
+            // value, then make sure that target is not a value alias.
+            for value_label in values_labels.values_mut() {
+                if let ValueLabelAssignments::Alias { value, .. } = value_label {
+                    if let ValueData::Alias { original, .. } = self.values[*value].into() {
+                        *value = original;
+                    }
+                }
+            }
+        }
+
+        // - `constants` and `immediates` have no values.
+        // - `jump_tables` is updated together with instruction-data above.
+
+        // Delete all aliases now that there are no uses left.
+        for value in self.values.values_mut() {
+            if let ValueData::Alias { .. } = ValueData::from(*value) {
+                *value = invalid_value;
+            }
+        }
     }
 
     /// Turn a value into an alias of another.
@@ -420,33 +525,32 @@ impl DataFlowGraph {
     /// After calling this instruction, `dest_inst` will have had its results
     /// cleared, so it likely needs to be removed from the graph.
     ///
-    pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
+    pub fn replace_with_aliases(&mut self, dest_inst: Inst, original_inst: Inst) {
         debug_assert_ne!(
-            dest_inst, src_inst,
+            dest_inst, original_inst,
             "Replacing {} with itself would create a loop",
             dest_inst
         );
+
+        let dest_results = self.results[dest_inst].as_slice(&self.value_lists);
+        let original_results = self.results[original_inst].as_slice(&self.value_lists);
+
         debug_assert_eq!(
-            self.results[dest_inst].len(&self.value_lists),
-            self.results[src_inst].len(&self.value_lists),
+            dest_results.len(),
+            original_results.len(),
             "Replacing {} with {} would produce a different number of results.",
             dest_inst,
-            src_inst
+            original_inst
         );
 
-        for (&dest, &src) in self.results[dest_inst]
-            .as_slice(&self.value_lists)
-            .iter()
-            .zip(self.results[src_inst].as_slice(&self.value_lists))
-        {
-            let original = src;
+        for (&dest, &original) in dest_results.iter().zip(original_results) {
             let ty = self.value_type(original);
             debug_assert_eq!(
                 self.value_type(dest),
                 ty,
                 "Aliasing {} to {} would change its type {} to {}",
                 dest,
-                src,
+                original,
                 self.value_type(dest),
                 ty
             );
@@ -545,10 +649,15 @@ struct ValueDataPacked(u64);
 /// (and is implied by `mask`), by translating 2^32-1 (0xffffffff)
 /// into 2^n-1 and panic'ing on 2^n..2^32-1.
 fn encode_narrow_field(x: u32, bits: u8) -> u32 {
+    let max = (1 << bits) - 1;
     if x == 0xffff_ffff {
-        (1 << bits) - 1
+        max
     } else {
-        debug_assert!(x < (1 << bits));
+        debug_assert!(
+            x < max,
+            "{x} does not fit into {bits} bits (must be less than {max} to \
+             allow for a 0xffffffff sentinel)"
+        );
         x
     }
 }
@@ -624,7 +733,7 @@ impl From<ValueData> for ValueDataPacked {
                 Self::make(Self::TAG_ALIAS, ty, 0, original.as_bits())
             }
             ValueData::Union { ty, x, y } => {
-                Self::make(Self::TAG_ALIAS, ty, x.as_bits(), y.as_bits())
+                Self::make(Self::TAG_UNION, ty, x.as_bits(), y.as_bits())
             }
         }
     }
@@ -721,24 +830,11 @@ impl DataFlowGraph {
     }
 
     /// Map a function over the values of the instruction.
-    pub fn map_inst_values<F>(&mut self, inst: Inst, mut body: F)
+    pub fn map_inst_values<F>(&mut self, inst: Inst, body: F)
     where
-        F: FnMut(&mut DataFlowGraph, Value) -> Value,
+        F: FnMut(Value) -> Value,
     {
-        for i in 0..self.inst_args(inst).len() {
-            let arg = self.inst_args(inst)[i];
-            self.inst_args_mut(inst)[i] = body(self, arg);
-        }
-
-        for block_ix in 0..self.insts[inst].branch_destination(&self.jump_tables).len() {
-            // We aren't changing the size of the args list, so we won't need to write the branch
-            // back to the instruction.
-            let mut block = self.insts[inst].branch_destination(&self.jump_tables)[block_ix];
-            for i in 0..block.args_slice(&self.value_lists).len() {
-                let arg = block.args_slice(&self.value_lists)[i];
-                block.args_slice_mut(&mut self.value_lists)[i] = body(self, arg);
-            }
-        }
+        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, body);
     }
 
     /// Overwrite the instruction's value references with values from the iterator.
@@ -748,16 +844,9 @@ impl DataFlowGraph {
     where
         I: Iterator<Item = Value>,
     {
-        for arg in self.inst_args_mut(inst) {
-            *arg = values.next().unwrap();
-        }
-
-        for block_ix in 0..self.insts[inst].branch_destination(&self.jump_tables).len() {
-            let mut block = self.insts[inst].branch_destination(&self.jump_tables)[block_ix];
-            for arg in block.args_slice_mut(&mut self.value_lists) {
-                *arg = values.next().unwrap();
-            }
-        }
+        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, |_| {
+            values.next().unwrap()
+        });
     }
 
     /// Get all value arguments on `inst` as a slice.
@@ -836,35 +925,32 @@ impl DataFlowGraph {
     where
         I: Iterator<Item = Option<Value>>,
     {
-        self.results[inst].clear(&mut self.value_lists);
+        self.clear_results(inst);
 
         let mut reuse = reuse.fuse();
         let result_tys: SmallVec<[_; 16]> = self.inst_result_types(inst, ctrl_typevar).collect();
-        let num_results = result_tys.len();
 
-        for ty in result_tys {
-            if let Some(Some(v)) = reuse.next() {
+        for (expected, &ty) in result_tys.iter().enumerate() {
+            let num = u16::try_from(expected).expect("Result value index should fit in u16");
+            let value_data = ValueData::Inst { ty, num, inst };
+            let v = if let Some(Some(v)) = reuse.next() {
                 debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
-                self.attach_result(inst, v);
+                debug_assert!(!self.value_is_attached(v));
+                self.values[v] = value_data.into();
+                v
             } else {
-                self.append_result(inst, ty);
-            }
+                self.make_value(value_data)
+            };
+            let actual = self.results[inst].push(v, &mut self.value_lists);
+            debug_assert_eq!(expected, actual);
         }
 
-        num_results
+        result_tys.len()
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
     pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder {
         ReplaceBuilder::new(self, inst)
-    }
-
-    /// Detach the list of result values from `inst` and return it.
-    ///
-    /// This leaves `inst` without any result values. New result values can be created by calling
-    /// `make_inst_results` or by using a `replace(inst)` builder.
-    pub fn detach_results(&mut self, inst: Inst) -> ValueList {
-        self.results[inst].take()
     }
 
     /// Clear the list of result values from `inst`.
@@ -873,25 +959,6 @@ impl DataFlowGraph {
     /// `make_inst_results` or by using a `replace(inst)` builder.
     pub fn clear_results(&mut self, inst: Inst) {
         self.results[inst].clear(&mut self.value_lists)
-    }
-
-    /// Attach an existing value to the result value list for `inst`.
-    ///
-    /// The `res` value is appended to the end of the result list.
-    ///
-    /// This is a very low-level operation. Usually, instruction results with the correct types are
-    /// created automatically. The `res` value must not be attached to anything else.
-    pub fn attach_result(&mut self, inst: Inst, res: Value) {
-        debug_assert!(!self.value_is_attached(res));
-        let num = self.results[inst].push(res, &mut self.value_lists);
-        debug_assert!(num <= u16::MAX as usize, "Too many result values");
-        let ty = self.value_type(res);
-        self.values[res] = ValueData::Inst {
-            ty,
-            num: num as u16,
-            inst,
-        }
-        .into();
     }
 
     /// Replace an instruction result with a new value of type `new_type`.
@@ -928,18 +995,6 @@ impl DataFlowGraph {
         new_value
     }
 
-    /// Append a new instruction result value to `inst`.
-    pub fn append_result(&mut self, inst: Inst, ty: Type) -> Value {
-        let res = self.values.next_key();
-        let num = self.results[inst].push(res, &mut self.value_lists);
-        debug_assert!(num <= u16::MAX as usize, "Too many result values");
-        self.make_value(ValueData::Inst {
-            ty,
-            inst,
-            num: num as u16,
-        })
-    }
-
     /// Clone an instruction, attaching new result `Value`s and
     /// returning them.
     pub fn clone_inst(&mut self, inst: Inst) -> Inst {
@@ -953,7 +1008,13 @@ impl DataFlowGraph {
         // Get the controlling type variable.
         let ctrl_typevar = self.ctrl_typevar(inst);
         // Create new result values.
-        self.make_inst_results(new_inst, ctrl_typevar);
+        let num_results = self.make_inst_results(new_inst, ctrl_typevar);
+        // Copy over PCC facts, if any.
+        for i in 0..num_results {
+            let old_result = self.inst_results(inst)[i];
+            let new_result = self.inst_results(new_inst)[i];
+            self.facts[new_result] = self.facts[old_result].clone();
+        }
         new_inst
     }
 
@@ -1279,6 +1340,38 @@ impl DataFlowGraph {
     pub fn detach_block_params(&mut self, block: Block) -> ValueList {
         self.blocks[block].params.take()
     }
+
+    /// Merge the facts for two values. If both values have facts and
+    /// they differ, both values get a special "conflict" fact that is
+    /// never satisfied.
+    pub fn merge_facts(&mut self, a: Value, b: Value) {
+        let a = self.resolve_aliases(a);
+        let b = self.resolve_aliases(b);
+        match (&self.facts[a], &self.facts[b]) {
+            (Some(a), Some(b)) if a == b => { /* nothing */ }
+            (None, None) => { /* nothing */ }
+            (Some(a), None) => {
+                self.facts[b] = Some(a.clone());
+            }
+            (None, Some(b)) => {
+                self.facts[a] = Some(b.clone());
+            }
+            (Some(a_fact), Some(b_fact)) => {
+                assert_eq!(self.value_type(a), self.value_type(b));
+                let merged = Fact::intersect(a_fact, b_fact);
+                crate::trace!(
+                    "facts merge on {} and {}: {:?}, {:?} -> {:?}",
+                    a,
+                    b,
+                    a_fact,
+                    b_fact,
+                    merged,
+                );
+                self.facts[a] = Some(merged.clone());
+                self.facts[b] = Some(merged);
+            }
+        }
+    }
 }
 
 /// Contents of a basic block.
@@ -1478,8 +1571,7 @@ impl DataFlowGraph {
 mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::types;
-    use crate::ir::{Function, InstructionData, Opcode, TrapCode};
+    use crate::ir::{Function, Opcode, TrapCode};
     use alloc::string::ToString;
 
     #[test]
@@ -1651,8 +1743,7 @@ mod tests {
         };
 
         // Remove `c` from the result list.
-        pos.func.dfg.clear_results(iadd);
-        pos.func.dfg.attach_result(iadd, s);
+        pos.func.stencil.dfg.results[iadd].remove(1, &mut pos.func.stencil.dfg.value_lists);
 
         // Replace `uadd_overflow` with a normal `iadd` and an `icmp`.
         pos.func.dfg.replace(iadd).iadd(v1, arg0);

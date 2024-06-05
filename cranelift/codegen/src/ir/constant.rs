@@ -13,7 +13,6 @@ use crate::ir::Constant;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::fmt;
-use core::iter::FromIterator;
 use core::slice::Iter;
 use core::str::{from_utf8, FromStr};
 use cranelift_entity::EntityRef;
@@ -166,8 +165,8 @@ impl FromStr for ConstantData {
     }
 }
 
-/// Maintains the mapping between a constant handle (i.e.  [`Constant`](crate::ir::Constant)) and
-/// its constant data (i.e.  [`ConstantData`](crate::ir::ConstantData)).
+/// Maintains the mapping between a constant handle (i.e.  [`Constant`]) and
+/// its constant data (i.e.  [`ConstantData`]).
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantPool {

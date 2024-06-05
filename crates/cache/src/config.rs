@@ -153,7 +153,7 @@ const ZSTD_COMPRESSION_LEVELS: std::ops::RangeInclusive<i32> = 0..=21;
 // Default settings, you're welcome to tune them!
 // TODO: what do we want to warn users about?
 
-// At the moment of writing, the modules couldn't depend on anothers,
+// At the moment of writing, the modules couldn't depend on another,
 // so we have at most one module per wasmtime instance
 // if changed, update cli-cache.md
 const DEFAULT_WORKER_EVENT_QUEUE_SIZE: u64 = 0x10;
@@ -407,11 +407,11 @@ impl CacheConfig {
         match (entity_exists, user_custom_file) {
             (false, false) => Ok(Self::new_cache_enabled_template()),
             _ => {
-                let bytes = fs::read(&config_file).context(format!(
+                let contents = fs::read_to_string(&config_file).context(format!(
                     "failed to read config file: {}",
                     config_file.display()
                 ))?;
-                let config = toml::from_slice::<Config>(&bytes[..]).context(format!(
+                let config = toml::from_str::<Config>(&contents).context(format!(
                     "failed to parse config file: {}",
                     config_file.display()
                 ))?;

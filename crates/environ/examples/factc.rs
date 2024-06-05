@@ -24,53 +24,53 @@ use wasmtime_environ::fact::Module;
 #[derive(Parser)]
 struct Factc {
     /// Whether or not debug code is inserted into the generated adapter.
-    #[clap(long)]
+    #[arg(long)]
     debug: bool,
 
     /// Whether or not the lifting options (the callee of the exported adapter)
     /// uses a 64-bit memory as opposed to a 32-bit memory.
-    #[clap(long)]
+    #[arg(long)]
     lift64: bool,
 
     /// Whether or not the lowering options (the caller of the exported adapter)
     /// uses a 64-bit memory as opposed to a 32-bit memory.
-    #[clap(long)]
+    #[arg(long)]
     lower64: bool,
 
     /// Whether or not a call to a `post-return` configured function is enabled
     /// or not.
-    #[clap(long)]
+    #[arg(long)]
     post_return: bool,
 
     /// Whether or not to skip validation of the generated adapter module.
-    #[clap(long)]
+    #[arg(long)]
     skip_validate: bool,
 
     /// Where to place the generated adapter module. Standard output is used if
     /// this is not specified.
-    #[clap(short, long)]
+    #[arg(short, long)]
     output: Option<PathBuf>,
 
     /// Output the text format for WebAssembly instead of the binary format.
-    #[clap(short, long)]
+    #[arg(short, long)]
     text: bool,
 
-    #[clap(long, value_parser = parse_string_encoding, default_value = "utf8")]
+    #[arg(long, value_parser = parse_string_encoding, default_value = "utf8")]
     lift_str: StringEncoding,
 
-    #[clap(long, value_parser = parse_string_encoding, default_value = "utf8")]
+    #[arg(long, value_parser = parse_string_encoding, default_value = "utf8")]
     lower_str: StringEncoding,
 
     /// TODO
     input: PathBuf,
 }
 
-fn parse_string_encoding(name: &str) -> anyhow::Result<StringEncoding> {
+fn parse_string_encoding(name: &str) -> Result<StringEncoding> {
     Ok(match name {
         "utf8" => StringEncoding::Utf8,
         "utf16" => StringEncoding::Utf16,
         "compact-utf16" => StringEncoding::CompactUtf16,
-        other => anyhow::bail!("invalid string encoding: `{other}`"),
+        other => bail!("invalid string encoding: `{other}`"),
     })
 }
 
@@ -81,8 +81,6 @@ fn main() -> Result<()> {
 impl Factc {
     fn execute(self) -> Result<()> {
         env_logger::init();
-
-        let mut types = ComponentTypesBuilder::default();
 
         // Manufactures a unique `CoreDef` so all function imports get unique
         // function imports.
@@ -118,24 +116,21 @@ impl Factc {
             }
         };
 
+        let mut validator = Validator::new();
+        let mut types = ComponentTypesBuilder::new(&validator);
+
         let mut adapters = Vec::new();
         let input = wat::parse_file(&self.input)?;
-        let mut validator = Validator::new_with_features(WasmFeatures {
-            component_model: true,
-            ..Default::default()
-        });
         let wasm_types = validator
             .validate_all(&input)
             .context("failed to validate input wasm")?;
         let wasm_types = wasm_types.as_ref();
         for i in 0..wasm_types.component_type_count() {
-            let ty = wasm_types.component_type_at(i);
-            let ty = match &wasm_types[ty] {
-                wasmparser::types::Type::ComponentFunc(_) => {
-                    types.convert_component_func_type(wasm_types, ty)?
-                }
+            let ty = match wasm_types.component_any_type_at(i) {
+                wasmparser::types::ComponentAnyTypeId::Func(id) => id,
                 _ => continue,
             };
+            let ty = types.convert_component_func_type(wasm_types, ty)?;
             adapters.push(Adapter {
                 lift_ty: ty,
                 lower_ty: ty,
@@ -193,13 +188,9 @@ impl Factc {
         }
 
         if !self.skip_validate {
-            Validator::new_with_features(WasmFeatures {
-                multi_memory: true,
-                memory64: true,
-                ..WasmFeatures::default()
-            })
-            .validate_all(&wasm)
-            .context("failed to validate generated module")?;
+            Validator::new_with_features(WasmFeatures::default() | WasmFeatures::MEMORY64)
+                .validate_all(&wasm)
+                .context("failed to validate generated module")?;
         }
 
         Ok(())
