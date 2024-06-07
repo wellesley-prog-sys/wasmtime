@@ -1380,14 +1380,10 @@ fn add_annotation_constraints(
                 .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
             tree.bv_constraints
                 .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
-            tree.bv_constraints
-                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::BitVector));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::Int));
             tree.bv_constraints
                 .insert(TypeExpr::Concrete(t3, annotation_ir::Type::BitVector));
-            tree.var_constraints.insert(TypeExpr::Variable(t1, t2));
-            tree.var_constraints.insert(TypeExpr::Variable(t, t1));
-            tree.var_constraints.insert(TypeExpr::Variable(t, t2));
-            tree.var_constraints.insert(TypeExpr::Variable(t, t3));
 
             tree.next_type_var += 1;
             (
