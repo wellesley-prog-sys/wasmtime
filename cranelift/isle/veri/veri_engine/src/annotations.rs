@@ -263,7 +263,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
             assert_eq!(
                 args.len(),
                 3,
-                "Unexpected number of args for subs operator {:?}",
+                "Unexpected number of args for load operator {:?}",
                 pos
             );
             Expr::Load(
