@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::program::Program;
+use crate::{program::Program, reachability::Reachability};
 use cranelift_isle::{
     disjointsets::DisjointSets,
     lexer::Pos,
@@ -72,7 +72,8 @@ impl Expansion {
 
 pub struct Expander<'a> {
     prog: &'a Program,
-    term_rule_sets: HashMap<TermId, RuleSet>,
+    term_rule_sets: &'a HashMap<TermId, RuleSet>,
+    reach: Reachability<'a>,
 
     /// Terms which can be considered for inlining.
     inlineable: HashSet<TermId>,
@@ -85,10 +86,11 @@ pub struct Expander<'a> {
 }
 
 impl<'a> Expander<'a> {
-    pub fn new(prog: &'a Program, term_rule_sets: HashMap<TermId, RuleSet>) -> Self {
+    pub fn new(prog: &'a Program, term_rule_sets: &'a HashMap<TermId, RuleSet>) -> Self {
         Self {
             prog,
             term_rule_sets,
+            reach: Reachability::build(term_rule_sets),
             inlineable: HashSet::new(),
             stack: Vec::new(),
             complete: Vec::new(),
@@ -135,20 +137,47 @@ impl<'a> Expander<'a> {
         self.stack.push(expansion);
     }
 
+    /// Marks term ID as inlinable.
     pub fn inline(&mut self, term_id: TermId) {
-        // Internal constructors are supported for inlining.
-        let term = self.prog.term(term_id);
-        assert!(term.has_constructor(), "only constructors may be inlined");
-        assert!(
-            !term.has_external_constructor(),
-            "should be internal constructor"
-        );
+        // Must be inlineable.
+        assert!(self.may_inline(term_id));
 
         // Add to inlineable set.
         self.inlineable.insert(term_id);
     }
 
+    /// Reports whether the given term can be inlined. Internal acyclic
+    /// constructors can be inlined.
+    pub fn may_inline(&mut self, term_id: TermId) -> bool {
+        // Internal constructors are supported for inlining.
+        let term = self.prog.term(term_id);
+        if !term.has_constructor() {
+            return false;
+        }
+
+        if term.has_external_constructor() {
+            return false;
+        }
+
+        // Cyclic terms cannot be inlined.
+        if self.reach.is_cyclic(term_id) {
+            return false;
+        }
+
+        true
+    }
+
+    /// Mark all possible terms as candidates for inlining.
+    pub fn enable_maximal_inlining(&mut self) {
+        for term_id in self.term_rule_sets.keys().copied() {
+            if self.may_inline(term_id) {
+                self.inline(term_id);
+            }
+        }
+    }
+
     fn finish(&mut self, expansion: Expansion) {
+        println!("finish: #complete = {}", self.complete.len());
         expansion.validate();
         self.complete.push(expansion);
     }
@@ -185,6 +214,10 @@ impl<'a> Expander<'a> {
 
         let rule_set = &self.term_rule_sets[term_id];
         for rule in &rule_set.rules {
+            //println!(
+            //    "inline rule: {:?}",
+            //    rule.pos.pretty_print_line(&self.prog.tyenv.filenames[..])
+            //);
             let mut apply = Application::new(expansion.clone());
             let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
             self.stack.push(inlined);

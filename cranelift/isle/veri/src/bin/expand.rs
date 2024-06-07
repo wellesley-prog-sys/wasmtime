@@ -32,6 +32,10 @@ struct Opts {
     /// Term names to inline.
     #[arg(long)]
     inline: Vec<String>,
+
+    /// Whether to enable maximal inlining.
+    #[arg(long)]
+    maximal_inlining: bool,
 }
 
 impl Opts {
@@ -83,10 +87,13 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Expand.
-    let mut expander = Expander::new(&prog, term_rule_sets);
+    let mut expander = Expander::new(&prog, &term_rule_sets);
     expander.constructor(term_id);
     for inline_term_id in inline_term_ids {
         expander.inline(inline_term_id);
+    }
+    if opts.maximal_inlining {
+        expander.enable_maximal_inlining();
     }
 
     expander.expand();

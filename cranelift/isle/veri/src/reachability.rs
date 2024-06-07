@@ -54,7 +54,7 @@ impl<'a> Reachability<'a> {
     }
 }
 
-fn used_terms(rule_set: &RuleSet) -> HashSet<TermId> {
+pub fn used_terms(rule_set: &RuleSet) -> HashSet<TermId> {
     rule_set
         .bindings
         .iter()
@@ -63,7 +63,7 @@ fn used_terms(rule_set: &RuleSet) -> HashSet<TermId> {
         .collect()
 }
 
-fn binding_used_term(binding: &Binding) -> Option<TermId> {
+pub fn binding_used_term(binding: &Binding) -> Option<TermId> {
     match binding {
         Binding::Constructor { term, .. } | Binding::Extractor { term, .. } => Some(*term),
         // TODO(mbm): make variant uses the variant constructor term?
