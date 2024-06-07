@@ -60,12 +60,7 @@ fn main() -> anyhow::Result<()> {
         total_num_terms += 1;
         total_num_rules += rule_ids.len();
 
-        println!(
-            "{}\tclass={}\trules={}",
-            prog.term_name(term.id),
-            class,
-            rule_ids.len()
-        );
+        println!("{}\t{}\t{}", prog.term_name(term.id), class, rule_ids.len());
     }
 
     println!("");
