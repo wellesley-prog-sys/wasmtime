@@ -259,6 +259,19 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                 .collect();
             Expr::Switch(Box::new(swith_on), arms)
         }
+        SpecOp::Load => {
+            assert_eq!(
+                args.len(),
+                3,
+                "Unexpected number of args for subs operator {:?}",
+                pos
+            );
+            Expr::Load(
+                Box::new(spec_to_expr(&args[0], env)),
+                Box::new(spec_to_expr(&args[1], env)),
+                Box::new(spec_to_expr(&args[2], env)),
+            )
+        }
     }
 }
 

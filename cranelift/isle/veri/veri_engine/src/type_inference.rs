@@ -1370,6 +1370,31 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::BVPopcnt(Box::new(e1)), t)
         }
+        annotation_ir::Expr::Load(x, y, z) => {
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+            let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
+            let (e3, t3) = add_annotation_constraints(*z, tree, annotation_info);
+            let t = tree.next_type_var;
+
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t3, annotation_ir::Type::BitVector));
+            tree.var_constraints.insert(TypeExpr::Variable(t1, t2));
+            tree.var_constraints.insert(TypeExpr::Variable(t, t1));
+            tree.var_constraints.insert(TypeExpr::Variable(t, t2));
+            tree.var_constraints.insert(TypeExpr::Variable(t, t3));
+
+            tree.next_type_var += 1;
+            (
+                veri_ir::Expr::Load(Box::new(e1), Box::new(e2), Box::new(e3)),
+                t,
+            )
+        }
     };
     tree.ty_vars.insert(e.clone(), t);
     // let fmt = format!("{}:\t{:?}", t, e);

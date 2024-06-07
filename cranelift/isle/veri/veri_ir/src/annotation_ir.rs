@@ -221,6 +221,8 @@ pub enum Expr {
 
     // Switch
     Switch(Box<Expr>, Vec<(Expr, Expr)>),
+
+    Load(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 impl Expr {
