@@ -57,12 +57,13 @@ fn main() -> anyhow::Result<()> {
     // Construct reachability.
     let mut reach = Reachability::build(&term_rule_sets);
 
-    for term_id in term_rule_sets.keys() {
+    for (term_id, rule_set) in term_rule_sets.iter() {
         let cyclic = reach.is_cyclic(*term_id);
         let reachable = reach.reachable(*term_id);
 
         println!("term = {}", prog.term_name(*term_id));
         println!("\tcyclic = {}", cyclic);
+        println!("\t#rules = {}", rule_set.rules.len());
         println!("\t#reachable = {}", reachable.len());
         for reach_term_id in reachable {
             println!("\treachable = {}", prog.term_name(*reach_term_id));
