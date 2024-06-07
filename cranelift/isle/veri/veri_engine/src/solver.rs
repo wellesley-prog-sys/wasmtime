@@ -38,6 +38,11 @@ pub struct SolverCtx {
     pub additional_assumptions: Vec<SExpr>,
     pub additional_assertions: Vec<SExpr>,
     fresh_bits_idx: usize,
+
+    // TODO Vaishu Amber: LHS load args, RHS load args
+    // Make this an "Option" type     
+
+    // variable name: Option<.....>
 }
 
 impl SolverCtx {
@@ -1240,7 +1245,22 @@ impl SolverCtx {
                     .rev()
                     .fold(last, |acc, x| self.smt.concat(*x, acc))
             }
-            Expr::Load(_, _, _) => todo!()
+            Expr::Load(x, y, z) => 
+                // visit the children
+                //   recur on x, y, and z
+
+
+                // TODO Vaishu Amber: recursively process the args, add them to a persistent data structure. 
+                // Will need to know if on LHS or RHS
+                // #x0000000000000000
+
+                // if self.lhs_flag {
+                //     self.lhs_loads = Some(vec![.. converted x, y, z])
+                // } else {
+                //     self.rhs_loads = Some(vec![.. converted x, y, z])
+                // }
+                self.smt.atom("true")
+
         }
     }
 
@@ -1915,10 +1935,13 @@ pub fn run_solver_with_static_widths(
         additional_assumptions: vec![],
         additional_assertions: vec![],
         fresh_bits_idx: 0,
+        // lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
 
+    // Note: lhs is like a', rhs is like d'
     let lhs = ctx.vir_expr_to_sexp(rule_sem.lhs.clone());
+    // ctx.lhs_flag = false;
     let rhs = ctx.vir_expr_to_sexp(rule_sem.rhs.clone());
 
     // Check whether the assumptions are possible
@@ -1982,6 +2005,7 @@ pub fn run_solver_with_static_widths(
         );
         custom_condition
     } else {
+        // Note: this is where we ask if the LHS and the RHS are equal
         let side_equality = ctx.smt.eq(lhs_care_bits, rhs_care_bits);
         println!(
             "LHS and RHS equality condition:\n\t{}\n",
@@ -1995,12 +2019,22 @@ pub fn run_solver_with_static_widths(
     }
 
     let assumption_conjunction = ctx.smt.and_many(assumptions);
-    let full_condition = if assertions.len() > 0 {
+    let mut full_condition = if assertions.len() > 0 {
         let assertion_conjunction = ctx.smt.and_many(assertions.clone());
         ctx.smt.and(condition, assertion_conjunction)
     } else {
         condition
     };
+
+    // TODO Vaishu Amber: add the load argument equalities to the full condiiton
+    // Check if there is any load arguments
+    // match, check: only do this if not None
+    // If there are load arguments
+    //  for arg in args 
+    //        arg_equal = ctx.smt.eq(arg0left, argo0right)
+    //         full_condition =  ctx.smt.and(full_condition, arg_equal)
+
+
     println!(
         "Full verification condition:\n\t{}\n",
         ctx.smt.display(full_condition)
