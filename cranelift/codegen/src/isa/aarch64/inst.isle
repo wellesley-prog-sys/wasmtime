@@ -3323,7 +3323,7 @@
 ;; widths and sign/zero-extending properties.
 (decl aarch64_uload8 (AMode MemFlags) Reg)
 (spec (aarch64_uload8 amode flags)
-      (provide ))
+      (provide true))
 (rule (aarch64_uload8 amode flags)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ULoad8 dst amode flags))))
