@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
@@ -32,6 +32,10 @@ struct Opts {
     /// Term to count.
     #[arg(long, required = true)]
     term_name: String,
+
+    /// Maximum rules: only expand terms with at most this many rules.
+    #[arg(long, default_value = "0")]
+    max_rules: usize,
 }
 
 impl Opts {
@@ -65,15 +69,20 @@ fn main() -> anyhow::Result<()> {
     let term_rule_sets: HashMap<_, _> = prog.build_trie()?.into_iter().collect();
 
     // Lookup term to count.
-    let term_id = prog
+    let root_term_id = prog
         .get_term_by_name(opts.term_name.as_str())
         .ok_or(anyhow::format_err!("unknown term {}", opts.term_name))?;
     println!("term = {}", opts.term_name);
-    println!("id = {}", term_id.index());
+    println!("id = {}", root_term_id.index());
 
     // Count expansions.
     let mut expansion_counter = ExpansionCounter::new(&prog, &term_rule_sets);
-    let n = expansion_counter.term(term_id, "".to_string());
+    expansion_counter.enable_expansion(root_term_id);
+    if opts.max_rules > 0 {
+        expansion_counter.set_max_rules(opts.max_rules);
+    }
+
+    let n = expansion_counter.term(root_term_id, "".to_string());
     println!("expansions = {}", n);
 
     Ok(())
@@ -83,6 +92,9 @@ struct ExpansionCounter<'a> {
     prog: &'a Program,
     term_rule_sets: &'a HashMap<TermId, RuleSet>,
     reach: Reachability<'a>,
+
+    enable_expansion: HashSet<TermId>,
+    max_rules: usize,
 }
 
 impl<'a> ExpansionCounter<'a> {
@@ -91,6 +103,9 @@ impl<'a> ExpansionCounter<'a> {
             prog,
             term_rule_sets,
             reach: Reachability::build(term_rule_sets),
+
+            enable_expansion: HashSet::new(),
+            max_rules: usize::MAX,
         }
     }
 
@@ -107,24 +122,52 @@ impl<'a> ExpansionCounter<'a> {
             self.rule_set(rule_set, indent.clone())
         };
 
-        println!(
-            "{indent}< {term_name} = {n}",
-            term_name = self.prog.term_name(term_id)
-        );
+        if n > 1 {
+            println!(
+                "{indent}< {term_name} = {n}",
+                term_name = self.prog.term_name(term_id)
+            );
+        }
 
         n
     }
 
+    fn enable_expansion(&mut self, term_id: TermId) {
+        self.enable_expansion.insert(term_id);
+    }
+
+    fn set_max_rules(&mut self, max_rules: usize) {
+        self.max_rules = max_rules;
+    }
+
     fn may_expand(&mut self, term_id: TermId) -> bool {
-        self.term_rule_sets.contains_key(&term_id) && !self.reach.is_cyclic(term_id)
+        if !self.term_rule_sets.contains_key(&term_id) {
+            return false;
+        }
+
+        if self.reach.is_cyclic(term_id) {
+            return false;
+        }
+
+        if self.enable_expansion.contains(&term_id) {
+            return true;
+        }
+
+        let rule_set = &self.term_rule_sets[&term_id];
+        if rule_set.rules.len() > self.max_rules {
+            return false;
+        }
+
+        return true;
     }
 
     fn rule_set(&mut self, rule_set: &RuleSet, indent: String) -> usize {
         let mut n = 0;
         for rule in &rule_set.rules {
-            n += self.rule(rule_set, rule, indent.clone());
+            let r = self.rule(rule_set, rule, indent.clone());
+            n += r;
             println!(
-                "{indent}n={n} rule={}",
+                "{indent}n={n} r={r} rule={}",
                 rule.pos.pretty_print_line(&self.prog.tyenv.filenames)
             );
         }
