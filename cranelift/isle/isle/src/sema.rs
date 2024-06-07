@@ -327,6 +327,17 @@ impl Term {
         }
     }
 
+    /// Does the declaration have the partial flag.
+    pub fn is_partial(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::Decl {
+                flags: TermFlags { partial: true, .. },
+                ..
+            }
+        )
+    }
+
     /// Is this term an enum variant?
     pub fn is_enum_variant(&self) -> bool {
         matches!(self.kind, TermKind::EnumVariant { .. })

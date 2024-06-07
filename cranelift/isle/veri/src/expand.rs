@@ -167,17 +167,28 @@ impl<'a> Expander<'a> {
         true
     }
 
-    /// Mark all possible terms as candidates for inlining.
-    pub fn enable_maximal_inlining(&mut self) {
-        for term_id in self.term_rule_sets.keys().copied() {
-            if self.may_inline(term_id) {
-                self.inline(term_id);
+    /// Mark all possible terms as candidates for inlining, provided they have
+    /// at most the given number of rules (0 for no limit).
+    pub fn enable_maximal_inlining(&mut self, max_rules: usize) {
+        for (term_id, rule_set) in self.term_rule_sets {
+            // HACK(mbm): merge these heuristics with may_inline
+            if max_rules > 0 && rule_set.rules.len() > max_rules {
+                continue;
+            }
+
+            // BUG(mbm): partial constructors are inlined incorrectly causing bindings to fail typecheck
+            let term = self.prog.term(*term_id);
+            if term.is_partial() {
+                continue;
+            }
+
+            if self.may_inline(*term_id) {
+                self.inline(*term_id);
             }
         }
     }
 
     fn finish(&mut self, expansion: Expansion) {
-        println!("finish: #complete = {}", self.complete.len());
         expansion.validate();
         self.complete.push(expansion);
     }
@@ -214,10 +225,6 @@ impl<'a> Expander<'a> {
 
         let rule_set = &self.term_rule_sets[term_id];
         for rule in &rule_set.rules {
-            //println!(
-            //    "inline rule: {:?}",
-            //    rule.pos.pretty_print_line(&self.prog.tyenv.filenames[..])
-            //);
             let mut apply = Application::new(expansion.clone());
             let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
             self.stack.push(inlined);

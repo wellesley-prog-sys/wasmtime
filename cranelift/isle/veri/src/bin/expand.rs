@@ -36,6 +36,10 @@ struct Opts {
     /// Whether to enable maximal inlining.
     #[arg(long)]
     maximal_inlining: bool,
+
+    /// Maximum rules: only inline terms with at most this many rules.
+    #[arg(long, default_value = "0")]
+    max_rules: usize,
 }
 
 impl Opts {
@@ -93,7 +97,7 @@ fn main() -> anyhow::Result<()> {
         expander.inline(inline_term_id);
     }
     if opts.maximal_inlining {
-        expander.enable_maximal_inlining();
+        expander.enable_maximal_inlining(opts.max_rules);
     }
 
     expander.expand();
