@@ -64,10 +64,10 @@ fn main() -> anyhow::Result<()> {
     }
 
     println!("");
-    println!("total_num_terms = {total_num_terms}",);
-    println!("total_num_rules = {total_num_rules}");
+    println!("TOTAL: num_terms = {total_num_terms}",);
+    println!("TOTAL: num_rules = {total_num_rules}");
     for (class, count) in term_class_counts {
-        println!("total_class: {class} = {count}");
+        println!("TOTAL: class:{class} = {count}");
     }
 
     Ok(())
@@ -92,7 +92,7 @@ fn classify_term(prog: &Program, term: &Term, rule_ids: &Vec<RuleId>) -> String 
         return "macro".to_string();
     }
 
-    return "other".to_string();
+    return "constructor".to_string();
 }
 
 fn is_macro_rule(rule: &Rule) -> bool {
