@@ -1341,9 +1341,6 @@
     (Nv)
 ))
 
-;;0i8 VectorSize.Size8x8
-;;1i8 VectorSize.Size16x4
-;;2i8 VectorSize.Size32x2
 (model VectorSize
   (enum
     (Size8x8 #x00)
@@ -2267,10 +2264,6 @@
        (MInst.AluRRImm12 (ALUOp.AddS) size (writable_zero_reg)
         src1 src2)))
 
-;; N: Set to 1 when the result of the operation is negative, cleared to 0 otherwise.
-;; Z: Set to 1 when the result of the operation is zero, cleared to 0 otherwise.
-;; C: Set to 1 when the operation results in a carry, or when a subtraction results in no borrow, cleared to 0 otherwise.
-;; V: Set to 1 when the operation causes overflow, cleared to 0 otherwise.
 (spec (cmp ty x y)
   (provide (= result (subs ty x y)))
   (require
@@ -2281,10 +2274,6 @@
        (MInst.AluRRR (ALUOp.SubS) size (writable_zero_reg)
         src1 src2)))
 
-;; N: Set to 1 when the result of the operation is negative, cleared to 0 otherwise.
-;; Z: Set to 1 when the result of the operation is zero, cleared to 0 otherwise.
-;; C: Set to 1 when the operation results in a carry, or when a subtraction results in no borrow, cleared to 0 otherwise.
-;; V: Set to 1 when the operation causes overflow, cleared to 0 otherwise.
 (spec (cmp_imm ty x y)
   (provide (= result (subs ty x (zero_ext 64 y))))
   (require (or (= ty 32) (= ty 64))))
@@ -2298,10 +2287,6 @@
 (rule (cmp64_imm src1 src2)
       (cmp_imm (OperandSize.Size64) src1 src2))
 
-;; N: Set to 1 when the result of the operation is negative, cleared to 0 otherwise.
-;; Z: Set to 1 when the result of the operation is zero, cleared to 0 otherwise.
-;; C: Set to 1 when the operation results in a carry, or when a subtraction results in no borrow, cleared to 0 otherwise.
-;; V: Set to 1 when the operation causes overflow, cleared to 0 otherwise.
 (spec (cmp_extend ty x y extend)
   (provide
     (= result
@@ -3497,16 +3482,6 @@
 (extern constructor load_constant64_full load_constant64_full)
 
 ;; Fallback for integral 64-bit constants
-;; Arguments:
-;; * Immediate type
-;; * Way to extend the immediate value to the full width of the destination
-;;   register
-;; * Immediate value - only the bits that fit within the type are used and
-;;   extended, while the rest are ignored
-;;
-;; Note that, unlike the convention in the AArch64 backend, this helper leaves
-;; all bits in the destination register in a defined state, i.e. smaller types
-;; such as `I8` are either sign- or zero-extended.
 (rule (imm (integral_ty ty) extend n)
       (load_constant64_full ty extend n))
 
