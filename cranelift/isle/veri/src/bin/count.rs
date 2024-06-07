@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
@@ -96,16 +96,23 @@ impl<'a> ExpansionCounter<'a> {
 
     fn term(&mut self, term_id: TermId, indent: String) -> usize {
         println!(
-            "{indent}{term_name}",
+            "{indent}> {term_name}",
             term_name = self.prog.term_name(term_id)
         );
 
-        if !self.may_expand(term_id) {
+        let n = if !self.may_expand(term_id) {
             1
         } else {
             let rule_set = &self.term_rule_sets[&term_id];
             self.rule_set(rule_set, indent.clone())
-        }
+        };
+
+        println!(
+            "{indent}< {term_name} = {n}",
+            term_name = self.prog.term_name(term_id)
+        );
+
+        n
     }
 
     fn may_expand(&mut self, term_id: TermId) -> bool {
@@ -137,18 +144,32 @@ impl<'a> ExpansionCounter<'a> {
     }
 }
 
-fn rule_bindings(rule_set: &RuleSet, rule: &Rule) -> HashSet<BindingId> {
+fn rule_bindings(rule_set: &RuleSet, rule: &Rule) -> BTreeSet<BindingId> {
     // TODO(mbm): duplicates logic in expand::Application
 
     // Initialize stack of bindings used directly by the rule.
     let mut stack = Vec::new();
+
+    // Result binding.
     stack.push(rule.result);
-    // TODO(mbm): equals
-    // TODO(mbm): constraints
+
+    // Constraints and equality.
+    for i in 0..rule_set.bindings.len() {
+        let binding_id = i.try_into().unwrap();
+
+        if rule.get_constraint(binding_id).is_some() {
+            stack.push(binding_id);
+        }
+
+        if let Some(equal_binding_id) = rule.equals.find(binding_id) {
+            stack.push(equal_binding_id);
+        }
+    }
+
     // TODO(mbm): iterators, prio, impure?
 
     // Collect dependencies.
-    let mut binding_ids = HashSet::new();
+    let mut binding_ids = BTreeSet::new();
     while !stack.is_empty() {
         let binding_id = stack.pop().unwrap();
 
