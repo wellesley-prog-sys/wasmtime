@@ -159,6 +159,7 @@ pub fn binding_string(
                     .collect::<Vec<_>>()
             )
         }
+        Binding::MakeSome { inner } => format!("some({inner})", inner = inner.index()),
         Binding::MatchSome { source } => format!("match_some({source})", source = source.index()),
         Binding::MatchTuple { source, field } => format!(
             "match_tuple({source}, {field})",
@@ -251,6 +252,12 @@ pub fn binding_type(
                 .constructor_sig(&prog.tyenv)
                 .expect("term should have constructor signature");
             external_sig_return_type(&sig)
+        }
+
+        Binding::MakeSome { inner } => {
+            let inner_binding = lookup_binding(*inner);
+            let inner_ty = binding_type(&inner_binding, term_id, prog, lookup_binding);
+            BindingType::Option(Box::new(inner_ty))
         }
 
         Binding::MatchSome { source } => {

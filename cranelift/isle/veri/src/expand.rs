@@ -26,6 +26,12 @@ impl Expansion {
             .push(constraint);
     }
 
+    fn push_binding(&mut self, binding: Binding) -> BindingId {
+        let binding_id = self.bindings.len().try_into().unwrap();
+        self.bindings.push(Some(binding));
+        binding_id
+    }
+
     fn validate(&self) {
         // Bindings: all references should be valid.
         for binding in self.bindings.iter().flatten() {
@@ -176,12 +182,6 @@ impl<'a> Expander<'a> {
                 continue;
             }
 
-            // BUG(mbm): partial constructors are inlined incorrectly causing bindings to fail typecheck
-            let term = self.prog.term(*term_id);
-            if term.is_partial() {
-                continue;
-            }
-
             if self.may_inline(*term_id) {
                 self.inline(*term_id);
             }
@@ -223,10 +223,17 @@ impl<'a> Expander<'a> {
             _ => unreachable!("expect constructor binding"),
         };
 
+        let term = &self.prog.term(*term_id);
         let rule_set = &self.term_rule_sets[term_id];
         for rule in &rule_set.rules {
             let mut apply = Application::new(expansion.clone());
-            let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
+            let inlined = apply.rule(
+                rule_set,
+                rule,
+                parameters,
+                inline_binding_id,
+                term.is_partial(),
+            );
             self.stack.push(inlined);
         }
     }
@@ -264,6 +271,8 @@ impl Application {
         rule: &Rule,
         parameters: &Box<[BindingId]>,
         call_site: BindingId,
+        // TODO(mbm): can we read the partial flag from somewhere instead of passing it?
+        partial: bool,
     ) -> Expansion {
         // Record the application of this rule.
         self.expansion.rules.push(rule.pos);
@@ -324,7 +333,26 @@ impl Application {
         // Result.
         //
         // Once imported, the callsite should be substituted for the result binding.
-        let result_binding_id = self.add_binding(rule_set, rule.result);
+        //
+        // For partial internal constructors the result type is an option, but
+        // the result binding is not wrapped in a Some.  As a result, the
+        // callsite we are replacing has type Option<T> and the imported result
+        // binding will have type T. Therefore in this case we need to wrap the
+        // incoming binding in a MakeSome binding. Note that the codegen phase
+        // in the ISLE compiler adds the Some(..) wrapper.
+        //
+        // TODO(mbm): is this the right way to handle partial constructors?
+        // Could we modify trie again so that the MakeSome is present in the
+        // result binding already?
+        let expansion_result_binding_id = self.add_binding(rule_set, rule.result);
+        let result_binding_id = if partial {
+            self.expansion.push_binding(Binding::MakeSome {
+                inner: expansion_result_binding_id,
+            })
+        } else {
+            expansion_result_binding_id
+        };
+
         substitutions.push(Substitution {
             target: call_site,
             replace: result_binding_id,
@@ -356,8 +384,7 @@ impl Application {
         let reindexed = self.import_reindex.binding(binding);
 
         // Insert into expansion bindings list.
-        let expansion_binding_id: BindingId = self.expansion.bindings.len().try_into().unwrap();
-        self.expansion.bindings.push(Some(reindexed));
+        let expansion_binding_id = self.expansion.push_binding(reindexed);
 
         // Record binding mapping.
         self.import_reindex.map(binding_id, expansion_binding_id);
@@ -435,6 +462,10 @@ impl Reindex {
                 field: *field,
             },
 
+            Binding::MakeSome { inner } => Binding::MakeSome {
+                inner: self.id(inner),
+            },
+
             Binding::MatchSome { source } => Binding::MatchSome {
                 source: self.id(source),
             },
@@ -444,7 +475,7 @@ impl Reindex {
                 field: *field,
             },
 
-            _ => todo!("reindex binding: {binding:?}"),
+            Binding::Iterator { .. } => unimplemented!("iterator bindings not supported"),
         }
     }
 }
