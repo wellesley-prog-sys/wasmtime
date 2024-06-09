@@ -328,7 +328,12 @@ impl Application {
             }
         }
 
-        // TODO: iterators, prio, impure?
+        // TODO: iterators, prio?
+
+        // Impure.
+        for impure_binding_id in &rule.impure {
+            self.add_binding(rule_set, *impure_binding_id);
+        }
 
         // Result.
         //
