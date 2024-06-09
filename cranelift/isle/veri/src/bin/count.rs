@@ -36,6 +36,10 @@ struct Opts {
     /// Maximum rules: only expand terms with at most this many rules.
     #[arg(long, default_value = "0")]
     max_rules: usize,
+
+    /// Terms to exclude from inlining.
+    #[arg(long, value_name = "TERM_NAME")]
+    exclude_inline: Vec<String>,
 }
 
 impl Opts {
@@ -81,6 +85,12 @@ fn main() -> anyhow::Result<()> {
     if opts.max_rules > 0 {
         expansion_counter.set_max_rules(opts.max_rules);
     }
+    for exclude_term_name in &opts.exclude_inline {
+        let exclude_term_id = prog
+            .get_term_by_name(&exclude_term_name)
+            .ok_or(anyhow::format_err!("unknown term {exclude_term_name}"))?;
+        expansion_counter.disable_expansion(exclude_term_id);
+    }
 
     let n = expansion_counter.term(root_term_id, "".to_string());
     println!("expansions = {}", n);
@@ -94,6 +104,7 @@ struct ExpansionCounter<'a> {
     reach: Reachability<'a>,
 
     enable_expansion: HashSet<TermId>,
+    disable_expansion: HashSet<TermId>,
     max_rules: usize,
 }
 
@@ -105,6 +116,7 @@ impl<'a> ExpansionCounter<'a> {
             reach: Reachability::build(term_rule_sets),
 
             enable_expansion: HashSet::new(),
+            disable_expansion: HashSet::new(),
             max_rules: usize::MAX,
         }
     }
@@ -136,6 +148,10 @@ impl<'a> ExpansionCounter<'a> {
         self.enable_expansion.insert(term_id);
     }
 
+    fn disable_expansion(&mut self, term_id: TermId) {
+        self.disable_expansion.insert(term_id);
+    }
+
     fn set_max_rules(&mut self, max_rules: usize) {
         self.max_rules = max_rules;
     }
@@ -151,6 +167,10 @@ impl<'a> ExpansionCounter<'a> {
 
         if self.enable_expansion.contains(&term_id) {
             return true;
+        }
+
+        if self.disable_expansion.contains(&term_id) {
+            return false;
         }
 
         let rule_set = &self.term_rule_sets[&term_id];
@@ -209,7 +229,10 @@ fn rule_bindings(rule_set: &RuleSet, rule: &Rule) -> BTreeSet<BindingId> {
         }
     }
 
-    // TODO(mbm): iterators, prio, impure?
+    // TODO(mbm): iterators, prio?
+
+    // Impure.
+    stack.extend(&rule.impure);
 
     // Collect dependencies.
     let mut binding_ids = BTreeSet::new();

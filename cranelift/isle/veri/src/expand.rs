@@ -174,14 +174,20 @@ impl<'a> Expander<'a> {
     }
 
     /// Mark all possible terms as candidates for inlining, provided they have
-    /// at most the given number of rules (0 for no limit).
-    pub fn enable_maximal_inlining(&mut self, max_rules: usize) {
+    /// at most the given number of rules (0 for no limit) and are not in an
+    /// explicit exclusion set.
+    pub fn enable_maximal_inlining(&mut self, max_rules: usize, exclude: &HashSet<TermId>) {
         for (term_id, rule_set) in self.term_rule_sets {
             // HACK(mbm): merge these heuristics with may_inline
             if max_rules > 0 && rule_set.rules.len() > max_rules {
                 continue;
             }
 
+            if exclude.contains(&term_id) {
+                continue;
+            }
+
+            // Mark inlinable, provided it meets base requirements.
             if self.may_inline(*term_id) {
                 self.inline(*term_id);
             }

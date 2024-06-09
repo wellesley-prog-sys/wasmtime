@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
@@ -30,7 +30,7 @@ struct Opts {
     term_name: String,
 
     /// Term names to inline.
-    #[arg(long)]
+    #[arg(long, value_name = "TERM_NAME")]
     inline: Vec<String>,
 
     /// Whether to enable maximal inlining.
@@ -40,6 +40,10 @@ struct Opts {
     /// Maximum rules: only inline terms with at most this many rules.
     #[arg(long, default_value = "0")]
     max_rules: usize,
+
+    /// Terms to exclude from inlining.
+    #[arg(long, value_name = "TERM_NAME")]
+    exclude_inline: Vec<String>,
 }
 
 impl Opts {
@@ -97,7 +101,14 @@ fn main() -> anyhow::Result<()> {
         expander.inline(inline_term_id);
     }
     if opts.maximal_inlining {
-        expander.enable_maximal_inlining(opts.max_rules);
+        let mut exclude = HashSet::new();
+        for exclude_term_name in &opts.exclude_inline {
+            let term_id = prog
+                .get_term_by_name(&exclude_term_name)
+                .ok_or(anyhow::format_err!("unknown term {exclude_term_name}"))?;
+            exclude.insert(term_id);
+        }
+        expander.enable_maximal_inlining(opts.max_rules, &exclude);
     }
 
     expander.expand();
