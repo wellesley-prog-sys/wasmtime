@@ -1240,6 +1240,7 @@ impl SolverCtx {
                     .rev()
                     .fold(last, |acc, x| self.smt.concat(*x, acc))
             }
+            Expr::Load(_, _, _) => todo!()
         }
     }
 

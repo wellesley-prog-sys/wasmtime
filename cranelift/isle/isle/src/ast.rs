@@ -205,6 +205,8 @@ pub enum SpecOp {
     // Control operations
     If,
     Switch,
+
+    Load,
 }
 
 /// A specification of the semantics of a term.

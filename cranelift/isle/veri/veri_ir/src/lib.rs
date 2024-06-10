@@ -187,6 +187,8 @@ pub enum Expr {
     BVConvToVarWidth(Box<Expr>, Box<Expr>),
 
     WidthOf(Box<Expr>),
+
+    Load(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 /// To-be-flushed-out verification counterexample for failures

@@ -3322,6 +3322,8 @@
 ;; Helpers for generating various load instructions, with varying
 ;; widths and sign/zero-extending properties.
 (decl aarch64_uload8 (AMode MemFlags) Reg)
+(spec (aarch64_uload8 amode flags)
+      (provide true))
 (rule (aarch64_uload8 amode flags)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ULoad8 dst amode flags))))
@@ -3689,6 +3691,9 @@
 ;; mid-end optimizations that fold constants into load/store immediate offsets
 ;; instead, but for now each backend needs to do this.
 (decl amode (Type Value i32) AMode)
+(spec (amode ty val offset)
+    (provide (= result (bvadd (zero_ext 64 val) (sign_ext 64 offset)))))
+
 (rule 0 (amode ty val offset)
         (amode_no_more_iconst ty val offset))
 (rule 1 (amode ty (iadd x (iconst (simm32 y))) offset)
