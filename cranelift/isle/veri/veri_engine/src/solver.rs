@@ -42,6 +42,7 @@ pub struct SolverCtx {
     // Make this an "Option" type     
     lhs_load_args: Option<Vec<SExpr>>,
     rhs_load_args: Option<Vec<SExpr>>,
+    load_return: Option<SExpr>,
     lhs_flag: bool,
 
 
@@ -568,9 +569,6 @@ impl SolverCtx {
         let ty = self.get_type(&e);
         let width = self.get_expr_width_var(&e).map(|s| s.clone());
         let static_expr_width = self.static_width(&e);
-        if !self.lhs_flag  {
-            dbg!(&e);
-        }
         match e {
             Expr::Terminal(t) => match t {
                 Terminal::Literal(v, tyvar) => {
@@ -1262,14 +1260,24 @@ impl SolverCtx {
                 let ey = self.vir_expr_to_sexp(*y);
                 let ez = self.vir_expr_to_sexp(*z);
 
+                if self.dynwidths {
+                    self.width_assumptions
+                        .push(self.smt.eq(width.unwrap(), ey));
+                }
+
                 if self.lhs_flag {
                     self.lhs_load_args = Some(vec![ex, ey, ez]);
+                    let load_ret = if self.dynwidths {
+                        self.new_fresh_bits(self.bitwidth)
+                    } else {
+                        self.new_fresh_bits(static_expr_width.unwrap())
+                    };
+                    self.load_return = Some(load_ret);
+                    load_ret
                 } else {
                     self.rhs_load_args = Some(vec![ex, ey, ez]);
-                    println!("RHS!!!");
-                    dbg!(&self.rhs_load_args);
+                    self.load_return.unwrap()
                 }
-                self.smt.atom("true")
             }
                 
         }
@@ -1750,6 +1758,7 @@ pub fn run_solver(
         fresh_bits_idx: 0,
         lhs_load_args: None,
         rhs_load_args: None,
+        load_return: None,
         lhs_flag: true,
     };
 
@@ -1957,6 +1966,7 @@ pub fn run_solver_with_static_widths(
         fresh_bits_idx: 0,
         lhs_load_args: None,
         rhs_load_args: None,
+        load_return: None,
         lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
@@ -2058,17 +2068,22 @@ pub fn run_solver_with_static_widths(
     //  for arg in args 
     //        arg_equal = ctx.smt.eq(arg0left, argo0right)
     //         full_condition =  ctx.smt.and(full_condition, arg_equal)
-
-    dbg!(&ctx.lhs_load_args);
-    dbg!(&ctx.rhs_load_args);
+    let mut load_conditions = vec![];
     match (&ctx.lhs_load_args, &ctx.rhs_load_args) {
         (Some(_), Some(_)) => {
             let lhs_args_vec = ctx.lhs_load_args.clone().unwrap();
             let rhs_args_vec = ctx.rhs_load_args.clone().unwrap();
+            println!("Load argument conditions:");
             for i in 0..lhs_args_vec.len() {
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
+                load_conditions.push(arg_equal);
+                println!(
+                    "\t{}",
+                    ctx.smt.display(arg_equal)
+                );
                 full_condition = ctx.smt.and(full_condition, arg_equal)
-        }
+            }
+            println!();
         },
         (None, None) => (),
         (Some(_), None) => {
@@ -2111,6 +2126,15 @@ pub fn run_solver_with_static_widths(
                 for (variable, value) in vals {
                     if value == ctx.smt.false_() {
                         println!("Failed assertion:\n{}", ctx.smt.display(variable));
+                    }
+                }
+            }
+
+            if load_conditions.len() > 0 {
+                let vals = ctx.smt.get_value(load_conditions).unwrap();
+                for (variable, value) in vals {
+                    if value == ctx.smt.false_() {
+                        println!("Failed load condition:\n{}", ctx.smt.display(variable));
                     }
                 }
             }

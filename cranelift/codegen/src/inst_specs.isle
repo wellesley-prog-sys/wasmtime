@@ -232,5 +232,6 @@
     ((args (bv 8) (bv 8) (bv 8)) (ret (bv 8)) (canon (bv 8)))
 )
 (spec (load flags val offset)
-    (provide (load flags (widthof result) (bvadd (zero_ext 64 val) (zero_ext 64 offset)))))
+    (provide 
+       (= result (load flags (widthof result) (bvadd (zero_ext 64 val) (sign_ext 64 offset))))))
 (instantiate load load)
