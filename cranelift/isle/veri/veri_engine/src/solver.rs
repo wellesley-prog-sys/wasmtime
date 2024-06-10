@@ -1652,7 +1652,13 @@ impl SolverCtx {
             }
             self.smt.declare_const(name, var_ty).unwrap();
         }
-        for a in &rule_sem.assumptions {
+        self.lhs_flag = true;
+        for a in &rule_sem.lhs_assumptions {
+            let p = self.vir_expr_to_sexp(a.clone());
+            assumptions.push(p)
+        }
+        self.lhs_flag = false;
+        for a in &rule_sem.rhs_assumptions {
             let p = self.vir_expr_to_sexp(a.clone());
             assumptions.push(p)
         }
