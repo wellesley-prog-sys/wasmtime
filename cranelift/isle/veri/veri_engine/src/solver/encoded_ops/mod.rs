@@ -36,6 +36,10 @@ mod tests {
             additional_assumptions: vec![],
             additional_assertions: vec![],
             fresh_bits_idx: 0,
+            lhs_flag: true,
+            lhs_load_args: None,
+            rhs_load_args: None,
+            load_return: None, 
         }
     }
 

@@ -3344,3 +3344,19 @@ fn test_named_x64_amode_imm_reg_reg_shift_shl_lhs() {
         )
     });
 }
+
+#[test]
+fn test_named_load_i8_aarch64_uload8() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "load_i8_aarch64_uload8",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::Success),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
