@@ -38,11 +38,13 @@ pub struct SolverCtx {
     pub additional_assumptions: Vec<SExpr>,
     pub additional_assertions: Vec<SExpr>,
     fresh_bits_idx: usize,
-
     // TODO Vaishu Amber: LHS load args, RHS load args
     // Make this an "Option" type     
+    lhs_load_args: Option<Vec<SExpr>>,
+    rhs_load_args: Option<Vec<SExpr>>,
+    lhs_flag: bool,
 
-    // variable name: Option<.....>
+
 }
 
 impl SolverCtx {
@@ -566,6 +568,9 @@ impl SolverCtx {
         let ty = self.get_type(&e);
         let width = self.get_expr_width_var(&e).map(|s| s.clone());
         let static_expr_width = self.static_width(&e);
+        if !self.lhs_flag  {
+            dbg!(&e);
+        }
         match e {
             Expr::Terminal(t) => match t {
                 Terminal::Literal(v, tyvar) => {
@@ -1245,7 +1250,7 @@ impl SolverCtx {
                     .rev()
                     .fold(last, |acc, x| self.smt.concat(*x, acc))
             }
-            Expr::Load(x, y, z) => 
+            Expr::Load(x, y, z) => {
                 // visit the children
                 //   recur on x, y, and z
 
@@ -1253,14 +1258,20 @@ impl SolverCtx {
                 // TODO Vaishu Amber: recursively process the args, add them to a persistent data structure. 
                 // Will need to know if on LHS or RHS
                 // #x0000000000000000
+                let ex = self.vir_expr_to_sexp(*x);
+                let ey = self.vir_expr_to_sexp(*y);
+                let ez = self.vir_expr_to_sexp(*z);
 
-                // if self.lhs_flag {
-                //     self.lhs_loads = Some(vec![.. converted x, y, z])
-                // } else {
-                //     self.rhs_loads = Some(vec![.. converted x, y, z])
-                // }
+                if self.lhs_flag {
+                    self.lhs_load_args = Some(vec![ex, ey, ez]);
+                } else {
+                    self.rhs_load_args = Some(vec![ex, ey, ez]);
+                    println!("RHS!!!");
+                    dbg!(&self.rhs_load_args);
+                }
                 self.smt.atom("true")
-
+            }
+                
         }
     }
 
@@ -1731,6 +1742,9 @@ pub fn run_solver(
         additional_assumptions: vec![],
         additional_assertions: vec![],
         fresh_bits_idx: 0,
+        lhs_load_args: None,
+        rhs_load_args: None,
+        lhs_flag: true,
     };
 
     let mut unresolved_widths = vec![];
@@ -1935,14 +1949,18 @@ pub fn run_solver_with_static_widths(
         additional_assumptions: vec![],
         additional_assertions: vec![],
         fresh_bits_idx: 0,
-        // lhs_flag: true,
+        lhs_load_args: None,
+        rhs_load_args: None,
+        lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
 
     // Note: lhs is like a', rhs is like d'
     let lhs = ctx.vir_expr_to_sexp(rule_sem.lhs.clone());
-    // ctx.lhs_flag = false;
+    println!("Processed LHS");
+    ctx.lhs_flag = false;
     let rhs = ctx.vir_expr_to_sexp(rule_sem.rhs.clone());
+    println!("Processed RHS");
 
     // Check whether the assumptions are possible
     let feasibility =
@@ -2029,11 +2047,35 @@ pub fn run_solver_with_static_widths(
     // TODO Vaishu Amber: add the load argument equalities to the full condiiton
     // Check if there is any load arguments
     // match, check: only do this if not None
+    
     // If there are load arguments
     //  for arg in args 
     //        arg_equal = ctx.smt.eq(arg0left, argo0right)
     //         full_condition =  ctx.smt.and(full_condition, arg_equal)
 
+    dbg!(&ctx.lhs_load_args);
+    dbg!(&ctx.rhs_load_args);
+    match (&ctx.lhs_load_args, &ctx.rhs_load_args) {
+        (Some(_), Some(_)) => {
+            let lhs_args_vec = ctx.lhs_load_args.clone().unwrap();
+            let rhs_args_vec = ctx.rhs_load_args.clone().unwrap();
+            for i in 0..lhs_args_vec.len() {
+                let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
+                full_condition = ctx.smt.and(full_condition, arg_equal)
+        }
+        },
+        (None, None) => (),
+        (Some(_), None) => {
+            println!("Verification failed");
+            println!("Left hand side has load statement but right hand side does not.");
+            return VerificationResult::Failure(Counterexample {});
+        },
+        (None, Some(_)) => {
+            println!("Verification failed");
+            println!("Right hand side has load statement but left hand side does not.");
+            return VerificationResult::Failure(Counterexample {});
+        }, 
+    }
 
     println!(
         "Full verification condition:\n\t{}\n",
