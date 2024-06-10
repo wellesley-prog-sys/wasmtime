@@ -37,9 +37,7 @@ pub struct SolverCtx {
     pub additional_decls: Vec<(String, SExpr)>,
     pub additional_assumptions: Vec<SExpr>,
     pub additional_assertions: Vec<SExpr>,
-    fresh_bits_idx: usize,
-    // TODO Vaishu Amber: LHS load args, RHS load args
-    // Make this an "Option" type     
+    fresh_bits_idx: usize, 
     lhs_load_args: Option<Vec<SExpr>>,
     rhs_load_args: Option<Vec<SExpr>>,
     load_return: Option<SExpr>,
@@ -1249,13 +1247,6 @@ impl SolverCtx {
                     .fold(last, |acc, x| self.smt.concat(*x, acc))
             }
             Expr::Load(x, y, z) => {
-                // visit the children
-                //   recur on x, y, and z
-
-
-                // TODO Vaishu Amber: recursively process the args, add them to a persistent data structure. 
-                // Will need to know if on LHS or RHS
-                // #x0000000000000000
                 let ex = self.vir_expr_to_sexp(*x);
                 let ey = self.vir_expr_to_sexp(*y);
                 let ez = self.vir_expr_to_sexp(*z);
@@ -1971,12 +1962,9 @@ pub fn run_solver_with_static_widths(
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
 
-    // Note: lhs is like a', rhs is like d'
     let lhs = ctx.vir_expr_to_sexp(rule_sem.lhs.clone());
-    println!("Processed LHS");
     ctx.lhs_flag = false;
     let rhs = ctx.vir_expr_to_sexp(rule_sem.rhs.clone());
-    println!("Processed RHS");
 
     // Check whether the assumptions are possible
     let feasibility =
@@ -2060,14 +2048,6 @@ pub fn run_solver_with_static_widths(
         condition
     };
 
-    // TODO Vaishu Amber: add the load argument equalities to the full condiiton
-    // Check if there is any load arguments
-    // match, check: only do this if not None
-    
-    // If there are load arguments
-    //  for arg in args 
-    //        arg_equal = ctx.smt.eq(arg0left, argo0right)
-    //         full_condition =  ctx.smt.and(full_condition, arg_equal)
     let mut load_conditions = vec![];
     match (&ctx.lhs_load_args, &ctx.rhs_load_args) {
         (Some(_), Some(_)) => {

@@ -389,7 +389,6 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
     for def in &defs.defs {
         match def {
             &ast::Def::Spec(ref spec) => {
-                dbg!(&spec.term);
                 let term_id = termenv.get_term_by_name(typeenv, &spec.term).unwrap();
                 assert!(
                     !annotation_map.contains_key(&term_id),
