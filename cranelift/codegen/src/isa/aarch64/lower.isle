@@ -2371,13 +2371,13 @@
 (rule load_i8_aarch64_uload8 (lower
        (has_type $I8 (load flags address offset)))
       (aarch64_uload8 (amode $I8 address offset) flags))
-(rule (lower
+(rule load_i16_aarch64_uload16 (lower
        (has_type $I16 (load flags address offset)))
       (aarch64_uload16 (amode $I16 address offset) flags))
-(rule (lower
+(rule load_i32_aarch64_uload32 (lower
        (has_type $I32 (load flags address offset)))
       (aarch64_uload32 (amode $I32 address offset) flags))
-(rule (lower
+(rule load_i64_aarch64_uload64 (lower
        (has_type $I64 (load flags address offset)))
       (aarch64_uload64 (amode $I64 address offset) flags))
 (rule (lower
