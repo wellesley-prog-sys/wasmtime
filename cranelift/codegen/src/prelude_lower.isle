@@ -386,6 +386,8 @@
 ;; Create an empty `InstOutput`, but do emit the given side-effectful
 ;; instruction.
 (decl side_effect (SideEffectNoResult) InstOutput)
+(spec (side_effect v)
+    (provide (= result v)))
 (rule (side_effect inst)
       (let ((_ Unit (emit_side_effect inst)))
         (output_none)))
