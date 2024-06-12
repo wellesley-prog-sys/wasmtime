@@ -245,7 +245,7 @@
     ((args (bv 8) (bv 32) (bv 32) (bv 32)) (ret Bool) (canon (bv 32)))
     ((args (bv 8) (bv 64) (bv 64) (bv 64)) (ret Bool) (canon (bv 64)))
 )
-(spec (store flags to_store val offset)
+(spec (store flags val_to_store addr offset)
     (provide 
-       (= result (store flags (widthof to_store) to_store (bvadd (zero_ext 64 val) (sign_ext 64 offset))))))
+       (= result (store flags (widthof val_to_store) val_to_store (bvadd (zero_ext 64 addr) (sign_ext 64 offset))))))
 (instantiate store store)
