@@ -2296,6 +2296,7 @@ fn create_parse_tree_expr(
             let name = typeenv.syms[sym.index()].clone();
             let val = match name.as_str() {
                 "I8" => 8,
+                "I16" => 16,
                 "I64" => 64,
                 "I32" => 32,
                 "false" => 0,
