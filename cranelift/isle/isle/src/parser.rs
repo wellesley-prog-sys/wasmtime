@@ -20,9 +20,6 @@ pub fn parse(lexer: Lexer) -> Result<Vec<Def>> {
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
-
-    // HACK(mbm): allow positions to be disabled to support testing
-    disable_pos: bool,
 }
 
 /// Used during parsing a `(rule ...)` to encapsulate some form that
@@ -36,15 +33,7 @@ enum IfLetOrExpr {
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
-        Parser {
-            lexer,
-            disable_pos: false,
-        }
-    }
-
-    // HACK(mbm): allow positions to be disabled to support testing
-    pub fn disable_pos(&mut self) {
-        self.disable_pos = true;
+        Parser { lexer }
     }
 
     fn error(&self, pos: Pos, msg: String) -> Error {
@@ -85,13 +74,9 @@ impl<'a> Parser<'a> {
     }
 
     fn pos(&self) -> Pos {
-        if !self.disable_pos {
-            self.lexer
-                .peek()
-                .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
-        } else {
-            Pos::default()
-        }
+        self.lexer
+            .peek()
+            .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
     }
 
     fn is_lparen(&self) -> bool {
