@@ -265,7 +265,9 @@ impl<'a> Expander<'a> {
                 inline_binding_id,
                 term.is_partial(),
             );
-            self.stack.push(inlined);
+            if inlined.is_feasible() {
+                self.stack.push(inlined);
+            }
         }
     }
 
