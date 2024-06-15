@@ -281,6 +281,28 @@ impl Constraint {
                 .collect(),
         }
     }
+
+    /// Determine if this constraint could be compatible with a given binding.
+    pub fn compatible(&self, binding: &Binding) -> bool {
+        match (self, binding) {
+            (
+                Constraint::Variant {
+                    ty: tc,
+                    variant: vc,
+                    ..
+                },
+                Binding::MakeVariant {
+                    ty: tb,
+                    variant: vb,
+                    ..
+                },
+            ) => tb == tc && vb == vc,
+            (Constraint::ConstInt { val: vc, ty: tc }, Binding::ConstInt { val: vb, ty: tb }) => {
+                vc == vb && tc == tb
+            }
+            _ => true,
+        }
+    }
 }
 
 impl Rule {

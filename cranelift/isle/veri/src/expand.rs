@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::{program::Program, reachability::Reachability};
 use cranelift_isle::{
@@ -13,12 +13,36 @@ pub struct Expansion {
     pub term: TermId,
     pub rules: Vec<Pos>,
     pub bindings: Vec<Option<Binding>>,
-    pub constraints: HashMap<BindingId, Vec<Constraint>>,
+    pub constraints: BTreeMap<BindingId, Vec<Constraint>>,
     pub equals: DisjointSets<BindingId>,
     pub result: BindingId,
 }
 
 impl Expansion {
+    /// Check basic feasibility of the expansion.
+    ///
+    /// A false return value means the expansion is known to never be viable.
+    /// However, a successful feasibility check leaves open the possibility that
+    /// the expansion is inapplicable for other reasons.
+    pub fn is_feasible(&self) -> bool {
+        // Assert data structure invariants.
+        self.validate();
+
+        // Check if any constraints are incompatible.
+        for (binding_id, constraints) in &self.constraints {
+            let binding = self.bindings[binding_id.index()]
+                .as_ref()
+                .expect("constrained binding must be defined");
+            for constraint in constraints {
+                if !constraint.compatible(binding) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
     fn add_constraint(&mut self, binding_id: BindingId, constraint: Constraint) {
         self.constraints
             .entry(binding_id)
@@ -65,7 +89,7 @@ impl Expansion {
         self.bindings[target.index()] = None;
 
         // Constraints.
-        let mut constraints = HashMap::new();
+        let mut constraints = BTreeMap::new();
         for (binding_id, constraint) in &self.constraints {
             constraints.insert(reindex.id(binding_id), constraint.clone());
         }
@@ -136,10 +160,11 @@ impl<'a> Expander<'a> {
             term: term_id,
             rules: Vec::new(),
             bindings,
-            constraints: HashMap::new(),
+            constraints: BTreeMap::new(),
             equals: DisjointSets::default(),
             result,
         };
+        assert!(expansion.is_feasible());
         self.stack.push(expansion);
     }
 

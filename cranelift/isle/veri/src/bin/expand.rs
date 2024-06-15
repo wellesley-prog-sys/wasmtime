@@ -187,5 +187,8 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
     // Result.
     println!("\tresult = {}", expansion.result.index());
 
+    // Feasibility.
+    println!("\tfeasible = {}", expansion.is_feasible());
+
     println!("}}");
 }
