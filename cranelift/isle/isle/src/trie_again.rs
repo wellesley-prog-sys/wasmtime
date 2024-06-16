@@ -182,6 +182,8 @@ pub struct Rule {
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
+    /// Rule name, if provided.
+    pub name: Option<sema::Sym>,
     /// If this rule applies, these side effects should be evaluated before returning.
     pub impure: Vec<BindingId>,
     /// If this rule applies, the top-level term should evaluate to this expression.
@@ -411,6 +413,7 @@ impl RuleSetBuilder {
         self.impure_instance = 0;
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
+        self.current_rule.name = rule.name;
         self.current_rule.result = rule.visit(self, termenv);
         if termenv.terms[rule.root_term.index()].is_partial() {
             self.current_rule.result = self.dedup_binding(Binding::MakeSome {
