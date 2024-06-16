@@ -1919,7 +1919,7 @@
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl alu_rrr (ALUOp Type Reg Reg) Reg)
-(rule (alu_rrr op ty src1 src2)
+(rule alu_rrr_to_emit (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op (operand_size ty) dst src1 src2))))
         dst))
@@ -2465,7 +2465,7 @@
 ;; Helpers for generating `add` instructions.
 
 (decl add (Type Reg Reg) Reg)
-(rule (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
+(rule add_to_alu_rrr (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
 
 (decl add_imm (Type Reg Imm12) Reg)
 (rule (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))

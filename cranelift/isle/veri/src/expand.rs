@@ -3,15 +3,14 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use crate::{program::Program, reachability::Reachability};
 use cranelift_isle::{
     disjointsets::DisjointSets,
-    lexer::Pos,
-    sema::TermId,
+    sema::{RuleId, TermId},
     trie_again::{Binding, BindingId, Constraint, Rule, RuleSet},
 };
 
 #[derive(Debug, Clone)]
 pub struct Expansion {
     pub term: TermId,
-    pub rules: Vec<Pos>,
+    pub rules: Vec<RuleId>,
     pub bindings: Vec<Option<Binding>>,
     pub constraints: BTreeMap<BindingId, Vec<Constraint>>,
     pub equals: DisjointSets<BindingId>,
@@ -299,7 +298,7 @@ impl Application {
         call_site: BindingId,
     ) -> Expansion {
         // Record the application of this rule.
-        self.expansion.rules.push(rule.pos);
+        self.expansion.rules.push(rule.id);
 
         //
         struct Substitution {

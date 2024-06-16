@@ -70,7 +70,7 @@
 
 ;; Construct a single-element `InstOutput` from a single register.
 (decl output_reg (Reg) InstOutput)
-(rule (output_reg reg) (output (value_reg reg)))
+(rule output_reg (output_reg reg) (output (value_reg reg)))
 
 ;; Construct a single-element `InstOutput` from a value.
 (decl output_value (Value) InstOutput)

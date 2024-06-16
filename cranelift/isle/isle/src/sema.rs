@@ -902,6 +902,14 @@ impl Rule {
         // Visit the rule's right-hand side, making use of the bound variables from the pattern.
         self.rhs.visit_in_rule(visitor, termenv, &vars)
     }
+
+    /// Identifier is a name or position for referring to the rule.
+    pub fn identifier(&self, tyenv: &TypeEnv) -> String {
+        match self.name {
+            Some(sym) => tyenv.syms[sym.index()].clone(),
+            None => self.pos.pretty_print_line(&tyenv.filenames),
+        }
+    }
 }
 
 /// Given an `Option<T>`, unwrap the inner `T` value, or `continue` if it is

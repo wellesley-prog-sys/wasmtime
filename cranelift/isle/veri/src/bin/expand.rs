@@ -131,8 +131,9 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
 
     // Rules.
     println!("\trules = [");
-    for pos in &expansion.rules {
-        println!("\t\t{}", pos.pretty_print_line(&prog.tyenv.filenames[..]));
+    for rule_id in &expansion.rules {
+        let rule = &prog.termenv.rules[rule_id.index()];
+        println!("\t\t{}", rule.identifier(&prog.tyenv));
     }
     println!("\t]");
 

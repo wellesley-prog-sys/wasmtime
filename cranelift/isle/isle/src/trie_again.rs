@@ -3,7 +3,7 @@
 use crate::disjointsets::DisjointSets;
 use crate::error::{Error, Span};
 use crate::lexer::Pos;
-use crate::sema;
+use crate::sema::{self, RuleId};
 use crate::stablemapset::StableSet;
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -169,6 +169,8 @@ pub enum Constraint {
 /// contains this rule.
 #[derive(Debug, Default)]
 pub struct Rule {
+    /// Identifier of the source rule.
+    pub id: RuleId,
     /// Where was this rule defined?
     pub pos: Pos,
     /// All of these bindings must match the given constraints for this rule to apply. Note that
@@ -182,8 +184,6 @@ pub struct Rule {
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
-    /// Rule name, if provided.
-    pub name: Option<sema::Sym>,
     /// If this rule applies, these side effects should be evaluated before returning.
     pub impure: Vec<BindingId>,
     /// If this rule applies, the top-level term should evaluate to this expression.
@@ -411,9 +411,9 @@ struct RuleSetBuilder {
 impl RuleSetBuilder {
     fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv, errors: &mut Vec<Error>) {
         self.impure_instance = 0;
+        self.current_rule.id = rule.id;
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
-        self.current_rule.name = rule.name;
         self.current_rule.result = rule.visit(self, termenv);
         if termenv.terms[rule.root_term.index()].is_partial() {
             self.current_rule.result = self.dedup_binding(Binding::MakeSome {
