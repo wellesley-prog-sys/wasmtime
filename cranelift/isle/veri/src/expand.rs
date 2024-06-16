@@ -254,17 +254,10 @@ impl<'a> Expander<'a> {
             _ => unreachable!("expect constructor binding"),
         };
 
-        let term = &self.prog.term(*term_id);
         let rule_set = &self.term_rule_sets[term_id];
         for rule in &rule_set.rules {
             let mut apply = Application::new(expansion.clone());
-            let inlined = apply.rule(
-                rule_set,
-                rule,
-                parameters,
-                inline_binding_id,
-                term.is_partial(),
-            );
+            let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
             if inlined.is_feasible() {
                 self.stack.push(inlined);
             }
@@ -304,8 +297,6 @@ impl Application {
         rule: &Rule,
         parameters: &Box<[BindingId]>,
         call_site: BindingId,
-        // TODO(mbm): can we read the partial flag from somewhere instead of passing it?
-        partial: bool,
     ) -> Expansion {
         // Record the application of this rule.
         self.expansion.rules.push(rule.pos);
@@ -371,26 +362,7 @@ impl Application {
         // Result.
         //
         // Once imported, the callsite should be substituted for the result binding.
-        //
-        // For partial internal constructors the result type is an option, but
-        // the result binding is not wrapped in a Some.  As a result, the
-        // callsite we are replacing has type Option<T> and the imported result
-        // binding will have type T. Therefore in this case we need to wrap the
-        // incoming binding in a MakeSome binding. Note that the codegen phase
-        // in the ISLE compiler adds the Some(..) wrapper.
-        //
-        // TODO(mbm): is this the right way to handle partial constructors?
-        // Could we modify trie again so that the MakeSome is present in the
-        // result binding already?
-        let expansion_result_binding_id = self.add_binding(rule_set, rule.result);
-        let result_binding_id = if partial {
-            self.expansion.push_binding(Binding::MakeSome {
-                inner: expansion_result_binding_id,
-            })
-        } else {
-            expansion_result_binding_id
-        };
-
+        let result_binding_id = self.add_binding(rule_set, rule.result);
         substitutions.push(Substitution {
             target: call_site,
             replace: result_binding_id,
