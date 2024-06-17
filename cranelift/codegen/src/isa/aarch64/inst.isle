@@ -3394,12 +3394,7 @@
 ;; widths.
 (decl aarch64_store8 (AMode MemFlags Reg) SideEffectNoResult)
 (spec (aarch64_store8 amode flags val)
-<<<<<<< HEAD
       (provide (= result (store flags 8 (extract 7 0 val) amode))))
-=======
-      (provide (= result (store flags 8 (extract 7 0 val) amode)))
-)
->>>>>>> 7ec750ce03 (Updates from pair programming)
 (rule (aarch64_store8 amode flags val)
       (SideEffectNoResult.Inst (MInst.Store8 val amode flags)))
 (decl aarch64_store16 (AMode MemFlags Reg) SideEffectNoResult)
