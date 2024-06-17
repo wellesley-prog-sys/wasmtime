@@ -3408,3 +3408,67 @@ fn test_named_load_i64_aarch64_uload64() {
         )
     });
 }
+
+#[test]
+fn test_named_store_i8_aarch64_store8() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i8_aarch64_store8",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::Success),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_store_i16_aarch64_store16() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i16_aarch64_store16",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::Success),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_store_i32_aarch64_store32() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i32_aarch64_store32",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_store_i64_aarch64_store64() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i64_aarch64_store64",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
+        )
+    });
+}
