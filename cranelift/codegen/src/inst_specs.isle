@@ -229,10 +229,10 @@
 
 
 (form load
-    ((args (bv 8) (bv 8) (bv 8)) (ret (bv 8)) (canon (bv 8)))
-    ((args (bv 8) (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
-    ((args (bv 8) (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
-    ((args (bv 8) (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+    ((args (bv 16) (bv 8) (bv 8)) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 16) (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
+    ((args (bv 16) (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+    ((args (bv 16) (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
 )
 (spec (load flags val offset)
     (provide 
@@ -240,10 +240,10 @@
 (instantiate load load)
 
 (form store
-    ((args (bv 8) (bv 8) (bv 8) (bv 8)) (ret Bool) (canon (bv 8)))
-    ((args (bv 8) (bv 16) (bv 16) (bv 16)) (ret Bool) (canon (bv 16)))
-    ((args (bv 8) (bv 32) (bv 32) (bv 32)) (ret Bool) (canon (bv 32)))
-    ((args (bv 8) (bv 64) (bv 64) (bv 64)) (ret Bool) (canon (bv 64)))
+    ((args (bv 16) (bv 8) (bv 64) (bv 32)) (ret (bv 1)) (canon (bv 8)))
+    ((args (bv 16) (bv 16) (bv 64) (bv 32)) (ret (bv 1)) (canon (bv 16)))
+    ((args (bv 16) (bv 32) (bv 64) (bv 32)) (ret (bv 1)) (canon (bv 32)))
+    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 1)) (canon (bv 64)))
 )
 (spec (store flags val_to_store addr offset)
     (provide 

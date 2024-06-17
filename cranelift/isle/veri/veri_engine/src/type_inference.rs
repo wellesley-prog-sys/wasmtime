@@ -1397,6 +1397,30 @@ fn add_annotation_constraints(
                 t,
             )
         }
+        annotation_ir::Expr::Store(w, x, y, z) => {
+            let (e0, t0) = add_annotation_constraints(*w, tree, annotation_info);
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+            let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
+            let (e3, t3) = add_annotation_constraints(*z, tree, annotation_info);
+            let t = tree.next_type_var;
+
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t0, annotation_ir::Type::BitVectorWithWidth(16)));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::Int));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t3, annotation_ir::Type::BitVector));
+
+            tree.next_type_var += 1;
+            (
+                veri_ir::Expr::Store(Box::new(e0),Box::new(e1), Box::new(e2), Box::new(e3)),
+                t,
+            )
+        }
     };
     tree.ty_vars.insert(e.clone(), t);
     // let fmt = format!("{}:\t{:?}", t, e);

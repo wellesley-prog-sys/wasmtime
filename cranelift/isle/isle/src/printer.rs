@@ -276,6 +276,7 @@ impl Printable for SpecOp {
             SpecOp::Cls => "cls",
             SpecOp::Clz => "clz",
             SpecOp::Load => "load", 
+            SpecOp::Store => "store",
         })
     }
 }
