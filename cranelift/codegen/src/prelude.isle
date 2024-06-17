@@ -373,7 +373,7 @@
 ;; `MemFlags::trusted`
 ;; TODO(mbm): ISLE types for FlagBit (hard-coding #x03 is fragile)
 (spec (mem_flags_trusted)
-      (provide (= result #x03)))
+      (provide (= result #x0003)))
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
