@@ -1731,7 +1731,6 @@ fn add_rule_constraints(
             }
 
             annotation_infos.push(annotation_info);
-
             Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(
                 curr.ident.clone(),
             )))

@@ -1802,7 +1802,7 @@ pub fn run_solver(
                         let eq = ctx
                             .smt
                             .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
-                        // println!("Width from inference {} ({})", width_name, bitwidth);
+                        println!("Width from inference {} ({})", width_name, bitwidth);
                         ctx.width_assumptions.push(eq);
                     }
                     None => {
