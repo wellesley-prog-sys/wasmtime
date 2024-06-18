@@ -17,6 +17,9 @@ struct Args {
     #[clap(short, long, default_value = "lower")]
     term: String,
 
+    #[clap(long)]
+    widths: Option<Vec<String>>,
+
     /// Which named rule to verify
     #[clap(long)]
     names: Option<Vec<String>>,
@@ -28,6 +31,10 @@ struct Args {
     /// Include the aarch64 files
     #[clap(short, long, action=ArgAction::SetTrue)]
     aarch64: bool,
+
+    /// Include the x64 files
+    #[clap(short, long, action=ArgAction::SetTrue)]
+    x64: bool,
 
     /// Don't check for distinct possible models
     #[clap(long, action=ArgAction::SetTrue)]
@@ -45,6 +52,17 @@ fn main() {
 
     let args = Args::parse();
     let mut inputs = vec![];
+
+    let valid_widths = ["I8", "I16", "I32", "I64"];
+    
+    if let Some(widths) = &args.widths {
+        for w in widths {
+            let w_str = w.as_str();
+            if !valid_widths.contains(&w_str) {
+                panic!("Invalid width type: {}", w);
+            }
+        }
+    }
 
     if !args.noprelude {
         // Build the relevant ISLE prelude using the meta crate
@@ -74,6 +92,20 @@ fn main() {
         if args.input.is_some() {
             panic!("Cannot specify both input file and aarch64 mode.")
         }
+    } else if args.x64 {
+        inputs.push(
+            cur_dir
+                .join("../../../codegen/src/isa/x64")
+                .join("inst.isle"),
+        );
+        inputs.push(
+            cur_dir
+                .join("../../../codegen/src/isa/x64")
+                .join("lower.isle"),
+        );
+        if args.input.is_some() {
+            panic!("Cannot specify both input file and x64 mode.")
+        }
     } else {
         if let Some(i) = args.input {
             inputs.push(PathBuf::from(i));
@@ -100,5 +132,5 @@ fn main() {
         custom_assumptions: None,
     };
 
-    verify_rules(inputs, &config)
+    verify_rules(inputs, &config, &args.widths)
 }
