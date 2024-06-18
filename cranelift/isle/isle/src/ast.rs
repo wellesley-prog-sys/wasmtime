@@ -228,10 +228,12 @@ pub struct Spec {
 pub enum ModelType {
     /// SMT-LIB Int
     Int,
-    /// SMT-LIB Int
+    /// SMT-LIB Bool
     Bool,
     /// SMT-LIB bitvector, but with a potentially-polymorphic width
     BitVec(Option<usize>),
+    /// Unit (removed before conversion to SMT-LIB)
+    Unit,
 }
 
 /// A construct's value in SMT-LIB

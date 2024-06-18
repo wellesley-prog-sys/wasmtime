@@ -160,6 +160,7 @@ fn convert_type(aty: &annotation_ir::Type) -> veri_ir::Type {
         annotation_ir::Type::BitVectorWithWidth(w) => veri_ir::Type::BitVector(Some(*w)),
         annotation_ir::Type::Int => veri_ir::Type::Int,
         annotation_ir::Type::Bool => veri_ir::Type::Bool,
+        annotation_ir::Type::Unit => veri_ir::Type::Unit,
         annotation_ir::Type::Poly(_) => veri_ir::Type::BitVector(None),
     }
 }
@@ -2055,6 +2056,7 @@ fn annotation_type_for_vir_type(ty: &Type) -> annotation_ir::Type {
         Type::BitVector(None) => annotation_ir::Type::BitVector,
         Type::Bool => annotation_ir::Type::Bool,
         Type::Int => annotation_ir::Type::Int,
+        Type::Unit => annotation_ir::Type::Unit,
     }
 }
 

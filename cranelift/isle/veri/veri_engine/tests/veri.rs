@@ -3208,7 +3208,10 @@ fn test_named_x64_iadd_base_case_32_or_64_lea() {
         test_x64_rule_with_lhs_termname_simple(
             "iadd_base_case_32_or_64_lea",
             "iadd",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }

@@ -516,7 +516,7 @@ impl SolverCtx {
                 self.smt.bit_vec_sort(self.smt.numeral(width))
             }
             Type::Int => self.smt.int_sort(),
-            Type::Bool => self.smt.bool_sort(),
+            Type::Bool | Type::Unit => self.smt.bool_sort(),
         }
     }
 
@@ -603,6 +603,7 @@ impl SolverCtx {
                             self.smt.true_()
                         }
                     }
+                    Type::Unit => self.smt.true_()
                 },
                 Terminal::True => self.smt.true_(),
                 Terminal::False => self.smt.false_(),
@@ -611,6 +612,7 @@ impl SolverCtx {
                     Type::BitVector(_) => self.new_fresh_bits(self.bitwidth),
                     Type::Int => self.new_fresh_int(),
                     Type::Bool => self.new_fresh_bool(),
+                    Type::Unit => self.smt.true_(),
                 },
             },
             Expr::Unary(op, arg) => {

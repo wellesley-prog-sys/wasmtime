@@ -1125,11 +1125,11 @@
 ;;
 ;; TODO: semantics of offset (sign extend or zero extend)?
 (spec (to_amode_add flags x y offset)
-      (provide (= result (bvadd (bvadd x y) (sign_ext 64 offset))))
-      (require
-            (= (widthof x) 64)
-            (= (widthof y) 64)))
+      (provide (= result (bvadd (conv_to 64 (bvadd x y)) (sign_ext 64 offset)))))
 (instantiate to_amode_add
+    ((args (bv 16) (bv 8) (bv 8) (bv 32)) (ret (bv 64)) (canon (bv 8)))
+    ((args (bv 16) (bv 16) (bv 16) (bv 32)) (ret (bv 64)) (canon (bv 16)))
+    ((args (bv 16) (bv 32) (bv 32) (bv 32)) (ret (bv 64)) (canon (bv 32)))
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64))))
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
