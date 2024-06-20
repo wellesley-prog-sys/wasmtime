@@ -31,12 +31,6 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config, widths: &Option<Vec<S
         .expect(format!("Missing term width for {}", config.term).as_str())
         .clone();
 
-    // if let Some(_) = widths {
-    //     match(&widths.unwrap()) {
-    //         _ =>
-    //     }
-    // }
-
     let types_filtered = if let Some(widths) = widths {
         let mut width_types = Vec::new();
 

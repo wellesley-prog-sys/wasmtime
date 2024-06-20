@@ -17,6 +17,7 @@ struct Args {
     #[clap(short, long, default_value = "lower")]
     term: String,
 
+    /// Which width types to verify
     #[clap(long)]
     widths: Option<Vec<String>>,
 
