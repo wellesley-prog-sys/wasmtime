@@ -272,6 +272,20 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                 Box::new(spec_to_expr(&args[2], env)),
             )
         }
+        SpecOp::Store => {
+            assert_eq!(
+                args.len(),
+                4,
+                "Unexpected number of args for store operator {:?}",
+                pos
+            );
+            Expr::Store(
+                Box::new(spec_to_expr(&args[0], env)),
+                Box::new(spec_to_expr(&args[1], env)),
+                Box::new(spec_to_expr(&args[2], env)),
+                Box::new(spec_to_expr(&args[3], env)),
+            )
+        }
     }
 }
 

@@ -207,6 +207,7 @@ pub enum SpecOp {
     Switch,
 
     Load,
+    Store,
 }
 
 /// A specification of the semantics of a term.

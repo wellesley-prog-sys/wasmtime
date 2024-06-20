@@ -40,7 +40,10 @@ pub struct SolverCtx {
     fresh_bits_idx: usize, 
     lhs_load_args: Option<Vec<SExpr>>,
     rhs_load_args: Option<Vec<SExpr>>,
+    lhs_store_args: Option<Vec<SExpr>>,
+    rhs_store_args: Option<Vec<SExpr>>,
     load_return: Option<SExpr>,
+    store_return: Option<SExpr>,
     lhs_flag: bool,
 
 
@@ -1270,6 +1273,33 @@ impl SolverCtx {
                     self.load_return.unwrap()
                 }
             }
+            Expr::Store(w, x, y, z) => {
+                let ew = self.vir_expr_to_sexp(*w);
+                let ex = self.vir_expr_to_sexp(*x);
+                let ey = self.vir_expr_to_sexp(*y);
+                let ez = self.vir_expr_to_sexp(*z);
+
+                if self.dynwidths {
+                    self.width_assumptions
+                        .push(self.smt.eq(width.unwrap(), ex));
+                }
+
+                if self.lhs_flag {
+                    self.lhs_store_args = Some(vec![ew, ex, ey, ez]);
+                    // self.smt.atom("true")
+                    let store_ret = if self.dynwidths {
+                        self.new_fresh_bits(self.bitwidth)
+                    } else {
+                        self.new_fresh_bits(static_expr_width.unwrap())
+                    };
+                    self.store_return = Some(store_ret);
+                    store_ret
+                } else {
+                    self.rhs_store_args = Some(vec![ew, ex, ey, ez]);
+                    // self.smt.atom("true")
+                    self.store_return.unwrap()
+                }
+            }
                 
         }
     }
@@ -1749,7 +1779,10 @@ pub fn run_solver(
         fresh_bits_idx: 0,
         lhs_load_args: None,
         rhs_load_args: None,
+        lhs_store_args: None,
+        rhs_store_args: None,
         load_return: None,
+        store_return: None,
         lhs_flag: true,
     };
 
@@ -1769,7 +1802,7 @@ pub fn run_solver(
                         let eq = ctx
                             .smt
                             .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
-                        // println!("Width from inference {} ({})", width_name, bitwidth);
+                        println!("Width from inference {} ({})", width_name, bitwidth);
                         ctx.width_assumptions.push(eq);
                     }
                     None => {
@@ -1957,7 +1990,10 @@ pub fn run_solver_with_static_widths(
         fresh_bits_idx: 0,
         lhs_load_args: None,
         rhs_load_args: None,
+        lhs_store_args: None,
+        rhs_store_args: None,
         load_return: None,
+        store_return: None,
         lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
@@ -2074,6 +2110,36 @@ pub fn run_solver_with_static_widths(
         (None, Some(_)) => {
             println!("Verification failed");
             println!("Right hand side has load statement but left hand side does not.");
+            return VerificationResult::Failure(Counterexample {});
+        }, 
+    }
+    
+    let mut store_conditions = vec![];
+    match (&ctx.lhs_store_args, &ctx.rhs_store_args) {
+        (Some(_), Some(_)) => {
+            let lhs_args_vec = ctx.lhs_store_args.clone().unwrap();
+            let rhs_args_vec = ctx.rhs_store_args.clone().unwrap();
+            println!("Store argument conditions:");
+            for i in 0..lhs_args_vec.len() {
+                let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
+                store_conditions.push(arg_equal);
+                println!(
+                    "\t{}",
+                    ctx.smt.display(arg_equal)
+                );
+                full_condition = ctx.smt.and(full_condition, arg_equal)
+            }
+            println!();
+        },
+        (None, None) => (),
+        (Some(_), None) => {
+            println!("Verification failed");
+            println!("Left hand side has store statement but right hand side does not.");
+            return VerificationResult::Failure(Counterexample {});
+        },
+        (None, Some(_)) => {
+            println!("Verification failed");
+            println!("Right hand side has store statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }, 
     }
