@@ -41,7 +41,7 @@ mod tests {
             rhs_load_args: None,
             lhs_store_args: None,
             rhs_store_args: None,
-            load_return: None, 
+            load_return: None,
             store_return: None,
         }
     }

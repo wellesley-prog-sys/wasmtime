@@ -3209,6 +3209,8 @@ fn test_named_x64_iadd_base_case_32_or_64_lea() {
             "iadd_base_case_32_or_64_lea",
             "iadd",
             vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
                 (Bitwidth::I32, VerificationResult::Success),
                 (Bitwidth::I64, VerificationResult::Success),
             ],
@@ -3222,7 +3224,9 @@ fn test_named_x64_to_amode_add_base_case() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_base_case",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3233,7 +3237,11 @@ fn test_named_x64_to_amode_add_const_rhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_rhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                // TODO: make this work for I32
+                // (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3244,7 +3252,9 @@ fn test_named_x64_to_amode_add_const_lhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_lhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3255,7 +3265,9 @@ fn test_named_x64_to_amode_add_const_fold_iadd_lhs_rhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_fold_iadd_lhs_rhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3266,7 +3278,9 @@ fn test_named_x64_to_amode_add_const_fold_iadd_lhs_lhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_fold_iadd_lhs_lhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3277,7 +3291,9 @@ fn test_named_x64_to_amode_add_const_fold_iadd_rhs_rhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_fold_iadd_rhs_rhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3288,7 +3304,9 @@ fn test_named_x64_to_amode_add_const_fold_iadd_rhs_lhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_fold_iadd_rhs_lhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3299,7 +3317,9 @@ fn test_named_x64_amode_imm_reg_base() {
         test_x64_rule_with_lhs_termname_simple(
             "amode_imm_reg_base",
             "amode_imm_reg",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3310,7 +3330,9 @@ fn test_named_x64_amode_imm_reg_iadd() {
         test_x64_rule_with_lhs_termname_simple(
             "amode_imm_reg_iadd",
             "amode_imm_reg",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3321,7 +3343,9 @@ fn test_named_x64_amode_imm_reg_reg_shift_no_shift() {
         test_x64_rule_with_lhs_termname_simple(
             "amode_imm_reg_reg_shift_no_shift",
             "amode_imm_reg_reg_shift",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3332,7 +3356,9 @@ fn test_named_x64_amode_imm_reg_reg_shift_shl_rhs() {
         test_x64_rule_with_lhs_termname_simple(
             "amode_imm_reg_reg_shift_shl_rhs",
             "amode_imm_reg_reg_shift",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3343,7 +3369,9 @@ fn test_named_x64_amode_imm_reg_reg_shift_shl_lhs() {
         test_x64_rule_with_lhs_termname_simple(
             "amode_imm_reg_reg_shift_shl_lhs",
             "amode_imm_reg_reg_shift",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
