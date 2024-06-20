@@ -522,6 +522,9 @@
 
 ;; An extractor that only matches types that can fit in 64 bits.
 (decl fits_in_64 (Type) Type)
+(spec (fits_in_64 arg)
+      (provide (= result arg))
+      (require (<= arg 64)))
 (extern extractor fits_in_64 fits_in_64)
 
 ;; An extractor that only matches types that fit in exactly 32 bits.

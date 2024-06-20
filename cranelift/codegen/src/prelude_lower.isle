@@ -38,6 +38,8 @@
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
+(spec (value_reg arg)
+    (provide (= result arg)))
 (extern constructor value_reg value_reg)
 
 ;; Construct a `WritableValueRegs` of one register.
@@ -62,6 +64,8 @@
 
 ;; Construct a single-element `InstOutput`.
 (decl output (ValueRegs) InstOutput)
+(spec (output arg)
+      (provide (= arg (conv_to (widthof arg) result))))
 (extern constructor output output)
 
 ;; Construct a two-element `InstOutput`.
@@ -90,6 +94,7 @@
 
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
+(spec (temp_writable_reg ty) (provide (= ty (widthof result))))
 (extern constructor temp_writable_reg temp_writable_reg)
 
 ;; Get a temporary register for reading.
@@ -120,6 +125,8 @@
 ;;
 ;; As a side effect, this marks the value as used.
 (decl put_in_reg (Value) Reg)
+(spec (put_in_reg arg)
+      (provide (= result (conv_to 64 arg))))
 (extern constructor put_in_reg put_in_reg)
 
 ;; Put the given value into one or more registers.
@@ -249,6 +256,7 @@
 
 ;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
 (decl pure writable_reg_to_reg (WritableReg) Reg)
+(spec (writable_reg_to_reg reg) (provide (= result reg)))
 (extern constructor writable_reg_to_reg writable_reg_to_reg)
 
 ;; Extract the result values for the given instruction.
@@ -271,6 +279,9 @@
 ;; Extract the type of the instruction's first result and pass along the
 ;; instruction as well.
 (decl has_type (Type Inst) Inst)
+(spec (has_type ty arg)
+      (provide (= result arg))
+      (require (= ty (widthof arg))))
 (extractor (has_type ty inst)
            (and (result_type ty)
                 inst))
@@ -317,8 +328,9 @@
 ;;
 ;; This is low-level and side-effectful; it should only be used as an
 ;; implementation detail by helpers that preserve the SSA facade themselves.
-
+; TODO(mbm): what is the right spec for emit?
 (decl emit (MInst) Unit)
+(spec (emit inst) (provide (= result #b1)))
 (extern constructor emit emit)
 
 ;; Sink an instruction.

@@ -1236,6 +1236,11 @@
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
 (decl operand_size (Type) OperandSize)
+(spec (operand_size ty)
+      (provide
+            (= result (if (<= ty 32) 32 64)))
+      (require
+            (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 (rule 1 (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
 (rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
 

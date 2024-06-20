@@ -52,6 +52,7 @@ pub fn get_isle_compilations(
     let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
     let prelude_opt_isle = codegen_crate_dir.join("src").join("prelude_opt.isle");
     let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");
+    let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
 
     // Directory for mid-end optimizations.
     let src_opts = codegen_crate_dir.join("src").join("opts");
@@ -88,6 +89,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_opt_isle,
+                    inst_specs_isle.clone(),
                     src_opts.join("arithmetic.isle"),
                     src_opts.join("bitops.isle"),
                     src_opts.join("cprop.isle"),
@@ -109,6 +111,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    inst_specs_isle.clone(),
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
                 ],
@@ -121,6 +124,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    inst_specs_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("inst_neon.isle"),
                     src_isa_aarch64.join("lower.isle"),
@@ -135,6 +139,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    inst_specs_isle.clone(),
                     src_isa_s390x.join("inst.isle"),
                     src_isa_s390x.join("lower.isle"),
                 ],
@@ -147,6 +152,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    inst_specs_isle.clone(),
                     src_isa_risc_v.join("inst.isle"),
                     src_isa_risc_v.join("inst_vector.isle"),
                     src_isa_risc_v.join("lower.isle"),

@@ -1,4 +1,4 @@
-use cranelift_isle::ast::Ident;
+use cranelift_isle::ast::{Defs, Ident};
 use cranelift_isle::error::{Errors, ErrorsBuilder};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle::sema::{self, Rule, RuleId, Term, TermEnv, TermId, TypeEnv};
@@ -7,6 +7,7 @@ use cranelift_isle::{lexer, parser};
 use std::collections::HashMap;
 
 pub struct Program {
+    pub defs: Defs,
     pub tyenv: TypeEnv,
     pub termenv: TermEnv,
 }
@@ -21,7 +22,11 @@ impl Program {
         let mut tyenv = sema::TypeEnv::from_ast(&defs)?;
         let termenv = sema::TermEnv::from_ast(&mut tyenv, &defs, expand_internal_extractors)?;
 
-        Ok(Self { tyenv, termenv })
+        Ok(Self {
+            defs,
+            tyenv,
+            termenv,
+        })
     }
 
     pub fn term(&self, term_id: TermId) -> &Term {

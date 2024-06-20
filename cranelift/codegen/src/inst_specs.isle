@@ -1,0 +1,2 @@
+(spec (iadd x y)
+    (provide (= result (bvadd x y))))
