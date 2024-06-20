@@ -3393,7 +3393,6 @@
 ;; Helpers for generating various store instructions with varying
 ;; widths.
 (decl aarch64_store8 (AMode MemFlags Reg) SideEffectNoResult)
-(rule store_i8_aarch64_store8 (aarch64_store8 amode flags val)
 (spec (aarch64_store8 amode flags val)
       (provide (= result (store flags 8 (extract 7 0 val) amode))))
 (rule (aarch64_store8 amode flags val)
