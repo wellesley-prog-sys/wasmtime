@@ -98,7 +98,6 @@ fn main() {
         distinct_check: !args.nodistinct,
         custom_verification_condition: None,
         custom_assumptions: None,
-        only_widths: None,
     };
 
     verify_rules(inputs, &config)

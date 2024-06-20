@@ -1405,8 +1405,8 @@ fn add_annotation_constraints(
             let (e3, t3) = add_annotation_constraints(*z, tree, annotation_info);
             let t = tree.next_type_var;
 
-            tree.bv_constraints
-                .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::Unit));
             tree.bv_constraints
                 .insert(TypeExpr::Concrete(t0, annotation_ir::Type::BitVector));
             tree.concrete_constraints

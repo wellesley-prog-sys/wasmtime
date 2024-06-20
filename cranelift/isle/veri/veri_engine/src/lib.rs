@@ -25,7 +25,6 @@ pub const WIDTHS: [usize; 4] = [8, 16, 32, 64];
 pub struct Config {
     pub term: String,
     pub names: Option<Vec<String>>,
-    pub only_widths: Option<Vec<String>>,
     pub dyn_width: bool,
     pub distinct_check: bool,
 
@@ -45,7 +44,6 @@ impl Config {
             custom_verification_condition: None,
             custom_assumptions: None,
             names: Some(vec![name.to_string()]),
-            only_widths: None,
         }
     }
 }

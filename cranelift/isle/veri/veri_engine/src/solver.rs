@@ -1288,19 +1288,10 @@ impl SolverCtx {
 
                 if self.lhs_flag {
                     self.lhs_store_args = Some(vec![ew, ex, ey, ez]);
-                    // self.smt.atom("true")
-                    let store_ret = if self.dynwidths {
-                        self.new_fresh_bits(self.bitwidth)
-                    } else {
-                        self.new_fresh_bits(static_expr_width.unwrap())
-                    };
-                    self.store_return = Some(store_ret);
-                    store_ret
                 } else {
                     self.rhs_store_args = Some(vec![ew, ex, ey, ez]);
-                    // self.smt.atom("true")
-                    self.store_return.unwrap()
                 }
+                self.smt.atom("true")
             }
                 
         }
