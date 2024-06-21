@@ -17,14 +17,24 @@ declare_id!(
 pub enum Expr {}
 
 /// Verification conditions for an expansion.
+#[derive(Default)]
 pub struct Conditions {
     pub exprs: Vec<Expr>,
     pub assumptions: Vec<ExprId>,
     pub assertions: Vec<ExprId>,
 }
 
+impl Conditions {
+    pub fn from_expansion(expansion: &Expansion) -> Self {
+        let mut builder = ConditionsBuilder::default();
+        builder.add_expansion(expansion);
+        builder.conditions
+    }
+}
+
 enum Value {}
 
+#[derive(Default)]
 struct ConditionsBuilder {
     conditions: Conditions,
     binding_value: HashMap<BindingId, Value>,

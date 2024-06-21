@@ -1,6 +1,11 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle_veri::{debug::print_expansion, expand::ExpansionsBuilder, program::Program};
+use cranelift_isle_veri::{
+    debug::print_expansion,
+    expand::{Expansion, ExpansionsBuilder},
+    program::Program,
+    veri::Conditions,
+};
 
 #[derive(Parser)]
 struct Opts {
@@ -65,7 +70,7 @@ fn main() -> anyhow::Result<()> {
     expansions_builder.set_max_rules(4);
     expansions_builder.exclude_inline_term("operand_size")?;
 
-    // Report.
+    // Process expansions.
     let expansions = expansions_builder.expansions()?;
     println!("expansions = {}", expansions.len());
     for expansion in &expansions {
@@ -73,7 +78,12 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         print_expansion(&prog, expansion);
+        verify_expansion(expansion);
     }
 
     Ok(())
+}
+
+fn verify_expansion(expansion: &Expansion) {
+    let _conditions = Conditions::from_expansion(expansion);
 }

@@ -1,10 +1,7 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle::trie_again::BindingId;
-use cranelift_isle_veri::debug::{
-    binding_string, binding_type, constraint_string, print_expansion,
-};
-use cranelift_isle_veri::expand::{Expansion, ExpansionsBuilder};
+use cranelift_isle_veri::debug::print_expansion;
+use cranelift_isle_veri::expand::ExpansionsBuilder;
 use cranelift_isle_veri::program::Program;
 
 #[derive(Parser)]
