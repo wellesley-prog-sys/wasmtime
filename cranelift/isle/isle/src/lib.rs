@@ -266,7 +266,6 @@ pub mod lexer;
 mod log;
 pub mod overlap;
 pub mod parser;
-#[cfg(feature = "printer")]
 pub mod printer;
 pub mod sema;
 pub mod serialize;
