@@ -1127,7 +1127,8 @@ impl TypeEnv {
         self.sym_map.get(&ident.0).copied()
     }
 
-    fn get_type_by_name(&self, sym: &ast::Ident) -> Option<TypeId> {
+    /// Lookup type by name.
+    pub fn get_type_by_name(&self, sym: &ast::Ident) -> Option<TypeId> {
         self.intern(sym)
             .and_then(|sym| self.type_map.get(&sym))
             .copied()

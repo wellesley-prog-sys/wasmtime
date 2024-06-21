@@ -1,6 +1,6 @@
 use cranelift_isle::{
-    ast::{self, Defs, Ident, SpecOp},
-    sema::{TermEnv, TermId, TypeEnv},
+    ast::{self, Defs, Ident, Model, ModelType, SpecOp},
+    sema::{TermEnv, TermId, TypeEnv, TypeId},
 };
 use std::collections::HashMap;
 
@@ -21,6 +21,17 @@ pub enum Type {
 
     /// The expression is a boolean.
     Bool,
+}
+
+impl Type {
+    fn from_model(model: &ModelType) -> Self {
+        match model {
+            ModelType::Int => Self::Int,
+            ModelType::Bool => Self::Bool,
+            ModelType::BitVec(None) => Self::BitVector,
+            ModelType::BitVec(Some(size)) => Self::BitVectorWithWidth(*size),
+        }
+    }
 }
 
 /// Type-specified constants
@@ -369,17 +380,37 @@ impl Spec {
 
 pub struct SpecEnv {
     pub term_spec: HashMap<TermId, Spec>,
+    pub type_model: HashMap<TypeId, Type>,
 }
 
 impl SpecEnv {
     pub fn from_ast(defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) -> Self {
         let mut env = Self {
             term_spec: HashMap::new(),
+            type_model: HashMap::new(),
         };
 
+        env.collect_models(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv);
 
         env
+    }
+
+    // Traverse models to process spec annotations for enums
+    fn collect_models(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
+        for def in &defs.defs {
+            match def {
+                &ast::Def::Model(Model { ref name, ref val }) => match val {
+                    ast::ModelValue::TypeValue(model_type) => {
+                        let type_id = tyenv.get_type_by_name(&name).unwrap();
+                        self.type_model
+                            .insert(type_id, Type::from_model(model_type));
+                    }
+                    ast::ModelValue::EnumValues(..) => todo!("enum values"),
+                },
+                _ => (),
+            }
+        }
     }
 
     fn collect_specs(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
