@@ -42,7 +42,6 @@ mod tests {
             lhs_store_args: None,
             rhs_store_args: None,
             load_return: None,
-            store_return: None,
         }
     }
 

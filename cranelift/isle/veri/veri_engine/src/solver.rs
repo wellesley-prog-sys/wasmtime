@@ -43,7 +43,6 @@ pub struct SolverCtx {
     lhs_store_args: Option<Vec<SExpr>>,
     rhs_store_args: Option<Vec<SExpr>>,
     load_return: Option<SExpr>,
-    store_return: Option<SExpr>,
     lhs_flag: bool,
 }
 
@@ -1770,7 +1769,6 @@ pub fn run_solver(
         lhs_store_args: None,
         rhs_store_args: None,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
 
@@ -1981,7 +1979,6 @@ pub fn run_solver_with_static_widths(
         lhs_store_args: None,
         rhs_store_args: None,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
