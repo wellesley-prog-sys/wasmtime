@@ -107,6 +107,9 @@ pub struct Expander<'a> {
     /// Terms which can be considered for inlining.
     inlineable: HashSet<TermId>,
 
+    /// Whether to drop expansions as soon as they are deemed to be infeasible.
+    prune_infeasible: bool,
+
     /// Expansions under construction.
     stack: Vec<Expansion>,
 
@@ -121,6 +124,7 @@ impl<'a> Expander<'a> {
             term_rule_sets,
             reach: Reachability::build(term_rule_sets),
             inlineable: HashSet::new(),
+            prune_infeasible: true,
             stack: Vec::new(),
             complete: Vec::new(),
         }
@@ -165,6 +169,12 @@ impl<'a> Expander<'a> {
         };
         assert!(expansion.is_feasible());
         self.stack.push(expansion);
+    }
+
+    /// Set whether to prune infeasible expansions. If enabled, expansions will
+    /// be dropped as soon as they are deemed to be not feasible.
+    pub fn set_prune_infeasible(&mut self, enabled: bool) {
+        self.prune_infeasible = enabled;
     }
 
     /// Marks term ID as inlinable.
@@ -257,7 +267,7 @@ impl<'a> Expander<'a> {
         for rule in &rule_set.rules {
             let mut apply = Application::new(expansion.clone());
             let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
-            if inlined.is_feasible() {
+            if !self.prune_infeasible || inlined.is_feasible() {
                 self.stack.push(inlined);
             }
         }
@@ -493,6 +503,7 @@ pub struct ExpansionsBuilder<'a> {
     prog: &'a Program,
     root: TermId,
     inline: Vec<TermId>,
+    prune_infeasible: bool,
     maximal_inlining: bool,
     max_rules: usize,
     exclude_inline: HashSet<TermId>,
@@ -508,6 +519,7 @@ impl<'a> ExpansionsBuilder<'a> {
             prog,
             root,
             inline: Vec::new(),
+            prune_infeasible: true,
             maximal_inlining: false,
             max_rules: 0,
             exclude_inline: HashSet::new(),
@@ -528,6 +540,10 @@ impl<'a> ExpansionsBuilder<'a> {
             self.inline_term(term_name)?;
         }
         Ok(())
+    }
+
+    pub fn set_prune_infeasible(&mut self, enabled: bool) {
+        self.prune_infeasible = enabled;
     }
 
     pub fn set_maximal_inlining(&mut self, enabled: bool) {
@@ -558,6 +574,7 @@ impl<'a> ExpansionsBuilder<'a> {
         let term_rule_sets: HashMap<_, _> = self.prog.build_trie()?.into_iter().collect();
         let mut expander = Expander::new(self.prog, &term_rule_sets);
         expander.constructor(self.root);
+        expander.set_prune_infeasible(self.prune_infeasible);
 
         for inline_term_id in self.inline {
             expander.inline(inline_term_id);

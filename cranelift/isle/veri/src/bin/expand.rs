@@ -26,6 +26,10 @@ struct Opts {
     #[arg(long, required = true)]
     term_name: String,
 
+    /// Whether to disable pruning of infeasible expansions.
+    #[arg(long)]
+    no_prune_infeasible: bool,
+
     /// Term names to inline.
     #[arg(long, value_name = "TERM_NAME")]
     inline: Vec<String>,
@@ -72,6 +76,7 @@ fn main() -> anyhow::Result<()> {
 
     // Build expansions.
     let mut expansions_builder = ExpansionsBuilder::new(&prog, &opts.term_name)?;
+    expansions_builder.set_prune_infeasible(!opts.no_prune_infeasible);
 
     // Configure inline terms.
     expansions_builder.inline_term(&opts.term_name)?;
