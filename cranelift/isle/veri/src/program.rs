@@ -1,7 +1,7 @@
 use cranelift_isle::ast::Ident;
 use cranelift_isle::error::{Errors, ErrorsBuilder};
 use cranelift_isle::lexer::Pos;
-use cranelift_isle::sema::{self, Rule, RuleId, Term, TermEnv, TermId, TypeEnv};
+use cranelift_isle::sema::{self, Rule, RuleId, Term, TermEnv, TermId, Type, TypeEnv, TypeId};
 use cranelift_isle::trie_again::{self, RuleSet};
 use cranelift_isle::{lexer, parser};
 use std::collections::HashMap;
@@ -32,6 +32,17 @@ impl Program {
         })
     }
 
+    pub fn ty(&self, type_id: TypeId) -> &Type {
+        self.tyenv
+            .types
+            .get(type_id.index())
+            .expect("invalid type id")
+    }
+
+    pub fn type_name(&self, type_id: TypeId) -> &str {
+        self.ty(type_id).name(&self.tyenv)
+    }
+
     pub fn term(&self, term_id: TermId) -> &Term {
         self.termenv
             .terms
@@ -39,9 +50,9 @@ impl Program {
             .expect("invalid term id")
     }
 
-    pub fn term_name(&self, term_id: TermId) -> String {
+    pub fn term_name(&self, term_id: TermId) -> &str {
         let term = self.term(term_id);
-        self.tyenv.syms[term.name.index()].clone()
+        &self.tyenv.syms[term.name.index()]
     }
 
     pub fn rule(&self, rule_id: RuleId) -> &Rule {

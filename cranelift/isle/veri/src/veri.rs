@@ -52,7 +52,7 @@ pub struct Conditions {
 }
 
 impl Conditions {
-    pub fn from_expansion(expansion: &Expansion, prog: &Program) -> Self {
+    pub fn from_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<Self> {
         let builder = ConditionsBuilder::new(expansion, prog);
         builder.build()
     }
@@ -82,28 +82,29 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
-    fn build(mut self) -> Conditions {
+    fn build(mut self) -> anyhow::Result<Conditions> {
         // TODO: callsite specifications
         // TODO: pub result: BindingId,
 
         // Bindings.
         for (i, binding) in self.expansion.bindings.iter().enumerate() {
             if let Some(binding) = binding {
-                self.add_binding(i.try_into().unwrap(), binding);
+                self.add_binding(i.try_into().unwrap(), binding)?;
             }
         }
 
         // TODO: pub constraints: BTreeMap<BindingId, Vec<Constraint>>,
         // TODO: pub equals: DisjointSets<BindingId>,
 
-        self.conditions
+        Ok(self.conditions)
     }
 
-    fn add_binding(&mut self, id: BindingId, binding: &Binding) {
+    fn add_binding(&mut self, id: BindingId, binding: &Binding) -> anyhow::Result<()> {
         // Allocate value for the binding.
         let binding_type = self.binding_type(binding);
-        let value = self.alloc_binding_value(&binding_type);
+        let value = self.alloc_binding_value(&binding_type)?;
         self.binding_value.insert(id, value);
+        Ok(())
     }
 
     /// Determine the type of the given binding in the context of the
@@ -117,23 +118,32 @@ impl<'a> ConditionsBuilder<'a> {
         )
     }
 
-    fn alloc_binding_value(&mut self, binding_type: &BindingType) -> Value {
+    fn alloc_binding_value(&mut self, binding_type: &BindingType) -> anyhow::Result<Value> {
         match binding_type {
             BindingType::Base(type_id) => {
-                let ty = Type::from_spec_type(&self.prog.specenv.type_model[type_id]);
-                Value::Base(self.alloc_variable(ty))
+                let model =
+                    self.prog
+                        .specenv
+                        .type_model
+                        .get(type_id)
+                        .ok_or(anyhow::format_err!(
+                            "no model for type {type_name}",
+                            type_name = self.prog.type_name(*type_id)
+                        ))?;
+                let ty = Type::from_spec_type(model);
+                Ok(Value::Base(self.alloc_variable(ty)))
             }
             BindingType::Option(inner_type) => {
                 let some = self.alloc_variable(Type::Bool);
-                let inner = Box::new(self.alloc_binding_value(inner_type));
-                Value::Option { some, inner }
+                let inner = Box::new(self.alloc_binding_value(inner_type)?);
+                Ok(Value::Option { some, inner })
             }
             BindingType::Tuple(inners) => {
                 let inners = inners
                     .iter()
                     .map(|inner_type| self.alloc_binding_value(inner_type))
-                    .collect();
-                Value::Tuple(inners)
+                    .collect::<anyhow::Result<_>>()?;
+                Ok(Value::Tuple(inners))
             }
         }
     }

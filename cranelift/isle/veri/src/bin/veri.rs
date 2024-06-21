@@ -78,12 +78,13 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         print_expansion(&prog, expansion);
-        verify_expansion(expansion, &prog);
+        verify_expansion(expansion, &prog)?;
     }
 
     Ok(())
 }
 
-fn verify_expansion(expansion: &Expansion, prog: &Program) {
-    let _conditions = Conditions::from_expansion(expansion, prog);
+fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()> {
+    let _conditions = Conditions::from_expansion(expansion, prog)?;
+    Ok(())
 }
