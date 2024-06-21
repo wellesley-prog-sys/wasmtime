@@ -16,7 +16,7 @@ struct Opts {
     #[arg(long, required = true)]
     work_dir: std::path::PathBuf,
 
-    /// Filter to expansions involving this named rule.
+    /// Filter to expansions involving this rule.
     #[arg(long, required = true)]
     rule: String,
 }
@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
 
     // Lookup target rule.
     let rule = prog
-        .get_rule_by_name(&opts.rule)
+        .get_rule_by_identifier(&opts.rule)
         .ok_or(anyhow::format_err!(
             "unknown rule: {rule_name}",
             rule_name = opts.rule

@@ -59,14 +59,11 @@ impl Program {
         rules
     }
 
-    pub fn get_rule_by_name(&self, name: &str) -> Option<&Rule> {
-        self.termenv.rules.iter().find(|r| {
-            if let Some(sym) = r.name {
-                self.tyenv.syms[sym.index()] == name
-            } else {
-                false
-            }
-        })
+    pub fn get_rule_by_identifier(&self, id: &str) -> Option<&Rule> {
+        self.termenv
+            .rules
+            .iter()
+            .find(|r| r.identifier(&self.tyenv) == id)
     }
 
     pub fn get_term_by_name(&self, name: &str) -> Option<TermId> {
