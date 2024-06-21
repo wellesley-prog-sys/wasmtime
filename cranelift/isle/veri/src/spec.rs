@@ -4,6 +4,8 @@ use cranelift_isle::{
 };
 use std::collections::HashMap;
 
+// QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
+
 /// Higher-level type, not including bitwidths.
 pub enum Type {
     /// The expression is a bitvector, currently modeled in the

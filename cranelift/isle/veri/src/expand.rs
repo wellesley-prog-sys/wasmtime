@@ -488,3 +488,87 @@ impl Reindex {
         }
     }
 }
+
+pub struct ExpansionsBuilder<'a> {
+    prog: &'a Program,
+    root: TermId,
+    inline: Vec<TermId>,
+    maximal_inlining: bool,
+    max_rules: usize,
+    exclude_inline: HashSet<TermId>,
+}
+
+impl<'a> ExpansionsBuilder<'a> {
+    pub fn new(prog: &'a Program, root_name: &str) -> anyhow::Result<Self> {
+        let root = prog
+            .get_term_by_name(root_name)
+            .ok_or(anyhow::format_err!("unknown term {}", root_name))?;
+
+        Ok(Self {
+            prog,
+            root,
+            inline: Vec::new(),
+            maximal_inlining: false,
+            max_rules: 0,
+            exclude_inline: HashSet::new(),
+        })
+    }
+
+    pub fn inline_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+        let term_id = self
+            .prog
+            .get_term_by_name(&term_name)
+            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+        self.inline.push(term_id);
+        Ok(())
+    }
+
+    pub fn inline_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+        for term_name in term_names {
+            self.inline_term(term_name)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_maximal_inlining(&mut self, enabled: bool) {
+        self.maximal_inlining = enabled;
+    }
+
+    pub fn set_max_rules(&mut self, max_rules: usize) {
+        self.max_rules = max_rules;
+    }
+
+    pub fn exclude_inline_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+        let term_id = self
+            .prog
+            .get_term_by_name(&term_name)
+            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+        self.exclude_inline.insert(term_id);
+        Ok(())
+    }
+
+    pub fn exclude_inline_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+        for term_name in term_names {
+            self.exclude_inline_term(term_name)?;
+        }
+        Ok(())
+    }
+
+    pub fn expansions(self) -> anyhow::Result<Vec<Expansion>> {
+        let term_rule_sets: HashMap<_, _> = self.prog.build_trie()?.into_iter().collect();
+        let mut expander = Expander::new(self.prog, &term_rule_sets);
+        expander.constructor(self.root);
+
+        for inline_term_id in self.inline {
+            expander.inline(inline_term_id);
+        }
+
+        if self.maximal_inlining {
+            expander.enable_maximal_inlining(self.max_rules, &self.exclude_inline);
+        }
+
+        expander.expand();
+
+        Ok(expander.expansions().clone())
+    }
+}

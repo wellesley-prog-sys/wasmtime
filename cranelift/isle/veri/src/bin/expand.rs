@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet};
-
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::trie_again::BindingId;
-use cranelift_isle_veri::debug::{binding_string, binding_type, constraint_string};
-use cranelift_isle_veri::expand::{Expander, Expansion};
+use cranelift_isle_veri::debug::{
+    binding_string, binding_type, constraint_string, print_expansion,
+};
+use cranelift_isle_veri::expand::{Expansion, ExpansionsBuilder};
 use cranelift_isle_veri::program::Program;
 
 #[derive(Parser)]
@@ -73,123 +73,24 @@ fn main() -> anyhow::Result<()> {
     let inputs = opts.isle_input_files()?;
     let prog = Program::from_files(&inputs, !opts.no_expand_internal_extractors)?;
 
-    // Derive rule sets.
-    let term_rule_sets: HashMap<_, _> = prog.build_trie()?.into_iter().collect();
-
-    // Lookup term to expand.
-    let term_id = prog
-        .get_term_by_name(opts.term_name.as_str())
-        .ok_or(anyhow::format_err!("unknown term {}", opts.term_name))?;
+    // Build expansions.
+    let mut expansions_builder = ExpansionsBuilder::new(&prog, &opts.term_name)?;
 
     // Configure inline terms.
-    let mut inline_term_names = opts.inline.clone();
-    inline_term_names.push(opts.term_name.clone());
+    expansions_builder.inline_term(&opts.term_name)?;
+    expansions_builder.inline_terms(&opts.inline)?;
 
-    let mut inline_term_ids = Vec::new();
-    for inline_term_name in &inline_term_names {
-        let term_id = prog
-            .get_term_by_name(&inline_term_name)
-            .ok_or(anyhow::format_err!("unknown term {inline_term_name}"))?;
-        inline_term_ids.push(term_id);
-        println!("inline term: {inline_term_name}");
-    }
-
-    // Expand.
-    let mut expander = Expander::new(&prog, &term_rule_sets);
-    expander.constructor(term_id);
-    for inline_term_id in inline_term_ids {
-        expander.inline(inline_term_id);
-    }
-    if opts.maximal_inlining {
-        let mut exclude = HashSet::new();
-        for exclude_term_name in &opts.exclude_inline {
-            let term_id = prog
-                .get_term_by_name(&exclude_term_name)
-                .ok_or(anyhow::format_err!("unknown term {exclude_term_name}"))?;
-            exclude.insert(term_id);
-        }
-        expander.enable_maximal_inlining(opts.max_rules, &exclude);
-    }
-
-    expander.expand();
+    // Configure maximal inlining.
+    expansions_builder.set_maximal_inlining(opts.maximal_inlining);
+    expansions_builder.set_max_rules(opts.max_rules);
+    expansions_builder.exclude_inline_terms(&opts.exclude_inline)?;
 
     // Report.
-    let expansions = expander.expansions();
+    let expansions = expansions_builder.expansions()?;
     println!("expansions = {}", expansions.len());
-    for expansion in expansions {
+    for expansion in &expansions {
         print_expansion(&prog, expansion);
     }
 
     Ok(())
-}
-
-pub fn print_expansion(prog: &Program, expansion: &Expansion) {
-    println!("expansion {{");
-
-    // Term.
-    println!("\tterm = {}", prog.term_name(expansion.term));
-
-    // Rules.
-    println!("\trules = [");
-    for rule_id in &expansion.rules {
-        let rule = &prog.termenv.rules[rule_id.index()];
-        println!("\t\t{}", rule.identifier(&prog.tyenv));
-    }
-    println!("\t]");
-
-    // Bindings.
-    let lookup_binding =
-        |binding_id: BindingId| expansion.bindings[binding_id.index()].clone().unwrap();
-    println!("\tbindings = [");
-    for (i, binding) in expansion.bindings.iter().enumerate() {
-        if let Some(binding) = binding {
-            let ty = binding_type(binding, expansion.term, &prog, lookup_binding);
-            println!(
-                "\t\t{i}: {}\t{}",
-                ty.display(&prog.tyenv),
-                binding_string(binding, expansion.term, &prog, lookup_binding),
-            );
-        }
-    }
-    println!("\t]");
-
-    // Constraints.
-    println!("\tconstraints = [");
-    let mut constrained_binding_ids: Vec<_> = expansion.constraints.keys().collect();
-    constrained_binding_ids.sort();
-    for binding_id in &constrained_binding_ids {
-        for constraint in &expansion.constraints[binding_id] {
-            println!(
-                "\t\t{}:\t{}",
-                binding_id.index(),
-                constraint_string(&constraint, &prog.tyenv)
-            );
-        }
-    }
-    println!("\t]");
-
-    // Equals.
-    if !expansion.equals.is_empty() {
-        println!("\tequals = [");
-        for (i, binding) in expansion.bindings.iter().enumerate() {
-            if binding.is_none() {
-                continue;
-            }
-            let binding_id = i.try_into().unwrap();
-            if let Some(eq) = expansion.equals.find(binding_id) {
-                if eq != binding_id {
-                    println!("\t\t{} == {}", binding_id.index(), eq.index());
-                }
-            }
-        }
-        println!("\t]");
-    }
-
-    // Result.
-    println!("\tresult = {}", expansion.result.index());
-
-    // Feasibility.
-    println!("\tfeasible = {}", expansion.is_feasible());
-
-    println!("}}");
 }

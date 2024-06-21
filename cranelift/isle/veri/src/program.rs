@@ -1,4 +1,4 @@
-use cranelift_isle::ast::{Defs, Ident};
+use cranelift_isle::ast::Ident;
 use cranelift_isle::error::{Errors, ErrorsBuilder};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle::sema::{self, Rule, RuleId, Term, TermEnv, TermId, TypeEnv};
@@ -6,10 +6,12 @@ use cranelift_isle::trie_again::{self, RuleSet};
 use cranelift_isle::{lexer, parser};
 use std::collections::HashMap;
 
+use crate::spec::{self, SpecEnv};
+
 pub struct Program {
-    pub defs: Defs,
     pub tyenv: TypeEnv,
     pub termenv: TermEnv,
+    pub specenv: SpecEnv,
 }
 
 impl Program {
@@ -21,11 +23,12 @@ impl Program {
         let defs = parser::parse(lexer)?;
         let mut tyenv = sema::TypeEnv::from_ast(&defs)?;
         let termenv = sema::TermEnv::from_ast(&mut tyenv, &defs, expand_internal_extractors)?;
+        let specenv = spec::SpecEnv::from_ast(&defs, &termenv, &tyenv);
 
         Ok(Self {
-            defs,
             tyenv,
             termenv,
+            specenv,
         })
     }
 
@@ -54,6 +57,16 @@ impl Program {
             rules.entry(rule.root_term).or_default().push(rule.id);
         }
         rules
+    }
+
+    pub fn get_rule_by_name(&self, name: &str) -> Option<&Rule> {
+        self.termenv.rules.iter().find(|r| {
+            if let Some(sym) = r.name {
+                self.tyenv.syms[sym.index()] == name
+            } else {
+                false
+            }
+        })
     }
 
     pub fn get_term_by_name(&self, name: &str) -> Option<TermId> {
