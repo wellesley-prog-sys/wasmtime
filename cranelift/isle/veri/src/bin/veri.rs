@@ -85,6 +85,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()> {
-    let _conditions = Conditions::from_expansion(expansion, prog)?;
+    let conditions = Conditions::from_expansion(expansion, prog)?;
+    conditions.pretty_print();
     Ok(())
 }

@@ -19,7 +19,8 @@ declare_id!(
     VariableId
 );
 
-// TODO(mbm): do we need yet another type enum?
+// QUESTION(mbm): do we need yet another type enum?
+#[derive(Debug)]
 pub enum Type {
     Unknown,
     BitVector(Option<usize>),
@@ -38,6 +39,18 @@ impl Type {
     }
 }
 
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Unknown => write!(f, "unk"),
+            Self::BitVector(Some(w)) => write!(f, "bv {w}"),
+            Self::BitVector(None) => write!(f, "bv _"),
+            Self::Int => write!(f, "int"),
+            Self::Bool => write!(f, "bool"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Expr {
     // Terminals.
@@ -51,8 +64,22 @@ pub enum Expr {
     Eq(ExprId, ExprId),
 }
 
+impl std::fmt::Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::False => write!(f, "false"),
+            Self::True => write!(f, "true"),
+            Self::Variable(v) => write!(f, "v{}", v.index()),
+
+            Self::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
+            Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
+            Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
+        }
+    }
+}
+
 /// Verification conditions for an expansion.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Conditions {
     pub exprs: Vec<Expr>,
     pub assumptions: Vec<ExprId>,
@@ -64,6 +91,40 @@ impl Conditions {
     pub fn from_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<Self> {
         let builder = ConditionsBuilder::new(expansion, prog);
         builder.build()
+    }
+
+    pub fn pretty_print(&self) {
+        println!("conditions {{");
+
+        // Expressions
+        println!("\texprs = [");
+        for (i, expr) in self.exprs.iter().enumerate() {
+            println!("\t\t{i}:\t{expr}");
+        }
+        println!("\t]");
+
+        // Assumptions
+        println!("\tassumptions = [");
+        for expr_id in &self.assumptions {
+            println!("\t\t{}", expr_id.index());
+        }
+        println!("\t]");
+
+        // Assertions
+        println!("\tassertions = [");
+        for expr_id in &self.assertions {
+            println!("\t\t{}", expr_id.index());
+        }
+        println!("\t]");
+
+        // Variable Types
+        println!("\tvariable_type = [");
+        for (i, ty) in self.variable_type.iter().enumerate() {
+            println!("\t\t{i}:\t{ty}");
+        }
+        println!("\t]");
+
+        println!("}}");
     }
 }
 
@@ -156,27 +217,32 @@ impl<'a> ConditionsBuilder<'a> {
         //
         match binding {
             // ConstInt
-            // ConstPrim
+            Binding::ConstPrim { .. } => {
+                // TODO(mbm): const_prim
+            }
+
             Binding::Argument { .. } => {
                 // Argument binding has no associated constraints.
-                Ok(())
             }
 
             Binding::Extractor { .. } => {
                 // TODO(mbm): extractor
-                Ok(())
             }
 
             Binding::Constructor { .. } => {
                 // TODO(mbm): constructor
-                Ok(())
             }
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings"),
 
-            // MakeVariant
-            // MatchVariant
-            // MakeSome
+            Binding::MakeVariant { .. } => {
+                // TODO(mbm): make_variant
+            }
+
+            Binding::MakeSome { .. } => {
+                // TODO(mbm): make_some
+            }
+
             Binding::MatchSome { source } => {
                 // Source should be an option.
                 let opt = self.binding_value[source]
@@ -193,8 +259,6 @@ impl<'a> ConditionsBuilder<'a> {
                 let eq = self.values_equal(&v, &opt.inner);
                 let constraint = self.dedup_expr(Expr::Imp(some, eq));
                 self.conditions.assumptions.push(constraint);
-
-                Ok(())
             }
 
             Binding::MatchTuple { source, field } => {
@@ -210,12 +274,12 @@ impl<'a> ConditionsBuilder<'a> {
                 // Assumption: indexed field should equal this binding.
                 let eq = self.values_equal(&v, &fields[field.index()]);
                 self.conditions.assumptions.push(eq);
-
-                Ok(())
             }
 
             _ => todo!("add binding: {binding:?}"),
         }
+
+        Ok(())
     }
 
     //fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {
