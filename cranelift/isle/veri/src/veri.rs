@@ -239,8 +239,23 @@ impl<'a> ConditionsBuilder<'a> {
                 // TODO(mbm): make_variant
             }
 
-            Binding::MakeSome { .. } => {
-                // TODO(mbm): make_some
+            Binding::MakeSome { inner } => {
+                // Destination binding should be an option.
+                let opt = self.binding_value[&id]
+                    .as_option()
+                    .expect("destination of make_some binding should be an option")
+                    .clone();
+
+                // Inner binding.
+                let inner = self.binding_value[inner].clone();
+
+                // Assumption: option is Some.
+                let some = self.dedup_expr(Expr::Variable(opt.some));
+                self.conditions.assumptions.push(some);
+
+                // Assumption: option value is equal to this binding.
+                let eq = self.values_equal(&inner, &opt.inner);
+                self.conditions.assumptions.push(eq);
             }
 
             Binding::MatchSome { source } => {
