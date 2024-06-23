@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::zip};
 
 use cranelift_isle::trie_again::{Binding, BindingId};
 
@@ -38,8 +38,17 @@ impl Type {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Expr {
-    // TODO: veri ir types
+    // Terminals.
+    False,
+    True,
+    Variable(VariableId),
+
+    // Boolean.
+    And(ExprId, ExprId),
+    Imp(ExprId, ExprId),
+    Eq(ExprId, ExprId),
 }
 
 /// Verification conditions for an expansion.
@@ -58,10 +67,33 @@ impl Conditions {
     }
 }
 
+#[derive(Clone, Debug)]
+struct OptionValue {
+    some: VariableId,
+    inner: Box<Value>,
+}
+
+#[derive(Clone, Debug)]
 enum Value {
     Base(VariableId),
-    Option { some: VariableId, inner: Box<Value> },
+    Option(OptionValue),
     Tuple(Vec<Value>),
+}
+
+impl Value {
+    fn as_option(&self) -> Option<&OptionValue> {
+        match self {
+            Self::Option(opt) => Some(opt),
+            _ => None,
+        }
+    }
+
+    fn as_tuple(&self) -> Option<&Vec<Value>> {
+        match self {
+            Self::Tuple(fields) => Some(fields),
+            _ => None,
+        }
+    }
 }
 
 struct ConditionsBuilder<'a> {
@@ -69,6 +101,7 @@ struct ConditionsBuilder<'a> {
     prog: &'a Program,
 
     binding_value: HashMap<BindingId, Value>,
+    expr_map: HashMap<Expr, ExprId>,
     conditions: Conditions,
 }
 
@@ -78,6 +111,7 @@ impl<'a> ConditionsBuilder<'a> {
             expansion,
             prog,
             binding_value: HashMap::new(),
+            expr_map: HashMap::new(),
             conditions: Conditions::default(),
         }
     }
@@ -100,11 +134,131 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn add_binding(&mut self, id: BindingId, binding: &Binding) -> anyhow::Result<()> {
-        // Allocate value for the binding.
+        // Exit if already added.
+        if self.binding_value.contains_key(&id) {
+            return Ok(());
+        }
+
+        // Allocate a value.
         let binding_type = self.binding_type(binding);
         let value = self.alloc_binding_value(&binding_type)?;
         self.binding_value.insert(id, value);
-        Ok(())
+
+        // Ensure dependencies have been added.
+        for source in binding.sources() {
+            let source_binding = self
+                .expansion
+                .binding(*source)
+                .expect("source binding should be defined");
+            self.add_binding(*source, source_binding)?;
+        }
+
+        //
+        match binding {
+            // ConstInt
+            // ConstPrim
+            Binding::Argument { .. } => {
+                // Argument binding has no associated constraints.
+                Ok(())
+            }
+
+            Binding::Extractor { .. } => {
+                // TODO(mbm): extractor
+                Ok(())
+            }
+
+            Binding::Constructor { .. } => {
+                // TODO(mbm): constructor
+                Ok(())
+            }
+
+            Binding::Iterator { .. } => unimplemented!("iterator bindings"),
+
+            // MakeVariant
+            // MatchVariant
+            // MakeSome
+            Binding::MatchSome { source } => {
+                // Source should be an option.
+                let opt = self.binding_value[source]
+                    .as_option()
+                    .expect("source of match_some binding should be an option")
+                    .clone();
+
+                // Destination binding.
+                let v = self.binding_value[&id].clone();
+
+                // Assumption: if the option is some, then the inner value
+                // equals this binding.
+                let some = self.dedup_expr(Expr::Variable(opt.some));
+                let eq = self.values_equal(&v, &opt.inner);
+                let constraint = self.dedup_expr(Expr::Imp(some, eq));
+                self.conditions.assumptions.push(constraint);
+
+                Ok(())
+            }
+
+            Binding::MatchTuple { source, field } => {
+                // Source should be a tuple. Access its fields.
+                let fields = self.binding_value[source]
+                    .as_tuple()
+                    .expect("source of match_tuple binding should be a tuple")
+                    .clone();
+
+                // Destination binding.
+                let v = self.binding_value[&id].clone();
+
+                // Assumption: indexed field should equal this binding.
+                let eq = self.values_equal(&v, &fields[field.index()]);
+                self.conditions.assumptions.push(eq);
+
+                Ok(())
+            }
+
+            _ => todo!("add binding: {binding:?}"),
+        }
+    }
+
+    //fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {
+    //    // NIT(mbm): possible to avoid clone here?
+    //    self.values_equal(
+    //        &self.binding_value[&a].clone(),
+    //        &self.binding_value[&b].clone(),
+    //    )
+    //}
+
+    fn values_equal(&mut self, a: &Value, b: &Value) -> ExprId {
+        match (a, b) {
+            (Value::Base(u), Value::Base(v)) => self.variables_equal(*u, *v),
+
+            (Value::Tuple(us), Value::Tuple(vs)) => {
+                // Field-wise equality.
+                // TODO(mbm): can we expect that tuples are the same length?
+                assert_eq!(us.len(), vs.len(), "tuple length mismatch");
+                let fields_eq = zip(us, vs).map(|(u, v)| self.values_equal(u, v)).collect();
+
+                // All fields must be equal.
+                self.all(fields_eq)
+            }
+
+            _ => todo!("values equal: {a:?} == {b:?}"),
+        }
+    }
+
+    fn variables_equal(&mut self, u: VariableId, v: VariableId) -> ExprId {
+        let lhs = self.dedup_expr(Expr::Variable(u));
+        let rhs = self.dedup_expr(Expr::Variable(v));
+        self.exprs_equal(lhs, rhs)
+    }
+
+    fn exprs_equal(&mut self, lhs: ExprId, rhs: ExprId) -> ExprId {
+        self.dedup_expr(Expr::Eq(lhs, rhs))
+    }
+
+    fn all(&mut self, exprs: Vec<ExprId>) -> ExprId {
+        exprs
+            .into_iter()
+            .reduce(|acc, e| self.dedup_expr(Expr::And(acc, e)))
+            .unwrap_or_else(|| self.dedup_expr(Expr::True))
     }
 
     /// Determine the type of the given binding in the context of the
@@ -121,22 +275,20 @@ impl<'a> ConditionsBuilder<'a> {
     fn alloc_binding_value(&mut self, binding_type: &BindingType) -> anyhow::Result<Value> {
         match binding_type {
             BindingType::Base(type_id) => {
-                let model =
-                    self.prog
-                        .specenv
-                        .type_model
-                        .get(type_id)
-                        .ok_or(anyhow::format_err!(
-                            "no model for type {type_name}",
-                            type_name = self.prog.type_name(*type_id)
-                        ))?;
-                let ty = Type::from_spec_type(model);
+                // TODO(mbm): how to handle missing type models? use unknown default or error?
+                let ty = self
+                    .prog
+                    .specenv
+                    .type_model
+                    .get(type_id)
+                    .map(Type::from_spec_type)
+                    .unwrap_or(Type::Unknown);
                 Ok(Value::Base(self.alloc_variable(ty)))
             }
             BindingType::Option(inner_type) => {
                 let some = self.alloc_variable(Type::Bool);
                 let inner = Box::new(self.alloc_binding_value(inner_type)?);
-                Ok(Value::Option { some, inner })
+                Ok(Value::Option(OptionValue { some, inner }))
             }
             BindingType::Tuple(inners) => {
                 let inners = inners
@@ -152,5 +304,16 @@ impl<'a> ConditionsBuilder<'a> {
         let id = self.conditions.variable_type.len();
         self.conditions.variable_type.push(ty);
         VariableId(id)
+    }
+
+    fn dedup_expr(&mut self, expr: Expr) -> ExprId {
+        if let Some(id) = self.expr_map.get(&expr) {
+            *id
+        } else {
+            let id = ExprId(self.conditions.exprs.len().try_into().unwrap());
+            self.conditions.exprs.push(expr.clone());
+            self.expr_map.insert(expr, id);
+            id
+        }
     }
 }

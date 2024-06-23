@@ -76,6 +76,10 @@ impl Expansion {
         self.bindings[binding_id.index()].is_some()
     }
 
+    pub fn binding(&self, binding_id: BindingId) -> Option<&Binding> {
+        self.bindings.get(binding_id.index())?.as_ref()
+    }
+
     fn substitute(&mut self, target: BindingId, replace: BindingId) {
         // Reindex bindings.
         let mut reindex = Reindex::new();
