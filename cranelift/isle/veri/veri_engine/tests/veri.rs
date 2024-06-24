@@ -3472,3 +3472,19 @@ fn test_named_store_i64_aarch64_store64() {
         )
     });
 }
+
+#[test]
+fn test_named_load_sub64_x64_movzx() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "load_sub64_x64_movzx",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::Success),
+                (Bitwidth::I16, VerificationResult::Success),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}

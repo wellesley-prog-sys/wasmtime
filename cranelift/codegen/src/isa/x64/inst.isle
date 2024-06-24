@@ -1105,6 +1105,10 @@
 ;; In the future if mid-end optimizations fold constants into `Offset32` then
 ;; this in theory can "simply" delegate to the `amode_imm_reg` helper, and
 ;; below can delegate to `amode_imm_reg_reg_shift`, or something like that.
+(spec (to_amode flags val offset)
+      (provide (= result (concat flags (bvadd val (sign_ext 64 offset)))))
+      (require
+            (= (widthof val) 64)))
 (decl to_amode (MemFlags Value Offset32) Amode)
 (rule 0 (to_amode flags base offset)
         (amode_imm_reg flags base offset))
@@ -1746,6 +1750,9 @@
 (decl is_xmm_type (Type) Type)
 (extractor (is_xmm_type ty) (and (type_register_class (RegisterClass.Xmm)) ty))
 
+(spec (is_gpr_type arg)
+      (provide (= result arg))
+      (require (<= arg 64)))
 (decl is_gpr_type (Type) Type)
 (extractor (is_gpr_type ty) (and (type_register_class (RegisterClass.Gpr _)) ty))
 
@@ -2207,9 +2214,32 @@
 
 (type ExtendKind (enum Sign Zero))
 
+(model ExtMode (enum 
+      (BL #b000)
+      (BQ #b001)
+      (WL #b010)
+      (WQ #b011)
+      (LQ #b100)
+))
 (type ExtMode extern (enum BL BQ WL WQ LQ))
 
 ;; `ExtMode::new`
+(spec (ext_mode x y)
+      (provide (= result (switch x
+            (8 (switch y
+                  (32 (ExtMode.BL))
+                  (64 (ExtMode.BQ))
+                  ))
+            (16 (switch y
+                  (32 (ExtMode.WL))
+                  (64 (ExtMode.WQ))
+                  ))
+            (32 (switch y
+                  (64 (ExtMode.LQ))
+                  ))
+            ))
+      )
+)
 (decl ext_mode (u16 u16) ExtMode)
 (extern constructor ext_mode ext_mode)
 
@@ -2344,6 +2374,22 @@
       (mov64_mr addr))
 
 (decl x64_movzx (ExtMode GprMem) Gpr)
+(spec (x64_movzx mode src)
+      (provide (= result (switch mode 
+                  ((ExtMode.BL) (zero_ext 24 (load (extract 79 64 src) (extract 63 0 src) 8)))
+                  ((ExtMode.BQ) (zero_ext 56 (load (extract 79 64 src) (extract 63 0 src) 8)))
+                  ((ExtMode.WL) (zero_ext 16 (load (extract 79 64 src) (extract 63 0 src) 16)))
+                  ((ExtMode.WQ) (zero_ext 48 (load (extract 79 64 src) (extract 63 0 src) 16)))
+                  ((ExtMode.LQ) (zero_ext 32 (load (extract 79 64 src) (extract 63 0 src) 32)))
+                  )
+            )
+      )
+      (require (or (= mode (ExtMode.BL))
+                  (= mode (ExtMode.BQ))
+                  (= mode (ExtMode.WL))
+                  (= mode (ExtMode.WQ))
+                  (= mode (ExtMode.LQ))))  
+)
 (rule (x64_movzx mode src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))
@@ -5197,6 +5243,9 @@
       (value_reg w_xmm))
 
 (decl synthetic_amode_to_gpr_mem (SyntheticAmode) GprMem)
+
+(spec (amode_to_gpr_mem amode)
+      (provide (= result amode)))
 (decl amode_to_gpr_mem (Amode) GprMem)
 (rule (amode_to_gpr_mem amode)
       (amode_to_synthetic_amode amode))
