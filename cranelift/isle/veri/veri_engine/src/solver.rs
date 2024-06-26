@@ -37,16 +37,13 @@ pub struct SolverCtx {
     pub additional_decls: Vec<(String, SExpr)>,
     pub additional_assumptions: Vec<SExpr>,
     pub additional_assertions: Vec<SExpr>,
-    fresh_bits_idx: usize, 
+    fresh_bits_idx: usize,
     lhs_load_args: Option<Vec<SExpr>>,
     rhs_load_args: Option<Vec<SExpr>>,
     lhs_store_args: Option<Vec<SExpr>>,
     rhs_store_args: Option<Vec<SExpr>>,
     load_return: Option<SExpr>,
-    store_return: Option<SExpr>,
     lhs_flag: bool,
-
-
 }
 
 impl SolverCtx {
@@ -516,7 +513,7 @@ impl SolverCtx {
                 self.smt.bit_vec_sort(self.smt.numeral(width))
             }
             Type::Int => self.smt.int_sort(),
-            Type::Bool => self.smt.bool_sort(),
+            Type::Bool | Type::Unit => self.smt.bool_sort(),
         }
     }
 
@@ -603,6 +600,7 @@ impl SolverCtx {
                             self.smt.true_()
                         }
                     }
+                    Type::Unit => self.smt.true_(),
                 },
                 Terminal::True => self.smt.true_(),
                 Terminal::False => self.smt.false_(),
@@ -611,6 +609,7 @@ impl SolverCtx {
                     Type::BitVector(_) => self.new_fresh_bits(self.bitwidth),
                     Type::Int => self.new_fresh_int(),
                     Type::Bool => self.new_fresh_bool(),
+                    Type::Unit => self.smt.true_(),
                 },
             },
             Expr::Unary(op, arg) => {
@@ -1255,8 +1254,7 @@ impl SolverCtx {
                 let ez = self.vir_expr_to_sexp(*z);
 
                 if self.dynwidths {
-                    self.width_assumptions
-                        .push(self.smt.eq(width.unwrap(), ey));
+                    self.width_assumptions.push(self.smt.eq(width.unwrap(), ey));
                 }
 
                 if self.lhs_flag {
@@ -1280,27 +1278,16 @@ impl SolverCtx {
                 let ez = self.vir_expr_to_sexp(*z);
 
                 if self.dynwidths {
-                    self.width_assumptions
-                        .push(self.smt.eq(width.unwrap(), ex));
+                    self.width_assumptions.push(self.smt.eq(width.unwrap(), ex));
                 }
 
                 if self.lhs_flag {
                     self.lhs_store_args = Some(vec![ew, ex, ey, ez]);
-                    // self.smt.atom("true")
-                    let store_ret = if self.dynwidths {
-                        self.new_fresh_bits(self.bitwidth)
-                    } else {
-                        self.new_fresh_bits(static_expr_width.unwrap())
-                    };
-                    self.store_return = Some(store_ret);
-                    store_ret
                 } else {
                     self.rhs_store_args = Some(vec![ew, ex, ey, ez]);
-                    // self.smt.atom("true")
-                    self.store_return.unwrap()
                 }
+                self.smt.atom("true")
             }
-                
         }
     }
 
@@ -1626,22 +1613,22 @@ impl SolverCtx {
         println!("{}", self.smt.display(lhs));
 
         // if-let statement processing
-        print!("(if-let "); 
+        if !&rule.iflets.is_empty() {
+            print!("(if-let ");
+        }
         for if_let_struct in &rule.iflets {
             let if_lhs = &if_let_struct.lhs;
-            let if_rhs: &cranelift_isle::sema::Expr  = &if_let_struct.rhs;
+            let if_rhs: &cranelift_isle::sema::Expr = &if_let_struct.rhs;
 
-            let if_lhs_expr = self.display_isle_pattern(
-                termenv,
-                typeenv,
-                &vars,
-                rule,
-                &if_lhs, 
+            let if_lhs_expr = self.display_isle_pattern(termenv, typeenv, &vars, rule, &if_lhs);
+
+            let if_rhs_expr = self.display_isle_expr(termenv, typeenv, &vars, rule, &if_rhs);
+
+            print!(
+                "({} {})\n",
+                self.smt.display(if_lhs_expr),
+                self.smt.display(if_rhs_expr)
             );
-    
-            let if_rhs_expr = self.display_isle_expr(termenv, typeenv, &vars, rule, &if_rhs); 
-
-            print!("({} {})\n", self.smt.display(if_lhs_expr), self.smt.display(if_rhs_expr)); 
         }
         print!(")\n");
 
@@ -1782,7 +1769,6 @@ pub fn run_solver(
         lhs_store_args: None,
         rhs_store_args: None,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
 
@@ -1802,7 +1788,7 @@ pub fn run_solver(
                         let eq = ctx
                             .smt
                             .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
-                        println!("Width from inference {} ({})", width_name, bitwidth);
+                        // println!("Width from inference {} ({})", width_name, bitwidth);
                         ctx.width_assumptions.push(eq);
                     }
                     None => {
@@ -1993,7 +1979,6 @@ pub fn run_solver_with_static_widths(
         lhs_store_args: None,
         rhs_store_args: None,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
@@ -2093,27 +2078,24 @@ pub fn run_solver_with_static_widths(
             for i in 0..lhs_args_vec.len() {
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 load_conditions.push(arg_equal);
-                println!(
-                    "\t{}",
-                    ctx.smt.display(arg_equal)
-                );
+                println!("\t{}", ctx.smt.display(arg_equal));
                 full_condition = ctx.smt.and(full_condition, arg_equal)
             }
             println!();
-        },
+        }
         (None, None) => (),
         (Some(_), None) => {
             println!("Verification failed");
             println!("Left hand side has load statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
-        },
+        }
         (None, Some(_)) => {
             println!("Verification failed");
             println!("Right hand side has load statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
-        }, 
+        }
     }
-    
+
     let mut store_conditions = vec![];
     match (&ctx.lhs_store_args, &ctx.rhs_store_args) {
         (Some(_), Some(_)) => {
@@ -2123,25 +2105,22 @@ pub fn run_solver_with_static_widths(
             for i in 0..lhs_args_vec.len() {
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 store_conditions.push(arg_equal);
-                println!(
-                    "\t{}",
-                    ctx.smt.display(arg_equal)
-                );
+                println!("\t{}", ctx.smt.display(arg_equal));
                 full_condition = ctx.smt.and(full_condition, arg_equal)
             }
             println!();
-        },
+        }
         (None, None) => (),
         (Some(_), None) => {
             println!("Verification failed");
             println!("Left hand side has store statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
-        },
+        }
         (None, Some(_)) => {
             println!("Verification failed");
             println!("Right hand side has store statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
-        }, 
+        }
     }
 
     println!(

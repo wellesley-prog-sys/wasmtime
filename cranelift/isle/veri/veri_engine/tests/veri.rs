@@ -3208,7 +3208,12 @@ fn test_named_x64_iadd_base_case_32_or_64_lea() {
         test_x64_rule_with_lhs_termname_simple(
             "iadd_base_case_32_or_64_lea",
             "iadd",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3230,7 +3235,11 @@ fn test_named_x64_to_amode_add_const_rhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_rhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                // TODO: make this work for I32
+                // (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }

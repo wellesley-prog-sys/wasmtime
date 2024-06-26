@@ -1125,11 +1125,9 @@
 ;;
 ;; TODO: semantics of offset (sign extend or zero extend)?
 (spec (to_amode_add flags x y offset)
-      (provide (= result (bvadd (bvadd x y) (sign_ext 64 offset))))
-      (require
-            (= (widthof x) 64)
-            (= (widthof y) 64)))
+      (provide (= result (bvadd (zero_ext 64 (bvadd x y)) (sign_ext 64 offset)))))
 (instantiate to_amode_add
+    ((args (bv 16) (bv 32) (bv 32) (bv 32)) (ret (bv 64)) (canon (bv 32)))
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64))))
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
@@ -1158,9 +1156,7 @@
 ;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
 ;; otherwise falls back on `ImmReg`.
 (spec (amode_imm_reg flags x offset)
-      (provide (= result (bvadd x (sign_ext 64 offset))))
-      (require
-            (= (widthof x) 64)))
+      (provide (= result (bvadd (zero_ext 64 x) (sign_ext 64 offset)))))
 (instantiate amode_imm_reg
     ((args (bv 16) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64))))
 (decl amode_imm_reg (MemFlags Value Offset32) Amode)
@@ -1170,11 +1166,10 @@
         (amode_imm_reg_reg_shift flags x y offset))
 
 (spec (amode_imm_reg_reg_shift flags x y offset)
-      (provide (= result (bvadd (bvadd x y) (sign_ext 64 offset))))
+      (provide (= result (bvadd (sign_ext 64 (bvadd x y)) (sign_ext 64 offset))))
       (require
             (= (widthof flags) 16)
-            (= (widthof x) 64)
-            (= (widthof y) 64)
+            (= (widthof x) (widthof y))
             (= (widthof offset) 32)))
 (instantiate amode_imm_reg_reg_shift
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64))))
@@ -1686,7 +1681,7 @@
 (extern constructor put_in_xmm_mem_imm put_in_xmm_mem_imm)
 
 ;; Construct an `InstOutput` out of a single GPR register.
-(spec (output_gpr x) (provide (= result x)))
+(spec (output_gpr x) (provide (= result (conv_to (widthof result) x))))
 (decl output_gpr (Gpr) InstOutput)
 (rule (output_gpr x)
       (output_reg (gpr_to_reg x)))

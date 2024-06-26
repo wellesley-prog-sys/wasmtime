@@ -98,6 +98,9 @@ pub enum Type {
 
     /// The expression is a boolean.
     Bool,
+
+    /// Unit, removed before SMT-Lib
+    Unit,
 }
 
 impl Type {
