@@ -2226,15 +2226,15 @@
 ;; `ExtMode::new`
 (spec (ext_mode x y)
       (provide (= result (switch x
-            (8 (switch y
+            (int2bv 8 (switch y
                   (32 (ExtMode.BL))
                   (64 (ExtMode.BQ))
                   ))
-            (16 (switch y
+            (int2bv 16 (switch y
                   (32 (ExtMode.WL))
                   (64 (ExtMode.WQ))
                   ))
-            (32 (switch y
+            (int2bv 32 (switch y
                   (64 (ExtMode.LQ))
                   ))
             ))
