@@ -736,6 +736,7 @@ dependencies = [
  "cranelift-codegen-meta",
  "cranelift-isle",
  "env_logger",
+ "log",
 ]
 
 [[package]]

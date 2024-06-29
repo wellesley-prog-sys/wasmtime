@@ -1123,7 +1123,8 @@ impl TypeEnv {
         }
     }
 
-    fn intern(&self, ident: &ast::Ident) -> Option<Sym> {
+    /// Lookup symbol ID for the given identifier.
+    pub fn intern(&self, ident: &ast::Ident) -> Option<Sym> {
         self.sym_map.get(&ident.0).copied()
     }
 

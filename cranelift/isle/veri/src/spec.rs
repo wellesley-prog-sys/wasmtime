@@ -1,12 +1,13 @@
 use cranelift_isle::{
     ast::{self, Defs, Ident, Model, ModelType, SpecOp},
-    sema::{TermEnv, TermId, TypeEnv, TypeId},
+    sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
 };
 use std::collections::HashMap;
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
 
 /// Higher-level type, not including bitwidths.
+#[derive(Debug)]
 pub enum Type {
     /// The expression is a bitvector, currently modeled in the
     /// logic QF_BV https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
@@ -35,6 +36,7 @@ impl Type {
 }
 
 /// Type-specified constants
+#[derive(Debug)]
 pub struct Const {
     pub ty: Type,
     // TODO(mbm): support constants larger than 127 bits
@@ -42,101 +44,102 @@ pub struct Const {
 }
 
 /// Spec expression.
+#[derive(Debug)]
 pub enum Expr {
     // Terminal nodes
     Var(Ident),
     Const(Const),
-    True,
-    False,
+    //True,
+    //False,
 
     // Get the width of a bitvector
     WidthOf(Box<Expr>),
 
     // Boolean operations
-    Not(Box<Expr>),
+    // QUESTION(mbm): would it be preferable to use the Binary(Opcode, Box<Expr>, Box<Expr>) form instead?
+    //Not(Box<Expr>),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
-    Imp(Box<Expr>, Box<Expr>),
+    //Imp(Box<Expr>, Box<Expr>),
     Eq(Box<Expr>, Box<Expr>),
     Lte(Box<Expr>, Box<Expr>),
-    Lt(Box<Expr>, Box<Expr>),
+    //Lt(Box<Expr>, Box<Expr>),
 
-    BVSgt(Box<Expr>, Box<Expr>),
-    BVSgte(Box<Expr>, Box<Expr>),
-    BVSlt(Box<Expr>, Box<Expr>),
-    BVSlte(Box<Expr>, Box<Expr>),
-    BVUgt(Box<Expr>, Box<Expr>),
-    BVUgte(Box<Expr>, Box<Expr>),
-    BVUlt(Box<Expr>, Box<Expr>),
-    BVUlte(Box<Expr>, Box<Expr>),
+    //BVSgt(Box<Expr>, Box<Expr>),
+    //BVSgte(Box<Expr>, Box<Expr>),
+    //BVSlt(Box<Expr>, Box<Expr>),
+    //BVSlte(Box<Expr>, Box<Expr>),
+    //BVUgt(Box<Expr>, Box<Expr>),
+    //BVUgte(Box<Expr>, Box<Expr>),
+    //BVUlt(Box<Expr>, Box<Expr>),
+    //BVUlte(Box<Expr>, Box<Expr>),
 
-    BVSaddo(Box<Expr>, Box<Expr>),
+    //BVSaddo(Box<Expr>, Box<Expr>),
 
-    // Bitvector operations
-    //      Note: these follow the naming conventions of the SMT theory of bitvectors:
-    //      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
-    // Unary operators
-    BVNeg(Box<Expr>),
-    BVNot(Box<Expr>),
-    CLZ(Box<Expr>),
-    A64CLZ(Box<Expr>, Box<Expr>),
-    CLS(Box<Expr>),
-    A64CLS(Box<Expr>, Box<Expr>),
-    Rev(Box<Expr>),
-    A64Rev(Box<Expr>, Box<Expr>),
-    BVPopcnt(Box<Expr>),
+    //// Bitvector operations
+    ////      Note: these follow the naming conventions of the SMT theory of bitvectors:
+    ////      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
+    //// Unary operators
+    //BVNeg(Box<Expr>),
+    //BVNot(Box<Expr>),
+    //CLZ(Box<Expr>),
+    //A64CLZ(Box<Expr>, Box<Expr>),
+    //CLS(Box<Expr>),
+    //A64CLS(Box<Expr>, Box<Expr>),
+    //Rev(Box<Expr>),
+    //A64Rev(Box<Expr>, Box<Expr>),
+    //BVPopcnt(Box<Expr>),
 
-    // Binary operators
-    BVMul(Box<Expr>, Box<Expr>),
-    BVUDiv(Box<Expr>, Box<Expr>),
-    BVSDiv(Box<Expr>, Box<Expr>),
+    //// Binary operators
+    //BVMul(Box<Expr>, Box<Expr>),
+    //BVUDiv(Box<Expr>, Box<Expr>),
+    //BVSDiv(Box<Expr>, Box<Expr>),
     BVAdd(Box<Expr>, Box<Expr>),
-    BVSub(Box<Expr>, Box<Expr>),
-    BVUrem(Box<Expr>, Box<Expr>),
-    BVSrem(Box<Expr>, Box<Expr>),
-    BVAnd(Box<Expr>, Box<Expr>),
-    BVOr(Box<Expr>, Box<Expr>),
-    BVXor(Box<Expr>, Box<Expr>),
-    BVRotl(Box<Expr>, Box<Expr>),
-    BVRotr(Box<Expr>, Box<Expr>),
-    BVShl(Box<Expr>, Box<Expr>),
-    BVShr(Box<Expr>, Box<Expr>),
-    BVAShr(Box<Expr>, Box<Expr>),
+    //BVSub(Box<Expr>, Box<Expr>),
+    //BVUrem(Box<Expr>, Box<Expr>),
+    //BVSrem(Box<Expr>, Box<Expr>),
+    //BVAnd(Box<Expr>, Box<Expr>),
+    //BVOr(Box<Expr>, Box<Expr>),
+    //BVXor(Box<Expr>, Box<Expr>),
+    //BVRotl(Box<Expr>, Box<Expr>),
+    //BVRotr(Box<Expr>, Box<Expr>),
+    //BVShl(Box<Expr>, Box<Expr>),
+    //BVShr(Box<Expr>, Box<Expr>),
+    //BVAShr(Box<Expr>, Box<Expr>),
 
-    // Includes type
-    BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
+    //// Includes type
+    //BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
 
-    // Conversions
-    // Zero extend, static and dynamic width
-    BVZeroExtTo(usize, Box<Expr>),
-    BVZeroExtToVarWidth(Box<Expr>, Box<Expr>),
+    //// Conversions
+    //// Zero extend, static and dynamic width
+    //BVZeroExtTo(usize, Box<Expr>),
+    //BVZeroExtToVarWidth(Box<Expr>, Box<Expr>),
 
-    // Sign extend, static and dynamic width
-    BVSignExtTo(usize, Box<Expr>),
-    BVSignExtToVarWidth(Box<Expr>, Box<Expr>),
+    //// Sign extend, static and dynamic width
+    //BVSignExtTo(usize, Box<Expr>),
+    //BVSignExtToVarWidth(Box<Expr>, Box<Expr>),
 
-    // Extract specified bits
-    BVExtract(usize, usize, Box<Expr>),
+    //// Extract specified bits
+    //BVExtract(usize, usize, Box<Expr>),
 
-    // Concat two bitvectors
-    BVConcat(Vec<Expr>),
+    //// Concat two bitvectors
+    //BVConcat(Vec<Expr>),
 
-    // Convert integer to bitvector
-    BVIntToBv(usize, Box<Expr>),
+    //// Convert integer to bitvector
+    //BVIntToBv(usize, Box<Expr>),
 
-    // Convert bitvector to integer
-    BVToInt(Box<Expr>),
+    //// Convert bitvector to integer
+    //BVToInt(Box<Expr>),
 
-    // Conversion to wider/narrower bits, without an explicit extend
-    BVConvTo(usize, Box<Expr>),
+    //// Conversion to wider/narrower bits, without an explicit extend
+    //BVConvTo(usize, Box<Expr>),
     // Allow the destination width to be symbolic.
     BVConvToVarWidth(Box<Expr>, Box<Expr>),
 
     // Conditional if-then-else
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
-
-    // Switch
-    Switch(Box<Expr>, Vec<(Expr, Expr)>),
+    //// Switch
+    //Switch(Box<Expr>, Vec<(Expr, Expr)>),
 }
 
 macro_rules! unary_expr {
@@ -379,8 +382,14 @@ impl Spec {
 }
 
 pub struct SpecEnv {
+    /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
+
+    /// Model for the given type.
     pub type_model: HashMap<TypeId, Type>,
+
+    /// Value for the given constant.
+    pub const_value: HashMap<Sym, Expr>,
 }
 
 impl SpecEnv {
@@ -388,23 +397,34 @@ impl SpecEnv {
         let mut env = Self {
             term_spec: HashMap::new(),
             type_model: HashMap::new(),
+            const_value: HashMap::new(),
         };
 
-        env.collect_models(defs, termenv, tyenv);
+        env.collect_models(defs, tyenv);
         env.collect_specs(defs, termenv, tyenv);
 
         env
     }
 
     // Traverse models to process spec annotations for enums
-    fn collect_models(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_models(&mut self, defs: &Defs, tyenv: &TypeEnv) {
         for def in &defs.defs {
             match def {
                 &ast::Def::Model(Model { ref name, ref val }) => match val {
                     ast::ModelValue::TypeValue(model_type) => {
-                        let type_id = tyenv.get_type_by_name(&name).unwrap();
+                        // TODO(mbm): error on missing type rather than panic
+                        let type_id = tyenv
+                            .get_type_by_name(&name)
+                            .expect("type name should be defined");
                         self.type_model
                             .insert(type_id, Type::from_model(model_type));
+                    }
+                    ast::ModelValue::ConstValue(val) => {
+                        // TODO(mbm): error on missing constant name rather than panic
+                        let sym = tyenv.intern(name).expect("constant name should be defined");
+                        // TODO(mbm): enforce that the expression is constant.
+                        // TODO(mbm): ensure the type of the expression matches the type of the
+                        self.const_value.insert(sym, Expr::from_ast(val));
                     }
                     ast::ModelValue::EnumValues(..) => todo!("enum values"),
                 },

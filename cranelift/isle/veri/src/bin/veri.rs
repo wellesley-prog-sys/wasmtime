@@ -47,6 +47,7 @@ impl Opts {
 }
 
 fn main() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
     let opts = Opts::parse();
 
     // Read ISLE inputs.
@@ -63,6 +64,7 @@ fn main() -> anyhow::Result<()> {
         ))?;
 
     // Generate expansions.
+    // TODO(mbm): don't hardcode the expansion configuration
     let root_term = "lower";
     let mut expansions_builder = ExpansionsBuilder::new(&prog, &root_term)?;
     expansions_builder.inline_term(&root_term)?;

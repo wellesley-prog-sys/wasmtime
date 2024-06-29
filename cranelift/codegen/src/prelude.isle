@@ -354,10 +354,15 @@
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (extern const $I8 Type)
+(model I8 (const 8))
 (extern const $I16 Type)
+(model I16 (const 16))
 (extern const $I32 Type)
+(model I32 (const 32))
 (extern const $I64 Type)
+(model I64 (const 64))
 (extern const $I128 Type)
+(model I128 (const 128))
 
 (extern const $F16 Type)
 (extern const $F32 Type)

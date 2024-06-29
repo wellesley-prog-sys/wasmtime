@@ -582,8 +582,11 @@ impl<'a> Parser<'a> {
                 variants.push((name, val));
             }
             ModelValue::EnumValues(variants)
+        } else if self.eat_sym_str("const")? {
+            let val = self.parse_spec_expr()?;
+            ModelValue::ConstValue(val)
         } else {
-            return Err(self.error(pos, "Model must be a type or enum".to_string()));
+            return Err(self.error(pos, "Model must be a type, enum or const".to_string()));
         };
 
         self.expect_rparen()?; // end body

@@ -20,7 +20,7 @@ declare_id!(
 );
 
 // QUESTION(mbm): do we need yet another type enum?
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
     Unknown,
     BitVector(Option<usize>),
@@ -51,11 +51,26 @@ impl std::fmt::Display for Type {
     }
 }
 
+// QUESTION(mbm): can this be deduped with the corresponding spec constant type?
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Const {
+    Bool(bool),
+    Int(i128),
+}
+
+impl std::fmt::Display for Const {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Bool(b) => write!(f, "{b}"),
+            Self::Int(v) => write!(f, "{v}"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Expr {
     // Terminals.
-    False,
-    True,
+    Const(Const),
     Variable(VariableId),
 
     // Boolean.
@@ -67,9 +82,8 @@ pub enum Expr {
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::False => write!(f, "false"),
-            Self::True => write!(f, "true"),
-            Self::Variable(v) => write!(f, "v{}", v.index()),
+            Self::Const(c) => write!(f, "const({c})"),
+            Self::Variable(v) => write!(f, "var({})", v.index()),
 
             Self::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
             Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
@@ -136,12 +150,19 @@ struct OptionValue {
 
 #[derive(Clone, Debug)]
 enum Value {
-    Base(VariableId),
+    Var(VariableId),
     Option(OptionValue),
     Tuple(Vec<Value>),
 }
 
 impl Value {
+    fn as_var(&self) -> Option<VariableId> {
+        match self {
+            Self::Var(v) => Some(*v),
+            _ => None,
+        }
+    }
+
     fn as_option(&self) -> Option<&OptionValue> {
         match self {
             Self::Option(opt) => Some(opt),
@@ -216,9 +237,27 @@ impl<'a> ConditionsBuilder<'a> {
 
         //
         match binding {
-            // ConstInt
-            Binding::ConstPrim { .. } => {
-                // TODO(mbm): const_prim
+            Binding::ConstPrim { val } => {
+                // Lookup value.
+                let spec_value =
+                    self.prog
+                        .specenv
+                        .const_value
+                        .get(val)
+                        .ok_or(anyhow::format_err!(
+                            "value of constant {const_name} is unspecified",
+                            const_name = self.prog.tyenv.syms[val.index()]
+                        ))?;
+                let value = self.spec_expr(spec_value);
+
+                // Destination binding should be a variable.
+                let v = self.binding_value[&id]
+                    .as_var()
+                    .expect("destination of const_prim binding should be a variable");
+
+                // Assumption: variable equals constant value.
+                let v = self.var(v);
+                self.exprs_equal(v, value);
             }
 
             Binding::Argument { .. } => {
@@ -226,17 +265,20 @@ impl<'a> ConditionsBuilder<'a> {
             }
 
             Binding::Extractor { .. } => {
-                // TODO(mbm): extractor
+                // TODO(mbm): implement extractor bindings
+                log::error!("extractor binding ");
             }
 
             Binding::Constructor { .. } => {
-                // TODO(mbm): constructor
+                // TODO(mbm): implement constructor bindings
+                log::error!("constructor binding unimplemented");
             }
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings"),
 
             Binding::MakeVariant { .. } => {
-                // TODO(mbm): make_variant
+                // TODO(mbm): implement make_variant bindings
+                log::error!("make_variant binding unimplemented");
             }
 
             Binding::MakeSome { inner } => {
@@ -297,17 +339,23 @@ impl<'a> ConditionsBuilder<'a> {
         Ok(())
     }
 
-    //fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {
-    //    // NIT(mbm): possible to avoid clone here?
-    //    self.values_equal(
-    //        &self.binding_value[&a].clone(),
-    //        &self.binding_value[&b].clone(),
-    //    )
-    //}
+    fn spec_expr(&mut self, expr: &spec::Expr) -> ExprId {
+        match expr {
+            spec::Expr::Const(c) => self.spec_const(c),
+            e => todo!("spec expr: {e:?}"),
+        }
+    }
+
+    fn spec_const(&mut self, c: &spec::Const) -> ExprId {
+        match &c.ty {
+            spec::Type::Int => self.constant(Const::Int(c.value)),
+            ty => todo!("spec const type: {ty:?}"),
+        }
+    }
 
     fn values_equal(&mut self, a: &Value, b: &Value) -> ExprId {
         match (a, b) {
-            (Value::Base(u), Value::Base(v)) => self.variables_equal(*u, *v),
+            (Value::Var(u), Value::Var(v)) => self.variables_equal(*u, *v),
 
             (Value::Tuple(us), Value::Tuple(vs)) => {
                 // Field-wise equality.
@@ -324,9 +372,9 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn variables_equal(&mut self, u: VariableId, v: VariableId) -> ExprId {
-        let lhs = self.dedup_expr(Expr::Variable(u));
-        let rhs = self.dedup_expr(Expr::Variable(v));
-        self.exprs_equal(lhs, rhs)
+        let u = self.var(u);
+        let v = self.var(v);
+        self.exprs_equal(u, v)
     }
 
     fn exprs_equal(&mut self, lhs: ExprId, rhs: ExprId) -> ExprId {
@@ -337,7 +385,19 @@ impl<'a> ConditionsBuilder<'a> {
         exprs
             .into_iter()
             .reduce(|acc, e| self.dedup_expr(Expr::And(acc, e)))
-            .unwrap_or_else(|| self.dedup_expr(Expr::True))
+            .unwrap_or_else(|| self.boolean(true))
+    }
+
+    fn var(&mut self, v: VariableId) -> ExprId {
+        self.dedup_expr(Expr::Variable(v))
+    }
+
+    fn boolean(&mut self, value: bool) -> ExprId {
+        self.constant(Const::Bool(value))
+    }
+
+    fn constant(&mut self, c: Const) -> ExprId {
+        self.dedup_expr(Expr::Const(c))
     }
 
     /// Determine the type of the given binding in the context of the
@@ -362,7 +422,7 @@ impl<'a> ConditionsBuilder<'a> {
                     .get(type_id)
                     .map(Type::from_spec_type)
                     .unwrap_or(Type::Unknown);
-                Ok(Value::Base(self.alloc_variable(ty)))
+                Ok(Value::Var(self.alloc_variable(ty)))
             }
             BindingType::Option(inner_type) => {
                 let some = self.alloc_variable(Type::Bool);

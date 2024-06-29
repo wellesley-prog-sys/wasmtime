@@ -231,6 +231,8 @@ pub enum ModelValue {
     TypeValue(ModelType),
     /// Correspond to ISLE enums, identifier is the enum variant name
     EnumValues(Vec<(Ident, SpecExpr)>),
+    /// Corresponds to ISLE external constants.
+    ConstValue(SpecExpr),
 }
 
 /// A model of a construct into SMT-LIB (currently, types or enums)
