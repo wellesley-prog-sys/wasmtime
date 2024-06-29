@@ -366,15 +366,21 @@ impl Expr {
     }
 }
 
+// QUESTION(mbm): should we make the result explicit in the spec syntax?
+static RESULT: &str = "result";
+
 pub struct Spec {
-    // TODO(mbm): spec signature
-    provides: Vec<Expr>,
-    requires: Vec<Expr>,
+    pub args: Vec<Ident>,
+    pub ret: Ident,
+    pub provides: Vec<Expr>,
+    pub requires: Vec<Expr>,
 }
 
 impl Spec {
     fn from_ast(spec: &ast::Spec) -> Self {
         Self {
+            args: spec.args.clone(),
+            ret: Ident(RESULT.to_string(), Default::default()),
             provides: spec.provides.iter().map(Expr::from_ast).collect(),
             requires: spec.requires.iter().map(Expr::from_ast).collect(),
         }

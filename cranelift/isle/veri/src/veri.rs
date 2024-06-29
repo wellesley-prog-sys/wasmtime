@@ -56,6 +56,7 @@ impl std::fmt::Display for Type {
 pub enum Const {
     Bool(bool),
     Int(i128),
+    BitVector(usize, i128),
 }
 
 impl std::fmt::Display for Const {
@@ -63,6 +64,7 @@ impl std::fmt::Display for Const {
         match self {
             Self::Bool(b) => write!(f, "{b}"),
             Self::Int(v) => write!(f, "{v}"),
+            Self::BitVector(w, v) => write!(f, "#b{v:0>w$}"),
         }
     }
 }
@@ -75,8 +77,16 @@ pub enum Expr {
 
     // Boolean.
     And(ExprId, ExprId),
+    Or(ExprId, ExprId),
     Imp(ExprId, ExprId),
     Eq(ExprId, ExprId),
+    Lte(ExprId, ExprId),
+    // ITE
+    Conditional(ExprId, ExprId, ExprId),
+    // Bitwidth conversion.
+    BVConvTo(ExprId, ExprId),
+    // Bitwidth.
+    WidthOf(ExprId),
 }
 
 impl std::fmt::Display for Expr {
@@ -84,10 +94,16 @@ impl std::fmt::Display for Expr {
         match self {
             Self::Const(c) => write!(f, "const({c})"),
             Self::Variable(v) => write!(f, "var({})", v.index()),
-
             Self::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
+            Self::Or(x, y) => write!(f, "{} || {}", x.index(), y.index()),
             Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
             Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
+            Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
+            Self::Conditional(c, t, e) => {
+                write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
+            }
+            Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
+            Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
         }
     }
 }
@@ -235,7 +251,7 @@ impl<'a> ConditionsBuilder<'a> {
             self.add_binding(*source, source_binding)?;
         }
 
-        //
+        // TODO(mbm): refactor match cases to methods
         match binding {
             Binding::ConstPrim { val } => {
                 // Lookup value.
@@ -248,7 +264,8 @@ impl<'a> ConditionsBuilder<'a> {
                             "value of constant {const_name} is unspecified",
                             const_name = self.prog.tyenv.syms[val.index()]
                         ))?;
-                let value = self.spec_expr(spec_value);
+                let no_vars = HashMap::new();
+                let value = self.spec_expr(spec_value, &no_vars)?;
 
                 // Destination binding should be a variable.
                 let v = self.binding_value[&id]
@@ -269,9 +286,53 @@ impl<'a> ConditionsBuilder<'a> {
                 log::error!("extractor binding ");
             }
 
-            Binding::Constructor { .. } => {
-                // TODO(mbm): implement constructor bindings
-                log::error!("constructor binding unimplemented");
+            Binding::Constructor {
+                term, parameters, ..
+            } => {
+                // Lookup spec.
+                let term_spec =
+                    self.prog
+                        .specenv
+                        .term_spec
+                        .get(term)
+                        .ok_or(anyhow::format_err!(
+                            "no spec for term {term_name}",
+                            term_name = self.prog.term_name(*term)
+                        ))?;
+
+                // Assignment of signature variables.
+                let mut vars = HashMap::new();
+
+                // Parameters.
+                // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
+                assert_eq!(parameters.len(), term_spec.args.len());
+                for (arg_name, parameter_binding_id) in zip(&term_spec.args, &parameters[..]) {
+                    let v = self
+                        .binding_value
+                        .get(parameter_binding_id)
+                        .expect("parameter binding should be defined")
+                        .as_var()
+                        .expect("constructor parameter should be a variable");
+                    vars.insert(arg_name.0.clone(), v);
+                }
+
+                // Return value.
+                let v = self.binding_value[&id].as_var().ok_or(anyhow::format_err!(
+                    "constructor return value must be a variable"
+                ))?;
+                vars.insert(term_spec.ret.0.clone(), v);
+
+                // Assertions: requires.
+                for require in &term_spec.requires {
+                    let require = self.spec_expr(require, &vars)?;
+                    self.conditions.assertions.push(require);
+                }
+
+                // Assumptions: provides.
+                for provide in &term_spec.provides {
+                    let provide = self.spec_expr(provide, &vars)?;
+                    self.conditions.assumptions.push(provide);
+                }
             }
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings"),
@@ -339,17 +400,68 @@ impl<'a> ConditionsBuilder<'a> {
         Ok(())
     }
 
-    fn spec_expr(&mut self, expr: &spec::Expr) -> ExprId {
+    fn spec_expr(
+        &mut self,
+        expr: &spec::Expr,
+        vars: &HashMap<String, VariableId>,
+    ) -> anyhow::Result<ExprId> {
         match expr {
+            spec::Expr::Var(v) => {
+                let var_name = &v.0;
+                let v = vars
+                    .get(var_name)
+                    .ok_or(anyhow::format_err!("undefined variable {var_name}"))?;
+                Ok(self.var(*v))
+            }
+
             spec::Expr::Const(c) => self.spec_const(c),
+
+            spec::Expr::Or(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::Or(x, y)))
+            }
+
+            spec::Expr::Eq(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.exprs_equal(x, y))
+            }
+
+            spec::Expr::Lte(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::Lte(x, y)))
+            }
+
+            spec::Expr::Conditional(c, t, e) => {
+                let c = self.spec_expr(c, vars)?;
+                let t = self.spec_expr(t, vars)?;
+                let e = self.spec_expr(e, vars)?;
+                Ok(self.dedup_expr(Expr::Conditional(c, t, e)))
+            }
+
+            spec::Expr::BVConvToVarWidth(w, x) => {
+                let w = self.spec_expr(w, vars)?;
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::BVConvTo(w, x)))
+            }
+
+            spec::Expr::WidthOf(x) => {
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::WidthOf(x)))
+            }
+
             e => todo!("spec expr: {e:?}"),
         }
     }
 
-    fn spec_const(&mut self, c: &spec::Const) -> ExprId {
+    fn spec_const(&mut self, c: &spec::Const) -> anyhow::Result<ExprId> {
         match &c.ty {
-            spec::Type::Int => self.constant(Const::Int(c.value)),
-            ty => todo!("spec const type: {ty:?}"),
+            spec::Type::Bool => Ok(self.boolean(c.value != 0)),
+            spec::Type::Int => Ok(self.constant(Const::Int(c.value))),
+            spec::Type::BitVectorWithWidth(w) => Ok(self.constant(Const::BitVector(*w, c.value))),
+            spec::Type::BitVector => anyhow::bail!("bitvector constant must have known width"),
         }
     }
 
