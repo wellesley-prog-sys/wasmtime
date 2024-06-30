@@ -4,7 +4,10 @@ use crate::{
     spec,
     trie_again::{binding_type, BindingType},
 };
-use cranelift_isle::trie_again::{Binding, BindingId};
+use cranelift_isle::{
+    sema::{Sym, TermId},
+    trie_again::{Binding, BindingId, TupleIndex},
+};
 use std::{collections::HashMap, iter::zip};
 
 declare_id!(
@@ -263,210 +266,249 @@ impl<'a> ConditionsBuilder<'a> {
             self.add_binding(*source, source_binding)?;
         }
 
-        // TODO(mbm): refactor match cases to methods
+        // Generate conditions depending on binding type.
         match binding {
-            Binding::ConstPrim { val } => {
-                // Lookup value.
-                let spec_value =
-                    self.prog
-                        .specenv
-                        .const_value
-                        .get(val)
-                        .ok_or(anyhow::format_err!(
-                            "value of constant {const_name} is unspecified",
-                            const_name = self.prog.tyenv.syms[val.index()]
-                        ))?;
-                let no_vars = HashMap::new();
-                let value = self.spec_expr(spec_value, &no_vars)?;
+            Binding::ConstInt { .. } => todo!("binding: const_int"),
 
-                // Destination binding should be a variable.
-                let v = self.binding_value[&id]
-                    .as_var()
-                    .expect("destination of const_prim binding should be a variable");
+            Binding::ConstPrim { val } => self.const_prim(id, *val),
 
-                // Assumption: variable equals constant value.
-                let v = self.var(v);
-                self.exprs_equal(v, value);
-            }
+            // Argument binding has no associated constraints.
+            Binding::Argument { .. } => Ok(()),
 
-            Binding::Argument { .. } => {
-                // Argument binding has no associated constraints.
-            }
-
-            Binding::Extractor { term, parameter } => {
-                // TODO(mbm): dedup extractor/constructor logic
-
-                // Lookup spec.
-                let term_spec =
-                    self.prog
-                        .specenv
-                        .term_spec
-                        .get(term)
-                        .ok_or(anyhow::format_err!(
-                            "no spec for term {term_name}",
-                            term_name = self.prog.term_name(*term)
-                        ))?;
-
-                // Assignment of signature variables.
-                let mut vars = HashMap::new();
-
-                // Parameters are the actually the return values of an
-                // extractor, wrapped in an Option<..> type.
-                // TODO(mbm): infallible extractors
-                let opt = self.binding_value[&id]
-                    .as_option()
-                    .ok_or(anyhow::format_err!(
-                        "destination of extractor binding should be an option"
-                    ))?;
-                let parameters = opt.inner.elements();
-
-                // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
-                assert_eq!(parameters.len(), term_spec.args.len());
-
-                for (arg_name, parameter) in zip(&term_spec.args, parameters) {
-                    let v = parameter
-                        .as_var()
-                        .expect("extractor parameter should be a variable");
-                    vars.insert(arg_name.0.clone(), v);
-                }
-
-                // Result maps to the parameter of an extractor.
-                let v = self.binding_value[parameter]
-                    .as_var()
-                    .ok_or(anyhow::format_err!(
-                        "extractor parameter must be a variable"
-                    ))?;
-                vars.insert(term_spec.ret.0.clone(), v);
-
-                // Requires define the conditions for the extractor to return
-                // Some(..).
-                // QUESTION(mbm): what are the intended semantics for extractor specs?
-                let some = self.var(opt.some);
-                let mut requires = Vec::new();
-                for require in &term_spec.requires {
-                    let require = self.spec_expr(require, &vars)?;
-                    requires.push(require);
-                }
-                let all_requires = self.all(requires);
-                self.exprs_equal(some, all_requires);
-
-                // Assumptions: provides.
-                for provide in &term_spec.provides {
-                    let provide = self.spec_expr(provide, &vars)?;
-                    self.conditions.assumptions.push(provide);
-                }
-            }
+            Binding::Extractor { term, parameter } => self.extractor(id, *term, *parameter),
 
             Binding::Constructor {
                 term, parameters, ..
-            } => {
-                // Lookup spec.
-                let term_spec =
-                    self.prog
-                        .specenv
-                        .term_spec
-                        .get(term)
-                        .ok_or(anyhow::format_err!(
-                            "no spec for term {term_name}",
-                            term_name = self.prog.term_name(*term)
-                        ))?;
-
-                // Assignment of signature variables.
-                let mut vars = HashMap::new();
-
-                // Parameters.
-                // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
-                assert_eq!(parameters.len(), term_spec.args.len());
-                for (arg_name, parameter_binding_id) in zip(&term_spec.args, &parameters[..]) {
-                    let v = self
-                        .binding_value
-                        .get(parameter_binding_id)
-                        .expect("parameter binding should be defined")
-                        .as_var()
-                        .expect("constructor parameter should be a variable");
-                    vars.insert(arg_name.0.clone(), v);
-                }
-
-                // Return value.
-                let v = self.binding_value[&id].as_var().ok_or(anyhow::format_err!(
-                    "constructor return value must be a variable"
-                ))?;
-                vars.insert(term_spec.ret.0.clone(), v);
-
-                // Assertions: requires.
-                for require in &term_spec.requires {
-                    let require = self.spec_expr(require, &vars)?;
-                    self.conditions.assertions.push(require);
-                }
-
-                // Assumptions: provides.
-                for provide in &term_spec.provides {
-                    let provide = self.spec_expr(provide, &vars)?;
-                    self.conditions.assumptions.push(provide);
-                }
-            }
+            } => self.constructor(id, *term, &*parameters),
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings"),
 
             Binding::MakeVariant { .. } => {
                 // TODO(mbm): implement make_variant bindings
                 log::error!("make_variant binding unimplemented");
+                Ok(())
             }
 
-            Binding::MakeSome { inner } => {
-                // Destination binding should be an option.
-                let opt = self.binding_value[&id]
-                    .as_option()
-                    .expect("destination of make_some binding should be an option")
-                    .clone();
+            Binding::MatchVariant { .. } => todo!("binding: match_variant"),
 
-                // Inner binding.
-                let inner = self.binding_value[inner].clone();
+            Binding::MakeSome { inner } => self.make_some(id, *inner),
 
-                // Assumption: option is Some.
-                let some = self.var(opt.some);
-                self.conditions.assumptions.push(some);
+            Binding::MatchSome { source } => self.match_some(id, *source),
 
-                // Assumption: option value is equal to this binding.
-                let eq = self.values_equal(&inner, &opt.inner);
-                self.conditions.assumptions.push(eq);
-            }
-
-            Binding::MatchSome { source } => {
-                // Source should be an option.
-                let opt = self.binding_value[source]
-                    .as_option()
-                    .expect("source of match_some binding should be an option")
-                    .clone();
-
-                // Destination binding.
-                let v = self.binding_value[&id].clone();
-
-                // Assumption: if the option is some, then the inner value
-                // equals this binding.
-                let some = self.var(opt.some);
-                let eq = self.values_equal(&v, &opt.inner);
-                let constraint = self.dedup_expr(Expr::Imp(some, eq));
-                self.conditions.assumptions.push(constraint);
-            }
-
-            Binding::MatchTuple { source, field } => {
-                // Source should be a tuple. Access its fields.
-                let fields = self.binding_value[source]
-                    .as_tuple()
-                    .expect("source of match_tuple binding should be a tuple")
-                    .clone();
-
-                // Destination binding.
-                let v = self.binding_value[&id].clone();
-
-                // Assumption: indexed field should equal this binding.
-                let eq = self.values_equal(&v, &fields[field.index()]);
-                self.conditions.assumptions.push(eq);
-            }
-
-            _ => todo!("add binding: {binding:?}"),
+            Binding::MatchTuple { source, field } => self.match_tuple(id, *source, *field),
         }
+    }
+
+    fn const_prim(&mut self, id: BindingId, val: Sym) -> anyhow::Result<()> {
+        // Lookup value.
+        let spec_value = self
+            .prog
+            .specenv
+            .const_value
+            .get(&val)
+            .ok_or(anyhow::format_err!(
+                "value of constant {const_name} is unspecified",
+                const_name = self.prog.tyenv.syms[val.index()]
+            ))?;
+        let no_vars = HashMap::new();
+        let value = self.spec_expr(spec_value, &no_vars)?;
+
+        // Destination binding should be a variable.
+        let v = self.binding_value[&id]
+            .as_var()
+            .expect("destination of const_prim binding should be a variable");
+
+        // Assumption: variable equals constant value.
+        let v = self.var(v);
+        self.exprs_equal(v, value);
+
+        Ok(())
+    }
+
+    fn extractor(
+        &mut self,
+        id: BindingId,
+        term: TermId,
+        parameter: BindingId,
+    ) -> anyhow::Result<()> {
+        // TODO(mbm): dedup extractor/constructor logic
+
+        // Lookup spec.
+        let term_spec = self
+            .prog
+            .specenv
+            .term_spec
+            .get(&term)
+            .ok_or(anyhow::format_err!(
+                "no spec for term {term_name}",
+                term_name = self.prog.term_name(term)
+            ))?;
+
+        // Assignment of signature variables.
+        let mut vars = HashMap::new();
+
+        // Parameters are the actually the return values of an
+        // extractor, wrapped in an Option<..> type.
+        // TODO(mbm): infallible extractors
+        let opt = self.binding_value[&id]
+            .as_option()
+            .ok_or(anyhow::format_err!(
+                "destination of extractor binding should be an option"
+            ))?;
+        let parameters = opt.inner.elements();
+
+        // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
+        assert_eq!(parameters.len(), term_spec.args.len());
+
+        for (arg_name, parameter) in zip(&term_spec.args, parameters) {
+            let v = parameter
+                .as_var()
+                .expect("extractor parameter should be a variable");
+            vars.insert(arg_name.0.clone(), v);
+        }
+
+        // Result maps to the parameter of an extractor.
+        let v = self.binding_value[&parameter]
+            .as_var()
+            .ok_or(anyhow::format_err!(
+                "extractor parameter must be a variable"
+            ))?;
+        vars.insert(term_spec.ret.0.clone(), v);
+
+        // Requires define the conditions for the extractor to return
+        // Some(..).
+        // QUESTION(mbm): what are the intended semantics for extractor specs?
+        let some = self.var(opt.some);
+        let mut requires = Vec::new();
+        for require in &term_spec.requires {
+            let require = self.spec_expr(require, &vars)?;
+            requires.push(require);
+        }
+        let all_requires = self.all(requires);
+        self.exprs_equal(some, all_requires);
+
+        // Assumptions: provides.
+        for provide in &term_spec.provides {
+            let provide = self.spec_expr(provide, &vars)?;
+            self.conditions.assumptions.push(provide);
+        }
+
+        Ok(())
+    }
+
+    fn constructor(
+        &mut self,
+        id: BindingId,
+        term: TermId,
+        parameters: &[BindingId],
+    ) -> anyhow::Result<()> {
+        // Lookup spec.
+        let term_spec = self
+            .prog
+            .specenv
+            .term_spec
+            .get(&term)
+            .ok_or(anyhow::format_err!(
+                "no spec for term {term_name}",
+                term_name = self.prog.term_name(term)
+            ))?;
+
+        // Assignment of signature variables.
+        let mut vars = HashMap::new();
+
+        // Parameters.
+        // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
+        assert_eq!(parameters.len(), term_spec.args.len());
+        for (arg_name, parameter_binding_id) in zip(&term_spec.args, &parameters[..]) {
+            let v = self
+                .binding_value
+                .get(parameter_binding_id)
+                .expect("parameter binding should be defined")
+                .as_var()
+                .expect("constructor parameter should be a variable");
+            vars.insert(arg_name.0.clone(), v);
+        }
+
+        // Return value.
+        let v = self.binding_value[&id].as_var().ok_or(anyhow::format_err!(
+            "constructor return value must be a variable"
+        ))?;
+        vars.insert(term_spec.ret.0.clone(), v);
+
+        // Assertions: requires.
+        for require in &term_spec.requires {
+            let require = self.spec_expr(require, &vars)?;
+            self.conditions.assertions.push(require);
+        }
+
+        // Assumptions: provides.
+        for provide in &term_spec.provides {
+            let provide = self.spec_expr(provide, &vars)?;
+            self.conditions.assumptions.push(provide);
+        }
+
+        Ok(())
+    }
+
+    fn make_some(&mut self, id: BindingId, inner: BindingId) -> anyhow::Result<()> {
+        // Destination binding should be an option.
+        let opt = self.binding_value[&id]
+            .as_option()
+            .expect("destination of make_some binding should be an option")
+            .clone();
+
+        // Inner binding.
+        let inner = self.binding_value[&inner].clone();
+
+        // Assumption: option is Some.
+        let some = self.var(opt.some);
+        self.conditions.assumptions.push(some);
+
+        // Assumption: option value is equal to this binding.
+        let eq = self.values_equal(&inner, &opt.inner);
+        self.conditions.assumptions.push(eq);
+
+        Ok(())
+    }
+
+    fn match_some(&mut self, id: BindingId, source: BindingId) -> anyhow::Result<()> {
+        // Source should be an option.
+        let opt = self.binding_value[&source]
+            .as_option()
+            .expect("source of match_some binding should be an option")
+            .clone();
+
+        // Destination binding.
+        let v = self.binding_value[&id].clone();
+
+        // Assumption: if the option is some, then the inner value
+        // equals this binding.
+        let some = self.var(opt.some);
+        let eq = self.values_equal(&v, &opt.inner);
+        let constraint = self.dedup_expr(Expr::Imp(some, eq));
+        self.conditions.assumptions.push(constraint);
+
+        Ok(())
+    }
+
+    fn match_tuple(
+        &mut self,
+        id: BindingId,
+        source: BindingId,
+        field: TupleIndex,
+    ) -> anyhow::Result<()> {
+        // Source should be a tuple. Access its fields.
+        let fields = self.binding_value[&source]
+            .as_tuple()
+            .expect("source of match_tuple binding should be a tuple")
+            .clone();
+
+        // Destination binding.
+        let v = self.binding_value[&id].clone();
+
+        // Assumption: indexed field should equal this binding.
+        let eq = self.values_equal(&v, &fields[field.index()]);
+        self.conditions.assumptions.push(eq);
 
         Ok(())
     }
