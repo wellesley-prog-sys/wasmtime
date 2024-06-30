@@ -1,13 +1,11 @@
-use std::{collections::HashMap, iter::zip};
-
-use cranelift_isle::trie_again::{Binding, BindingId};
-
 use crate::{
     expand::Expansion,
     program::Program,
     spec,
     trie_again::{binding_type, BindingType},
 };
+use cranelift_isle::trie_again::{Binding, BindingId};
+use std::{collections::HashMap, iter::zip};
 
 declare_id!(
     /// The id of an expression within verification Conditions.
@@ -81,10 +79,16 @@ pub enum Expr {
     Imp(ExprId, ExprId),
     Eq(ExprId, ExprId),
     Lte(ExprId, ExprId),
+
+    // Binary.
+    BVAdd(ExprId, ExprId),
+
     // ITE
     Conditional(ExprId, ExprId, ExprId),
+
     // Bitwidth conversion.
     BVConvTo(ExprId, ExprId),
+
     // Bitwidth.
     WidthOf(ExprId),
 }
@@ -99,6 +103,7 @@ impl std::fmt::Display for Expr {
             Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
             Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
             Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
+            Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
             Self::Conditional(c, t, e) => {
                 write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
             }
@@ -192,6 +197,13 @@ impl Value {
             _ => None,
         }
     }
+
+    fn elements(&self) -> &[Value] {
+        match self {
+            Self::Tuple(fields) => &fields[..],
+            v => std::slice::from_ref(v),
+        }
+    }
 }
 
 struct ConditionsBuilder<'a> {
@@ -281,9 +293,68 @@ impl<'a> ConditionsBuilder<'a> {
                 // Argument binding has no associated constraints.
             }
 
-            Binding::Extractor { .. } => {
-                // TODO(mbm): implement extractor bindings
-                log::error!("extractor binding ");
+            Binding::Extractor { term, parameter } => {
+                // TODO(mbm): dedup extractor/constructor logic
+
+                // Lookup spec.
+                let term_spec =
+                    self.prog
+                        .specenv
+                        .term_spec
+                        .get(term)
+                        .ok_or(anyhow::format_err!(
+                            "no spec for term {term_name}",
+                            term_name = self.prog.term_name(*term)
+                        ))?;
+
+                // Assignment of signature variables.
+                let mut vars = HashMap::new();
+
+                // Parameters are the actually the return values of an
+                // extractor, wrapped in an Option<..> type.
+                // TODO(mbm): infallible extractors
+                let opt = self.binding_value[&id]
+                    .as_option()
+                    .ok_or(anyhow::format_err!(
+                        "destination of extractor binding should be an option"
+                    ))?;
+                let parameters = opt.inner.elements();
+
+                // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
+                assert_eq!(parameters.len(), term_spec.args.len());
+
+                for (arg_name, parameter) in zip(&term_spec.args, parameters) {
+                    let v = parameter
+                        .as_var()
+                        .expect("extractor parameter should be a variable");
+                    vars.insert(arg_name.0.clone(), v);
+                }
+
+                // Result maps to the parameter of an extractor.
+                let v = self.binding_value[parameter]
+                    .as_var()
+                    .ok_or(anyhow::format_err!(
+                        "extractor parameter must be a variable"
+                    ))?;
+                vars.insert(term_spec.ret.0.clone(), v);
+
+                // Requires define the conditions for the extractor to return
+                // Some(..).
+                // QUESTION(mbm): what are the intended semantics for extractor specs?
+                let some = self.var(opt.some);
+                let mut requires = Vec::new();
+                for require in &term_spec.requires {
+                    let require = self.spec_expr(require, &vars)?;
+                    requires.push(require);
+                }
+                let all_requires = self.all(requires);
+                self.exprs_equal(some, all_requires);
+
+                // Assumptions: provides.
+                for provide in &term_spec.provides {
+                    let provide = self.spec_expr(provide, &vars)?;
+                    self.conditions.assumptions.push(provide);
+                }
             }
 
             Binding::Constructor {
@@ -353,7 +424,7 @@ impl<'a> ConditionsBuilder<'a> {
                 let inner = self.binding_value[inner].clone();
 
                 // Assumption: option is Some.
-                let some = self.dedup_expr(Expr::Variable(opt.some));
+                let some = self.var(opt.some);
                 self.conditions.assumptions.push(some);
 
                 // Assumption: option value is equal to this binding.
@@ -373,7 +444,7 @@ impl<'a> ConditionsBuilder<'a> {
 
                 // Assumption: if the option is some, then the inner value
                 // equals this binding.
-                let some = self.dedup_expr(Expr::Variable(opt.some));
+                let some = self.var(opt.some);
                 let eq = self.values_equal(&v, &opt.inner);
                 let constraint = self.dedup_expr(Expr::Imp(some, eq));
                 self.conditions.assumptions.push(constraint);
@@ -432,6 +503,12 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
                 Ok(self.dedup_expr(Expr::Lte(x, y)))
+            }
+
+            spec::Expr::BVAdd(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVAdd(x, y)))
             }
 
             spec::Expr::Conditional(c, t, e) => {
