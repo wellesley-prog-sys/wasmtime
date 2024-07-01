@@ -12,6 +12,7 @@ pub struct Expansion {
     pub term: TermId,
     pub rules: Vec<RuleId>,
     pub bindings: Vec<Option<Binding>>,
+    // QUESTION(mbm): are multiple constraints per binding necessary?
     pub constraints: BTreeMap<BindingId, Vec<Constraint>>,
     pub equals: DisjointSets<BindingId>,
     pub result: BindingId,

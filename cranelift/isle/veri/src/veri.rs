@@ -6,7 +6,7 @@ use crate::{
 };
 use cranelift_isle::{
     sema::{Sym, TermId, TypeId},
-    trie_again::{Binding, BindingId, TupleIndex},
+    trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use std::{collections::HashMap, iter::zip};
 
@@ -240,7 +240,13 @@ impl<'a> ConditionsBuilder<'a> {
             }
         }
 
-        // TODO: pub constraints: BTreeMap<BindingId, Vec<Constraint>>,
+        // Constraints.
+        for (binding_id, constraints) in &self.expansion.constraints {
+            for constraint in constraints {
+                self.add_constraint(*binding_id, constraint)?;
+            }
+        }
+
         // TODO: pub equals: DisjointSets<BindingId>,
 
         Ok(self.conditions)
@@ -534,6 +540,31 @@ impl<'a> ConditionsBuilder<'a> {
         // Assumption: indexed field should equal this binding.
         let eq = self.values_equal(&v, &fields[field.index()]);
         self.conditions.assumptions.push(eq);
+
+        Ok(())
+    }
+
+    fn add_constraint(
+        &mut self,
+        binding_id: BindingId,
+        constraint: &Constraint,
+    ) -> anyhow::Result<()> {
+        match constraint {
+            Constraint::Some => self.constraint_some(binding_id),
+            _ => todo!("constraint: {constraint:?}"),
+        }
+    }
+
+    fn constraint_some(&mut self, binding_id: BindingId) -> anyhow::Result<()> {
+        // Constrained binding should be an option.
+        let opt = self.binding_value[&binding_id]
+            .as_option()
+            .expect("target of some constraint should be an option")
+            .clone();
+
+        // Assumption: option is Some.
+        let some = self.var(opt.some);
+        self.conditions.assumptions.push(some);
 
         Ok(())
     }
