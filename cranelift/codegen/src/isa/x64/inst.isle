@@ -1041,7 +1041,7 @@
 ;; Model an Amode as a calculated 64-bit address.
 ;; TODO: what is the right model for Amode?
 ;; TODO: represent flags in Amode
-(model Amode (type (bv 64)))
+(model Amode (type (bv 80)))
 
 ;; TODO: represent flags in Amode
 (spec (Amode.ImmReg simm base flags)
@@ -1690,7 +1690,8 @@
 (extern constructor put_in_xmm_mem_imm put_in_xmm_mem_imm)
 
 ;; Construct an `InstOutput` out of a single GPR register.
-(spec (output_gpr x) (provide (= result x)))
+(spec (output_gpr x)
+      (provide (= result (conv_to (widthof result) x))))
 (decl output_gpr (Gpr) InstOutput)
 (rule (output_gpr x)
       (output_reg (gpr_to_reg x)))
@@ -2224,6 +2225,7 @@
 (type ExtMode extern (enum BL BQ WL WQ LQ))
 
 ;; `ExtMode::new`
+
 (spec (ext_mode x y)
       (provide (= result (switch x
             (#x0008 (switch y
