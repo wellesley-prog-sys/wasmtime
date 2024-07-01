@@ -5,7 +5,7 @@ use crate::{
     trie_again::{binding_type, BindingType},
 };
 use cranelift_isle::{
-    sema::{Sym, TermId},
+    sema::{Sym, TermId, TypeId},
     trie_again::{Binding, BindingId, TupleIndex},
 };
 use std::{collections::HashMap, iter::zip};
@@ -268,7 +268,7 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Generate conditions depending on binding type.
         match binding {
-            Binding::ConstInt { .. } => todo!("binding: const_int"),
+            Binding::ConstInt { val, ty } => self.const_int(id, *val, *ty),
 
             Binding::ConstPrim { val } => self.const_prim(id, *val),
 
@@ -297,6 +297,31 @@ impl<'a> ConditionsBuilder<'a> {
 
             Binding::MatchTuple { source, field } => self.match_tuple(id, *source, *field),
         }
+    }
+
+    fn const_int(&mut self, id: BindingId, val: i128, ty: TypeId) -> anyhow::Result<()> {
+        // Determine modeled type.
+        let ty_name = self.prog.type_name(ty);
+        let ty = self
+            .prog
+            .specenv
+            .type_model
+            .get(&ty)
+            .ok_or(anyhow::format_err!("no model for type {ty_name}"))?;
+
+        // Construct value of the determined type.
+        let value = self.spec_typed_value(val, ty)?;
+
+        // Destination binding should be a variable.
+        let v = self.binding_value[&id]
+            .as_var()
+            .expect("destination of const_int binding should be a variable");
+
+        // Assumption: variable equals constant value.
+        let v = self.var(v);
+        self.exprs_equal(v, value);
+
+        Ok(())
     }
 
     fn const_prim(&mut self, id: BindingId, val: Sym) -> anyhow::Result<()> {
@@ -576,10 +601,14 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn spec_const(&mut self, c: &spec::Const) -> anyhow::Result<ExprId> {
-        match &c.ty {
-            spec::Type::Bool => Ok(self.boolean(c.value != 0)),
-            spec::Type::Int => Ok(self.constant(Const::Int(c.value))),
-            spec::Type::BitVectorWithWidth(w) => Ok(self.constant(Const::BitVector(*w, c.value))),
+        self.spec_typed_value(c.value, &c.ty)
+    }
+
+    fn spec_typed_value(&mut self, val: i128, ty: &spec::Type) -> anyhow::Result<ExprId> {
+        match ty {
+            spec::Type::Bool => Ok(self.boolean(val != 0)),
+            spec::Type::Int => Ok(self.constant(Const::Int(val))),
+            spec::Type::BitVectorWithWidth(w) => Ok(self.constant(Const::BitVector(*w, val))),
             spec::Type::BitVector => anyhow::bail!("bitvector constant must have known width"),
         }
     }
