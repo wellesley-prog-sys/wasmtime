@@ -2226,16 +2226,16 @@
 ;; `ExtMode::new`
 (spec (ext_mode x y)
       (provide (= result (switch x
-            (int2bv 8 (switch y
-                  (32 (ExtMode.BL))
-                  (64 (ExtMode.BQ))
+            (#x0008 (switch y
+                  (#x0020 (ExtMode.BL))
+                  (#x0040 (ExtMode.BQ))
                   ))
-            (int2bv 16 (switch y
-                  (32 (ExtMode.WL))
-                  (64 (ExtMode.WQ))
+            (#x0010 (switch y
+                  (#x0020 (ExtMode.WL))
+                  (#x0040 (ExtMode.WQ))
                   ))
-            (int2bv 32 (switch y
-                  (64 (ExtMode.LQ))
+            (#x0020 (switch y
+                  (#x0040 (ExtMode.LQ))
                   ))
             ))
       )
@@ -2376,11 +2376,11 @@
 (decl x64_movzx (ExtMode GprMem) Gpr)
 (spec (x64_movzx mode src)
       (provide (= result (switch mode 
-                  ((ExtMode.BL) (zero_ext 24 (load (extract 79 64 src) (extract 63 0 src) 8)))
-                  ((ExtMode.BQ) (zero_ext 56 (load (extract 79 64 src) (extract 63 0 src) 8)))
-                  ((ExtMode.WL) (zero_ext 16 (load (extract 79 64 src) (extract 63 0 src) 16)))
-                  ((ExtMode.WQ) (zero_ext 48 (load (extract 79 64 src) (extract 63 0 src) 16)))
-                  ((ExtMode.LQ) (zero_ext 32 (load (extract 79 64 src) (extract 63 0 src) 32)))
+                  ((ExtMode.BL) (conv_to 64 (zero_ext 24 (load (extract 79 64 src) 8 (extract 63 0 src)))))
+                  ((ExtMode.BQ) (conv_to 64 (zero_ext 56 (load (extract 79 64 src) 8 (extract 63 0 src)))))
+                  ((ExtMode.WL) (conv_to 64 (zero_ext 16 (load (extract 79 64 src) 16 (extract 63 0 src)))))
+                  ((ExtMode.WQ) (conv_to 64 (zero_ext 48 (load (extract 79 64 src) 16 (extract 63 0 src)))))
+                  ((ExtMode.LQ) (conv_to 64 (zero_ext 32 (load (extract 79 64 src) 32 (extract 63 0 src)))))
                   )
             )
       )
