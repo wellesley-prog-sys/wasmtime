@@ -247,7 +247,10 @@ impl<'a> ConditionsBuilder<'a> {
             }
         }
 
-        // TODO: pub equals: DisjointSets<BindingId>,
+        // Equals.
+        for (a, b) in self.expansion.equalities() {
+            self.bindings_equal(a, b);
+        }
 
         Ok(self.conditions)
     }
@@ -646,6 +649,13 @@ impl<'a> ConditionsBuilder<'a> {
             spec::Type::BitVectorWithWidth(w) => Ok(self.constant(Const::BitVector(*w, val))),
             spec::Type::BitVector => anyhow::bail!("bitvector constant must have known width"),
         }
+    }
+
+    fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {
+        // TODO(mbm): can this be done without clones?
+        let a = self.binding_value[&a].clone();
+        let b = self.binding_value[&b].clone();
+        self.values_equal(&a, &b)
     }
 
     fn values_equal(&mut self, a: &Value, b: &Value) -> ExprId {

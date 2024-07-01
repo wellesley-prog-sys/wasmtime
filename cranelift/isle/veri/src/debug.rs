@@ -56,16 +56,8 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
     // Equals.
     if !expansion.equals.is_empty() {
         println!("\tequals = [");
-        for (i, binding) in expansion.bindings.iter().enumerate() {
-            if binding.is_none() {
-                continue;
-            }
-            let binding_id = i.try_into().unwrap();
-            if let Some(eq) = expansion.equals.find(binding_id) {
-                if eq != binding_id {
-                    println!("\t\t{} == {}", binding_id.index(), eq.index());
-                }
-            }
+        for (left, right) in expansion.equalities() {
+            println!("\t\t{} == {}", left.index(), right.index());
         }
         println!("\t]");
     }

@@ -81,6 +81,22 @@ impl Expansion {
         self.bindings.get(binding_id.index())?.as_ref()
     }
 
+    pub fn equalities(&self) -> Vec<(BindingId, BindingId)> {
+        let mut eqs = Vec::new();
+        for (i, binding) in self.bindings.iter().enumerate() {
+            if binding.is_none() {
+                continue;
+            }
+            let binding_id = i.try_into().unwrap();
+            if let Some(eq) = self.equals.find(binding_id) {
+                if eq != binding_id {
+                    eqs.push((binding_id, eq));
+                }
+            }
+        }
+        eqs
+    }
+
     fn substitute(&mut self, target: BindingId, replace: BindingId) {
         // Reindex bindings.
         let mut reindex = Reindex::new();
