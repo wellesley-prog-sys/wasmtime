@@ -1,3 +1,4 @@
+use cranelift_codegen::dbg;
 /// Convert our internal Verification IR to an external SMT AST and pass
 /// queries to that solver.
 ///
@@ -570,6 +571,12 @@ impl SolverCtx {
         let ty = self.get_type(&e);
         let width = self.get_expr_width_var(&e).map(|s| s.clone());
         let static_expr_width = self.static_width(&e);
+        if matches!(e, Expr::BVConvToVarWidth(..)) {
+            dbg!(&e);
+        }
+        if matches!(e, Expr::BVConvTo(..)) {
+            dbg!(&e);
+        }
         match e {
             Expr::Terminal(t) => match t {
                 Terminal::Literal(v, tyvar) => {
@@ -860,9 +867,12 @@ impl SolverCtx {
                     let arg_width = self.static_width(&*y).unwrap();
                     match ty {
                         Some(Type::BitVector(Some(w))) => {
+                            dbg!(arg_width);
+                            dbg!(*w);
                             if arg_width < *w {
                                 let padding =
                                     self.new_fresh_bits(w.checked_sub(arg_width).unwrap());
+                                dbg!(self.smt.display(padding).to_string());
                                 let ys = self.vir_expr_to_sexp(*y);
                                 self.smt.concat(padding, ys)
                             } else {
@@ -948,6 +958,8 @@ impl SolverCtx {
                     let arg_width = self.static_width(&*y).unwrap();
                     match ty {
                         Some(Type::BitVector(Some(w))) => {
+                            dbg!(w);
+                            dbg!(arg_width);
                             if arg_width < *w {
                                 let padding =
                                     self.new_fresh_bits(w.checked_sub(arg_width).unwrap());
@@ -1254,22 +1266,37 @@ impl SolverCtx {
                 let ey = self.vir_expr_to_sexp(*y);
                 let ez = self.vir_expr_to_sexp(*z);
 
+                // Dynamic widths case
                 if self.dynwidths {
                     self.width_assumptions
                         .push(self.smt.eq(width.unwrap(), ey));
+                    if self.lhs_flag {
+                        return self.new_fresh_bits(self.bitwidth);
+                    } else {
+                        self.rhs_load_args = Some(vec![ex, ey, ez]);
+                        return self.load_return.unwrap()
+                    }
                 }
 
+                // Static widths case
                 if self.lhs_flag {
                     self.lhs_load_args = Some(vec![ex, ey, ez]);
-                    let load_ret = if self.dynwidths {
-                        self.new_fresh_bits(self.bitwidth)
-                    } else {
-                        self.new_fresh_bits(static_expr_width.unwrap())
-                    };
+
+                    // If there is no current load return, create new fresh bits with the maximum size (self.bitwidth)
+                    // 1. set that to be the load_return value
+                    // 2. instead of just returning load_ret, extract the low bits corresponging to this current size
+                    //  something like self.smt.extract(static_expr_width.unwrap(), 0, load_ret)
+                    // if statments in this whole section might need to change
+                    
+                    let load_ret = self.new_fresh_bits(static_expr_width.unwrap());
                     self.load_return = Some(load_ret);
                     load_ret
                 } else {
                     self.rhs_load_args = Some(vec![ex, ey, ez]);
+
+                    // On this side, extract the correct bits here too
+                    // self.smt.extract(static_expr_width.unwrap(), 0, load_ret)
+
                     self.load_return.unwrap()
                 }
             }
