@@ -209,6 +209,11 @@ impl Value {
     }
 }
 
+struct Call {
+    requires: Vec<ExprId>,
+    provides: Vec<ExprId>,
+}
+
 struct ConditionsBuilder<'a> {
     expansion: &'a Expansion,
     prog: &'a Program,
@@ -365,67 +370,42 @@ impl<'a> ConditionsBuilder<'a> {
         term: TermId,
         parameter: BindingId,
     ) -> anyhow::Result<()> {
-        // TODO(mbm): dedup extractor/constructor logic
-
-        // Lookup spec.
-        let term_spec = self
-            .prog
-            .specenv
-            .term_spec
-            .get(&term)
-            .ok_or(anyhow::format_err!(
-                "no spec for term {term_name}",
-                term_name = self.prog.term_name(term)
-            ))?;
-
-        // Assignment of signature variables.
-        let mut vars = HashMap::new();
-
-        // Parameters are the actually the return values of an
+        // Arguments are the actually the return values of an
         // extractor, wrapped in an Option<..> type.
         // TODO(mbm): infallible extractors
         let opt = self.binding_value[&id]
             .as_option()
             .ok_or(anyhow::format_err!(
                 "destination of extractor binding should be an option"
-            ))?;
-        let parameters = opt.inner.elements();
+            ))?
+            .clone();
+        let rets = opt.inner.elements();
 
-        // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
-        assert_eq!(parameters.len(), term_spec.args.len());
-
-        for (arg_name, parameter) in zip(&term_spec.args, parameters) {
-            let v = parameter
-                .as_var()
-                .expect("extractor parameter should be a variable");
-            vars.insert(arg_name.0.clone(), v);
+        let mut args = Vec::new();
+        for ret in rets {
+            let v = ret.as_var().expect("extractor return should be a variable");
+            args.push(v);
         }
 
         // Result maps to the parameter of an extractor.
-        let v = self.binding_value[&parameter]
+        let result = self.binding_value[&parameter]
             .as_var()
             .ok_or(anyhow::format_err!(
                 "extractor parameter must be a variable"
             ))?;
-        vars.insert(term_spec.ret.0.clone(), v);
+
+        // Call constructor.
+        let call = self.call(term, &args, result)?;
 
         // Requires define the conditions for the extractor to return
         // Some(..).
         // QUESTION(mbm): what are the intended semantics for extractor specs?
         let some = self.var(opt.some);
-        let mut requires = Vec::new();
-        for require in &term_spec.requires {
-            let require = self.spec_expr(require, &vars)?;
-            requires.push(require);
-        }
-        let all_requires = self.all(requires);
+        let all_requires = self.all(call.requires);
         self.exprs_equal(some, all_requires);
 
         // Assumptions: provides.
-        for provide in &term_spec.provides {
-            let provide = self.spec_expr(provide, &vars)?;
-            self.conditions.assumptions.push(provide);
-        }
+        self.conditions.assumptions.extend(call.provides);
 
         Ok(())
     }
@@ -436,6 +416,41 @@ impl<'a> ConditionsBuilder<'a> {
         term: TermId,
         parameters: &[BindingId],
     ) -> anyhow::Result<()> {
+        // Arguments.
+        let mut args = Vec::new();
+        for parameter_binding_id in parameters {
+            let v = self
+                .binding_value
+                .get(parameter_binding_id)
+                .expect("parameter binding should be defined")
+                .as_var()
+                .expect("constructor parameter should be a variable");
+            args.push(v);
+        }
+
+        // Return value.
+        let result = self.binding_value[&id].as_var().ok_or(anyhow::format_err!(
+            "constructor return value must be a variable"
+        ))?;
+
+        // Call constructor.
+        let call = self.call(term, &args, result)?;
+
+        // Assertions: requires.
+        self.conditions.assertions.extend(call.requires);
+
+        // Assumptions: provides.
+        self.conditions.assumptions.extend(call.provides);
+
+        Ok(())
+    }
+
+    fn call(
+        &mut self,
+        term: TermId,
+        args: &Vec<VariableId>,
+        result: VariableId,
+    ) -> anyhow::Result<Call> {
         // Lookup spec.
         let term_spec = self
             .prog
@@ -450,38 +465,31 @@ impl<'a> ConditionsBuilder<'a> {
         // Assignment of signature variables.
         let mut vars = HashMap::new();
 
-        // Parameters.
+        // Arguments.
         // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
-        assert_eq!(parameters.len(), term_spec.args.len());
-        for (arg_name, parameter_binding_id) in zip(&term_spec.args, &parameters[..]) {
-            let v = self
-                .binding_value
-                .get(parameter_binding_id)
-                .expect("parameter binding should be defined")
-                .as_var()
-                .expect("constructor parameter should be a variable");
-            vars.insert(arg_name.0.clone(), v);
+        assert_eq!(term_spec.args.len(), args.len());
+        for (name, v) in zip(&term_spec.args, args) {
+            vars.insert(name.0.clone(), *v);
         }
 
         // Return value.
-        let v = self.binding_value[&id].as_var().ok_or(anyhow::format_err!(
-            "constructor return value must be a variable"
-        ))?;
-        vars.insert(term_spec.ret.0.clone(), v);
+        vars.insert(term_spec.ret.0.clone(), result);
 
-        // Assertions: requires.
+        // Requires.
+        let mut requires = Vec::new();
         for require in &term_spec.requires {
             let require = self.spec_expr(require, &vars)?;
-            self.conditions.assertions.push(require);
+            requires.push(require);
         }
 
-        // Assumptions: provides.
+        // Provides.
+        let mut provides = Vec::new();
         for provide in &term_spec.provides {
             let provide = self.spec_expr(provide, &vars)?;
-            self.conditions.assumptions.push(provide);
+            provides.push(provide);
         }
 
-        Ok(())
+        Ok(Call { requires, provides })
     }
 
     fn make_some(&mut self, id: BindingId, inner: BindingId) -> anyhow::Result<()> {
