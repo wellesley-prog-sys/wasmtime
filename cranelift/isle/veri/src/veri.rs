@@ -606,7 +606,11 @@ impl<'a> ConditionsBuilder<'a> {
 
     fn spec_typed_value(&mut self, val: i128, ty: &spec::Type) -> anyhow::Result<ExprId> {
         match ty {
-            spec::Type::Bool => Ok(self.boolean(val != 0)),
+            spec::Type::Bool => Ok(self.boolean(match val {
+                0 => false,
+                1 => true,
+                _ => anyhow::bail!("boolean value must be zero or one"),
+            })),
             spec::Type::Int => Ok(self.constant(Const::Int(val))),
             spec::Type::BitVectorWithWidth(w) => Ok(self.constant(Const::BitVector(*w, val))),
             spec::Type::BitVector => anyhow::bail!("bitvector constant must have known width"),
