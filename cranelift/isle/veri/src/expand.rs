@@ -15,6 +15,7 @@ pub struct Expansion {
     // QUESTION(mbm): are multiple constraints per binding necessary?
     pub constraints: BTreeMap<BindingId, Vec<Constraint>>,
     pub equals: DisjointSets<BindingId>,
+    pub parameters: Vec<BindingId>,
     pub result: BindingId,
 }
 
@@ -69,12 +70,20 @@ impl Expansion {
             assert!(self.is_defined(*binding));
         }
 
+        // Parameters: should be defined argument bindings.
+        for binding in &self.parameters {
+            assert!(matches!(
+                self.binding(*binding),
+                Some(Binding::Argument { .. })
+            ));
+        }
+
         // Result: should be defined.
         assert!(self.is_defined(self.result));
     }
 
     fn is_defined(&self, binding_id: BindingId) -> bool {
-        self.bindings[binding_id.index()].is_some()
+        self.binding(binding_id).is_some()
     }
 
     pub fn binding(&self, binding_id: BindingId) -> Option<&Binding> {
@@ -175,7 +184,7 @@ impl<'a> Expander<'a> {
         let result = bindings.len().try_into().unwrap();
         bindings.push(Some(Binding::Constructor {
             term: term_id,
-            parameters: parameters.into(),
+            parameters: parameters.clone().into(),
             instance: 0,
         }));
 
@@ -186,6 +195,7 @@ impl<'a> Expander<'a> {
             bindings,
             constraints: BTreeMap::new(),
             equals: DisjointSets::default(),
+            parameters,
             result,
         };
         assert!(expansion.is_feasible());

@@ -62,6 +62,13 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
         println!("\t]");
     }
 
+    // Parameters.
+    println!("\tparameters = [");
+    for binding_id in &expansion.parameters {
+        println!("\t\t{}", binding_id.index());
+    }
+    println!("\t]");
+
     // Result.
     println!("\tresult = {}", expansion.result.index());
 
