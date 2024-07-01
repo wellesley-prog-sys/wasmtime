@@ -1295,7 +1295,7 @@ impl SolverCtx {
                     self.rhs_load_args = Some(vec![ex, ey, ez]);
 
                     // On this side, extract the correct bits here too
-                    // self.smt.extract(static_expr_width.unwrap(), 0, load_ret)
+                    // self.smt.extract(static_expr_width.unwrap(), 0, self.load_return.unwrap())
 
                     self.load_return.unwrap()
                 }
