@@ -209,9 +209,23 @@ impl Value {
     }
 }
 
-struct Call {
-    requires: Vec<ExprId>,
-    provides: Vec<ExprId>,
+enum Invocation {
+    Caller,
+    Callee,
+}
+
+enum Domain {
+    Total,
+    Partial(VariableId),
+}
+
+impl Domain {
+    fn from_return_value(value: &Value) -> (Self, &Value) {
+        match value {
+            Value::Option(opt) => (Self::Partial(opt.some), &opt.inner),
+            v => (Self::Total, v),
+        }
+    }
 }
 
 struct ConditionsBuilder<'a> {
@@ -235,15 +249,20 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn build(mut self) -> anyhow::Result<Conditions> {
-        // TODO: callsite specifications
-        // TODO: pub result: BindingId,
-
         // Bindings.
         for (i, binding) in self.expansion.bindings.iter().enumerate() {
             if let Some(binding) = binding {
                 self.add_binding(i.try_into().unwrap(), binding)?;
             }
         }
+
+        // Callee contract for the term under expansion.
+        self.constructor(
+            self.expansion.result,
+            self.expansion.term,
+            &self.expansion.parameters,
+            Invocation::Callee,
+        )?;
 
         // Constraints.
         for (binding_id, constraints) in &self.expansion.constraints {
@@ -293,7 +312,7 @@ impl<'a> ConditionsBuilder<'a> {
 
             Binding::Constructor {
                 term, parameters, ..
-            } => self.constructor(id, *term, &*parameters),
+            } => self.constructor(id, *term, &*parameters, Invocation::Caller),
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings"),
 
@@ -371,15 +390,9 @@ impl<'a> ConditionsBuilder<'a> {
         parameter: BindingId,
     ) -> anyhow::Result<()> {
         // Arguments are the actually the return values of an
-        // extractor, wrapped in an Option<..> type.
-        // TODO(mbm): infallible extractors
-        let opt = self.binding_value[&id]
-            .as_option()
-            .ok_or(anyhow::format_err!(
-                "destination of extractor binding should be an option"
-            ))?
-            .clone();
-        let rets = opt.inner.elements();
+        // extractor, possibly wrapped in an Option<..> type.
+        let (domain, ret) = Domain::from_return_value(&self.binding_value[&id]);
+        let rets = ret.elements();
 
         let mut args = Vec::new();
         for ret in rets {
@@ -394,20 +407,8 @@ impl<'a> ConditionsBuilder<'a> {
                 "extractor parameter must be a variable"
             ))?;
 
-        // Call constructor.
-        let call = self.call(term, &args, result)?;
-
-        // Requires define the conditions for the extractor to return
-        // Some(..).
-        // QUESTION(mbm): what are the intended semantics for extractor specs?
-        let some = self.var(opt.some);
-        let all_requires = self.all(call.requires);
-        self.exprs_equal(some, all_requires);
-
-        // Assumptions: provides.
-        self.conditions.assumptions.extend(call.provides);
-
-        Ok(())
+        // Call extractor.
+        self.call(term, &args, result, Invocation::Caller, domain)
     }
 
     fn constructor(
@@ -415,6 +416,7 @@ impl<'a> ConditionsBuilder<'a> {
         id: BindingId,
         term: TermId,
         parameters: &[BindingId],
+        invocation: Invocation,
     ) -> anyhow::Result<()> {
         // Arguments.
         let mut args = Vec::new();
@@ -429,20 +431,13 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Return value.
-        let result = self.binding_value[&id].as_var().ok_or(anyhow::format_err!(
-            "constructor return value must be a variable"
-        ))?;
+        let (domain, result) = Domain::from_return_value(&self.binding_value[&id]);
+        let result = result
+            .as_var()
+            .expect("constructor return should be a variable");
 
         // Call constructor.
-        let call = self.call(term, &args, result)?;
-
-        // Assertions: requires.
-        self.conditions.assertions.extend(call.requires);
-
-        // Assumptions: provides.
-        self.conditions.assumptions.extend(call.provides);
-
-        Ok(())
+        self.call(term, &args, result, invocation, domain)
     }
 
     fn call(
@@ -450,7 +445,9 @@ impl<'a> ConditionsBuilder<'a> {
         term: TermId,
         args: &Vec<VariableId>,
         result: VariableId,
-    ) -> anyhow::Result<Call> {
+        invocation: Invocation,
+        domain: Domain,
+    ) -> anyhow::Result<()> {
         // Lookup spec.
         let term_spec = self
             .prog
@@ -466,7 +463,7 @@ impl<'a> ConditionsBuilder<'a> {
         let mut vars = HashMap::new();
 
         // Arguments.
-        // TODO(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
+        // QUESTION(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
         assert_eq!(term_spec.args.len(), args.len());
         for (name, v) in zip(&term_spec.args, args) {
             vars.insert(name.0.clone(), *v);
@@ -489,7 +486,27 @@ impl<'a> ConditionsBuilder<'a> {
             provides.push(provide);
         }
 
-        Ok(Call { requires, provides })
+        // Partial function.
+        // HACK(mbm): pin down semantics for partial function specifications.
+        if let Domain::Partial(p) = domain {
+            let in_domain = self.var(p);
+            let all_requires = self.all(requires.clone());
+            self.exprs_equal(in_domain, all_requires);
+        }
+
+        // Assert/assume depending on caller or callee.
+        match invocation {
+            Invocation::Caller => {
+                self.conditions.assertions.extend(requires);
+                self.conditions.assumptions.extend(provides);
+            }
+            Invocation::Callee => {
+                self.conditions.assumptions.extend(requires);
+                self.conditions.assertions.extend(provides);
+            }
+        }
+
+        Ok(())
     }
 
     fn make_some(&mut self, id: BindingId, inner: BindingId) -> anyhow::Result<()> {
