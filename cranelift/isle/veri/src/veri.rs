@@ -487,7 +487,7 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Partial function.
-        // HACK(mbm): pin down semantics for partial function specifications.
+        // REVIEW(mbm): pin down semantics for partial function specifications.
         if let Domain::Partial(p) = domain {
             let in_domain = self.var(p);
             let all_requires = self.all(requires.clone());
