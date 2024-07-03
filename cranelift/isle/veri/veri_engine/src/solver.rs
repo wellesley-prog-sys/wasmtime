@@ -1023,6 +1023,7 @@ impl SolverCtx {
                 }
             }
             Expr::Conditional(c, t, e) => {
+                // TODO: conditional should allow load args for both, similar to switch
                 if self.dynwidths {
                     if matches!(ty, Some(Type::BitVector(_))) {
                         self.assume_same_width_from_sexpr(width.clone().unwrap(), &*t);
