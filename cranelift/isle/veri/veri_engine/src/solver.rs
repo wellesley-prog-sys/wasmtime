@@ -26,6 +26,22 @@ use encoded_ops::subs;
 
 use crate::MAX_WIDTH;
 
+// Verification state, used by vir_expr_to_sexp
+pub struct State {
+    val: SExpr,
+
+    load_args: Option<Vec<SExpr>>,
+    store_args: Option<Vec<SExpr>>,
+}
+
+pub fn val_state(val: SExpr) -> State {
+    State {
+        val,
+        load_args: None,
+        store_args: None,
+    }
+}
+
 pub struct SolverCtx {
     smt: easy_smt::Context,
     dynwidths: bool,
@@ -39,15 +55,9 @@ pub struct SolverCtx {
     pub additional_assumptions: Vec<SExpr>,
     pub additional_assertions: Vec<SExpr>,
     fresh_bits_idx: usize, 
-    lhs_load_args: Option<Vec<SExpr>>,
-    rhs_load_args: Option<Vec<SExpr>>,
-    lhs_store_args: Option<Vec<SExpr>>,
-    rhs_store_args: Option<Vec<SExpr>>,
     load_return: Option<SExpr>,
     store_return: Option<SExpr>,
     lhs_flag: bool,
-
-
 }
 
 impl SolverCtx {
@@ -566,7 +576,7 @@ impl SolverCtx {
         }
     }
 
-    pub fn vir_expr_to_sexp(&mut self, e: Expr) -> SExpr {
+    pub fn vir_expr_to_sexp(&mut self, e: Expr) -> State {
         let tyvar = self.tyctx.tyvars.get(&e);
         let ty = self.get_type(&e);
         let width = self.get_expr_width_var(&e).map(|s| s.clone());
@@ -581,17 +591,17 @@ impl SolverCtx {
             Expr::Terminal(t) => match t {
                 Terminal::Literal(v, tyvar) => {
                     let lit = self.smt.atom(v);
-                    if self.dynwidths && matches!(ty.unwrap(), Type::BitVector(_)) {
+                    val_state(if self.dynwidths && matches!(ty.unwrap(), Type::BitVector(_)) {
                         self.widen_to_register_width(tyvar, static_expr_width.unwrap(), lit, None)
                     } else {
                         lit
-                    }
+                    })
                 }
-                Terminal::Var(v) => match self.var_map.get(&v) {
+                Terminal::Var(v) => val_state(match self.var_map.get(&v) {
                     Some(o) => *o,
                     None => self.smt.atom(v),
-                },
-                Terminal::Const(i, _) => match ty.unwrap() {
+                }),
+                Terminal::Const(i, _) => val_state(match ty.unwrap() {
                     Type::BitVector(w) => {
                         let var = *tyvar.unwrap();
                         let width = w.unwrap_or(self.bitwidth);
@@ -610,15 +620,15 @@ impl SolverCtx {
                             self.smt.true_()
                         }
                     }
-                },
-                Terminal::True => self.smt.true_(),
-                Terminal::False => self.smt.false_(),
-                Terminal::Wildcard(_) => match ty.unwrap() {
+                }),
+                Terminal::True => val_state(self.smt.true_()),
+                Terminal::False => val_state(self.smt.false_()),
+                Terminal::Wildcard(_) => val_state(match ty.unwrap() {
                     Type::BitVector(Some(w)) if !self.dynwidths => self.new_fresh_bits(*w),
                     Type::BitVector(_) => self.new_fresh_bits(self.bitwidth),
                     Type::Int => self.new_fresh_int(),
                     Type::Bool => self.new_fresh_bool(),
-                },
+                }),
             },
             Expr::Unary(op, arg) => {
                 let op = match op {
@@ -636,10 +646,32 @@ impl SolverCtx {
                         "bvnot"
                     }
                 };
-                let subexp = self.vir_expr_to_sexp(*arg);
-                self.smt.list(vec![self.smt.atom(op), subexp])
+                let sub_state: State = self.vir_expr_to_sexp(*arg);
+                let val = self.smt.list(vec![self.smt.atom(op), sub_state.val]);
+                State { val: val, ..sub_state }
             }
             Expr::Binary(op, x, y) => {
+                // Look at both arg's states
+                let xs = self.vir_expr_to_sexp(*x);
+                let ys = self.vir_expr_to_sexp(*y);
+
+                // Check that only one of the args has a load or has a store
+                let mut new_state = State {..xs};
+                let x_has_load = xs.load_args.is_some();
+                let y_has_load = ys.load_args.is_some();
+                match (x_has_load, y_has_load) {
+                    // If both have none or x has one, just use x
+                    (false, false) | (true, false)  => (),
+                    // Otherwise, if y has one, overwrite with y
+                    (false, true) => {
+                        new_state.load_args = ys.load_args;
+                    }
+                    (true, true) => panic!("Multiple simultaneous loads unsupported")
+                }
+
+                let xval = xs.val;
+                let yval = ys.val;
+
                 if self.dynwidths {
                     match op {
                         BinaryOp::BVMul
@@ -671,18 +703,14 @@ impl SolverCtx {
                         let source_width = self.static_width(&*x);
                         match source_width {
                             Some(w) => {
-                                let xs = self.vir_expr_to_sexp(*x);
-                                let ys = self.vir_expr_to_sexp(*y);
-                                return self.rotate_symbolic(xs, w, ys, "rotate_left");
+                                new_state.val = self.rotate_symbolic(xval, w, yval, "rotate_left");
                             }
                             None => {
                                 let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
-                                let xs = self.vir_expr_to_sexp(*x);
-                                let ys = self.vir_expr_to_sexp(*y);
-                                return self.rotate_symbolic_dyn_source_width(
-                                    xs,
+                                new_state.val = self.rotate_symbolic_dyn_source_width(
+                                    xval,
                                     arg_width,
-                                    ys,
+                                    yval,
                                     "rotate_left",
                                 );
                             }
@@ -692,18 +720,14 @@ impl SolverCtx {
                         let source_width = self.static_width(&*x);
                         match source_width {
                             Some(w) => {
-                                let xs = self.vir_expr_to_sexp(*x);
-                                let ys = self.vir_expr_to_sexp(*y);
-                                return self.rotate_symbolic(xs, w, ys, "rotate_right");
+                                new_state.val = self.rotate_symbolic(xval, w, yval, "rotate_right");
                             }
                             None => {
                                 let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
-                                let xs = self.vir_expr_to_sexp(*x);
-                                let ys = self.vir_expr_to_sexp(*y);
-                                return self.rotate_symbolic_dyn_source_width(
-                                    xs,
+                                new_state.val =  self.rotate_symbolic_dyn_source_width(
+                                    xval,
                                     arg_width,
-                                    ys,
+                                    yval,
                                     "rotate_right",
                                 );
                             }
@@ -716,7 +740,6 @@ impl SolverCtx {
                         } else {
                             self.smt.numeral(self.static_width(&*x).unwrap())
                         };
-                        let xs = self.vir_expr_to_sexp(*x);
 
                         // Strategy: shift left by (bitwidth - arg width) to zero bits to the right
                         // of the bits in the argument size. Then shift right by (amt + (bitwidth - arg width))
@@ -725,27 +748,25 @@ impl SolverCtx {
                         if self.dynwidths {
                             // The shift arg needs to be extracted to the right width, default to 8 if unknown
                             let y_static_width = self.static_width(&y).unwrap_or(8);
-                            let y_rec = self.vir_expr_to_sexp(*y);
                             if self.onlywidths {
-                                return xs;
+                                new_state.val = xval;
                             }
                             let extract = self.smt.extract(
                                 y_static_width.checked_sub(1).unwrap().try_into().unwrap(),
                                 0,
-                                y_rec,
+                                yval,
                             );
                             let ys = self.zero_extend(self.bitwidth - y_static_width, extract);
                             let arg_width_as_bv = self.int2bv(self.bitwidth, arg_width);
                             let bitwidth_as_bv =
                                 self.bv(self.bitwidth.try_into().unwrap(), self.bitwidth);
                             let extra_shift = self.smt.bvsub(bitwidth_as_bv, arg_width_as_bv);
-                            let shl_to_zero = self.smt.bvshl(xs, extra_shift);
+                            let shl_to_zero = self.smt.bvshl(xval, extra_shift);
 
                             let amt_plus_extra = self.smt.bvadd(ys, extra_shift);
-                            return self.smt.bvlshr(shl_to_zero, amt_plus_extra);
+                            new_state.val = self.smt.bvlshr(shl_to_zero, amt_plus_extra);
                         } else {
-                            let ys = self.vir_expr_to_sexp(*y);
-                            return self.smt.bvlshr(xs, ys);
+                            new_state.val =  self.smt.bvlshr(xval, yval);
                         }
                     }
                     BinaryOp::BVAShr => {
@@ -754,7 +775,6 @@ impl SolverCtx {
                         } else {
                             self.smt.numeral(self.static_width(&*x).unwrap())
                         };
-                        let xs = self.vir_expr_to_sexp(*x);
 
                         // Strategy: shift left by (bitwidth - arg width) to eliminate bits to the left
                         // of the bits in the argument size. Then shift right by (amt + (bitwidth - arg width))
@@ -763,11 +783,10 @@ impl SolverCtx {
                         if self.dynwidths {
                             // The shift arg needs to be extracted to the right width, default to 8 if unknown
                             let y_static_width = self.static_width(&y).unwrap_or(8);
-                            let ys = self.vir_expr_to_sexp(*y);
                             let extract = self.smt.extract(
                                 y_static_width.checked_sub(1).unwrap().try_into().unwrap(),
                                 0,
-                                ys,
+                                yval,
                             );
                             let ysext = self.zero_extend(self.bitwidth - y_static_width, extract);
 
@@ -775,13 +794,12 @@ impl SolverCtx {
                             let bitwidth_as_bv =
                                 self.bv(self.bitwidth.try_into().unwrap(), self.bitwidth);
                             let extra_shift = self.smt.bvsub(bitwidth_as_bv, arg_width_as_bv);
-                            let shl_to_zero = self.smt.bvshl(xs, extra_shift);
+                            let shl_to_zero = self.smt.bvshl(xval, extra_shift);
 
                             let amt_plus_extra = self.smt.bvadd(ysext, extra_shift);
-                            return self.smt.bvashr(shl_to_zero, amt_plus_extra);
+                            new_state.val =  self.smt.bvashr(shl_to_zero, amt_plus_extra);
                         } else {
-                            let ys = self.vir_expr_to_sexp(*y);
-                            return self.smt.bvashr(xs, ys);
+                            new_state.val =  self.smt.bvashr(xval, yval);
                         }
                     }
                     _ => (),
@@ -825,26 +843,23 @@ impl SolverCtx {
                 };
                 // If we have some static width that isn't the bitwidth, extract based on it
                 // before performing the operation for the dynamic case.
-                match static_expr_width {
+                new_state.val = match static_expr_width {
                     Some(w) if w < self.bitwidth && self.dynwidths => {
                         let h: i32 = (w - 1).try_into().unwrap();
-                        let x_sexp = self.vir_expr_to_sexp(*x);
-                        let y_sexp = self.vir_expr_to_sexp(*y);
                         self.zero_extend(
                             self.bitwidth.checked_sub(w).unwrap(),
                             self.smt.list(vec![
                                 self.smt.atom(op_str),
-                                self.smt.extract(h, 0, x_sexp),
-                                self.smt.extract(h, 0, y_sexp),
+                                self.smt.extract(h, 0, xval),
+                                self.smt.extract(h, 0, yval),
                             ]),
                         )
                     }
                     _ => {
-                        let x_sexp = self.vir_expr_to_sexp(*x);
-                        let y_sexp = self.vir_expr_to_sexp(*y);
-                        self.smt.list(vec![self.smt.atom(op_str), x_sexp, y_sexp])
+                        self.smt.list(vec![self.smt.atom(op_str), xval, yval])
                     }
                 }
+                return new_state
             }
             Expr::BVIntToBV(w, x) => {
                 let x_sexp = self.vir_expr_to_sexp(*x);
@@ -1035,29 +1050,47 @@ impl SolverCtx {
                     }
                 }
                 let cs = self.vir_expr_to_sexp(*c);
-                let mut case_sexprs: Vec<(SExpr, SExpr)> = cases
+                assert!(cs.load_args.is_none(), "TODO support more load locations");
+                let mut case_states: Vec<(State, State)> = cases
                     .iter()
                     .map(|(m, b)| {
+                        let ms = self.vir_expr_to_sexp(m.clone());
+                        assert!(ms.load_args.is_none(), "TODO support more load locations");
                         (
-                            self.vir_expr_to_sexp(m.clone()),
+                            ms,
                             self.vir_expr_to_sexp(b.clone()),
                         )
                     })
                     .collect();
 
                 // Assert that some case must match
-                let some_case_matches: Vec<SExpr> = case_sexprs
+                let some_case_matches: Vec<SExpr> = case_states
                     .iter()
-                    .map(|(m, _)| self.smt.eq(cs, *m))
+                    .map(|(m, _)| self.smt.eq(cs.val, m.val))
                     .collect();
                 self.assert(self.smt.or_many(some_case_matches.clone()));
 
-                let (_, last_body) = case_sexprs.remove(case_sexprs.len() - 1);
+                let (_, last_body) = case_states.remove(case_states.len() - 1);
 
                 // Reverse to keep the order of the switch
-                case_sexprs.iter().rev().fold(last_body, |acc, (m, b)| {
-                    self.smt.ite(self.smt.eq(cs, *m), *b, acc)
-                })
+                let val: SExpr = case_states.iter().rev().fold(last_body.val, |acc, (m, b)| {
+                    self.smt.ite(self.smt.eq(cs.val, m.val), b.val, acc)
+                });
+
+                // TODO: look up folds, maps in Rust book
+                let load_args: Option<Vec<SExpr>> = case_states.iter().rev().fold(last_body.load_args, |acc, (m, b)| {
+                    match acc {
+                        None => b.load_args,
+                        Some(args) => {
+                            Some(match b.load_args {
+                                None => args,
+                                Some(bargs) => 
+                                    bargs.iter().map(|a| self.smt.ite(self.smt.eq(cs.val, m.val), b.val, *a)).collect()
+                            })
+                        }
+                    }
+                });
+                return State {val, ..cs}
             }
             Expr::CLZ(e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1262,34 +1295,37 @@ impl SolverCtx {
                     .fold(last, |acc, x| self.smt.concat(*x, acc))
             }
             Expr::Load(x, y, z) => {
-                let ex = self.vir_expr_to_sexp(*x);
-                let ey = self.vir_expr_to_sexp(*y);
-                let ez = self.vir_expr_to_sexp(*z);
+                let xstate = self.vir_expr_to_sexp(*x);
+                let ystate = self.vir_expr_to_sexp(*y);
+                let zstate = self.vir_expr_to_sexp(*z);
+
+                if (xstate.load_args.is_some() || ystate.load_args.is_some() || zstate.load_args.is_some()) {
+                    panic!("Multiple simultaneous loads unsupported")
+                }
+                let load_args = Some(vec![xstate.val, ystate.val, zstate.val]);
 
                 // Dynamic widths case
                 if self.dynwidths {
                     self.width_assumptions
-                        .push(self.smt.eq(width.unwrap(), ey));
+                        .push(self.smt.eq(width.unwrap(), ystate.val));
                     if self.lhs_flag {
-                        let ret = self.new_fresh_bits(self.bitwidth);
-                        self.load_return = Some(ret);
-                        return ret;
+                        let val = self.new_fresh_bits(self.bitwidth);
+                        self.load_return = Some(val);
+                        return State {val, load_args, ..xstate };
                     } else {
-                        self.rhs_load_args = Some(vec![ex, ey, ez]);
-                        return self.load_return.unwrap()
+                        return State { val: self.load_return.unwrap(), load_args, ..xstate };
                     }
                 }
 
                 // Static widths case
                 if self.lhs_flag {
-                    self.lhs_load_args = Some(vec![ex, ey, ez]);
 
                     // If there is no current load return, create new fresh bits with the maximum size (self.bitwidth)
                     // 1. set that to be the load_return value
                     // 2. instead of just returning load_ret, extract the low bits corresponging to this cyurrent size
                     //  something like self.smt.extract(static_expr_width.unwrap(), 0, load_ret)
                     // if statments in this whole section might need to change
-                    match self.load_return {
+                   let val = match self.load_return {
                         Some(_) => {
                             dbg!("Static LHS load return", self.load_return.unwrap());
                             self.smt.extract(<usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap()).unwrap() - 1, 0, self.load_return.unwrap())
@@ -1300,12 +1336,13 @@ impl SolverCtx {
                             dbg!("Static LHS load return", self.load_return.unwrap());
                             self.smt.extract(<usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap()).unwrap() - 1, 0, self.load_return.unwrap())
                         },
-                    }
+                    };
+                    return State {val, load_args, ..xstate };
                 } else {
-                    self.rhs_load_args = Some(vec![ex, ey, ez]);
                     // On this side, extract the correct bits here too
                     dbg!("Static RHS load return", self.load_return.unwrap());
-                    self.smt.extract(<usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap()).unwrap() - 1, 0, self.load_return.unwrap())
+                    let val = self.smt.extract(<usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap()).unwrap() - 1, 0, self.load_return.unwrap());
+                    return State {val, load_args, ..xstate };
                 }
             }
             Expr::Store(w, x, y, z) => {
