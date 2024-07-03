@@ -256,13 +256,13 @@ impl<'a> ConditionsBuilder<'a> {
             }
         }
 
-        // Callee contract for the term under expansion.
-        self.constructor(
-            self.expansion.result,
-            self.expansion.term,
-            &self.expansion.parameters,
-            Invocation::Callee,
-        )?;
+        //// Callee contract for the term under expansion.
+        //self.constructor(
+        //    self.expansion.result,
+        //    self.expansion.term,
+        //    &self.expansion.parameters,
+        //    Invocation::Callee,
+        //)?;
 
         // Constraints.
         for (binding_id, constraints) in &self.expansion.constraints {
