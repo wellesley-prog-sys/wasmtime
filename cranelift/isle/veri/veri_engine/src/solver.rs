@@ -574,9 +574,9 @@ impl SolverCtx {
         if matches!(e, Expr::BVConvToVarWidth(..)) {
             dbg!(&e);
         }
-        if matches!(e, Expr::BVConvTo(..)) {
-            dbg!(&e);
-        }
+        // if matches!(e, Expr::BVConvTo(..)) {
+        //     dbg!(&e);
+        // }
         match e {
             Expr::Terminal(t) => match t {
                 Terminal::Literal(v, tyvar) => {
@@ -1271,7 +1271,9 @@ impl SolverCtx {
                     self.width_assumptions
                         .push(self.smt.eq(width.unwrap(), ey));
                     if self.lhs_flag {
-                        return self.new_fresh_bits(self.bitwidth);
+                        let ret = self.new_fresh_bits(self.bitwidth);
+                        self.load_return = Some(ret);
+                        return ret;
                     } else {
                         self.rhs_load_args = Some(vec![ex, ey, ez]);
                         return self.load_return.unwrap()
@@ -1284,20 +1286,26 @@ impl SolverCtx {
 
                     // If there is no current load return, create new fresh bits with the maximum size (self.bitwidth)
                     // 1. set that to be the load_return value
-                    // 2. instead of just returning load_ret, extract the low bits corresponging to this current size
+                    // 2. instead of just returning load_ret, extract the low bits corresponging to this cyurrent size
                     //  something like self.smt.extract(static_expr_width.unwrap(), 0, load_ret)
                     // if statments in this whole section might need to change
-                    
-                    let load_ret = self.new_fresh_bits(static_expr_width.unwrap());
-                    self.load_return = Some(load_ret);
-                    load_ret
+                    match self.load_return {
+                        Some(_) => {
+                            dbg!("Static LHS load return", self.load_return.unwrap());
+                            self.smt.extract(<usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap()).unwrap() - 1, 0, self.load_return.unwrap())
+                        },
+                        None => {
+                            let load_ret = self.new_fresh_bits(self.bitwidth);
+                            self.load_return = Some(load_ret);
+                            dbg!("Static LHS load return", self.load_return.unwrap());
+                            self.smt.extract(<usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap()).unwrap() - 1, 0, self.load_return.unwrap())
+                        },
+                    }
                 } else {
                     self.rhs_load_args = Some(vec![ex, ey, ez]);
-
                     // On this side, extract the correct bits here too
-                    // self.smt.extract(static_expr_width.unwrap(), 0, self.load_return.unwrap())
-
-                    self.load_return.unwrap()
+                    dbg!("Static RHS load return", self.load_return.unwrap());
+                    self.smt.extract(<usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap()).unwrap() - 1, 0, self.load_return.unwrap())
                 }
             }
             Expr::Store(w, x, y, z) => {
@@ -2207,6 +2215,7 @@ pub fn run_solver_with_static_widths(
                 let vals = ctx.smt.get_value(load_conditions).unwrap();
                 for (variable, value) in vals {
                     if value == ctx.smt.false_() {
+                        dbg!(variable, value);
                         println!("Failed load condition:\n{}", ctx.smt.display(variable));
                     }
                 }
