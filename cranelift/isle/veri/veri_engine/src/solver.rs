@@ -27,6 +27,7 @@ use encoded_ops::subs;
 use crate::MAX_WIDTH;
 
 // Verification state, used by vir_expr_to_sexp
+#[derive(Clone)]
 pub struct State {
     val: SExpr,
 
@@ -40,6 +41,18 @@ pub fn val_state(val: SExpr) -> State {
         load_args: None,
         store_args: None,
     }
+}
+
+// Merge states assuming there is zero or one "some" value for each field
+pub fn merge_states_assert_lone(val: SExpr, states: Vec<State>) -> State {
+    // If load_args is always none, set the new state's load_args to be none
+    // If load_args is some in one spot, set the new state's load_args to be that
+    // Otherwise, panic
+
+    // Same logic for store_args
+    let new_state = val_state(val);
+    todo!()
+
 }
 
 pub struct SolverCtx {
@@ -1412,22 +1425,24 @@ impl SolverCtx {
                     self.width_assumptions
                         .push(self.smt.eq(width.unwrap(), sum));
                 }
-                let mut sexprs: Vec<SExpr> = xs
+                let states: Vec<State> = xs
                     .iter()
                     .map(|x| self.vir_expr_to_sexp(x.clone()))
                     .collect();
-                let last = sexprs.remove(sexprs.len() - 1);
+                let mut values : Vec<SExpr> = states.iter().map(|x| x.val).collect();
+                let last = values.remove(values.len() - 1);
 
                 // AVH TODO: better solution for the width case
                 if self.onlywidths {
-                    return sexprs[0];
+                    return states[0].clone();
                 }
                 // Reverse to keep the order of the cases
-                let val = sexprs
+                let val: SExpr = values
                     .iter()
                     .rev()
                     .fold(last, |acc, x| self.smt.concat(*x, acc));
 
+                merge_states_assert_lone(val, states)
             }
             Expr::Load(x, y, z) => {
                 let xstate = self.vir_expr_to_sexp(*x);
