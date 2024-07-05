@@ -920,13 +920,12 @@ impl SolverCtx {
                     let arg_width = self.static_width(&*y).unwrap();
                     match ty {
                         Some(Type::BitVector(Some(w))) => {
-                            dbg!(arg_width);
-                            dbg!(*w);
+                            let actual_width = *w;
                             let ys = self.vir_expr_to_sexp(*y);
                             let mut new_state = State { ..ys };
-                            new_state.val = if arg_width < *w {
+                            new_state.val = if arg_width < actual_width {
                                 let padding =
-                                    self.new_fresh_bits(w.checked_sub(arg_width).unwrap());
+                                    self.new_fresh_bits(actual_width.checked_sub(arg_width).unwrap());
                                 dbg!(self.smt.display(padding).to_string());
                                 // let ys = self.vir_expr_to_sexp(*y);
                                 self.smt.concat(padding, ys.val)
