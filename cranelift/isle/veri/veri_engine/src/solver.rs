@@ -50,8 +50,21 @@ pub fn merge_states_assert_lone(val: SExpr, states: Vec<State>) -> State {
     // Otherwise, panic
 
     // Same logic for store_args
-    let new_state = val_state(val);
-    todo!()
+    let mut new_state = val_state(val);
+    let mut set_load_arg = None;  
+    for state in states.iter() {
+         if set_load_arg.is_none() && state.load_args.is_some() {
+            set_load_arg = state.load_args.clone();
+            new_state.load_args = state.load_args.clone();
+         } else if set_load_arg.is_none() && state.load_args.is_none() {
+            ()
+         } else if set_load_arg.is_some() && state.load_args.is_some(){
+            panic!("Multiple simultaneous loads unsupported");
+         } else {
+            ()
+         }
+    }
+    return new_state
 
 }
 
@@ -675,11 +688,11 @@ impl SolverCtx {
             }
             Expr::Binary(op, x, y) => {
                 // Look at both arg's states
-                let xs = self.vir_expr_to_sexp(*x);
-                let ys = self.vir_expr_to_sexp(*y);
+                let xs = self.vir_expr_to_sexp(*(x.clone()));
+                let ys = self.vir_expr_to_sexp(*(y.clone()));
 
                 // Check that only one of the args has a load or has a store
-                let mut new_state = State { ..xs };
+                let mut new_state = State { ..xs.clone()};
                 let x_has_load = xs.load_args.is_some();
                 let y_has_load = ys.load_args.is_some();
                 match (x_has_load, y_has_load) {
@@ -952,7 +965,7 @@ impl SolverCtx {
                 let is = self.vir_expr_to_sexp(*i);
                 let xs = self.vir_expr_to_sexp(*x);
 
-                let mut new_state = State { ..is };
+                let mut new_state = State { ..is.clone() };
                 let i_has_load = is.load_args.is_some();
                 let x_has_load = xs.load_args.is_some();
                 match (i_has_load, x_has_load) {
@@ -1003,7 +1016,7 @@ impl SolverCtx {
                 let arg_width = self.get_expr_width_var(&*x);
                 let is = self.vir_expr_to_sexp(*i);
                 let xs = self.vir_expr_to_sexp(*x);
-                let mut new_state = State { ..is };
+                let mut new_state = State { ..is.clone() };
                 let i_has_load = is.load_args.is_some();
                 let x_has_load = xs.load_args.is_some();
                 match (i_has_load, x_has_load) {
@@ -1044,14 +1057,14 @@ impl SolverCtx {
                             if arg_width < *w {
                                 let padding =
                                     self.new_fresh_bits(w.checked_sub(arg_width).unwrap());
-                                let ys = self.vir_expr_to_sexp(*y);
+                                let ys = self.vir_expr_to_sexp(*(y.clone()));
                                 self.smt.concat(padding, ys.val)
                             } else if *w < arg_width {
                                 let new = (w - 1).try_into().unwrap();
-                                let ys = self.vir_expr_to_sexp(*y);
+                                let ys = self.vir_expr_to_sexp(*(y.clone()));
                                 self.smt.extract(new, 0, ys.val)
                             } else {
-                                let ys = self.vir_expr_to_sexp(*y);
+                                let ys = self.vir_expr_to_sexp(*(y.clone()));
                                 ys.val
                             }
                         }
@@ -1060,7 +1073,7 @@ impl SolverCtx {
                     let ys = self.vir_expr_to_sexp(*y);
                     let xs = self.vir_expr_to_sexp(*x);
                     let mut new_state = State {
-                        val: new_val, ..ys
+                        val: new_val, ..ys.clone()
                     };
             
                     let x_has_load = xs.load_args.is_some();
@@ -1077,7 +1090,7 @@ impl SolverCtx {
                 }
             }
             Expr::WidthOf(x) => {
-                let xs = self.vir_expr_to_sexp(*x);
+                let xs = self.vir_expr_to_sexp(*(x.clone()));
                 let mut new_state = State {..xs};
 
                 new_state.val = if self.dynwidths {
@@ -1092,7 +1105,7 @@ impl SolverCtx {
                 assert!(i >= j);
                 if self.get_type(&x).is_some() {
                     let xs = self.vir_expr_to_sexp(*x);
-                    let mut new_state = State {..xs};
+                    let mut new_state = State {..xs.clone()};
                     // No-op if we are extracting exactly the full bitwidth
                     if j == 0 && i == self.bitwidth - 1 && self.dynwidths {
                         return xs;
@@ -1188,8 +1201,8 @@ impl SolverCtx {
                         .iter()
                         .rev()
                         .fold(last_body.load_args, |acc, (m, b)| match acc {
-                            None => b.load_args,
-                            Some(args) => Some(match b.load_args {
+                            None => b.load_args.clone(),
+                            Some(args) => Some(match &b.load_args {
                                 None => args,
                                 Some(bargs) => bargs
                                     .iter()
@@ -1197,7 +1210,7 @@ impl SolverCtx {
                                     .collect(),
                             }),
                         });
-                return State { val, ..cs };
+                return State { val, load_args, ..cs };
             }
             Expr::CLZ(e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1345,7 +1358,7 @@ impl SolverCtx {
                 let ex = self.vir_expr_to_sexp(*x);
                 let ey = self.vir_expr_to_sexp(*y);
 
-                let mut new_state = State {..ex};
+                let mut new_state = State {..ex.clone()};
 
                 let ex_has_load = ex.load_args.is_some();
                 let ey_has_load = ey.load_args.is_some();
@@ -1964,7 +1977,7 @@ impl SolverCtx {
         self.lhs_flag = false;
         for a in &rule_sem.rhs_assumptions {
             let p = self.vir_expr_to_sexp(a.clone());
-            assumptions.push(p)
+            assumptions.push(p.val)
         }
         if self.dynwidths {
             // println!("Adding width assumptions");
@@ -1982,7 +1995,7 @@ impl SolverCtx {
         let assertions: Vec<SExpr> = rule_sem
             .rhs_assertions
             .iter()
-            .map(|a| self.vir_expr_to_sexp(a.clone()))
+            .map(|a| self.vir_expr_to_sexp(a.clone()).val)
             .collect();
 
         // println!("Declaring additional variables");
