@@ -3208,7 +3208,12 @@ fn test_named_x64_iadd_base_case_32_or_64_lea() {
         test_x64_rule_with_lhs_termname_simple(
             "iadd_base_case_32_or_64_lea",
             "iadd",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3230,7 +3235,11 @@ fn test_named_x64_to_amode_add_const_rhs() {
         test_x64_rule_with_lhs_termname_simple(
             "to_amode_add_const_rhs",
             "to_amode_add",
-            vec![(Bitwidth::I64, VerificationResult::Success)],
+            vec![
+                // TODO: make this work for I32
+                // (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
         )
     });
 }
@@ -3341,6 +3350,150 @@ fn test_named_x64_amode_imm_reg_reg_shift_shl_lhs() {
             "amode_imm_reg_reg_shift_shl_lhs",
             "amode_imm_reg_reg_shift",
             vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_load_i8_aarch64_uload8() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "load_i8_aarch64_uload8",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::Success),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_load_i16_aarch64_uload16() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "load_i16_aarch64_uload16",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::Success),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_load_i32_aarch64_uload32() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "load_i32_aarch64_uload32",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_load_i64_aarch64_uload64() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "load_i64_aarch64_uload64",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_store_i8_aarch64_store8() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i8_aarch64_store8",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::Success),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_store_i16_aarch64_store16() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i16_aarch64_store16",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::Success),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_store_i32_aarch64_store32() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i32_aarch64_store32",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_store_i64_aarch64_store64() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "store_i64_aarch64_store64",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
+        )
+    });
+}
+
+#[test]
+fn test_named_load_sub64_x64_movzx() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "load_sub64_x64_movzx",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::Success),
+                (Bitwidth::I16, VerificationResult::Success),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
         )
     });
 }

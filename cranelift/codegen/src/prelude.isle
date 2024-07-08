@@ -338,6 +338,8 @@
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
+(spec (ty_bits_u16 x) 
+      (provide (= result (int2bv 16 x))))
 (decl pure ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
 
@@ -389,12 +391,12 @@
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Provide model for the MemFlags type (declared in generated clif_lower.isle).
-(model MemFlags (type (bv 8)))
+(model MemFlags (type (bv 16)))
 
 ;; `MemFlags::trusted`
 ;; TODO(mbm): ISLE types for FlagBit (hard-coding #x03 is fragile)
 (spec (mem_flags_trusted)
-      (provide (= result #x03)))
+      (provide (= result #x0003)))
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 

@@ -32,7 +32,9 @@ struct RuleParseTree {
     term_input_bvs: Vec<String>,
     // Used for custom verification conditions
     term_args: Vec<String>,
-    assumptions: Vec<Expr>,
+    lhs_assumptions: Vec<Expr>,
+    rhs_assumptions: Vec<Expr>,
+
     rhs_assertions: Vec<Expr>,
     concrete: Option<ConcreteTest>,
 }
@@ -88,7 +90,8 @@ pub struct RuleSemantics {
     pub term_input_bvs: Vec<String>,
     // Used for custom verification conditions
     pub term_args: Vec<String>,
-    pub assumptions: Vec<Expr>,
+    pub lhs_assumptions: Vec<Expr>,
+    pub rhs_assumptions: Vec<Expr>,
     pub rhs_assertions: Vec<Expr>,
     pub tyctx: TypeContext,
 }
@@ -157,6 +160,7 @@ fn convert_type(aty: &annotation_ir::Type) -> veri_ir::Type {
         annotation_ir::Type::BitVectorWithWidth(w) => veri_ir::Type::BitVector(Some(*w)),
         annotation_ir::Type::Int => veri_ir::Type::Int,
         annotation_ir::Type::Bool => veri_ir::Type::Bool,
+        annotation_ir::Type::Unit => veri_ir::Type::Unit,
         annotation_ir::Type::Poly(_) => veri_ir::Type::BitVector(None),
     }
 }
@@ -182,7 +186,8 @@ fn type_annotations_using_rule<'a>(
         free_vars: HashSet::new(),
         term_input_bvs: vec![],
         term_args: vec![],
-        assumptions: vec![],
+        lhs_assumptions: vec![],
+        rhs_assumptions: vec![],
         rhs_assertions: vec![],
         concrete: concrete.clone(),
     };
@@ -231,7 +236,8 @@ fn type_annotations_using_rule<'a>(
             parse_tree
                 .var_constraints
                 .insert(TypeExpr::Variable(iflet_lhs.type_var, iflet_rhs.type_var));
-            parse_tree.assumptions.push(veri_ir::Expr::Binary(
+            // Add if-lets to the LHS
+            parse_tree.lhs_assumptions.push(veri_ir::Expr::Binary(
                 veri_ir::BinaryOp::Eq,
                 Box::new(iflet_lhs_expr.unwrap()),
                 Box::new(iflet_rhs_expr.unwrap()),
@@ -340,7 +346,8 @@ fn type_annotations_using_rule<'a>(
                 type_var_to_type: solution,
                 lhs: lhs_expr,
                 rhs: rhs_expr,
-                assumptions: parse_tree.assumptions,
+                lhs_assumptions: parse_tree.lhs_assumptions,
+                rhs_assumptions: parse_tree.rhs_assumptions,
                 rhs_assertions: parse_tree.rhs_assertions,
                 quantified_vars,
                 free_vars,
@@ -372,6 +379,9 @@ fn add_annotation_constraints(
 ) -> (veri_ir::Expr, u32) {
     let (e, t) = match expr {
         annotation_ir::Expr::Var(x, ..) => {
+            if !annotation_info.var_to_type_var.contains_key(&x) {
+                panic!("Error: unbound variable: {}", x);
+            }
             let t = annotation_info.var_to_type_var[&x];
             let name = format!("{}__{}__{}", annotation_info.term, x, t);
             (veri_ir::Expr::Terminal(veri_ir::Terminal::Var(name)), t)
@@ -1370,6 +1380,51 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::BVPopcnt(Box::new(e1)), t)
         }
+        annotation_ir::Expr::Load(x, y, z) => {
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+            let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
+            let (e3, t3) = add_annotation_constraints(*z, tree, annotation_info);
+            let t = tree.next_type_var;
+
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::Int));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t3, annotation_ir::Type::BitVector));
+
+            tree.next_type_var += 1;
+            (
+                veri_ir::Expr::Load(Box::new(e1), Box::new(e2), Box::new(e3)),
+                t,
+            )
+        }
+        annotation_ir::Expr::Store(w, x, y, z) => {
+            let (e0, t0) = add_annotation_constraints(*w, tree, annotation_info);
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+            let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
+            let (e3, t3) = add_annotation_constraints(*z, tree, annotation_info);
+            let t = tree.next_type_var;
+
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::Unit));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t0, annotation_ir::Type::BitVector));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::Int));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t3, annotation_ir::Type::BitVector));
+
+            tree.next_type_var += 1;
+            (
+                veri_ir::Expr::Store(Box::new(e0), Box::new(e1), Box::new(e2), Box::new(e3)),
+                t,
+            )
+        }
     };
     tree.ty_vars.insert(e.clone(), t);
     // let fmt = format!("{}:\t{:?}", t, e);
@@ -1463,11 +1518,16 @@ fn add_rule_constraints(
         }
         TypeVarConstruct::BindPattern => {
             assert_eq!(children.len(), 2);
-            tree.assumptions.push(veri_ir::Expr::Binary(
+            let eq = veri_ir::Expr::Binary(
                 veri_ir::BinaryOp::Eq,
                 Box::new(children[0].clone()),
                 Box::new(children[1].clone()),
-            ));
+            );
+            if rhs {
+                tree.rhs_assumptions.push(eq);
+            } else {
+                tree.lhs_assumptions.push(eq);
+            }
             Some(children[0].clone())
         }
         TypeVarConstruct::Wildcard(i) => {
@@ -1489,11 +1549,16 @@ fn add_rule_constraints(
             let first = &children[0];
             for (i, e) in children.iter().enumerate() {
                 if i != 0 {
-                    tree.assumptions.push(veri_ir::Expr::Binary(
+                    let eq = veri_ir::Expr::Binary(
                         veri_ir::BinaryOp::Eq,
                         Box::new(first.clone()),
                         Box::new(e.clone()),
-                    ))
+                    );
+                    if rhs {
+                        tree.rhs_assumptions.push(eq);
+                    } else {
+                        tree.lhs_assumptions.push(eq);
+                    }
                 }
             }
             Some(first.to_owned())
@@ -1502,13 +1567,18 @@ fn add_rule_constraints(
             tree.quantified_vars
                 .insert((curr.ident.clone(), curr.type_var));
             for (e, s) in children.iter().zip(bound) {
-                tree.assumptions.push(veri_ir::Expr::Binary(
+                let eq = veri_ir::Expr::Binary(
                     veri_ir::BinaryOp::Eq,
                     Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(
                         s.to_owned(),
                     ))),
                     Box::new(e.to_owned()),
-                ))
+                );
+                if rhs {
+                    tree.rhs_assumptions.push(eq);
+                } else {
+                    tree.lhs_assumptions.push(eq);
+                }
             }
             children.last().cloned()
         }
@@ -1549,7 +1619,11 @@ fn add_rule_constraints(
                             Box::new(lit),
                         );
                         curr.assertions.push(eq.clone());
-                        tree.assumptions.push(eq)
+                        if rhs {
+                            tree.rhs_assumptions.push(eq);
+                        } else {
+                            tree.lhs_assumptions.push(eq);
+                        }
                     }
                 }
             }
@@ -1574,7 +1648,11 @@ fn add_rule_constraints(
             for expr in annotation.assumptions {
                 let (typed_expr, _) = add_annotation_constraints(*expr, tree, &mut annotation_info);
                 curr.assertions.push(typed_expr.clone());
-                tree.assumptions.push(typed_expr);
+                if rhs {
+                    tree.rhs_assumptions.push(typed_expr);
+                } else {
+                    tree.lhs_assumptions.push(typed_expr);
+                }
                 add_isle_constraints(
                     term,
                     tree,
@@ -1597,7 +1675,7 @@ fn add_rule_constraints(
                 if rhs {
                     tree.rhs_assertions.push(typed_expr);
                 } else {
-                    tree.assumptions.push(typed_expr);
+                    tree.lhs_assumptions.push(typed_expr);
                 }
             }
 
@@ -1626,11 +1704,16 @@ fn add_rule_constraints(
                 );
                 tree.quantified_vars
                     .insert((arg_name.clone(), annotation_type_var));
-                tree.assumptions.push(veri_ir::Expr::Binary(
+                let eq = veri_ir::Expr::Binary(
                     veri_ir::BinaryOp::Eq,
                     Box::new(child.clone()),
                     Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(arg_name))),
-                ))
+                );
+                if rhs {
+                    tree.rhs_assumptions.push(eq);
+                } else {
+                    tree.lhs_assumptions.push(eq);
+                }
             }
             // set term ret var equal to annotation ret var
             let ret_var = annotation_info.var_to_type_var[&annotation.sig.ret.name];
@@ -1641,16 +1724,20 @@ fn add_rule_constraints(
                 annotation_info.term, annotation.sig.ret.name, ret_var
             );
             tree.quantified_vars.insert((ret_name.clone(), ret_var));
-            tree.assumptions.push(veri_ir::Expr::Binary(
+            let eq = veri_ir::Expr::Binary(
                 veri_ir::BinaryOp::Eq,
                 Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(
                     curr.ident.clone(),
                 ))),
                 Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(ret_name))),
-            ));
+            );
+            if rhs {
+                tree.rhs_assumptions.push(eq);
+            } else {
+                tree.lhs_assumptions.push(eq);
+            }
 
             annotation_infos.push(annotation_info);
-
             Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(
                 curr.ident.clone(),
             )))
@@ -1977,6 +2064,7 @@ fn annotation_type_for_vir_type(ty: &Type) -> annotation_ir::Type {
         Type::BitVector(None) => annotation_ir::Type::BitVector,
         Type::Bool => annotation_ir::Type::Bool,
         Type::Int => annotation_ir::Type::Int,
+        Type::Unit => annotation_ir::Type::Unit,
     }
 }
 
@@ -2241,6 +2329,7 @@ fn create_parse_tree_expr(
             let name = typeenv.syms[sym.index()].clone();
             let val = match name.as_str() {
                 "I8" => 8,
+                "I16" => 16,
                 "I64" => 64,
                 "I32" => 32,
                 "false" => 0,

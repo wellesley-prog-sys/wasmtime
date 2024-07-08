@@ -2422,16 +2422,16 @@
 
 ;;;; Rules for loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower
+(rule load_i8_aarch64_uload8 (lower
        (has_type $I8 (load flags address offset)))
       (aarch64_uload8 (amode $I8 address offset) flags))
-(rule (lower
+(rule load_i16_aarch64_uload16 (lower
        (has_type $I16 (load flags address offset)))
       (aarch64_uload16 (amode $I16 address offset) flags))
-(rule (lower
+(rule load_i32_aarch64_uload32 (lower
        (has_type $I32 (load flags address offset)))
       (aarch64_uload32 (amode $I32 address offset) flags))
-(rule (lower
+(rule load_i64_aarch64_uload64 (lower
        (has_type $I64 (load flags address offset)))
       (aarch64_uload64 (amode $I64 address offset) flags))
 (rule (lower
@@ -2521,19 +2521,19 @@
 
 ;;;; Rules for stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower
+(rule store_i8_aarch64_store8 (lower
        (store flags value @ (value_type $I8) address offset))
       (side_effect
        (aarch64_store8 (amode $I8 address offset) flags value)))
-(rule (lower
+(rule store_i16_aarch64_store16 (lower
        (store flags value @ (value_type $I16) address offset))
       (side_effect
        (aarch64_store16 (amode $I16 address offset) flags value)))
-(rule (lower
+(rule store_i32_aarch64_store32 (lower
        (store flags value @ (value_type $I32) address offset))
       (side_effect
        (aarch64_store32 (amode $I32 address offset) flags value)))
-(rule (lower
+(rule store_i64_aarch64_store64 (lower
        (store flags value @ (value_type $I64) address offset))
       (side_effect
        (aarch64_store64 (amode $I64 address offset) flags value)))

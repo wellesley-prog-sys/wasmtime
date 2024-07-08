@@ -259,6 +259,33 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                 .collect();
             Expr::Switch(Box::new(swith_on), arms)
         }
+        SpecOp::Load => {
+            assert_eq!(
+                args.len(),
+                3,
+                "Unexpected number of args for load operator {:?}",
+                pos
+            );
+            Expr::Load(
+                Box::new(spec_to_expr(&args[0], env)),
+                Box::new(spec_to_expr(&args[1], env)),
+                Box::new(spec_to_expr(&args[2], env)),
+            )
+        }
+        SpecOp::Store => {
+            assert_eq!(
+                args.len(),
+                4,
+                "Unexpected number of args for store operator {:?}",
+                pos
+            );
+            Expr::Store(
+                Box::new(spec_to_expr(&args[0], env)),
+                Box::new(spec_to_expr(&args[1], env)),
+                Box::new(spec_to_expr(&args[2], env)),
+                Box::new(spec_to_expr(&args[3], env)),
+            )
+        }
     }
 }
 
@@ -300,6 +327,7 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
 fn model_type_to_type(model_type: &ModelType) -> veri_ir::Type {
     match model_type {
         ModelType::Int => veri_ir::Type::Int,
+        ModelType::Unit => veri_ir::Type::Unit,
         ModelType::Bool => veri_ir::Type::Bool,
         ModelType::BitVec(size) => veri_ir::Type::BitVector(*size),
     }
@@ -330,6 +358,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
                     let type_id = typeenv.get_type_by_name(&name).unwrap();
                     let ir_type = match model_type {
                         ModelType::Int => annotation_ir::Type::Int,
+                        ModelType::Unit => annotation_ir::Type::Unit,
                         ModelType::Bool => annotation_ir::Type::Bool,
                         ModelType::BitVec(None) => annotation_ir::Type::BitVector,
                         ModelType::BitVec(Some(size)) => {

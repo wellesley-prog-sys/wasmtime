@@ -226,3 +226,26 @@
 (spec (sextend x)
     (provide (= result (sign_ext (widthof result) x))))
 (instantiate sextend extend)
+
+
+(form load
+    ((args (bv 16) (bv 64) (bv 32)) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 16) (bv 64) (bv 32)) (ret (bv 16)) (canon (bv 16)))
+    ((args (bv 16) (bv 64) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+    ((args (bv 16) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64)))
+)
+(spec (load flags val offset)
+    (provide 
+       (= result (load flags (widthof result) (bvadd val (sign_ext 64 offset))))))
+(instantiate load load)
+
+(form store
+    ((args (bv 16) (bv 8) (bv 64) (bv 32)) (ret Unit) (canon (bv 8)))
+    ((args (bv 16) (bv 16) (bv 64) (bv 32)) (ret Unit) (canon (bv 16)))
+    ((args (bv 16) (bv 32) (bv 64) (bv 32)) (ret Unit) (canon (bv 32)))
+    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret Unit) (canon (bv 64)))
+)
+(spec (store flags val_to_store addr offset)
+    (provide 
+       (= result (store flags (widthof val_to_store) val_to_store (bvadd (zero_ext 64 addr) (sign_ext 64 offset))))))
+(instantiate store store)

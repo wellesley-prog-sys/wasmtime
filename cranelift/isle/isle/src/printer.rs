@@ -177,9 +177,11 @@ impl Printable for ModelType {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             ModelType::Int => RcDoc::text("Int"),
+            ModelType::Unit => RcDoc::text("Unit"),
             ModelType::Bool => RcDoc::text("Bool"),
             ModelType::BitVec(Some(size)) => sexp(vec![RcDoc::text("bv"), RcDoc::as_string(size)]),
             ModelType::BitVec(None) => sexp(vec![RcDoc::text("bv")]),
+
         }
     }
 }
@@ -275,6 +277,8 @@ impl Printable for SpecOp {
             SpecOp::Rev => "rev",
             SpecOp::Cls => "cls",
             SpecOp::Clz => "clz",
+            SpecOp::Load => "load", 
+            SpecOp::Store => "store",
         })
     }
 }

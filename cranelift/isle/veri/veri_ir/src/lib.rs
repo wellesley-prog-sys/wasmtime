@@ -58,6 +58,8 @@ pub enum Type {
     /// This corresponds to Cranelift's Isle type:
     /// (type Type (primitive Type))
     Int,
+
+    Unit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -187,6 +189,9 @@ pub enum Expr {
     BVConvToVarWidth(Box<Expr>, Box<Expr>),
 
     WidthOf(Box<Expr>),
+
+    Load(Box<Expr>, Box<Expr>, Box<Expr>),
+    Store(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 /// To-be-flushed-out verification counterexample for failures

@@ -530,6 +530,8 @@ impl<'a> Parser<'a> {
             "rev" => Ok(SpecOp::Rev),
             "cls" => Ok(SpecOp::Cls),
             "clz" => Ok(SpecOp::Clz),
+            "load" => Ok(SpecOp::Load),
+            "store" => Ok(SpecOp::Store),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
     }
@@ -630,6 +632,8 @@ impl<'a> Parser<'a> {
             Ok(ModelType::Bool)
         } else if self.eat_sym_str("Int")? {
             Ok(ModelType::Int)
+        } else if self.eat_sym_str("Unit")? {
+            Ok(ModelType::Unit)
         } else if self.is_lparen() {
             self.expect_lparen()?;
             let width = if self.eat_sym_str("bv")? {

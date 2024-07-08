@@ -4,18 +4,15 @@
 ;;;; Primitive and External Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `cranelift-entity`-based identifiers.
-(model Inst (type (bv)))
 (type Inst (primitive Inst))
 
 ;; ISLE representation of `Vec<u8>`
 (type VecMask extern (enum))
 
-(model ValueRegs (type (bv)))
 (type ValueRegs (primitive ValueRegs))
 (type WritableValueRegs (primitive WritableValueRegs))
 
 ;; Instruction lowering result: a vector of `ValueRegs`.
-(model InstOutput (type (bv)))
 (type InstOutput (primitive InstOutput))
 ;; (Mutable) builder to incrementally construct an `InstOutput`.
 (type InstOutputBuilder extern (enum))
@@ -389,6 +386,8 @@
                                  (inst2 MInst)
                                  (inst3 MInst))))
 
+(model SideEffectNoResult (type Unit))
+
 ;; Emit given side-effectful instruction.
 (decl emit_side_effect (SideEffectNoResult) Unit)
 (rule (emit_side_effect (SideEffectNoResult.Inst inst))
@@ -404,6 +403,8 @@
 ;; Create an empty `InstOutput`, but do emit the given side-effectful
 ;; instruction.
 (decl side_effect (SideEffectNoResult) InstOutput)
+(spec (side_effect v)
+    (provide (= result v)))
 (rule (side_effect inst)
       (let ((_ Unit (emit_side_effect inst)))
         (output_none)))

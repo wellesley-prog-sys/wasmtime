@@ -12,7 +12,7 @@ use crate::type_inference::RuleSemantics;
 use crate::{interp::Context, termname::pattern_contains_termname};
 use veri_ir::{ConcreteTest, TermSignature, VerificationResult};
 
-pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config) {
+pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config, widths: &Option<Vec<String>>) {
     let lexer = isle::lexer::Lexer::from_files(&inputs).unwrap();
 
     // Parses to an AST, as a list of definitions
@@ -31,7 +31,35 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config) {
         .unwrap_or_else(|| panic!("Missing term width for {}", config.term))
         .clone();
 
-    for type_instantiation in types {
+    let types_filtered = if let Some(widths) = widths {
+        let mut width_types = Vec::new();
+
+        for w in widths {
+            let width_type = match w.as_str() {
+                "I8" => veri_ir::Type::BitVector(Some(8)),
+                "I16" => veri_ir::Type::BitVector(Some(16)),
+                "I32" => veri_ir::Type::BitVector(Some(32)),
+                "I64" => veri_ir::Type::BitVector(Some(64)),
+                _ => panic!("Invalid width type: {}", w),
+            };
+            width_types.push(width_type);
+        }
+
+        types
+            .into_iter()
+            .filter(|t| {
+                if let Some(canonical_type) = &t.canonical_type {
+                    width_types.contains(canonical_type)
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<_>>()
+    } else {
+        types
+    };
+
+    for type_instantiation in types_filtered {
         let type_sols = type_rules_with_term_and_types(
             &termenv,
             &typeenv,
