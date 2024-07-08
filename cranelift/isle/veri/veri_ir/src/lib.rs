@@ -58,6 +58,8 @@ pub enum Type {
     /// This corresponds to Cranelift's Isle type:
     /// (type Type (primitive Type))
     Int,
+
+    Unit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

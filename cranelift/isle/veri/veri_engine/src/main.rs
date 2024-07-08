@@ -55,7 +55,7 @@ fn main() {
     let mut inputs = vec![];
 
     let valid_widths = ["I8", "I16", "I32", "I64"];
-    
+
     if let Some(widths) = &args.widths {
         for w in widths {
             let w_str = w.as_str();

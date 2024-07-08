@@ -83,7 +83,6 @@ pub struct SolverCtx {
     pub additional_assertions: Vec<SExpr>,
     fresh_bits_idx: usize,
     load_return: Option<SExpr>,
-    store_return: Option<SExpr>,
     lhs_flag: bool,
 }
 
@@ -554,7 +553,7 @@ impl SolverCtx {
                 self.smt.bit_vec_sort(self.smt.numeral(width))
             }
             Type::Int => self.smt.int_sort(),
-            Type::Bool => self.smt.bool_sort(),
+            Type::Bool | Type::Unit => self.smt.bool_sort(),
         }
     }
 
@@ -2013,7 +2012,6 @@ pub fn run_solver(
         additional_assertions: vec![],
         fresh_bits_idx: 0,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
 
@@ -2033,7 +2031,7 @@ pub fn run_solver(
                         let eq = ctx
                             .smt
                             .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
-                        println!("Width from inference {} ({})", width_name, bitwidth);
+                        // println!("Width from inference {} ({})", width_name, bitwidth);
                         ctx.width_assumptions.push(eq);
                     }
                     None => {
@@ -2220,7 +2218,6 @@ pub fn run_solver_with_static_widths(
         additional_assertions: vec![],
         fresh_bits_idx: 0,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);

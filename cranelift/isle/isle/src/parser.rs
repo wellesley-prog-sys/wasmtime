@@ -623,6 +623,8 @@ impl<'a> Parser<'a> {
             Ok(ModelType::Bool)
         } else if self.eat_sym_str("Int")? {
             Ok(ModelType::Int)
+        } else if self.eat_sym_str("Unit")? {
+            Ok(ModelType::Unit)
         } else if self.is_lparen() {
             self.expect_lparen()?;
             let width = if self.eat_sym_str("bv")? {

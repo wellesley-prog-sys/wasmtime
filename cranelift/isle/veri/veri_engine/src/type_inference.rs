@@ -160,6 +160,7 @@ fn convert_type(aty: &annotation_ir::Type) -> veri_ir::Type {
         annotation_ir::Type::BitVectorWithWidth(w) => veri_ir::Type::BitVector(Some(*w)),
         annotation_ir::Type::Int => veri_ir::Type::Int,
         annotation_ir::Type::Bool => veri_ir::Type::Bool,
+        annotation_ir::Type::Unit => veri_ir::Type::Unit,
         annotation_ir::Type::Poly(_) => veri_ir::Type::BitVector(None),
     }
 }
@@ -1407,8 +1408,8 @@ fn add_annotation_constraints(
             let (e3, t3) = add_annotation_constraints(*z, tree, annotation_info);
             let t = tree.next_type_var;
 
-            tree.bv_constraints
-                .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::Unit));
             tree.bv_constraints
                 .insert(TypeExpr::Concrete(t0, annotation_ir::Type::BitVector));
             tree.concrete_constraints
@@ -1420,7 +1421,7 @@ fn add_annotation_constraints(
 
             tree.next_type_var += 1;
             (
-                veri_ir::Expr::Store(Box::new(e0),Box::new(e1), Box::new(e2), Box::new(e3)),
+                veri_ir::Expr::Store(Box::new(e0), Box::new(e1), Box::new(e2), Box::new(e3)),
                 t,
             )
         }
@@ -1623,7 +1624,6 @@ fn add_rule_constraints(
                         } else {
                             tree.lhs_assumptions.push(eq);
                         }
-                        
                     }
                 }
             }
@@ -1635,10 +1635,14 @@ fn add_rule_constraints(
                 var_to_type_var: HashMap::new(),
             };
             for arg in &annotation.sig.args {
-                annotation_info.var_to_type_var.insert(arg.name.clone(), tree.next_type_var);
+                annotation_info
+                    .var_to_type_var
+                    .insert(arg.name.clone(), tree.next_type_var);
                 tree.next_type_var += 1;
             }
-            annotation_info.var_to_type_var.insert(annotation.sig.ret.name.clone(), tree.next_type_var);
+            annotation_info
+                .var_to_type_var
+                .insert(annotation.sig.ret.name.clone(), tree.next_type_var);
             tree.next_type_var += 1;
 
             for expr in annotation.assumptions {
@@ -1833,20 +1837,22 @@ fn solve_constraints(
                             match (x.is_poly(), y.is_poly()) {
                                 (false, false) => {
                                     if x != y {
-                                        let e1 = ty_vars
-                                            .unwrap()
-                                            .iter()
-                                            .find_map(
-                                                |(k, &v)| if v == *v1 { Some(k) } else { None },
-                                            );
-                                        let e2 = ty_vars
-                                            .unwrap()
-                                            .iter()
-                                            .find_map(
-                                                |(k, &v)| if v == *v2 { Some(k) } else { None },
-                                            );
+                                        let e1 = ty_vars.unwrap().iter().find_map(|(k, &v)| {
+                                            if v == *v1 {
+                                                Some(k)
+                                            } else {
+                                                None
+                                            }
+                                        });
+                                        let e2 = ty_vars.unwrap().iter().find_map(|(k, &v)| {
+                                            if v == *v2 {
+                                                Some(k)
+                                            } else {
+                                                None
+                                            }
+                                        });
                                         match (e1, e2) {
-                                            (Some(e1), Some(e2)) => 
+                                            (Some(e1), Some(e2)) =>
                                             panic!(
                                                 "type conflict at constraint {:#?}:\nt{}:{:?}\n has type {:#?},\nt{}:{:?}\n has type {:#?}",
                                                 v, v1, e1, x, v2, e2, y
@@ -2058,6 +2064,7 @@ fn annotation_type_for_vir_type(ty: &Type) -> annotation_ir::Type {
         Type::BitVector(None) => annotation_ir::Type::BitVector,
         Type::Bool => annotation_ir::Type::Bool,
         Type::Int => annotation_ir::Type::Int,
+        Type::Unit => annotation_ir::Type::Unit,
     }
 }
 
