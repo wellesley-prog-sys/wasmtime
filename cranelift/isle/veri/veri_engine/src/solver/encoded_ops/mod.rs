@@ -38,7 +38,6 @@ mod tests {
             fresh_bits_idx: 0,
             lhs_flag: true,
             load_return: None,
-            store_return: None,
         }
     }
 

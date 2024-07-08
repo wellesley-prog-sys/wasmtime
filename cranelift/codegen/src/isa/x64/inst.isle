@@ -1045,7 +1045,7 @@
 
 ;; TODO: represent flags in Amode
 (spec (Amode.ImmReg simm base flags)
-      (provide (= result (bvadd base (sign_ext 64 simm))))
+      (provide (= result (concat flags (bvadd base (sign_ext 64 simm)))))
       (require
         (= (widthof simm) 32)
         (= (widthof base) 64)
@@ -1055,9 +1055,10 @@
 (spec (Amode.ImmRegRegShift simm base index shift flags)
   (provide
     (= result
+      (concat flags
       (bvadd
         (bvadd base (sign_ext 64 simm))
-        (bvshl index (zero_ext 64 shift)))))
+        (bvshl index (zero_ext 64 shift))))))
   (require
        (= (widthof simm) 32)
        (= (widthof base) 64)
@@ -1129,10 +1130,10 @@
 ;;
 ;; TODO: semantics of offset (sign extend or zero extend)?
 (spec (to_amode_add flags x y offset)
-      (provide (= result (bvadd (zero_ext 64 (bvadd x y)) (sign_ext 64 offset)))))
+      (provide (= result (concat flags (bvadd (zero_ext 64 (bvadd x y)) (sign_ext 64 offset))))))
 (instantiate to_amode_add
-    ((args (bv 16) (bv 32) (bv 32) (bv 32)) (ret (bv 64)) (canon (bv 32)))
-    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64))))
+    ((args (bv 16) (bv 32) (bv 32) (bv 32)) (ret (bv 80)) (canon (bv 32)))
+    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
@@ -1160,9 +1161,9 @@
 ;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
 ;; otherwise falls back on `ImmReg`.
 (spec (amode_imm_reg flags x offset)
-      (provide (= result (bvadd (zero_ext 64 x) (sign_ext 64 offset)))))
+      (provide (= result (concat flags (bvadd (zero_ext 64 x) (sign_ext 64 offset))))))
 (instantiate amode_imm_reg
-    ((args (bv 16) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64))))
+    ((args (bv 16) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl amode_imm_reg (MemFlags Value Offset32) Amode)
 (rule amode_imm_reg_base 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
@@ -1170,13 +1171,13 @@
         (amode_imm_reg_reg_shift flags x y offset))
 
 (spec (amode_imm_reg_reg_shift flags x y offset)
-      (provide (= result (bvadd (sign_ext 64 (bvadd x y)) (sign_ext 64 offset))))
+      (provide (= result (concat flags (bvadd (sign_ext 64 (bvadd x y)) (sign_ext 64 offset)))))
       (require
             (= (widthof flags) 16)
             (= (widthof x) (widthof y))
             (= (widthof offset) 32)))
 (instantiate amode_imm_reg_reg_shift
-    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 64))))
+    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) Amode)
 (rule amode_imm_reg_reg_shift_no_shift 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
