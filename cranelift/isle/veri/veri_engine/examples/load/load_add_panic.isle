@@ -1,0 +1,15 @@
+;; Instruction formats.
+(type MInst (enum))
+
+(spec (lhs cond t_case f_case) 
+  (provide (= result (if cond t_case f_case))))
+(decl lhs (bool Value Value) Value)
+(extern constructor lhs lhs)
+
+(spec (rhs t_case) 
+  (provide (= result (t_case))))
+(decl rhs (Value) Value)
+(extern constructor rhs rhs)
+
+(rule (lhs true (load flags val offset1) (load flags val offset2))
+  (rhs (load flags val offset1)))
