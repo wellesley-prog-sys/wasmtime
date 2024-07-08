@@ -457,6 +457,11 @@ impl<'a> Parser<'a> {
                     return Ok(SpecExpr::Enum { name: ident });
                 };
             }
+            // Unit
+            if self.is_rparen() {
+                self.expect_rparen()?;
+                return Ok(SpecExpr::ConstBool { val: 1, pos });
+            }
         }
         Err(self.error(pos, "Unexpected spec expression".into()))
     }
