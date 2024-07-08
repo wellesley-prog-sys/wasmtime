@@ -2,14 +2,7 @@
 
 use cranelift_isle::compile;
 use cranelift_isle::error::Errors;
-use cranelift_isle::lexer::Lexer;
-
-/// Parse without positional information, to enable equality on structure alone.
-fn parse_without_pos(lexer: Lexer) -> Result<Defs, Errors> {
-    let mut parser = Parser::new(lexer);
-    parser.disable_pos();
-    parser.parse_defs()
-}
+use std::default::Default;
 
 fn build(filename: &str) -> Result<String, Errors> {
     compile::from_files(&[filename], &Default::default())
@@ -68,28 +61,6 @@ fn build_and_link_isle(isle_filename: &str) -> (tempfile::TempDir, std::path::Pa
 
 pub fn run_link(isle_filename: &str) {
     build_and_link_isle(isle_filename);
-}
-
-pub fn run_print(isle_filename: &str) {
-    // Parse.
-    let lexer = Lexer::from_files(&[isle_filename]).unwrap();
-    let original = parse_without_pos(lexer).unwrap();
-
-    // Print.
-    let mut buf = std::io::BufWriter::new(Vec::new());
-    cranelift_isle::printer::print(&original, 78, &mut buf).unwrap();
-    let bytes = buf.into_inner().unwrap();
-    let isle_source = String::from_utf8(bytes).unwrap();
-
-    // Round trip.
-    let lexer = Lexer::from_str(&isle_source, "<string>").unwrap();
-    let round_trip = parse_without_pos(lexer).unwrap();
-
-    // Ensure equal.
-    assert_eq!(original.defs.len(), round_trip.defs.len());
-    for (orig, rt) in std::iter::zip(original.defs, round_trip.defs) {
-        assert_eq!(orig, rt);
-    }
 }
 
 pub fn run_run(isle_filename: &str) {

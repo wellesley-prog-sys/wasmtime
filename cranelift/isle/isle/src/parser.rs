@@ -16,11 +16,8 @@ pub fn parse(lexer: Lexer) -> Result<Defs> {
 ///
 /// Takes in a lexer and creates an AST.
 #[derive(Clone, Debug)]
-pub struct Parser<'a> {
+struct Parser<'a> {
     lexer: Lexer<'a>,
-
-    /// Allow positions to be disabled to support testing
-    disable_pos: bool,
 }
 
 /// Used during parsing a `(rule ...)` to encapsulate some form that
@@ -34,15 +31,7 @@ enum IfLetOrExpr {
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
-        Parser {
-            lexer,
-            disable_pos: false,
-        }
-    }
-
-    /// Allow positions to be disabled to support testing
-    pub fn disable_pos(&mut self) {
-        self.disable_pos = true;
+        Parser { lexer }
     }
 
     fn error(&self, pos: Pos, msg: String) -> Errors {
@@ -87,13 +76,9 @@ impl<'a> Parser<'a> {
     }
 
     fn pos(&self) -> Pos {
-        if !self.disable_pos {
-            self.lexer
-                .peek()
-                .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
-        } else {
-            Pos::default()
-        }
+        self.lexer
+            .peek()
+            .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
     }
 
     fn is_lparen(&self) -> bool {
@@ -172,8 +157,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse ISLE definitions
-    pub fn parse_defs(mut self) -> Result<Defs> {
+    fn parse_defs(mut self) -> Result<Defs> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
