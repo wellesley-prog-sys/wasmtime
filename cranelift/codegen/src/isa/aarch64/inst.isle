@@ -1,4 +1,3 @@
-
 ;; Instruction formats.
 (type MInst
       (enum
@@ -3287,11 +3286,6 @@
 (rule (eon ty x y) (alu_rrr (ALUOp.EorNot) ty x y))
 
 ;; Helpers for generating `cnt` instructions.
-;; Supported sizes, for now
-;;0i8 VectorSize.Size8x8
-;;1i8 VectorSize.Size16x4
-;;2i8 VectorSize.Size32x2
-;; Helpers for generating `cnt` instructions.
 (spec (vec_cnt x s)
   (provide
     (= result
@@ -4439,17 +4433,6 @@
 (decl flags_and_cc (ProducesFlags IntCC) FlagsAndCC)
 (rule (flags_and_cc flags cc) (FlagsAndCC.FlagsAndCC flags cc))
 
-;; (model IntCC (enum
-;;     (Equal #x00)
-;;     (NotEqual #x01)
-;;     (SignedGreaterThan #x02)
-;;     (SignedGreaterThanOrEqual #x03)
-;;     (SignedLessThan #x04)
-;;     (SignedLessThanOrEqual #x05)
-;;     (UnsignedGreaterThan #x06)
-;;     (UnsignedGreaterThanOrEqual #x07)
-;;     (UnsignedLessThan #x08)
-;;     (UnsignedLessThanOrEqual #x09)))
 (spec (flags_and_cc_to_bool a)
       (provide
          (= result
