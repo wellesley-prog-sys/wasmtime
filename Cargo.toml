@@ -133,7 +133,7 @@ members = [
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
   "cranelift/isle/veri/veri_engine",
-    "cranelift/isle/veri/veri_ir",
+  "cranelift/isle/veri/veri_ir",
   "cranelift/serde",
   "crates/bench-api",
   "crates/c-api/artifact",

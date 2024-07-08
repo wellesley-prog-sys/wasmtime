@@ -23,8 +23,5 @@ vendor
 examples/build
 examples/.cache
 *.coredump
-<<<<<<< HEAD
 *.smt2
-=======
 crates/explorer/node_modules
->>>>>>> main
