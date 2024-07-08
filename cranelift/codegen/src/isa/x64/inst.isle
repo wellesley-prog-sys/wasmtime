@@ -1056,12 +1056,11 @@
              ;; the given MachLabel.
              (RipRelative (target MachLabel))))
 
-;; Model an Amode as a calculated 64-bit address.
-;; TODO: what is the right model for Amode?
-;; TODO: represent flags in Amode
+;; Model an Amode as a combination of flags and the calculated 64-bit address.
+;;   16 bits     64 bits
+;; [ flags  |    address    ]
 (model Amode (type (bv 80)))
 
-;; TODO: represent flags in Amode
 (spec (Amode.ImmReg simm base flags)
       (provide (= result (concat flags (bvadd base (sign_ext 64 simm)))))
       (require
@@ -1069,7 +1068,6 @@
         (= (widthof base) 64)
         (= (widthof flags) 16)))
 
-;; TODO: represent flags in Amode
 (spec (Amode.ImmRegRegShift simm base index shift flags)
   (provide
     (= result
@@ -1146,7 +1144,6 @@
 ;; In other words this function's job is to find constants and then defer to
 ;; `amode_imm_reg*`.
 ;;
-;; TODO: semantics of offset (sign extend or zero extend)?
 (spec (to_amode_add flags x y offset)
       (provide (= result (concat flags (bvadd (zero_ext 64 (bvadd x y)) (sign_ext 64 offset))))))
 (instantiate to_amode_add
@@ -4269,7 +4266,6 @@
             (inst MInst (MInst.Neg size src dst)))
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst dst)))
 
-;; Gpr: can we start this as just a new type, modeled as a 64 bit bitvecotr?
 (spec (x64_lea ty amode)
       (provide (= result amode))
       (require (or (= ty 32) (= ty 64))))
