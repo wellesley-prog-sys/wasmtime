@@ -108,7 +108,6 @@ use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
-use anyhow::anyhow;
 use core::any;
 use core::marker;
 use core::mem;
@@ -408,9 +407,7 @@ impl RootSet {
     /// Calls to `{enter,exit}_lifo_scope` must happen in a strict LIFO order.
     #[inline]
     pub(crate) fn enter_lifo_scope(&self) -> usize {
-        let len = self.lifo_roots.len();
-        log::debug!("Entering GC root set LIFO scope: {len}");
-        len
+        self.lifo_roots.len()
     }
 
     /// Exit a LIFO rooting scope.
@@ -420,8 +417,7 @@ impl RootSet {
     ///
     /// Calls to `{enter,exit}_lifo_scope` must happen in a strict LIFO order.
     #[inline]
-    pub(crate) fn exit_lifo_scope(&mut self, gc_store: &mut GcStore, scope: usize) {
-        log::debug!("Exiting GC root set LIFO scope: {scope}");
+    pub(crate) fn exit_lifo_scope(&mut self, gc_store: Option<&mut GcStore>, scope: usize) {
         debug_assert!(self.lifo_roots.len() >= scope);
 
         // If we actually have roots to unroot, call an out-of-line slow path.
@@ -432,7 +428,7 @@ impl RootSet {
 
     #[inline(never)]
     #[cold]
-    fn exit_lifo_scope_slow(&mut self, gc_store: &mut GcStore, scope: usize) {
+    fn exit_lifo_scope_slow(&mut self, mut gc_store: Option<&mut GcStore>, scope: usize) {
         self.lifo_generation += 1;
 
         // TODO: In the case where we have a tracing GC that doesn't need to
@@ -442,7 +438,13 @@ impl RootSet {
 
         let mut lifo_roots = mem::take(&mut self.lifo_roots);
         for root in lifo_roots.drain(scope..) {
-            gc_store.drop_gc_ref(root.gc_ref);
+            // Only drop the GC reference if we actually have a GC store. How
+            // can we have a GC reference but not a GC store? If we've only
+            // create `i31refs`, we never force a GC store's allocation. This is
+            // fine because `i31ref`s never need drop barriers.
+            if let Some(gc_store) = &mut gc_store {
+                gc_store.drop_gc_ref(root.gc_ref);
+            }
         }
         self.lifo_roots = lifo_roots;
     }

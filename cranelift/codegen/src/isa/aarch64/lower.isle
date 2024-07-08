@@ -515,8 +515,27 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (ty_scalar_float ty) (fma x y z)))
-       (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+(type IsFneg (enum (Result (negate u64) (value Value))))
+
+(decl pure is_fneg (Value) IsFneg)
+(rule 1 (is_fneg (fneg n)) (IsFneg.Result 1 n))
+(rule 0 (is_fneg n) (IsFneg.Result 0 n))
+
+(decl pure is_fneg_neg (IsFneg) u64)
+(rule (is_fneg_neg (IsFneg.Result n _)) n)
+
+(decl pure get_fneg_value (IsFneg) Value)
+(rule (get_fneg_value (IsFneg.Result _ v)) v)
+
+(decl fmadd_series (Type u64 Value Value Value) InstOutput)
+(rule 0 (fmadd_series (ty_scalar_float ty) 0 x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+(rule 0 (fmadd_series (ty_scalar_float ty) 1 x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
+
+(rule (lower (has_type (ty_scalar_float ty) (fma x_src y_src z)))
+  (let
+      ((x_res IsFneg (is_fneg x_src))
+       (y_res IsFneg (is_fneg y_src)))
+      (fmadd_series ty (u64_xor (is_fneg_neg x_res) (is_fneg_neg y_res)) (get_fneg_value x_res) (get_fneg_value y_res) z)))
 
 ;; Delegate vector-based lowerings to helpers below
 (rule 1 (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
@@ -1168,6 +1187,17 @@
                                              (u8_from_uimm8 lane)))))
       (value_regs (mov_from_vec (put_in_reg vec) lane (lane_size in)) (imm $I64 (ImmExtend.Zero) 0)))
 
+;; Zero extensions from a load can be encoded in the load itself
+(rule (lower (has_type (fits_in_64 _) (uextend x @ (has_type in_ty (load flags address offset)))))
+      (if-let inst (is_sinkable_inst x))
+      (let ((_ Unit (sink_inst inst)))
+            (aarch64_uload in_ty (amode in_ty address offset) flags)))
+
+(decl aarch64_uload (Type AMode MemFlags) Reg)
+(rule (aarch64_uload $I8 amode flags) (aarch64_uload8 amode flags))
+(rule (aarch64_uload $I16 amode flags) (aarch64_uload16 amode flags))
+(rule (aarch64_uload $I32 amode flags) (aarch64_uload32 amode flags))
+
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; General rule for extending input to an output which fits in a single
@@ -1215,6 +1245,17 @@
                                   (ScalarSize.Size64)))
             (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63))))
         (value_regs lo hi)))
+
+;; Signed extensions from a load can be encoded in the load itself
+(rule (lower (has_type (fits_in_64 _) (sextend x @ (has_type in_ty (load flags address offset)))))
+      (if-let inst (is_sinkable_inst x))
+      (let ((_ Unit (sink_inst inst)))
+            (aarch64_sload in_ty (amode in_ty address offset) flags)))
+
+(decl aarch64_sload (Type AMode MemFlags) Reg)
+(rule (aarch64_sload $I8 amode flags) (aarch64_sload8 amode flags))
+(rule (aarch64_sload $I16 amode flags) (aarch64_sload16 amode flags))
+(rule (aarch64_sload $I32 amode flags) (aarch64_sload32 amode flags))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2020,11 +2061,6 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))
-      (side_effect (udf trap_code)))
-
-;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
 
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

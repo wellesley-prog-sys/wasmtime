@@ -731,10 +731,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            &Inst::Call { .. }
-            | &Inst::CallInd { .. }
-            | &Inst::TrapIf { .. }
-            | &Inst::Udf { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } => true,
             _ => false,
         }
     }
@@ -847,8 +844,8 @@ impl MachInst for Inst {
     }
 
     fn worst_case_size() -> CodeOffset {
-        // calculate by test function riscv64_worst_case_instruction_size()
-        124
+        // Our worst case size is determined by the riscv64_worst_case_instruction_size test
+        84
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {

@@ -1115,15 +1115,35 @@
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (uextend val)))
   (zext val))
+
 (rule 1 (lower (has_type $I128 (uextend val)))
   (value_regs (zext val) (imm $I64 0)))
+
+;; When the source of an `uextend` is a load, we can merge both ops
+(rule 2 (lower (has_type (fits_in_64 _) (uextend (sinkable_load inst ty flags addr offset))))
+  (gen_sunk_load inst (amode addr offset) (uextend_load_op ty) flags))
+
+(decl pure uextend_load_op (Type) LoadOP)
+(rule (uextend_load_op $I8) (LoadOP.Lbu))
+(rule (uextend_load_op $I16) (LoadOP.Lhu))
+(rule (uextend_load_op $I32) (LoadOP.Lwu))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (sextend val @ (value_type in_ty))))
   (sext val))
+
 (rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
   (let ((lo XReg (sext val)))
     (value_regs lo (rv_srai lo (imm12_const 63)))))
+
+;; When the source of an `sextend` is a load, we can merge both ops
+(rule 2 (lower (has_type (fits_in_64 _) (sextend (sinkable_load inst ty flags addr offset))))
+  (gen_sunk_load inst (amode addr offset) (sextend_load_op ty) flags))
+
+(decl pure sextend_load_op (Type) LoadOP)
+(rule (sextend_load_op $I8) (LoadOP.Lb))
+(rule (sextend_load_op $I16) (LoadOP.Lh))
+(rule (sextend_load_op $I32) (LoadOP.Lw))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1534,11 +1554,21 @@
 (rule 1 (is_fneg (fneg x)) (IsFneg.Result 1 x))
 (rule 0 (is_fneg x) (IsFneg.Result 0 x))
 
+(decl pure is_fneg_neg (IsFneg) u64)
+(rule (is_fneg_neg (IsFneg.Result n _)) n)
+
+(decl pure get_fneg_value (IsFneg) Value)
+(rule (get_fneg_value (IsFneg.Result _ v)) v)
+
 (rule (lower (has_type ty (fma x_src y_src z_src)))
-  (if-let (IsFneg.Result neg_x x) (is_fneg x_src))
-  (if-let (IsFneg.Result neg_y y) (is_fneg y_src))
-  (if-let (IsFneg.Result neg_z z) (is_fneg z_src))
-  (rv_fma ty (u64_xor neg_x neg_y) neg_z x y z))
+  (let
+    ((x_res IsFneg (is_fneg x_src))
+     (y_res IsFneg (is_fneg y_src))
+     (z_res IsFneg (is_fneg z_src))
+     (x Value (get_fneg_value x_res))
+     (y Value (get_fneg_value y_res))
+     (z Value (get_fneg_value z_res)))
+    (rv_fma ty (u64_xor (is_fneg_neg x_res) (is_fneg_neg y_res)) (is_fneg_neg z_res) x y z)))
 
 ; parity arguments indicate whether to negate the x*y term or the z term, respectively
 (decl rv_fma (Type u64 u64 Value Value Value) InstOutput)
@@ -2007,11 +2037,6 @@
   (lower (trap code))
   (udf code))
 
-;;;;;  Rules for `resumable_trap`;;;;;;;;;
-(rule
-  (lower (resumable_trap code))
-  (udf code))
-
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags addr offset))
   (gen_load (amode addr offset) (LoadOP.Lbu) flags))
@@ -2450,19 +2475,24 @@
 
 ;; These rules should probably be handled in `gen_bitcast`, but it's convenient to have that return
 ;; a single register, instead of a `ValueRegs`
-(rule 2 (lower (has_type $I128 (bitcast _ v @ (value_type (ty_vec_fits_in_register _)))))
+(rule 3 (lower (has_type $I128 (bitcast _ v @ (value_type (ty_vec_fits_in_register _)))))
     (value_regs
       (gen_extractlane $I64X2 v 0)
       (gen_extractlane $I64X2 v 1)))
 
 ;; Move the high half into a vector register, and then use vslide1up to move it up and
 ;; insert the lower half in one instruction.
-(rule 1 (lower (has_type (ty_vec_fits_in_register _) (bitcast _ v @ (value_type $I128))))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _) (bitcast _ v @ (value_type $I128))))
     (let ((lo XReg (value_regs_get v 0))
           (hi XReg (value_regs_get v 1))
           (vstate VState (vstate_from_type $I64X2))
           (vec VReg (rv_vmv_sx hi vstate)))
       (rv_vslide1up_vx vec vec lo (unmasked) vstate)))
+
+;; `gen_bitcast` below only works with single register values, so handle I128
+;; specially here.
+(rule 1 (lower (has_type $I128 (bitcast _ v @ (value_type $I128))))
+   v)
 
 (rule 0 (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
    (gen_bitcast v in_ty out_ty))

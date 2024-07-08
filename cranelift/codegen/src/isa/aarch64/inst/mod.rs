@@ -1114,10 +1114,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            &Inst::Call { .. }
-            | &Inst::CallInd { .. }
-            | &Inst::TrapIf { .. }
-            | &Inst::Udf { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } => true,
             _ => false,
         }
     }
@@ -1806,6 +1803,7 @@ impl Inst {
             } => {
                 let op = match fpu_op {
                     FPUOp3::MAdd => "fmadd",
+                    FPUOp3::MSub => "fmsub",
                 };
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), size);
                 let rn = pretty_print_vreg_scalar(rn, size);
