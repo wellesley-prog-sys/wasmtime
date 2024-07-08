@@ -83,6 +83,7 @@ pub struct SolverCtx {
     pub additional_assertions: Vec<SExpr>,
     fresh_bits_idx: usize,
     load_return: Option<SExpr>,
+    store_return: Option<SExpr>,
     lhs_flag: bool,
 }
 
@@ -647,6 +648,7 @@ impl SolverCtx {
                             self.smt.true_()
                         }
                     }
+                    Type::Unit => self.smt.true_(),
                 }),
                 Terminal::True => val_state(self.smt.true_()),
                 Terminal::False => val_state(self.smt.false_()),
@@ -655,6 +657,7 @@ impl SolverCtx {
                     Type::BitVector(_) => self.new_fresh_bits(self.bitwidth),
                     Type::Int => self.new_fresh_int(),
                     Type::Bool => self.new_fresh_bool(),
+                    Type::Unit => self.smt.true_(),
                 }),
             },
             Expr::Unary(op, arg) => {
@@ -2012,6 +2015,7 @@ pub fn run_solver(
         additional_assertions: vec![],
         fresh_bits_idx: 0,
         load_return: None,
+        store_return: None,
         lhs_flag: true,
     };
 
@@ -2218,6 +2222,7 @@ pub fn run_solver_with_static_widths(
         additional_assertions: vec![],
         fresh_bits_idx: 0,
         load_return: None,
+        store_return: None,
         lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);
