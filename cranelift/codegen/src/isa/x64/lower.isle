@@ -2836,11 +2836,11 @@
 ;; 8-bit loads.
 ;;
 ;; By default, we zero-extend all sub-64-bit loads to a GPR.
-(rule -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
+(rule load_sub64_x64_movzx -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
 ;; But if we know that both the `from` and `to` are 64 bits, we simply load with
 ;; no extension.
-(rule -1 (lower (has_type (ty_int_ref_64 ty) (load flags address offset)))
+(rule load_64_x64_movzx -1 (lower (has_type (ty_int_ref_64 ty) (load flags address offset)))
       (x64_mov (to_amode flags address offset)))
 ;; Also, certain scalar loads have a specific `from` width and extension kind
 ;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit

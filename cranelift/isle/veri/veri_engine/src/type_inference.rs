@@ -379,6 +379,9 @@ fn add_annotation_constraints(
 ) -> (veri_ir::Expr, u32) {
     let (e, t) = match expr {
         annotation_ir::Expr::Var(x, ..) => {
+            if !annotation_info.var_to_type_var.contains_key(&x) {
+                panic!("Error: unbound variable: {}", x);
+            }
             let t = annotation_info.var_to_type_var[&x];
             let name = format!("{}__{}__{}", annotation_info.term, x, t);
             (veri_ir::Expr::Terminal(veri_ir::Terminal::Var(name)), t)

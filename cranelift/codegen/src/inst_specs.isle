@@ -236,8 +236,7 @@
 )
 (spec (load flags val offset)
     (provide 
-       (= result (load flags (widthof result) (bvadd val (sign_ext 64 offset)))))
-    (require (= 64 (widthof val))))
+       (= result (load flags (widthof result) (bvadd val (sign_ext 64 offset))))))
 (instantiate load load)
 
 (form store
