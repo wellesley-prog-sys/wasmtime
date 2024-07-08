@@ -8,6 +8,7 @@
 
 ;; `()`
 (type Unit (primitive Unit))
+(model Unit (type Unit))
 
 (decl pure unit () Unit)
 (extern constructor unit unit)
@@ -67,13 +68,11 @@
 
 ;; Pure/fallible constructor that tests if one u32 is less than or
 ;; equal to another.
-;; TODO(mbm): when it matches this returns Unit. For now assert a 1-bit value, but what's the right way to handle in provide?
 (spec (u32_lteq a b)
-    (provide (= result #b1))
+    (provide (= result ()))
     (require (<= a b)
              (= (widthof a) 32)
-             (= (widthof b) 32)
-             (= (widthof result) 1)))
+             (= (widthof b) 32)))
 (decl pure partial u32_lteq (u32 u32) Unit)
 (extern constructor u32_lteq u32_lteq)
 
