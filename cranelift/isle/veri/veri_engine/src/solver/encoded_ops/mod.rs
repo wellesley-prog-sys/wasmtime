@@ -37,11 +37,8 @@ mod tests {
             additional_assertions: vec![],
             fresh_bits_idx: 0,
             lhs_flag: true,
-            lhs_load_args: None,
-            rhs_load_args: None,
-            lhs_store_args: None,
-            rhs_store_args: None,
             load_return: None,
+            store_return: None,
         }
     }
 
