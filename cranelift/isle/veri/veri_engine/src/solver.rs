@@ -1439,6 +1439,7 @@ impl SolverCtx {
                     panic!("Multiple simultaneous loads unsupported")
                 }
                 let load_args = Some(vec![xstate.val, ystate.val, zstate.val]);
+                dbg!(load_args.clone()); 
 
                 // Dynamic widths case
                 if self.dynwidths {
@@ -2311,6 +2312,8 @@ pub fn run_solver_with_static_widths(
     };
 
     let mut load_conditions = vec![];
+    dbg!(&lhs.load_args); 
+    dbg!(&rhs.load_args);
     match (&lhs.load_args, &rhs.load_args) {
         (Some(_), Some(_)) => {
             let lhs_args_vec = lhs.load_args.clone().unwrap();
@@ -2320,7 +2323,8 @@ pub fn run_solver_with_static_widths(
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 load_conditions.push(arg_equal);
                 println!("\t{}", ctx.smt.display(arg_equal));
-                full_condition = ctx.smt.and(full_condition, arg_equal)
+                full_condition = ctx.smt.and(full_condition, arg_equal);
+                dbg!(&lhs.load_args); 
             }
             println!();
         }
@@ -2328,11 +2332,13 @@ pub fn run_solver_with_static_widths(
         (Some(_), None) => {
             println!("Verification failed");
             println!("Left hand side has load statement but right hand side does not.");
+            dbg!(&lhs.load_args); 
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
             println!("Verification failed");
             println!("Right hand side has load statement but left hand side does not.");
+            dbg!(&rhs.load_args); 
             return VerificationResult::Failure(Counterexample {});
         }
     }
