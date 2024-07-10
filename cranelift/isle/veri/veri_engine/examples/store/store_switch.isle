@@ -3,10 +3,10 @@
 
 (form
   lhs_form
-  ((args Bool (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))
-  ((args Bool (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
-  ((args Bool (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
-  ((args Bool (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+  ((args Bool (bv  8) (bv  8)) (ret Unit) (canon (bv  8)))
+  ((args Bool (bv 16) (bv 16)) (ret Unit) (canon (bv 16)))
+  ((args Bool (bv 32) (bv 32)) (ret Unit) (canon (bv 32)))
+  ((args Bool (bv 64) (bv 64)) (ret Unit) (canon (bv 64)))
 )
 (spec (lhs val1 val2 val3)
   (provide (= result (switch val1

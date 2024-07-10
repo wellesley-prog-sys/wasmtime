@@ -915,7 +915,6 @@ impl SolverCtx {
                             new_state.val = if arg_width < actual_width {
                                 let padding = self
                                     .new_fresh_bits(actual_width.checked_sub(arg_width).unwrap());
-                                dbg!(self.smt.display(padding).to_string());
                                 self.smt.concat(padding, ys.val)
                             } else {
                                 ys.val
@@ -1022,8 +1021,6 @@ impl SolverCtx {
                     let arg_width = self.static_width(&*y).unwrap();
                     let new_val = match ty {
                         Some(Type::BitVector(Some(w))) => {
-                            dbg!(w);
-                            dbg!(arg_width);
                             if arg_width < *w {
                                 let padding =
                                     self.new_fresh_bits(w.checked_sub(arg_width).unwrap());
@@ -1439,7 +1436,6 @@ impl SolverCtx {
                     panic!("Multiple simultaneous loads unsupported")
                 }
                 let load_args = Some(vec![xstate.val, ystate.val, zstate.val]);
-                // dbg!(load_args.clone()); 
 
                 // Dynamic widths case
                 if self.dynwidths {
@@ -2228,8 +2224,6 @@ pub fn run_solver_with_static_widths(
     let lhs = ctx.vir_expr_to_state(rule_sem.lhs.clone());
     ctx.lhs_flag = false;
     let rhs = ctx.vir_expr_to_state(rule_sem.rhs.clone());
-    dbg!(lhs.val.clone());
-    dbg!(rhs.val.clone());
     // Check whether the assumptions are possible
     let feasibility =
         ctx.check_assumptions_feasibility(&assumptions, &rule_sem.term_input_bvs, config);
@@ -2240,8 +2234,6 @@ pub fn run_solver_with_static_widths(
 
     // Correctness query
     // Verification condition: first rule's LHS and RHS are equal
-    dbg!(ctx.static_width(&rule_sem.lhs));
-    dbg!(ctx.static_width(&rule_sem.lhs));
     let width = match (
         ctx.static_width(&rule_sem.lhs),
         ctx.static_width(&rule_sem.rhs),
@@ -2303,7 +2295,6 @@ pub fn run_solver_with_static_widths(
     };
 
     for a in &ctx.additional_assertions {
-        dbg!(*a);
         assertions.push(*a);
     }
 
@@ -2316,8 +2307,6 @@ pub fn run_solver_with_static_widths(
     };
 
     let mut load_conditions = vec![];
-    dbg!(&lhs.load_args); 
-    dbg!(&rhs.load_args);
     match (&lhs.load_args, &rhs.load_args) {
         (Some(_), Some(_)) => {
             let lhs_args_vec = lhs.load_args.clone().unwrap();
@@ -2328,21 +2317,18 @@ pub fn run_solver_with_static_widths(
                 load_conditions.push(arg_equal);
                 println!("\t{}", ctx.smt.display(arg_equal));
                 full_condition = ctx.smt.and(full_condition, arg_equal);
-                dbg!(&lhs.load_args); 
             }
             println!();
         }
         (None, None) => (),
         (Some(_), None) => {
             println!("Verification failed");
-            println!("Left hand side has load statement but right hand side does not.");
-            dbg!(&lhs.load_args); 
+            println!("Left hand side has load statement but right hand side does not."); 
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
             println!("Verification failed");
             println!("Right hand side has load statement but left hand side does not.");
-            dbg!(&rhs.load_args); 
             return VerificationResult::Failure(Counterexample {});
         }
     }
