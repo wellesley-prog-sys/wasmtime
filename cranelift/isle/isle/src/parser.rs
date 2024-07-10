@@ -130,7 +130,7 @@ impl<'a> Parser<'a> {
 
     fn is_spec_bool(&self) -> bool {
         self.is(|tok| match tok {
-            Token::Symbol(tok_s) if tok_s == "true" || tok_s == "false" => true,
+            Token::Symbol(ref tok_s) if tok_s == "true" || tok_s == "false" => true,
             _ => false,
         })
     }
@@ -427,7 +427,7 @@ impl<'a> Parser<'a> {
             })
         } else if self.is_spec_bool() {
             let val = self.parse_spec_bool()?;
-            Ok(SpecExpr::ConstBool { val, pos })
+            dbg!(Ok(SpecExpr::ConstBool { val, pos }))
         } else if self.is_sym() {
             let var = self.parse_ident()?;
             Ok(SpecExpr::Var { var, pos })

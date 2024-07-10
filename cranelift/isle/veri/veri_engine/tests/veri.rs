@@ -3511,3 +3511,27 @@ fn test_load_conditional() {
             ],
     );
 }
+
+#[test]
+fn test_store_switch() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/store/store_switch.isle",
+        "lhs".to_string(),
+        vec![
+                (Bitwidth::I8, VerificationResult::Success),
+                (Bitwidth::I16, VerificationResult::Success),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
+    );
+}
+
+#[test]
+#[should_panic]
+fn test_load_add_panic() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/load/load_add_panic.isle",
+        "lhs".to_string(),
+        all_failure_result(),
+    );
+}
