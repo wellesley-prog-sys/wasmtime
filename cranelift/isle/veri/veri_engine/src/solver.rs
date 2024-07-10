@@ -911,7 +911,6 @@ impl SolverCtx {
                             new_state.val = if arg_width < actual_width {
                                 let padding = self
                                     .new_fresh_bits(actual_width.checked_sub(arg_width).unwrap());
-                                dbg!(self.smt.display(padding).to_string());
                                 self.smt.concat(padding, ys.val)
                             } else {
                                 ys.val
@@ -1018,8 +1017,6 @@ impl SolverCtx {
                     let arg_width = self.static_width(&*y).unwrap();
                     let new_val = match ty {
                         Some(Type::BitVector(Some(w))) => {
-                            dbg!(w);
-                            dbg!(arg_width);
                             if arg_width < *w {
                                 let padding =
                                     self.new_fresh_bits(w.checked_sub(arg_width).unwrap());

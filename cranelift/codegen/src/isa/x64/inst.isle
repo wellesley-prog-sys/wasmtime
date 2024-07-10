@@ -1145,10 +1145,10 @@
 ;; `amode_imm_reg*`.
 ;;
 (spec (to_amode_add flags x y offset)
-      (provide (= result (concat flags (bvadd (zero_ext 64 (bvadd x y)) (sign_ext 64 offset))))))
+      (provide (= result (concat flags (bvadd (bvadd (sign_ext 64 x) (sign_ext 64 y)) (sign_ext 64 offset))))))
 (instantiate to_amode_add
     ((args (bv 16) (bv 32) (bv 32) (bv 32)) (ret (bv 80)) (canon (bv 32)))
-    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
+    ((args (bv 16) (bv 32) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
@@ -1176,7 +1176,7 @@
 ;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
 ;; otherwise falls back on `ImmReg`.
 (spec (amode_imm_reg flags x offset)
-      (provide (= result (concat flags (bvadd (zero_ext 64 x) (sign_ext 64 offset))))))
+      (provide (= result (concat flags (bvadd (sign_ext 64 x) (sign_ext 64 offset))))))
 (instantiate amode_imm_reg
     ((args (bv 16) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl amode_imm_reg (MemFlags Value Offset32) Amode)
