@@ -1439,7 +1439,7 @@ impl SolverCtx {
                     panic!("Multiple simultaneous loads unsupported")
                 }
                 let load_args = Some(vec![xstate.val, ystate.val, zstate.val]);
-                dbg!(load_args.clone()); 
+                // dbg!(load_args.clone()); 
 
                 // Dynamic widths case
                 if self.dynwidths {
@@ -2228,7 +2228,8 @@ pub fn run_solver_with_static_widths(
     let lhs = ctx.vir_expr_to_state(rule_sem.lhs.clone());
     ctx.lhs_flag = false;
     let rhs = ctx.vir_expr_to_state(rule_sem.rhs.clone());
-
+    dbg!(lhs.val.clone());
+    dbg!(rhs.val.clone());
     // Check whether the assumptions are possible
     let feasibility =
         ctx.check_assumptions_feasibility(&assumptions, &rule_sem.term_input_bvs, config);
@@ -2239,6 +2240,8 @@ pub fn run_solver_with_static_widths(
 
     // Correctness query
     // Verification condition: first rule's LHS and RHS are equal
+    dbg!(ctx.static_width(&rule_sem.lhs));
+    dbg!(ctx.static_width(&rule_sem.lhs));
     let width = match (
         ctx.static_width(&rule_sem.lhs),
         ctx.static_width(&rule_sem.rhs),
@@ -2300,6 +2303,7 @@ pub fn run_solver_with_static_widths(
     };
 
     for a in &ctx.additional_assertions {
+        dbg!(*a);
         assertions.push(*a);
     }
 
