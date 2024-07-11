@@ -583,12 +583,10 @@ impl SolverCtx {
                 },
                 Terminal::Const(i, _) => match ty.unwrap() {
                     Type::BitVector(w) => {
-                        let var = *tyvar.unwrap();
                         let width = w.unwrap_or(self.bitwidth);
                         let narrow_decl = self.bv(i, width);
                         if self.dynwidths {
                             self.zero_extend(self.bitwidth - width, narrow_decl)
-                            // self.widen_to_register_width(var, width, narrow_decl, None)
                         } else {
                             narrow_decl
                         }
