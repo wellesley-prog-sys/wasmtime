@@ -2375,21 +2375,26 @@
 
 (decl x64_movzx (ExtMode GprMem) Gpr)
 (spec (x64_movzx mode src)
-      (provide (= result (switch mode 
-                  ((ExtMode.BL) (conv_to 64 (zero_ext 24 (load (extract 79 64 src) 8 (extract 63 0 src)))))
-                  ((ExtMode.BQ) (conv_to 64 (zero_ext 56 (load (extract 79 64 src) 8 (extract 63 0 src)))))
-                  ((ExtMode.WL) (conv_to 64 (zero_ext 16 (load (extract 79 64 src) 16 (extract 63 0 src)))))
-                  ((ExtMode.WQ) (conv_to 64 (zero_ext 48 (load (extract 79 64 src) 16 (extract 63 0 src)))))
-                  ((ExtMode.LQ) (conv_to 64 (zero_ext 32 (load (extract 79 64 src) 32 (extract 63 0 src)))))
-                  )
-            )
-      )
+      (provide 
+            (= result 
+                  (conv_to 
+                        64  
+                        (zero_ext
+                              32
+                              (load 
+                                    (extract 79 64 src)
+                                    (switch mode 
+                                          ((ExtMode.BL) 8)
+                                          ((ExtMode.BQ) 8)
+                                          ((ExtMode.WL) 16)
+                                          ((ExtMode.WQ) 16)
+                                          ((ExtMode.LQ) 32))
+                                    (extract 63 0 src))))))
       (require (or (= mode (ExtMode.BL))
                   (= mode (ExtMode.BQ))
                   (= mode (ExtMode.WL))
                   (= mode (ExtMode.WQ))
-                  (= mode (ExtMode.LQ))))  
-)
+                  (= mode (ExtMode.LQ)))))
 (rule (x64_movzx mode src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))

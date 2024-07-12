@@ -630,11 +630,10 @@ impl SolverCtx {
                 }),
                 Terminal::Const(i, _) => val_state(match ty.unwrap() {
                     Type::BitVector(w) => {
-                        let var = *tyvar.unwrap();
                         let width = w.unwrap_or(self.bitwidth);
                         let narrow_decl = self.bv(i, width);
                         if self.dynwidths {
-                            self.widen_to_register_width(var, width, narrow_decl, None)
+                            self.zero_extend(self.bitwidth - width, narrow_decl)
                         } else {
                             narrow_decl
                         }
@@ -1442,16 +1441,16 @@ impl SolverCtx {
 
                 // Dynamic widths case
                 if self.dynwidths {
-                    self.width_assumptions
-                        .push(self.smt.eq(width.unwrap(), ystate.val));
-                    if self.lhs_flag {
-                        let val = self.new_fresh_bits(self.bitwidth);
-                        self.load_return = Some(val);
-                        return State {
-                            val,
-                            load_args,
-                            ..xstate
-                        };
+                    self.width_assumptions.push(self.smt.eq(width.unwrap(), ey));
+                }
+
+                if self.lhs_flag {
+                    if self.lhs_load_args.is_some() {
+                        panic!("Only one load on the LHS currently supported, found multiple.")
+                    }
+                    self.lhs_load_args = Some(vec![ex, ey, ez]);
+                    let load_ret = if self.dynwidths {
+                        self.new_fresh_bits(self.bitwidth)
                     } else {
                         return State {
                             val: self.load_return.unwrap(),
@@ -1498,19 +1497,11 @@ impl SolverCtx {
                         ..xstate
                     };
                 } else {
-                    // On this side, extract the correct bits here too
-                    let val = self.smt.extract(
-                        <usize as std::convert::TryInto<i32>>::try_into(static_expr_width.unwrap())
-                            .unwrap()
-                            - 1,
-                        0,
-                        self.load_return.unwrap(),
-                    );
-                    return State {
-                        val,
-                        load_args,
-                        ..xstate
-                    };
+                    if self.rhs_load_args.is_some() {
+                        panic!("Only one load on the RHS currently supported, found miltiple.")
+                    }
+                    self.rhs_load_args = Some(vec![ex, ey, ez]);
+                    self.load_return.unwrap()
                 }
             }
             Expr::Store(w, x, y, z) => {
@@ -2037,7 +2028,7 @@ pub fn run_solver(
                         ctx.width_assumptions.push(eq);
                     }
                     None => {
-                        // println!("Unresolved width: {:?} ({})", &e, *t);
+                        println!("Unresolved width: {:?} ({})", &_e, *t);
                         // Assume the width is greater than 0
                         ctx.width_assumptions
                             .push(ctx.smt.gt(ctx.smt.atom(&width_name), ctx.smt.numeral(0)));

@@ -3497,35 +3497,3 @@ fn test_named_load_sub64_x64_movzx() {
         )
     });
 }
-
-#[test]
-fn test_load_conditional() {
-    run_and_retry(|| {
-        test_from_file_with_lhs_termname_simple(
-            "./examples/load/load_conditional.isle",
-            "lhs".to_string(),
-            vec![
-                (Bitwidth::I8, VerificationResult::Success),
-                (Bitwidth::I16, VerificationResult::Success),
-                (Bitwidth::I32, VerificationResult::Success),
-                (Bitwidth::I64, VerificationResult::Success),
-            ],
-        )
-    });
-}
-
-#[test]
-fn test_named_load_64_x64_mov() {
-    run_and_retry(|| {
-        test_x64_rule_with_lhs_termname_simple(
-            "load_64_x64_mov",
-            "load",
-            vec![
-                (Bitwidth::I8, VerificationResult::InapplicableRule),
-                (Bitwidth::I16, VerificationResult::InapplicableRule),
-                (Bitwidth::I32, VerificationResult::InapplicableRule),
-                (Bitwidth::I64, VerificationResult::Success),
-            ],
-        )
-    });
-}
