@@ -554,7 +554,9 @@ impl SolverCtx {
     pub fn assume_comparable_types(&mut self, x: &Expr, y: &Expr) {
         match (self.get_type(x), self.get_type(y)) {
             (None, _) | (_, None) => panic!("Missing type(s) {:?} {:?}", x, y),
-            (Some(Type::Bool), Some(Type::Bool)) | (Some(Type::Int), Some(Type::Int)) => (),
+            (Some(Type::Bool), Some(Type::Bool)) 
+            | (Some(Type::Int), Some(Type::Int))
+            | (Some(Type::Unit), Some(Type::Unit))  => (),
             (Some(Type::BitVector(Some(xw))), Some(Type::BitVector(Some(yw)))) => {
                 assert_eq!(xw, yw, "incompatible {:?} {:?}", x, y)
             }
@@ -1279,12 +1281,13 @@ impl SolverCtx {
             Expr::Store(w, x, y, z) => {
                 let ew = self.vir_expr_to_sexp(*w);
                 let ex = self.vir_expr_to_sexp(*x);
-                let ey = self.vir_expr_to_sexp(*y);
                 let ez = self.vir_expr_to_sexp(*z);
 
                 if self.dynwidths {
-                    self.width_assumptions.push(self.smt.eq(width.unwrap(), ex));
+                    let y_width = self.get_expr_width_var(&y).unwrap();
+                    self.width_assumptions.push(self.smt.eq(y_width, ex));
                 }
+                let ey = self.vir_expr_to_sexp(*y);
 
                 if self.lhs_flag {
                     self.lhs_store_args = Some(vec![ew, ex, ey, ez]);
@@ -2107,6 +2110,7 @@ pub fn run_solver_with_static_widths(
             let lhs_args_vec = ctx.lhs_store_args.clone().unwrap();
             let rhs_args_vec = ctx.rhs_store_args.clone().unwrap();
             println!("Store argument conditions:");
+
             for i in 0..lhs_args_vec.len() {
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 store_conditions.push(arg_equal);
