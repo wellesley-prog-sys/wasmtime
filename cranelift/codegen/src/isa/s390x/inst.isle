@@ -1891,8 +1891,6 @@
 
 ;; Sinkable big-endian load instruction.
 (decl sinkable_load (Inst) Value)
-(spec (sinkable_load inst)
-      )
 (extractor (sinkable_load inst)
            (sinkable_inst (and inst (load (bigendian) _addr _offset))))
 
