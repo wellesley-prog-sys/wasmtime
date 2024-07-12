@@ -1,6 +1,7 @@
 ;; Instruction formats.
 (type MInst (enum))
 
+;; Conditional with 2 loads spec
 (form
   lhs_form
   ((args Bool (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))

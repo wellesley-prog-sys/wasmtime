@@ -1,6 +1,7 @@
 ;; Instruction formats
 (type MInst (enum))
 
+;; Switch with 2 stores spec
 (form
   lhs_form
   ((args Bool (bv  8) (bv  8)) (ret Unit) (canon (bv  8)))
