@@ -1848,6 +1848,8 @@
 ;; instructions which load exactly the type width necessary use
 ;; `sinkable_load_exact`.
 (decl sinkable_load (SinkableLoad) Value)
+(spec (sinkable_load inst) 
+      (provide (= result inst)))
 (extern extractor sinkable_load sinkable_load)
 
 ;; Same as `sinkable_load` except that all type widths of loads are supported.
@@ -1880,6 +1882,8 @@
 (rule (sink_load_to_gpr_mem load) (RegMem.Mem load))
 
 (decl sink_load_to_reg_mem_imm (SinkableLoad) RegMemImm)
+(spec (sink_load_to_reg_mem_imm load) 
+      (provide (= result load)))
 (rule (sink_load_to_reg_mem_imm load) (RegMemImm.Mem load))
 
 ;;;; Helpers for constructing and emitting an `MInst` ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4624,12 +4628,11 @@
 (spec (x64_add_mem ty addr val)
       (provide (= result (store 
                         (extract 79 64 addr) 
-                        ty (bvadd (load (extract 79 64 addr) ty (extract 63 0 addr)) val) 
+                        ty (conv_to ty (bvadd (load (extract 79 64 addr) ty (extract 63 0 addr)) val)) 
                         (extract 63 0 addr))
             )
       )
-      (require (or (= ty 32
-      )))
+       (require (or (= ty 32) (= ty 64))) 
 )
 (rule (x64_add_mem ty addr val)
       (alu_rm ty (AluRmiROpcode.Add) addr val))
