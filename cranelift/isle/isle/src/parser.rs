@@ -174,7 +174,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_defs(mut self) -> Result<Defs> {
+    pub fn parse_defs(mut self) -> Result<Defs> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
