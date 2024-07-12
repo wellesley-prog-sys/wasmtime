@@ -34,7 +34,7 @@ pub struct State {
     store_args: Option<Vec<SExpr>>,
 }
 
-/// Returns a State struct with the val field set to the provided SExpr and the 
+/// Returns a State struct with the val field set to the provided SExpr and the
 /// remaining fields set to None
 pub fn val_state(val: SExpr) -> State {
     State {
@@ -53,7 +53,7 @@ pub fn merge_states_assert_lone(val: SExpr, states: Vec<State>) -> State {
     // Same logic for store_args
     let mut new_state = val_state(val);
     let mut set_load_arg = None;
-    
+
     for state in states.iter() {
         match (set_load_arg.is_none(), state.load_args.is_some()) {
             (true, true) => {
@@ -66,7 +66,7 @@ pub fn merge_states_assert_lone(val: SExpr, states: Vec<State>) -> State {
         }
     }
 
-    return new_state
+    return new_state;
 }
 
 pub struct SolverCtx {
@@ -83,7 +83,6 @@ pub struct SolverCtx {
     pub additional_assertions: Vec<SExpr>,
     fresh_bits_idx: usize,
     load_return: Option<SExpr>,
-    store_return: Option<SExpr>,
     lhs_flag: bool,
 }
 
@@ -688,7 +687,8 @@ impl SolverCtx {
                 let xs = self.vir_expr_to_state(*(x.clone()));
                 let ys = self.vir_expr_to_state(*(y.clone()));
 
-                let mut new_state = merge_states_assert_lone(xs.val.clone(), vec![xs.clone(), ys.clone()]);
+                let mut new_state =
+                    merge_states_assert_lone(xs.val.clone(), vec![xs.clone(), ys.clone()]);
 
                 let xval = xs.val;
                 let yval = ys.val;
@@ -735,7 +735,8 @@ impl SolverCtx {
                                     "rotate_left",
                                 );
                             }
-                        }
+                        };
+                        return new_state;
                     }
                     BinaryOp::BVRotr => {
                         let source_width = self.static_width(&*x);
@@ -752,7 +753,8 @@ impl SolverCtx {
                                     "rotate_right",
                                 );
                             }
-                        }
+                        };
+                        return new_state;
                     }
                     // To shift right, we need to make sure the bits to the right get zeroed. Shift left first.
                     BinaryOp::BVShr => {
@@ -788,7 +790,8 @@ impl SolverCtx {
                             new_state.val = self.smt.bvlshr(shl_to_zero, amt_plus_extra);
                         } else {
                             new_state.val = self.smt.bvlshr(xval, yval);
-                        }
+                        };
+                        return new_state;
                     }
                     BinaryOp::BVAShr => {
                         let arg_width = if self.dynwidths {
@@ -821,7 +824,8 @@ impl SolverCtx {
                             new_state.val = self.smt.bvashr(shl_to_zero, amt_plus_extra);
                         } else {
                             new_state.val = self.smt.bvashr(xval, yval);
-                        }
+                        };
+                        return new_state;
                     }
                     _ => (),
                 };
@@ -909,8 +913,8 @@ impl SolverCtx {
                             let ys = self.vir_expr_to_state(*y);
                             let mut new_state = State { ..ys };
                             new_state.val = if arg_width < actual_width {
-                                let padding =
-                                    self.new_fresh_bits(actual_width.checked_sub(arg_width).unwrap());
+                                let padding = self
+                                    .new_fresh_bits(actual_width.checked_sub(arg_width).unwrap());
                                 dbg!(self.smt.display(padding).to_string());
                                 self.smt.concat(padding, ys.val)
                             } else {
@@ -947,7 +951,8 @@ impl SolverCtx {
                 let arg_width = self.get_expr_width_var(&*x);
                 let is = self.vir_expr_to_state(*i);
                 let xs = self.vir_expr_to_state(*x);
-                let mut new_state = merge_states_assert_lone(is.val.clone(), vec![is.clone(), xs.clone()]);
+                let mut new_state =
+                    merge_states_assert_lone(is.val.clone(), vec![is.clone(), xs.clone()]);
 
                 if self.dynwidths {
                     let expr_width = width.unwrap().clone();
@@ -989,8 +994,9 @@ impl SolverCtx {
                 let arg_width = self.get_expr_width_var(&*x);
                 let is = self.vir_expr_to_state(*i);
                 let xs = self.vir_expr_to_state(*x);
-                let mut new_state = merge_states_assert_lone(is.val.clone(), vec![is.clone(), xs.clone()]);
-                
+                let mut new_state =
+                    merge_states_assert_lone(is.val.clone(), vec![is.clone(), xs.clone()]);
+
                 if self.dynwidths {
                     let expr_width = width.unwrap().clone();
                     self.width_assumptions.push(self.smt.eq(expr_width, is.val));
@@ -1037,39 +1043,40 @@ impl SolverCtx {
                     let ys = self.vir_expr_to_state(*y);
                     let xs = self.vir_expr_to_state(*x);
                     let mut new_state = State {
-                        val: new_val, ..ys.clone()
+                        val: new_val,
+                        ..ys.clone()
                     };
-            
+
                     let x_has_load = xs.load_args.is_some();
                     let y_has_load = ys.load_args.is_some();
                     match (x_has_load, y_has_load) {
-                        (false, false) | (false, true)  => (),
+                        (false, false) | (false, true) => (),
                         (true, false) => {
                             new_state.load_args = xs.load_args;
                         }
                         (true, true) => panic!("Multiple simultaneous loads unsupported"),
                     }
-            
-                    return new_state
+
+                    return new_state;
                 }
             }
             Expr::WidthOf(x) => {
                 let xs = self.vir_expr_to_state(*(x.clone()));
-                let mut new_state = State {..xs};
+                let mut new_state = State { ..xs };
 
                 new_state.val = if self.dynwidths {
                     self.get_expr_width_var(&*x).unwrap().clone()
                 } else {
                     self.smt.numeral(self.static_width(&*x).unwrap())
-                }; 
+                };
 
-                return new_state
+                return new_state;
             }
             Expr::BVExtract(i, j, x) => {
                 assert!(i >= j);
                 if self.get_type(&x).is_some() {
                     let xs = self.vir_expr_to_state(*x);
-                    let mut new_state = State {..xs.clone()};
+                    let mut new_state = State { ..xs.clone() };
                     // No-op if we are extracting exactly the full bitwidth
                     if j == 0 && i == self.bitwidth - 1 && self.dynwidths {
                         return xs;
@@ -1085,7 +1092,7 @@ impl SolverCtx {
                     } else {
                         extract
                     };
-                    return new_state
+                    return new_state;
                 } else {
                     unreachable!("Must perform extraction on bv with known width")
                 }
@@ -1109,14 +1116,20 @@ impl SolverCtx {
                     (None, None) => None,
                     (Some(t_args), None) => Some(t_args),
                     (None, Some(e_args)) => Some(e_args),
-                    (Some(t_args), Some(e_args)) => {
-                        Some(t_args.iter().zip(e_args.iter()).map(|(t_arg, e_arg)| {
-                            self.smt.ite(cs.val, *t_arg, *e_arg)
-                        }).collect())
-                    }
+                    (Some(t_args), Some(e_args)) => Some(
+                        t_args
+                            .iter()
+                            .zip(e_args.iter())
+                            .map(|(t_arg, e_arg)| self.smt.ite(cs.val, *t_arg, *e_arg))
+                            .collect(),
+                    ),
                 };
-            
-                return State { val, load_args, ..cs };
+
+                return State {
+                    val,
+                    load_args,
+                    ..cs
+                };
             }
             Expr::Switch(c, cases) => {
                 if self.dynwidths {
@@ -1172,7 +1185,11 @@ impl SolverCtx {
                                     .collect(),
                             }),
                         });
-                return State { val, load_args, ..cs };
+                return State {
+                    val,
+                    load_args,
+                    ..cs
+                };
             }
             Expr::CLZ(e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1180,7 +1197,7 @@ impl SolverCtx {
                     self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }
                 let es = self.vir_expr_to_state(*e);
-                let mut new_state = State {..es};
+                let mut new_state = State { ..es };
                 new_state.val = match static_expr_width {
                     Some(1) => clz::clz1(self, es.val, tyvar),
                     Some(8) => clz::clz8(self, es.val, tyvar),
@@ -1191,7 +1208,7 @@ impl SolverCtx {
                     None => unreachable!("Need static CLZ width"),
                 };
 
-                return new_state
+                return new_state;
             }
             Expr::A64CLZ(ty, e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1199,7 +1216,7 @@ impl SolverCtx {
                     self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }
                 let es = self.vir_expr_to_state(*e);
-                let mut new_state = State {..es};
+                let mut new_state = State { ..es };
 
                 let val = self.get_expr_value(&*ty);
                 new_state.val = match val {
@@ -1217,7 +1234,7 @@ impl SolverCtx {
                     }
                 };
 
-                return new_state
+                return new_state;
             }
             Expr::CLS(e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1225,7 +1242,7 @@ impl SolverCtx {
                     self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }
                 let es = self.vir_expr_to_state(*e);
-                let mut new_state = State {..es};
+                let mut new_state = State { ..es };
 
                 new_state.val = match static_expr_width {
                     Some(1) => cls::cls1(self, tyvar),
@@ -1237,7 +1254,7 @@ impl SolverCtx {
                     None => unreachable!("Need static CLS width"),
                 };
 
-                return new_state
+                return new_state;
             }
             Expr::A64CLS(ty, e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1245,7 +1262,7 @@ impl SolverCtx {
                     self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }
                 let es = self.vir_expr_to_state(*e);
-                let mut new_state = State {..es};
+                let mut new_state = State { ..es };
 
                 let val = self.get_expr_value(&*ty);
                 new_state.val = match val {
@@ -1263,7 +1280,7 @@ impl SolverCtx {
                     }
                 };
 
-                return new_state
+                return new_state;
             }
             Expr::Rev(e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1271,7 +1288,7 @@ impl SolverCtx {
                     self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }
                 let es = self.vir_expr_to_state(*e);
-                let mut new_state = State {..es};
+                let mut new_state = State { ..es };
 
                 new_state.val = match static_expr_width {
                     Some(1) => rev::rev1(self, es.val, tyvar),
@@ -1283,7 +1300,7 @@ impl SolverCtx {
                     None => unreachable!("Need static CLS width"),
                 };
 
-                return new_state
+                return new_state;
             }
             Expr::A64Rev(ty, e) => {
                 let tyvar = *tyvar.unwrap();
@@ -1291,7 +1308,7 @@ impl SolverCtx {
                     self.assume_same_width_from_sexpr(width.unwrap(), &*e);
                 }
                 let es = self.vir_expr_to_state(*e);
-                let mut new_state = State {..es};
+                let mut new_state = State { ..es };
 
                 let val = self.get_expr_value(&*ty);
                 new_state.val = match val {
@@ -1309,7 +1326,7 @@ impl SolverCtx {
                     }
                 };
 
-                return new_state
+                return new_state;
             }
             Expr::BVSubs(ty, x, y) => {
                 let tyvar = *tyvar.unwrap();
@@ -1320,7 +1337,8 @@ impl SolverCtx {
                 let ex = self.vir_expr_to_state(*x);
                 let ey = self.vir_expr_to_state(*y);
 
-                let mut new_state = merge_states_assert_lone(ex.val.clone(), vec![ex.clone(), ey.clone()]);
+                let mut new_state =
+                    merge_states_assert_lone(ex.val.clone(), vec![ex.clone(), ey.clone()]);
 
                 let encoded_32 = subs::subs(self, 32, ex.val, ey.val, tyvar);
                 let encoded_64 = subs::subs(self, 64, ex.val, ey.val, tyvar);
@@ -1331,7 +1349,7 @@ impl SolverCtx {
                     encoded_64,
                 );
 
-                return new_state
+                return new_state;
             }
             Expr::BVPopcnt(x) => {
                 let tyvar = *tyvar.unwrap();
@@ -1339,7 +1357,7 @@ impl SolverCtx {
                     self.assume_same_width_from_sexpr(width.unwrap(), &*x);
                 }
                 let ex = self.vir_expr_to_state(*x);
-                let mut new_state = State {..ex};
+                let mut new_state = State { ..ex };
 
                 new_state.val = match static_expr_width {
                     Some(8) => {
@@ -1378,7 +1396,7 @@ impl SolverCtx {
                     None => unreachable!("Need static popcnt width"),
                 };
 
-                return new_state
+                return new_state;
             }
             Expr::BVConcat(xs) => {
                 if self.dynwidths {
@@ -1394,7 +1412,7 @@ impl SolverCtx {
                     .iter()
                     .map(|x| self.vir_expr_to_state(x.clone()))
                     .collect();
-                let mut values : Vec<SExpr> = states.iter().map(|x| x.val).collect();
+                let mut values: Vec<SExpr> = states.iter().map(|x| x.val).collect();
                 let last = values.remove(values.len() - 1);
 
                 // AVH TODO: better solution for the width case
@@ -1451,17 +1469,15 @@ impl SolverCtx {
                     //  something like self.smt.extract(static_expr_width.unwrap(), 0, load_ret)
                     // if statments in this whole section might need to change
                     let val = match self.load_return {
-                        Some(_) => {
-                            self.smt.extract(
-                                <usize as std::convert::TryInto<i32>>::try_into(
-                                    static_expr_width.unwrap(),
-                                )
-                                .unwrap()
-                                    - 1,
-                                0,
-                                self.load_return.unwrap(),
+                        Some(_) => self.smt.extract(
+                            <usize as std::convert::TryInto<i32>>::try_into(
+                                static_expr_width.unwrap(),
                             )
-                        }
+                            .unwrap()
+                                - 1,
+                            0,
+                            self.load_return.unwrap(),
+                        ),
                         None => {
                             let load_ret = self.new_fresh_bits(self.bitwidth);
                             self.load_return = Some(load_ret);
@@ -1513,32 +1529,15 @@ impl SolverCtx {
                 let store_args = Some(vec![wstate.val, xstate.val, ystate.val, zstate.val]);
 
                 if self.dynwidths {
-                    self.width_assumptions.push(self.smt.eq(width.unwrap(), xstate.val));
+                    self.width_assumptions
+                        .push(self.smt.eq(width.unwrap(), xstate.val));
                 }
 
-                if self.lhs_flag {
-                    let store_ret = if self.dynwidths {
-                        self.new_fresh_bits(self.bitwidth)
-                    } else {
-                        self.new_fresh_bits(static_expr_width.unwrap())
-                    };
-                    self.store_return = Some(store_ret);
-                    let val = store_ret;
-
-                    return State {
-                        val,
-                        store_args,
-                        ..xstate
-                    };
-                } else {
-                    let val = self.store_return.unwrap();
-
-                    return State {
-                        val,
-                        store_args,
-                        ..xstate
-                    };
-                }
+                return State {
+                    val: self.smt.true_(),
+                    store_args,
+                    ..xstate
+                };
             }
         }
     }
@@ -2015,7 +2014,6 @@ pub fn run_solver(
         additional_assertions: vec![],
         fresh_bits_idx: 0,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
 
@@ -2222,7 +2220,6 @@ pub fn run_solver_with_static_widths(
         additional_assertions: vec![],
         fresh_bits_idx: 0,
         load_return: None,
-        store_return: None,
         lhs_flag: true,
     };
     let (assumptions, mut assertions) = ctx.declare_variables(&rule_sem, config);

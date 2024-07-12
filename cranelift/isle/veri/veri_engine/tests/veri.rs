@@ -3513,3 +3513,19 @@ fn test_load_conditional() {
         )
     });
 }
+
+#[test]
+fn test_named_load_64_x64_mov() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "load_64_x64_mov",
+            "load",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::InapplicableRule),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
+        )
+    });
+}
