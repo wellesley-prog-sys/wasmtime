@@ -554,9 +554,9 @@ impl SolverCtx {
     pub fn assume_comparable_types(&mut self, x: &Expr, y: &Expr) {
         match (self.get_type(x), self.get_type(y)) {
             (None, _) | (_, None) => panic!("Missing type(s) {:?} {:?}", x, y),
-            (Some(Type::Bool), Some(Type::Bool)) 
+            (Some(Type::Bool), Some(Type::Bool))
             | (Some(Type::Int), Some(Type::Int))
-            | (Some(Type::Unit), Some(Type::Unit))  => (),
+            | (Some(Type::Unit), Some(Type::Unit)) => (),
             (Some(Type::BitVector(Some(xw))), Some(Type::BitVector(Some(yw)))) => {
                 assert_eq!(xw, yw, "incompatible {:?} {:?}", x, y)
             }
@@ -2094,7 +2094,7 @@ pub fn run_solver_with_static_widths(
         (None, None) => (),
         (Some(_), None) => {
             println!("Verification failed");
-            println!("Left hand side has load statement but right hand side does not."); 
+            println!("Left hand side has load statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {

@@ -2097,14 +2097,16 @@ fn create_parse_tree_pattern(
                     ));
 
                     // If this is a bitvector, mark the name for the assumption feasibility check
-                    if let Type::BitVector(Some(w)) = &types.args[i]{
+                    if let Type::BitVector(Some(w)) = &types.args[i] {
                         tree.term_input_bvs.push(child.ident.clone());
 
                         // Hack: width matching
                         let lit = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*w as i128, 0));
                         let eq = veri_ir::Expr::Binary(
                             veri_ir::BinaryOp::Eq,
-                            Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(child.ident.clone()))))),
+                            Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(
+                                veri_ir::Terminal::Var(child.ident.clone()),
+                            )))),
                             Box::new(lit),
                         );
                         assertions.push(eq);
@@ -2126,7 +2128,9 @@ fn create_parse_tree_pattern(
                     let lit = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*w as i128, 0));
                     let eq = veri_ir::Expr::Binary(
                         veri_ir::BinaryOp::Eq,
-                        Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var( format!("{}__{}", name, type_var)))))),
+                        Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(
+                            veri_ir::Terminal::Var(format!("{}__{}", name, type_var)),
+                        )))),
                         Box::new(lit),
                     );
                     assertions.push(eq);

@@ -3514,18 +3514,17 @@ fn test_named_store_x64_movrm() {
     });
 }
 
-
 #[test]
 fn test_load_conditional() {
     test_from_file_with_lhs_termname_simple(
         "./examples/load/load_conditional.isle",
         "lhs".to_string(),
         vec![
-                (Bitwidth::I8, VerificationResult::Success),
-                (Bitwidth::I16, VerificationResult::Success),
-                (Bitwidth::I32, VerificationResult::Success),
-                (Bitwidth::I64, VerificationResult::Success),
-            ],
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
     );
 }
 
@@ -3535,11 +3534,11 @@ fn test_store_switch() {
         "./examples/store/store_switch.isle",
         "lhs".to_string(),
         vec![
-                (Bitwidth::I8, VerificationResult::Success),
-                (Bitwidth::I16, VerificationResult::Success),
-                (Bitwidth::I32, VerificationResult::Success),
-                (Bitwidth::I64, VerificationResult::Success),
-            ],
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
     );
 }
 
