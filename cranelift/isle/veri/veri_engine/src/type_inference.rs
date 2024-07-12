@@ -2082,6 +2082,7 @@ fn create_parse_tree_pattern(
             let sym = termenv.terms[term_id.index()].name;
             let name = typeenv.syms[sym.index()].clone();
 
+            let mut assertions = vec![];
             // process children first
             let mut children = vec![];
             for (i, arg) in args.iter().enumerate() {
@@ -2096,8 +2097,17 @@ fn create_parse_tree_pattern(
                     ));
 
                     // If this is a bitvector, mark the name for the assumption feasibility check
-                    if matches!(&types.args[i], Type::BitVector(_)) {
+                    if let Type::BitVector(Some(w)) = &types.args[i]{
                         tree.term_input_bvs.push(child.ident.clone());
+
+                        // Hack: width matching
+                        let lit = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*w as i128, 0));
+                        let eq = veri_ir::Expr::Binary(
+                            veri_ir::BinaryOp::Eq,
+                            Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(child.ident.clone()))))),
+                            Box::new(lit),
+                        );
+                        assertions.push(eq);
                     }
                     tree.term_args.push(child.ident.clone())
                 }
@@ -2111,6 +2121,16 @@ fn create_parse_tree_pattern(
                     type_var,
                     annotation_type_for_vir_type(&types.ret),
                 ));
+                // Hack: width matching
+                if let Type::BitVector(Some(w)) = &types.ret {
+                    let lit = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*w as i128, 0));
+                    let eq = veri_ir::Expr::Binary(
+                        veri_ir::BinaryOp::Eq,
+                        Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var( format!("{}__{}", name, type_var)))))),
+                        Box::new(lit),
+                    );
+                    assertions.push(eq);
+                }
             }
 
             TypeVarNode {
@@ -2118,7 +2138,7 @@ fn create_parse_tree_pattern(
                 construct: TypeVarConstruct::Term(term_id.clone()),
                 type_var,
                 children,
-                assertions: vec![],
+                assertions,
             }
         }
         isle::sema::Pattern::Var(_, var_id) => {
