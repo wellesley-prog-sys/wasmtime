@@ -2,6 +2,7 @@
 
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
+; QUESTION(mbm): can we capture the "equality on lower bits only" constraint in the lower spec?
 (spec (lower arg)
       (provide (= result arg)))
 (decl partial lower (Inst) InstOutput)
