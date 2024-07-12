@@ -2107,6 +2107,8 @@ pub fn run_solver_with_static_widths(
             let lhs_args_vec = ctx.lhs_store_args.clone().unwrap();
             let rhs_args_vec = ctx.rhs_store_args.clone().unwrap();
             println!("Store argument conditions:");
+
+            // if this is the 3rd condition (idx 2) extract ty many bits
             for i in 0..lhs_args_vec.len() {
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 store_conditions.push(arg_equal);
