@@ -4630,7 +4630,8 @@
 (spec (x64_add_mem ty addr val)
       (provide (= result (store 
                         (extract 79 64 addr) 
-                        ty (conv_to ty (bvadd (load (extract 79 64 addr) ty (extract 63 0 addr)) val)) 
+                        ty 
+                        (conv_to ty (bvadd (load (extract 79 64 addr) ty (extract 63 0 addr)) (conv_to ty val))) 
                         (extract 63 0 addr))
             )
       )
