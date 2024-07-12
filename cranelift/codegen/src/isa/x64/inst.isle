@@ -2555,6 +2555,8 @@
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxdq) from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
+(spec (x64_movrm ty addr data)
+       (provide (= result (store (extract 79 64 addr) ty (conv_to ty data) (extract 63 0 addr)))))
 (rule (x64_movrm ty addr data)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
