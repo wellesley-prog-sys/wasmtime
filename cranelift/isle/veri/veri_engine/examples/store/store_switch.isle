@@ -1,23 +1,22 @@
 ;; Instruction formats
 (type MInst (enum))
 
-;; Switch with 2 stores spec
 (form
   lhs_form
-  ((args Bool (bv  8) (bv  8)) (ret Unit) (canon (bv  8)))
+  ((args Bool (bv  8) (bv  8)) (ret Unit) (canon (bv 8)))
   ((args Bool (bv 16) (bv 16)) (ret Unit) (canon (bv 16)))
   ((args Bool (bv 32) (bv 32)) (ret Unit) (canon (bv 32)))
   ((args Bool (bv 64) (bv 64)) (ret Unit) (canon (bv 64)))
 )
-(spec (lhs val1 val2 val3)
-  (provide (= result (switch val1
-               (true (store #x0000 (widthof val2) val2 #x0000000000000000))
-               (false (store #x0000 (widthof val3) val3 #x0000000000000000))))))
+
+(spec (lhs cond val2 val3)
+  (provide (= result (store #x0000 (widthof (switch cond (val2) (val3))) (switch cond (val2) (val3)) #x0000000000000000)))
+  )
 (decl lhs (bool Value Value) Inst)
 (extern extractor lhs lhs)
 (instantiate lhs lhs_form)
 
-(spec (rhs val2 val3)
+(spec (rhs val2 val3) 
   (provide (= result (store #x0000 (widthof val2) val2 #x0000000000000000))))
 (decl rhs (Value Value) Inst)
 (extern constructor rhs rhs)
