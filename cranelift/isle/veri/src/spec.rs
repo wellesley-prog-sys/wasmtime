@@ -7,7 +7,7 @@ use std::collections::HashMap;
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
 
 /// Higher-level type, not including bitwidths.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     /// The expression is a bitvector, currently modeled in the
     /// logic QF_BV https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
@@ -36,7 +36,7 @@ impl Type {
 }
 
 /// Type-specified constants
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Const {
     pub ty: Type,
     // TODO(mbm): support constants larger than 127 bits
@@ -44,11 +44,13 @@ pub struct Const {
 }
 
 /// Spec expression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     // Terminal nodes
     Var(Ident),
     Const(Const),
+    // TODO(mbm): Enum identifier should be mapped to TermId
+    Enum(Ident),
     //True,
     //False,
 
@@ -60,7 +62,7 @@ pub enum Expr {
     //Not(Box<Expr>),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
-    //Imp(Box<Expr>, Box<Expr>),
+    Imp(Box<Expr>, Box<Expr>),
     Eq(Box<Expr>, Box<Expr>),
     Lte(Box<Expr>, Box<Expr>),
     //Lt(Box<Expr>, Box<Expr>),
@@ -234,7 +236,8 @@ impl Expr {
                 SpecOp::Lte => binary_expr!(Expr::Lte, args, pos),
                 //SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
                 //SpecOp::Gte => binop(|x, y| Expr::Lte(y, x), args, pos, env),
-                //SpecOp::Imp => binop(|x, y| Expr::Imp(x, y), args, pos, env),
+                SpecOp::Imp => binary_expr!(Expr::Imp, args, pos),
+                //SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
                 //SpecOp::BVAnd => binop(|x, y| Expr::BVAnd(x, y), args, pos, env),
                 //SpecOp::BVOr => binop(|x, y| Expr::BVOr(x, y), args, pos, env),
                 //SpecOp::BVXor => binop(|x, y| Expr::BVXor(x, y), args, pos, env),
@@ -339,9 +342,8 @@ impl Expr {
                 //        })
                 //        .collect();
                 //    Expr::Switch(Box::new(swith_on), arms)
-                _ => todo!("spec op: {op:?}"),
+                _ => todo!("ast spec op: {op:?}"),
             },
-
             /*
             SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const {
                 ty: Type::Bool,
@@ -353,15 +355,9 @@ impl Expr {
                     "pairs currently only parsed as part of Switch statements, {:?} {:?}",
                     l, r
                 )
-            }
-            SpecExpr::Enum { name } => {
-                if let Some(e) = env.enums.get(&name.0) {
-                    e.clone()
-                } else {
-                    panic!("Can't find model for enum {}", name.0);
-                }
             }*/
-            _ => todo!("spec expr: {expr:?}"),
+            ast::SpecExpr::Enum { name } => Expr::Enum(name.clone()),
+            _ => todo!("ast spec expr: {expr:?}"),
         }
     }
 }
@@ -377,13 +373,26 @@ pub struct Spec {
 }
 
 impl Spec {
+    fn new() -> Self {
+        Self {
+            args: Vec::new(),
+            ret: Self::result_ident(),
+            provides: Vec::new(),
+            requires: Vec::new(),
+        }
+    }
+
     fn from_ast(spec: &ast::Spec) -> Self {
         Self {
             args: spec.args.clone(),
-            ret: Ident(RESULT.to_string(), Default::default()),
+            ret: Self::result_ident(),
             provides: spec.provides.iter().map(Expr::from_ast).collect(),
             requires: spec.requires.iter().map(Expr::from_ast).collect(),
         }
+    }
+
+    fn result_ident() -> Ident {
+        Ident(RESULT.to_string(), Default::default())
     }
 }
 
@@ -396,6 +405,9 @@ pub struct SpecEnv {
 
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
+
+    /// Value for enum variant.
+    pub enum_value: HashMap<TermId, Expr>,
 }
 
 impl SpecEnv {
@@ -404,19 +416,20 @@ impl SpecEnv {
             term_spec: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
+            enum_value: HashMap::new(),
         };
 
-        env.collect_models(defs, tyenv);
+        env.collect_models(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv);
+        env.generate_enum_value_specs();
 
         env
     }
 
-    // Traverse models to process spec annotations for enums
-    fn collect_models(&mut self, defs: &Defs, tyenv: &TypeEnv) {
+    fn collect_models(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
         for def in &defs.defs {
             match def {
-                &ast::Def::Model(Model { ref name, ref val }) => match val {
+                ast::Def::Model(Model { name, val }) => match val {
                     ast::ModelValue::TypeValue(model_type) => {
                         // TODO(mbm): error on missing type rather than panic
                         let type_id = tyenv
@@ -432,7 +445,21 @@ impl SpecEnv {
                         // TODO(mbm): ensure the type of the expression matches the type of the
                         self.const_value.insert(sym, Expr::from_ast(val));
                     }
-                    ast::ModelValue::EnumValues(..) => todo!("enum values"),
+                    ast::ModelValue::EnumValues(vals) => {
+                        // TODO(mbm): validate enum variants against the type definition
+                        // TODO(mbm): ensure the enum doesn't have non-unit variants
+                        // TODO(mbm): enforce that the enum values are distinct
+                        for (variant, expr) in vals {
+                            let ident = ast::Variant::full_name(name, variant);
+                            // TODO(mbm): error on missing variant rather than panic
+                            let term_id = termenv
+                                .get_term_by_name(tyenv, &ident)
+                                .expect("enum variant should exist");
+                            // TODO(mbm): enforce that the enum value expression is constant
+                            let val = Expr::from_ast(expr);
+                            self.enum_value.insert(term_id, val);
+                        }
+                    }
                 },
                 _ => (),
             }
@@ -450,6 +477,18 @@ impl SpecEnv {
                 }
                 _ => {}
             }
+        }
+    }
+
+    fn generate_enum_value_specs(&mut self) {
+        // Enum values are sugar for term specs of the form `(provide (= result <value>))`.
+        for (term_id, val) in &self.enum_value {
+            let mut spec = Spec::new();
+            spec.provides.push(Expr::Eq(
+                Box::new(Expr::Var(spec.ret.clone())),
+                Box::new(val.clone()),
+            ));
+            self.term_spec.insert(*term_id, spec);
         }
     }
 }

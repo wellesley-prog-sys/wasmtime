@@ -1001,6 +1001,14 @@
                        (end Reg)
                        (step Imm12))))
 
+(spec (MInst.AluRRR alu_op size rd rn rm)
+      (provide
+            (= result #b1)
+            (=>
+                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+                  (= rd (bvadd rn rm))))
+      (require (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))))
+
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
 (type ALUOp
@@ -1039,6 +1047,23 @@
     ;; Subtract with carry, settings flags
     (SbcS)
 ))
+
+(model ALUOp (enum
+      (Add #x00) ;; 0
+      (Sub #x01)
+      (Orr #x02)
+      (OrrNot #x03)
+      (And #x04)
+      (AndNot #x05)
+      (Eor #x06)
+      (EorNot #x07)
+      (SubS #x08)
+      (SDiv #x09)
+      (UDiv #x0a)
+      (RotR #x0b)
+      (Lsr #x0c)
+      (Asr #x0d)
+      (Lsl #x0e)))
 
 ;; An ALU operation with three arguments.
 (type ALUOp3
@@ -1231,6 +1256,10 @@
 (type OperandSize extern
       (enum Size32
             Size64))
+
+(model OperandSize
+      (enum (Size32 32)
+            (Size64 64)))
 
 (type TestBitAndBranchKind (enum (Z) (NZ)))
 

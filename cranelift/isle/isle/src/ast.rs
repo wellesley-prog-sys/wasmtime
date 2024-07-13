@@ -58,6 +58,15 @@ pub struct Variant {
     pub pos: Pos,
 }
 
+impl Variant {
+    pub fn full_name(enum_name: &Ident, variant_name: &Ident) -> Ident {
+        Ident(
+            format!("{}.{}", enum_name.0, variant_name.0),
+            variant_name.1,
+        )
+    }
+}
+
 /// One field of an enum variant.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Field {

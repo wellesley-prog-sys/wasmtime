@@ -5,7 +5,8 @@ use crate::{
     trie_again::{binding_type, BindingType},
 };
 use cranelift_isle::{
-    sema::{Sym, TermId, TypeId},
+    ast,
+    sema::{self, Sym, TermId, TypeId, VariantId},
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use std::{collections::HashMap, iter::zip};
@@ -316,11 +317,11 @@ impl<'a> ConditionsBuilder<'a> {
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings"),
 
-            Binding::MakeVariant { .. } => {
-                // TODO(mbm): implement make_variant bindings
-                log::error!("make_variant binding unimplemented");
-                Ok(())
-            }
+            Binding::MakeVariant {
+                ty,
+                variant,
+                fields,
+            } => self.make_variant(id, *ty, *variant, &*fields),
 
             Binding::MatchVariant { .. } => todo!("binding: match_variant"),
 
@@ -368,8 +369,7 @@ impl<'a> ConditionsBuilder<'a> {
                 "value of constant {const_name} is unspecified",
                 const_name = self.prog.tyenv.syms[val.index()]
             ))?;
-        let no_vars = HashMap::new();
-        let value = self.spec_expr(spec_value, &no_vars)?;
+        let value = self.spec_expr_no_vars(spec_value)?;
 
         // Destination binding should be a variable.
         let v = self.binding_value[&id]
@@ -509,6 +509,30 @@ impl<'a> ConditionsBuilder<'a> {
         Ok(())
     }
 
+    fn make_variant(
+        &mut self,
+        id: BindingId,
+        ty: TypeId,
+        variant: VariantId,
+        fields: &[BindingId],
+    ) -> anyhow::Result<()> {
+        // TODO(mbm): make_variant binding conditions generation must account for enum type models
+        log::warn!("make_variant binding partially implemented");
+
+        // Lookup term corresponding to variant.
+        let ty = self.prog.ty(ty);
+        let sema::Type::Enum { variants, .. } = ty else {
+            unreachable!("make_variant type must be an enum")
+        };
+        let variant = &variants[variant.index()];
+        let variant_term_id = self.prog.termenv.term_map[&variant.fullname];
+
+        // Invoke as a constructor.
+        self.constructor(id, variant_term_id, fields, Invocation::Caller)?;
+
+        Ok(())
+    }
+
     fn make_some(&mut self, id: BindingId, inner: BindingId) -> anyhow::Result<()> {
         // Destination binding should be an option.
         let opt = self.binding_value[&id]
@@ -613,10 +637,24 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::Const(c) => self.spec_const(c),
 
+            spec::Expr::Enum(name) => self.spec_enum(name),
+
+            spec::Expr::And(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::And(x, y)))
+            }
+
             spec::Expr::Or(x, y) => {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
                 Ok(self.dedup_expr(Expr::Or(x, y)))
+            }
+
+            spec::Expr::Imp(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::Imp(x, y)))
             }
 
             spec::Expr::Eq(x, y) => {
@@ -659,6 +697,11 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
+    fn spec_expr_no_vars(&mut self, expr: &spec::Expr) -> anyhow::Result<ExprId> {
+        let no_vars = HashMap::new();
+        self.spec_expr(expr, &no_vars)
+    }
+
     fn spec_const(&mut self, c: &spec::Const) -> anyhow::Result<ExprId> {
         self.spec_typed_value(c.value, &c.ty)
     }
@@ -674,6 +717,28 @@ impl<'a> ConditionsBuilder<'a> {
             spec::Type::BitVectorWithWidth(w) => Ok(self.constant(Const::BitVector(*w, val))),
             spec::Type::BitVector => anyhow::bail!("bitvector constant must have known width"),
         }
+    }
+
+    fn spec_enum(&mut self, name: &ast::Ident) -> anyhow::Result<ExprId> {
+        // Lookup variant term.
+        // TODO(mbm): move term lookup to the SpecEnv construction stage?
+        let variant_name = &name.0;
+        let term_id = self
+            .prog
+            .termenv
+            .get_term_by_name(&self.prog.tyenv, name)
+            .ok_or(anyhow::format_err!("unknown enum variant {variant_name}"))?;
+
+        // Lookup specified value.
+        let spec_value = self
+            .prog
+            .specenv
+            .enum_value
+            .get(&term_id)
+            .ok_or(anyhow::format_err!(
+                "value of enum variant {variant_name} is unspecified"
+            ))?;
+        self.spec_expr_no_vars(spec_value)
     }
 
     fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {

@@ -1037,8 +1037,7 @@ impl TypeEnv {
 
                 let mut variants = vec![];
                 for variant in ty_variants {
-                    let combined_ident =
-                        ast::Ident(format!("{}.{}", ty.name.0, variant.name.0), variant.name.1);
+                    let combined_ident = ast::Variant::full_name(&ty.name, &variant.name);
                     let fullname = self.intern_mut(&combined_ident);
                     let name = self.intern_mut(&variant.name);
                     let id = VariantId(variants.len());
