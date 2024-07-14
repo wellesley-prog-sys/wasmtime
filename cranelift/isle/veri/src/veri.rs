@@ -639,6 +639,7 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::Enum(name) => self.spec_enum(name),
 
+            // TODO(mbm): fix boilerplate for common expressions
             spec::Expr::And(x, y) => {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
@@ -692,8 +693,6 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?;
                 Ok(self.dedup_expr(Expr::WidthOf(x)))
             }
-
-            e => todo!("spec expr: {e:?}"),
         }
     }
 
