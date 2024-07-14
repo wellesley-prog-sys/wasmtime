@@ -22,4 +22,5 @@ pub mod program;
 pub mod reachability;
 pub mod spec;
 pub mod trie_again;
+pub mod type_inference;
 pub mod veri;

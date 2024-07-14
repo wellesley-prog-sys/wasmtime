@@ -61,6 +61,16 @@ pub enum Const {
     BitVector(usize, i128),
 }
 
+impl Const {
+    pub fn ty(&self) -> Type {
+        match self {
+            Self::Bool(_) => Type::Bool,
+            Self::Int(_) => Type::Int,
+            Self::BitVector(w, _) => Type::BitVector(Some(*w)),
+        }
+    }
+}
+
 impl std::fmt::Display for Const {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {

@@ -4,6 +4,7 @@ use cranelift_isle_veri::{
     debug::print_expansion,
     expand::{Expansion, ExpansionsBuilder},
     program::Program,
+    type_inference::type_constraints,
     veri::Conditions,
 };
 
@@ -87,7 +88,17 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()> {
+    // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
     conditions.pretty_print();
+
+    // Type constraints.
+    let constraints = type_constraints(&conditions)?;
+    println!("type constraints = [");
+    for constraint in &constraints {
+        println!("\t{constraint}");
+    }
+    println!("]");
+
     Ok(())
 }
