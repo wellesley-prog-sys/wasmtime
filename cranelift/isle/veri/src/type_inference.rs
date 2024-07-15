@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use crate::veri::{Conditions, Expr, ExprId, Type};
 
+#[derive(Debug)]
 pub enum Constraint {
     /// Expression x has the given concrete type.
     Concrete { x: ExprId, ty: Type },
@@ -129,5 +132,87 @@ impl<'a> ConstraintsBuilder<'a> {
 
     fn width_of(&mut self, x: ExprId, w: ExprId) {
         self.constraints.push(Constraint::WidthOf { x, w });
+    }
+}
+
+pub struct Solver {
+    pub expr_type: HashMap<ExprId, Type>,
+}
+
+impl Solver {
+    pub fn new() -> Self {
+        Self {
+            expr_type: HashMap::new(),
+        }
+    }
+
+    pub fn solve(&mut self, constraints: &Vec<Constraint>) -> anyhow::Result<()> {
+        while self.iterate(constraints)? {}
+        Ok(())
+    }
+
+    fn iterate(&mut self, constraints: &Vec<Constraint>) -> anyhow::Result<bool> {
+        let mut change = false;
+        for constraint in constraints {
+            change |= self.constraint(constraint)?;
+        }
+        Ok(change)
+    }
+
+    fn constraint(&mut self, constraint: &Constraint) -> anyhow::Result<bool> {
+        match constraint {
+            Constraint::Concrete { x, ty } => self.set_type(*x, ty),
+            Constraint::Same { x, y } => self.same(*x, *y),
+            Constraint::WidthOf { x, w } => self.width_of(*x, *w),
+        }
+    }
+
+    fn set_type(&mut self, x: ExprId, ty: &Type) -> anyhow::Result<bool> {
+        // If we don't know a type for the expression, record it.
+        if !self.expr_type.contains_key(&x) {
+            self.expr_type.insert(x, ty.clone());
+            return Ok(true);
+        }
+
+        // If we do, merge this type with the existing one.
+        let existing = &self.expr_type[&x];
+        let merged = Type::merge(existing, ty)?;
+        if merged != *existing {
+            self.expr_type.insert(x, merged);
+            return Ok(true);
+        }
+
+        // No change.
+        return Ok(false);
+    }
+
+    fn same(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
+        // TODO(mbm): union find
+        // TODO(mbm): simplify by initializing all expression types to unknown
+        match (self.expr_type.get(&x), self.expr_type.get(&y)) {
+            (None, None) => Ok(false),
+            (Some(tx), None) => {
+                self.expr_type.insert(y, tx.clone());
+                Ok(true)
+            }
+            (None, Some(ty)) => {
+                self.expr_type.insert(x, ty.clone());
+                Ok(true)
+            }
+            (Some(tx), Some(ty)) => {
+                if tx == ty {
+                    return Ok(false);
+                }
+                let merged = Type::merge(tx, ty)?;
+                self.expr_type.insert(x, merged.clone());
+                self.expr_type.insert(y, merged.clone());
+                Ok(true)
+            }
+        }
+    }
+
+    fn width_of(&mut self, x: ExprId, w: ExprId) -> anyhow::Result<bool> {
+        log::error!("width_of not implemented");
+        Ok(false)
     }
 }

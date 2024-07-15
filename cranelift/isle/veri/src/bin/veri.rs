@@ -4,7 +4,7 @@ use cranelift_isle_veri::{
     debug::print_expansion,
     expand::{Expansion, ExpansionsBuilder},
     program::Program,
-    type_inference::type_constraints,
+    type_inference::{type_constraints, Solver},
     veri::Conditions,
 };
 
@@ -99,6 +99,10 @@ fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()>
         println!("\t{constraint}");
     }
     println!("]");
+
+    // Solve.
+    let mut solver = Solver::new();
+    solver.solve(&constraints)?;
 
     Ok(())
 }

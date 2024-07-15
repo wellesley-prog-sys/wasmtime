@@ -39,6 +39,24 @@ impl Type {
             spec::Type::Bool => Self::Bool,
         }
     }
+
+    pub fn is_concrete(&self) -> bool {
+        match self {
+            Self::BitVector(Some(_)) | Self::Int | Self::Bool => true,
+            Self::Unknown | Self::BitVector(None) => false,
+        }
+    }
+
+    pub fn merge(left: &Self, right: &Self) -> anyhow::Result<Self> {
+        Ok(match (left, right) {
+            (Self::Unknown, r) => r.clone(),
+            (l, Self::Unknown) => l.clone(),
+            (Self::BitVector(None), r @ Self::BitVector(Some(_))) => r.clone(),
+            (l @ Self::BitVector(Some(_)), Self::BitVector(None)) => l.clone(),
+            (l, r) if l == r => l.clone(),
+            _ => anyhow::bail!("types {left} and {right} are incompatible"),
+        })
+    }
 }
 
 impl std::fmt::Display for Type {
