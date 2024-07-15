@@ -149,7 +149,7 @@ impl<'a> ConstraintsBuilder<'a> {
 }
 
 pub struct Solver {
-    pub expr_type: HashMap<ExprId, Type>,
+    expr_type: HashMap<ExprId, Type>,
     int_value: HashMap<ExprId, i128>,
 }
 
@@ -161,9 +161,9 @@ impl Solver {
         }
     }
 
-    pub fn solve(&mut self, constraints: &Vec<Constraint>) -> anyhow::Result<()> {
+    pub fn solve(mut self, constraints: &Vec<Constraint>) -> anyhow::Result<HashMap<ExprId, Type>> {
         while self.iterate(constraints)? {}
-        Ok(())
+        Ok(self.expr_type)
     }
 
     fn iterate(&mut self, constraints: &Vec<Constraint>) -> anyhow::Result<bool> {

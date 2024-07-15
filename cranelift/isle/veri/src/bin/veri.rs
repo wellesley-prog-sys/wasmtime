@@ -5,7 +5,7 @@ use cranelift_isle_veri::{
     expand::{Expansion, ExpansionsBuilder},
     program::Program,
     type_inference::{type_constraints, Solver},
-    veri::Conditions,
+    veri::{Conditions, ExprId},
 };
 
 #[derive(Parser)]
@@ -94,6 +94,7 @@ fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()>
 
     // Type constraints.
     let constraints = type_constraints(&conditions)?;
+    // TOOD(mbm): pretty print method for type constraints
     println!("type constraints = [");
     for constraint in &constraints {
         println!("\t{constraint}");
@@ -101,8 +102,19 @@ fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()>
     println!("]");
 
     // Solve.
-    let mut solver = Solver::new();
-    solver.solve(&constraints)?;
+    let solver = Solver::new();
+    let expr_type = solver.solve(&constraints)?;
+
+    // Dump types.
+    // TOOD(mbm): type `Assignment` struct with validation and pretty printer methods
+    for (i, expr) in conditions.exprs.iter().enumerate() {
+        print!("{i}:\t");
+        match expr_type.get(&ExprId(i)) {
+            None => print!("false\t-"),
+            Some(typ) => print!("{}\t{typ}", typ.is_concrete()),
+        }
+        println!("\t{expr}");
+    }
 
     Ok(())
 }
