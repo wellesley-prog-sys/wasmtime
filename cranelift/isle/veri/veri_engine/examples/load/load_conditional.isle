@@ -20,5 +20,5 @@
 (decl rhs (Value Value) Inst)
 (extern constructor rhs rhs)
 
-(rule (lhs true x y)
+(rule (lhs $true x y)
   (rhs x y))
