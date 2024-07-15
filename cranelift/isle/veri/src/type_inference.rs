@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::veri::{Conditions, Expr, ExprId, Type};
+use crate::veri::{Conditions, Const, Expr, ExprId, Type};
 
 #[derive(Debug)]
 pub enum Constraint {
@@ -10,6 +10,8 @@ pub enum Constraint {
     Same { x: ExprId, y: ExprId },
     /// Expression x is a bitvector with width given by the integer expression w.
     WidthOf { x: ExprId, w: ExprId },
+    /// Expression x is an integer with known constant value v.
+    IntValue { x: ExprId, v: i128 },
 }
 
 impl std::fmt::Display for Constraint {
@@ -18,6 +20,7 @@ impl std::fmt::Display for Constraint {
             Self::Concrete { x, ty } => write!(f, "{} = {ty}", x.index()),
             Self::Same { x, y } => write!(f, "{} == {}", x.index(), y.index()),
             Self::WidthOf { x, w } => write!(f, "{} = width_of({})", w.index(), x.index()),
+            Self::IntValue { x, v } => write!(f, "{} = int({v})", x.index()),
         }
     }
 }
@@ -64,7 +67,13 @@ impl<'a> ConstraintsBuilder<'a> {
 
     fn veri_expr(&mut self, x: ExprId, expr: &Expr) {
         match expr {
-            Expr::Const(c) => self.concrete(x, c.ty()),
+            Expr::Const(Const::Int(v)) => {
+                self.concrete(x, Type::Int);
+                self.int_value(x, *v);
+            }
+            Expr::Const(c) => {
+                self.concrete(x, c.ty());
+            }
             Expr::Variable(v) => {
                 let ty = self.conditions.variable_type[v.index()].clone();
                 self.concrete(x, ty);
@@ -133,16 +142,22 @@ impl<'a> ConstraintsBuilder<'a> {
     fn width_of(&mut self, x: ExprId, w: ExprId) {
         self.constraints.push(Constraint::WidthOf { x, w });
     }
+
+    fn int_value(&mut self, x: ExprId, v: i128) {
+        self.constraints.push(Constraint::IntValue { x, v });
+    }
 }
 
 pub struct Solver {
     pub expr_type: HashMap<ExprId, Type>,
+    int_value: HashMap<ExprId, i128>,
 }
 
 impl Solver {
     pub fn new() -> Self {
         Self {
             expr_type: HashMap::new(),
+            int_value: HashMap::new(),
         }
     }
 
@@ -154,6 +169,7 @@ impl Solver {
     fn iterate(&mut self, constraints: &Vec<Constraint>) -> anyhow::Result<bool> {
         let mut change = false;
         for constraint in constraints {
+            // TODO(mbm): remove satisfied constraints from list
             change |= self.constraint(constraint)?;
         }
         Ok(change)
@@ -164,6 +180,7 @@ impl Solver {
             Constraint::Concrete { x, ty } => self.set_type(*x, ty),
             Constraint::Same { x, y } => self.same(*x, *y),
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
+            Constraint::IntValue { x, v } => self.set_int_value(*x, *v),
         }
     }
 
@@ -214,5 +231,16 @@ impl Solver {
     fn width_of(&mut self, x: ExprId, w: ExprId) -> anyhow::Result<bool> {
         log::error!("width_of not implemented");
         Ok(false)
+    }
+
+    fn set_int_value(&mut self, x: ExprId, v: i128) -> anyhow::Result<bool> {
+        match self.int_value.get(&x) {
+            None => {
+                self.int_value.insert(x, v);
+                Ok(true)
+            }
+            Some(u) if *u == v => Ok(false),
+            Some(_) => anyhow::bail!("incompatible integer values"),
+        }
     }
 }
