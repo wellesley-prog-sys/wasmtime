@@ -229,8 +229,13 @@ impl Solver {
     }
 
     fn width_of(&mut self, x: ExprId, w: ExprId) -> anyhow::Result<bool> {
-        log::error!("width_of not implemented");
-        Ok(false)
+        match (self.expr_type.get(&x), self.int_value.get(&w)) {
+            (Some(&Type::BitVector(Some(width))), _) => {
+                self.set_int_value(w, width.try_into().unwrap())
+            }
+            (_, Some(&v)) => self.set_type(x, &Type::BitVector(Some(v.try_into().unwrap()))),
+            _ => Ok(false),
+        }
     }
 
     fn set_int_value(&mut self, x: ExprId, v: i128) -> anyhow::Result<bool> {
