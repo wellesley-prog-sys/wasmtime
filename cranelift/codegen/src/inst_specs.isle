@@ -1,2 +1,5 @@
 (spec (iadd x y)
     (provide (= result (bvadd x y))))
+(instantiate iadd
+    ((args (bv 64) (bv 64)) (ret (bv 64)))
+)

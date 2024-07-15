@@ -257,7 +257,6 @@ pub struct Model {
 pub struct Signature {
     pub args: Vec<ModelType>,
     pub ret: ModelType,
-    pub canonical: ModelType,
     pub pos: Pos,
 }
 

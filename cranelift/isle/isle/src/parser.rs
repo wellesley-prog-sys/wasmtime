@@ -648,14 +648,8 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         let args = self.parse_tagged_types("args")?;
         let ret = self.parse_tagged_type("ret")?;
-        let canonical = self.parse_tagged_type("canon")?;
         self.expect_rparen()?;
-        Ok(Signature {
-            args,
-            ret,
-            canonical,
-            pos,
-        })
+        Ok(Signature { args, ret, pos })
     }
 
     fn parse_tagged_types(&mut self, tag: &str) -> Result<Vec<ModelType>> {
