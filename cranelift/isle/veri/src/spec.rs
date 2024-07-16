@@ -35,6 +35,21 @@ impl Type {
     }
 }
 
+#[derive(Clone)]
+pub struct Signature {
+    pub args: Vec<Type>,
+    pub ret: Type,
+}
+
+impl Signature {
+    fn from_ast(sig: &ast::Signature) -> Self {
+        Self {
+            args: sig.args.iter().map(Type::from_model).collect(),
+            ret: Type::from_model(&sig.ret),
+        }
+    }
+}
+
 /// Type-specified constants
 #[derive(Debug, Clone)]
 pub struct Const {
@@ -400,6 +415,9 @@ pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
 
+    // Type instantiations for the given term.
+    pub term_instantiations: HashMap<TermId, Vec<Signature>>,
+
     /// Model for the given type.
     pub type_model: HashMap<TypeId, Type>,
 
@@ -414,12 +432,14 @@ impl SpecEnv {
     pub fn from_ast(defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) -> Self {
         let mut env = Self {
             term_spec: HashMap::new(),
+            term_instantiations: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
             enum_value: HashMap::new(),
         };
 
         env.collect_models(defs, termenv, tyenv);
+        env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv);
         env.generate_enum_value_specs();
 
@@ -466,10 +486,40 @@ impl SpecEnv {
         }
     }
 
+    fn collect_instantiations(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
+        // Collect form signatures first, as they may be referenced by instantiations.
+        let mut form_signature = HashMap::new();
+        for def in &defs.defs {
+            match def {
+                ast::Def::Form(form) => {
+                    let signatures: Vec<_> =
+                        form.signatures.iter().map(Signature::from_ast).collect();
+                    form_signature.insert(form.name.0.clone(), signatures);
+                }
+                _ => {}
+            }
+        }
+
+        // Collect instantiations.
+        for def in &defs.defs {
+            match def {
+                ast::Def::Instantiation(inst) => {
+                    let term_id = termenv.get_term_by_name(tyenv, &inst.term).unwrap();
+                    let sigs = match &inst.form {
+                        Some(form) => form_signature[&form.0].clone(),
+                        None => inst.signatures.iter().map(Signature::from_ast).collect(),
+                    };
+                    self.term_instantiations.insert(term_id, sigs);
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn collect_specs(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
         for def in &defs.defs {
             match def {
-                &ast::Def::Spec(ref spec) => {
+                ast::Def::Spec(spec) => {
                     let term_id = termenv
                         .get_term_by_name(tyenv, &spec.term)
                         .expect("spec term should exist");
