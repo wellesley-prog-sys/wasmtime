@@ -31,7 +31,7 @@ pub enum Type {
 }
 
 impl Type {
-    fn from_spec_type(spec_type: &spec::Type) -> Self {
+    fn from_spec(spec_type: &spec::Type) -> Self {
         match spec_type {
             spec::Type::BitVector => Self::BitVector(None),
             spec::Type::BitVectorWithWidth(width) => Self::BitVector(Some(*width)),
@@ -67,6 +67,21 @@ impl std::fmt::Display for Type {
             Self::BitVector(None) => write!(f, "bv _"),
             Self::Int => write!(f, "int"),
             Self::Bool => write!(f, "bool"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Signature {
+    pub args: Vec<Type>,
+    pub ret: Type,
+}
+
+impl Signature {
+    fn from_spec(sig: &spec::Signature) -> Self {
+        Self {
+            args: sig.args.iter().map(Type::from_spec).collect(),
+            ret: Type::from_spec(&sig.ret),
         }
     }
 }
@@ -145,13 +160,22 @@ impl std::fmt::Display for Expr {
     }
 }
 
+#[derive(Debug)]
+pub struct Call {
+    pub term: TermId,
+    pub args: Vec<ExprId>,
+    pub ret: ExprId,
+    pub signatures: Vec<Signature>,
+}
+
 /// Verification conditions for an expansion.
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct Conditions {
     pub exprs: Vec<Expr>,
     pub assumptions: Vec<ExprId>,
     pub assertions: Vec<ExprId>,
     pub variable_type: Vec<Type>,
+    pub calls: Vec<Call>,
 }
 
 impl Conditions {
@@ -160,7 +184,7 @@ impl Conditions {
         builder.build()
     }
 
-    pub fn pretty_print(&self) {
+    pub fn pretty_print(&self, prog: &Program) {
         println!("conditions {{");
 
         // Expressions
@@ -188,6 +212,40 @@ impl Conditions {
         println!("\tvariable_type = [");
         for (i, ty) in self.variable_type.iter().enumerate() {
             println!("\t\t{i}:\t{ty}");
+        }
+        println!("\t]");
+
+        // Calls
+        // TODO(mbm): prettier pretty printing code
+        println!("\tcalls = [");
+        for call in &self.calls {
+            println!("\t\tcall {{");
+            println!("\t\t\tterm = {}", prog.term_name(call.term));
+            if !call.args.is_empty() {
+                println!("\t\t\targs = [");
+                for arg in &call.args {
+                    println!("\t\t\t\t{}", arg.index());
+                }
+                println!("\t\t\t]");
+            }
+            println!("\t\t\tret = {}", call.ret.index());
+            if !call.signatures.is_empty() {
+                println!("\t\t\tsignatures = [");
+                for sig in &call.signatures {
+                    println!("\t\t\t\tsignature {{");
+                    if !sig.args.is_empty() {
+                        println!("\t\t\t\t\targs = [");
+                        for arg in &sig.args {
+                            println!("\t\t\t\t\t\t{}", arg);
+                        }
+                        println!("\t\t\t\t\t]");
+                    }
+                    println!("\t\t\t\t\tret = {}", sig.ret);
+                    println!("\t\t\t\t}}");
+                }
+                println!("\t\t\t]");
+            }
+            println!("\t\t}}");
         }
         println!("\t]");
 
@@ -472,7 +530,7 @@ impl<'a> ConditionsBuilder<'a> {
         &mut self,
         term: TermId,
         args: &Vec<VariableId>,
-        result: VariableId,
+        ret: VariableId,
         invocation: Invocation,
         domain: Domain,
     ) -> anyhow::Result<()> {
@@ -487,18 +545,21 @@ impl<'a> ConditionsBuilder<'a> {
                 term_name = self.prog.term_name(term)
             ))?;
 
-        // Assignment of signature variables.
+        let args = self.vars(args);
+        let ret = self.var(ret);
+
+        // Assignment of signature variables to expressions.
         let mut vars = HashMap::new();
 
         // Arguments.
         // QUESTION(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
         assert_eq!(term_spec.args.len(), args.len());
-        for (name, v) in zip(&term_spec.args, args) {
-            vars.insert(name.0.clone(), *v);
+        for (name, arg) in zip(&term_spec.args, &args) {
+            vars.insert(name.0.clone(), *arg);
         }
 
         // Return value.
-        vars.insert(term_spec.ret.0.clone(), result);
+        vars.insert(term_spec.ret.0.clone(), ret);
 
         // Requires.
         let mut requires = Vec::new();
@@ -533,6 +594,24 @@ impl<'a> ConditionsBuilder<'a> {
                 self.conditions.assertions.extend(provides);
             }
         }
+
+        // Record callsite.
+        let signatures = self
+            .prog
+            .specenv
+            .term_instantiations
+            .get(&term)
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(Signature::from_spec)
+            .collect();
+        self.conditions.calls.push(Call {
+            term,
+            args,
+            ret,
+            signatures,
+        });
 
         Ok(())
     }
@@ -652,7 +731,7 @@ impl<'a> ConditionsBuilder<'a> {
     fn spec_expr(
         &mut self,
         expr: &spec::Expr,
-        vars: &HashMap<String, VariableId>,
+        vars: &HashMap<String, ExprId>,
     ) -> anyhow::Result<ExprId> {
         match expr {
             spec::Expr::Var(v) => {
@@ -660,7 +739,7 @@ impl<'a> ConditionsBuilder<'a> {
                 let v = vars
                     .get(var_name)
                     .ok_or(anyhow::format_err!("undefined variable {var_name}"))?;
-                Ok(self.var(*v))
+                Ok(*v)
             }
 
             spec::Expr::Const(c) => self.spec_const(c),
@@ -810,6 +889,10 @@ impl<'a> ConditionsBuilder<'a> {
             .unwrap_or_else(|| self.boolean(true))
     }
 
+    fn vars(&mut self, vs: &Vec<VariableId>) -> Vec<ExprId> {
+        vs.iter().map(|v| self.var(*v)).collect()
+    }
+
     fn var(&mut self, v: VariableId) -> ExprId {
         self.dedup_expr(Expr::Variable(v))
     }
@@ -842,7 +925,7 @@ impl<'a> ConditionsBuilder<'a> {
                     .specenv
                     .type_model
                     .get(type_id)
-                    .map(Type::from_spec_type)
+                    .map(Type::from_spec)
                     .unwrap_or(Type::Unknown);
                 Ok(Value::Var(self.alloc_variable(ty)))
             }

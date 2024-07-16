@@ -90,7 +90,7 @@ fn main() -> anyhow::Result<()> {
 fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()> {
     // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
-    conditions.pretty_print();
+    conditions.pretty_print(prog);
 
     // Type constraints.
     let constraints = type_constraints(&conditions)?;
