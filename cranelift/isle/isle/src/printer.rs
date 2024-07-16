@@ -16,65 +16,59 @@ where
     N: Printable,
     W: ?Sized + Write,
 {
-    todo!("Meg TODO")
+    // Confused what this function is achieving...
+    // node.to_doc()
+    //     .render(width, out)
+    //     .map_err(|e| Errors::from_io(e, "failed to print isle"))
 }
 
 impl Printable for Defs {
     fn to_doc(&self) -> String {
-        todo!("Meg TODO") 
+        // Confused what this function is achieving...
+        // let sep = RcDoc::hardline().append(Doc::hardline());
+        // RcDoc::intersperse(self.defs.iter().map(|d| d.to_doc()), sep).append(Doc::hardline()) 
     }
 }
 
-// Is this the proper approach?
 impl Printable for Def {
     fn to_doc(&self) -> String {
+        // Missing match arm error?
         match self {
             Def::Pragma(_) => unimplemented!("pragmas not supported"),
             Def::Type(ref t) => {
-                let mut parts = String::from("type");
-                parts.push_str(&t.name.to_doc());
+                let mut parts = format!("(type {} ", &t.name.to_doc());
                 if t.is_extern {
-                    parts.push_str("extern");
+                    parts.push_str("extern ");
                 }
                 if t.is_nodebug {
-                    parts.push_str("nodebug");
+                    parts.push_str("nodebug ");
                 }
-                parts.push_str(&t.ty.to_doc());
-                // Should a return statement be used here?
+                parts.push_str(&format!("{})", &t.ty.to_doc()));
                 return parts
             }
             Def::Rule(ref r) => {
-                let mut parts = String::from("rule");
+                let mut parts = String::from("(rule ");
                 if let Some(prio) = &r.prio {
-                    // Is this the best way to convert from &i64 to string?
-                    parts.push_str(&format!("{}", prio));
-
+                    parts.push_str(&format!("{} ", &prio.to_string()));
                 }
-                parts.push_str(&r.pattern.to_doc());
-                // This function converts to a map of type il? but how is that printed as a string?
-                parts.extend(&r.iflets.iter().map(|il| il.to_doc()));
-                parts.push_str(&r.expr.to_doc());
+                parts.push_str(&format!(
+                    "{} {} {})", 
+                    &r.pattern.to_doc(),
+                    // join is not defined for Maps
+                    &r.iflets.iter().map(|il| il.to_doc()).join(" "),
+                    &r.expr.to_doc()
+                ));
                 return parts
             }
-            Def::Extractor(ref e) => {
-                // sexp(vec![
-                //     RcDoc::text("extractor"),
-                //     sexp(
-                //         Vec::from([e.term.to_doc()])
-                //             .into_iter()
-                //             .chain(e.args.iter().map(|v| v.to_doc())),
-                //     ),
-                //     e.template.to_doc(),
-                // ])
-
-                let mut parts = String::from("extractor");
-                parts.push_str(&e.term.to_doc());
-                // Add something else here in the middle
-                parts.push_str(&e.template.to_doc());
-                return parts
-            }
+            Def::Extractor(ref e) => format!(
+                "(extractor {} {} {})",
+                &e.term.to_doc(),
+                // Same error
+                &e.args.iter().map(|v| v.to_doc()).join(" "),
+                &e.template.to_doc()
+            ),
             Def::Decl(ref d) => {
-                let mut parts = String::from("decl");
+                let mut parts = String::from("(decl ");
                 if d.pure {
                     parts.push_str("pure");
                 }
@@ -84,20 +78,22 @@ impl Printable for Def {
                 if d.partial {
                     parts.push_str("partial");
                 }
-                parts.push_str(&d.term.to_doc());
-                // Same question how do you convert from a Map to a String?
-                parts.push_str(sexp(d.arg_tys.iter().map(|ty| ty.to_doc())));
-                parts.push_str(&d.ret_ty.to_doc());
+                parts.push_str(&format!(
+                    " {} ({}) {})",
+                    &d.term.to_doc(),
+                    // Same error
+                    &(d.arg_tys.iter().map(|ty| ty.to_doc())).join(" "),
+                    &d.ret_ty.to_doc()
+                ));
                 return parts
             }
             Def::Extern(ref e) => e.to_doc(),
-            Def::Converter(ref c) => {
-                let mut parts = String::from("convert");
-                parts.push_str(&c.inner_ty.to_doc());
-                parts.push_str(&c.outer_ty.to_doc());
-                parts.push_str(&c.term.to_doc());
-                return parts
-            }
+            Def::Converter(ref c) => format!(
+                "(convert {} {} {})",
+                &c.inner_ty.to_doc(),
+                &c.outer_ty.to_doc(),
+                &c.term.to_doc()
+            ),
         }
     }
 }
@@ -111,30 +107,37 @@ impl Printable for Ident {
 impl Printable for TypeValue {
     fn to_doc(&self) -> String {
         match self {
-            TypeValue::Primitive(ref name, _) => {
-                format!("primative {}", &name.to_doc())
-            }
-            TypeValue::Enum(ref variants, _) => {
-                // What does this function do?
-                // sexp(
-                //     Vec::from([RcDoc::text("enum")])
-                //         .into_iter()
-                //         .chain(variants.iter().map(|v| v.to_doc()))
-            }
+            TypeValue::Primitive(ref name, _) => format!(
+                "(primative {})", 
+                &name.to_doc()
+            ),
+            TypeValue::Enum(ref variants, _) => format!(
+                "(enum {})", 
+                // Same error
+                &variants.iter().map(|v| v.to_doc()).join(" ")
+            ),
         }
     }
 }
 
-
 impl Printable for Variant {
     fn to_doc(&self) -> String {
-        todo!("Meg TODO") 
+        format!(
+            "({} {})",
+            self.name.to_doc(),
+            // Same error
+            self.fields.iter().map(|f| f.to_doc()).join(" ")
+        )
     }
 }
 
 impl Printable for Field {
     fn to_doc(&self) -> String {
-        format!("{} {}", &self.name.to_doc(), &self.ty.to_doc())
+        format!(
+            "({} {})", 
+            &self.name.to_doc(), 
+            &self.ty.to_doc()
+        )
     }
 }
 
@@ -142,22 +145,26 @@ impl Printable for Pattern {
     fn to_doc(&self) -> String {
         match self {
             Pattern::Var { var, .. } => var.to_doc(),
-            Pattern::BindPattern { var, subpat, .. } => format!("{}@{}", &var.to_doc(), &subpat.to_doc()),
-            Pattern::ConstInt { val, .. } => format!("{}", val),
+            // Unsure of what RcDoc::intersperse() function accpmplishes
+            Pattern::BindPattern { var, subpat, .. } => format!(
+                "{} @ {}", 
+                &var.to_doc(), 
+                &subpat.to_doc()
+            ),
+            Pattern::ConstInt { val, .. } => val.to_string(),
             Pattern::ConstPrim { val, .. } => format!("${}", &val.to_doc()),
             Pattern::Wildcard { .. } => String::from("_"),
-            Pattern::Term { sym, args, .. } => {
-                // sexp(
-                //     Vec::from([sym.to_doc()])
-                //         .into_iter()
-                //         .chain(args.iter().map(|f| f.to_doc()))
-            }
-            Pattern::And { subpats, .. } => {
-                // sexp(
-                //     Vec::from([RcDoc::text("and")])
-                //         .into_iter()
-                //         .chain(subpats.iter().map(|p| p.to_doc()))
-            }
+            Pattern::Term { sym, args, .. } => format!(
+                "({} {})",
+                &sym.to_doc(),
+                // Same error
+                &args.iter().map(|f| f.to_doc()).join(" ")
+            ),
+            Pattern::And { subpats, .. } => format!(
+                "(and {})",
+                // Same error
+                &subpats.iter().map(|p| p.to_doc()).join(" ")
+            ),
             Pattern::MacroArg { .. } => unimplemented!("macro arguments are for internal use only"),
         }
     }
@@ -165,36 +172,44 @@ impl Printable for Pattern {
 
 impl Printable for IfLet {
     fn to_doc(&self) -> String {
-        format!("if-let{}{}", &self.pattern.to_doc(), &self.expr.to_doc())
+        format!(
+            "(if-let {} {})", 
+            &self.pattern.to_doc(), 
+            &self.expr.to_doc()
+        )
     }
 }
 
 impl Printable for Expr {
     fn to_doc(&self) -> String {
         match self {
-            Expr::Term { sym, args, .. } => {
-                // sexp(
-                // Vec::from([sym.to_doc()])
-                //     .into_iter()
-                //     .chain(args.iter().map(|f| f.to_doc())),
-            }
+            Expr::Term { sym, args, .. } => format!(
+                "({} {})",
+                &sym.to_doc(),
+                // Same error
+                &args.iter().map(|f| f.to_doc()).join(" ")
+            ),
             Expr::Var { name, .. } => name.to_doc(),
-            Expr::ConstInt { val, .. } => format!("{}", val),
-            Expr::ConstPrim { val, .. } => format!("${}", val.to_doc()),
-            Expr::Let { defs, body, .. } => {
-                let mut parts = String::from("let");
-                // Convert from a map to a string
-                parts.push_str(sexp(defs.iter().map(|d| d.to_doc())));
-                parts.push_str(&body.to_doc());
-                return parts
-            }
+            Expr::ConstInt { val, .. } => val.to_string(),
+            Expr::ConstPrim { val, .. } => format!("(${})", val.to_doc()),
+            Expr::Let { defs, body, .. } => format!(
+                "(let {} {})",
+                // Same error
+                &defs.iter().map(|d| d.to_doc()).join(" "),
+                &body.to_doc()
+            ),
         }
     }   
 }
 
 impl Printable for LetDef {
     fn to_doc(&self) -> String {
-        format!("{}{}{}", &self.var.to_doc(), &self.ty.to_doc(), &self.val.to_doc())
+        format!(
+            "({} {} {})", 
+            &self.var.to_doc(), 
+            &self.ty.to_doc(), 
+            &self.val.to_doc()
+        )
     }
 }
 
@@ -207,16 +222,27 @@ impl Printable for Extern {
                 pos: _,
                 infallible,
             } => {
-                let mut parts = String::from("extern-extractor");
+                let mut parts = String::from("(extern extractor ");
                 if *infallible {
-                    parts.push_str("infallible");
+                    parts.push_str("infallible ");
                 }
-                parts.push_str(&term.to_doc());
-                parts.push_str(&func.to_doc());
+                parts.push_str(&format!(
+                    "{} {})",
+                    &term.to_doc(),
+                    &func.to_doc()
+                ));
                 return parts
             }
-            Extern::Constructor { term, func, .. } => format!("extern-constructor{}{}", &term.to_doc(), &func.to_doc()),
-            Extern::Const { name, ty, .. } => format!("extern-const${}{}", &name.to_doc(), &ty.to_doc()),
+            Extern::Constructor { term, func, .. } => format!(
+                "extern constructor {} {})", 
+                &term.to_doc(), 
+                &func.to_doc()
+            ),
+            Extern::Const { name, ty, .. } => format!(
+                "(extern const ${} {})",
+                &name.to_doc(),
+                &ty.to_doc()
+            ),
         }
     }
 }
