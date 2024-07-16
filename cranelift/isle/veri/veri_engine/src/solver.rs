@@ -897,30 +897,6 @@ impl SolverCtx {
                 new_state.val = self.bv2nat(xs.val);
                 return new_state;
             }
-            Expr::BVConvTo(y) => {
-                if self.dynwidths {
-                    // For static convto, width constraints are handling during inference
-                    self.vir_expr_to_state(*y)
-                } else {
-                    let arg_width = self.static_width(&*y).unwrap();
-                    match ty {
-                        Some(Type::BitVector(Some(w))) => {
-                            let actual_width = *w;
-                            let ys = self.vir_expr_to_state(*y);
-                            let mut new_state = State { ..ys };
-                            new_state.val = if arg_width < actual_width {
-                                let padding = self
-                                    .new_fresh_bits(actual_width.checked_sub(arg_width).unwrap());
-                                self.smt.concat(padding, ys.val)
-                            } else {
-                                ys.val
-                            };
-                            return new_state;
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-            }
             Expr::BVZeroExtTo(i, x) => {
                 let arg_width = if self.dynwidths {
                     let expr_width = width.unwrap().clone();
@@ -1006,7 +982,7 @@ impl SolverCtx {
                 return new_state;
             }
 
-            Expr::BVConvToVarWidth(x, y) => {
+            Expr::BVConvTo(x, y) => {
                 if self.dynwidths {
                     let expr_width = width.unwrap().clone();
                     let dyn_width = self.vir_expr_to_state(*x);
@@ -1201,32 +1177,6 @@ impl SolverCtx {
 
                 return new_state;
             }
-            Expr::A64CLZ(ty, e) => {
-                let tyvar = *tyvar.unwrap();
-                if self.dynwidths {
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
-                }
-                let es = self.vir_expr_to_state(*e);
-                let mut new_state = State { ..es };
-
-                let val = self.get_expr_value(&*ty);
-                new_state.val = match val {
-                    Some(32) => clz::a64clz32(self, es.val, tyvar),
-                    Some(64) => clz::clz64(self, es.val, tyvar),
-                    Some(w) => {
-                        println!("Unexpected A64CLZ width {}", w);
-                        self.assert(self.smt.false_());
-                        es.val
-                    }
-                    None => {
-                        println!("Need static A64CLZ width");
-                        self.assert(self.smt.false_());
-                        es.val
-                    }
-                };
-
-                return new_state;
-            }
             Expr::CLS(e) => {
                 let tyvar = *tyvar.unwrap();
                 if self.dynwidths {
@@ -1247,32 +1197,6 @@ impl SolverCtx {
 
                 return new_state;
             }
-            Expr::A64CLS(ty, e) => {
-                let tyvar = *tyvar.unwrap();
-                if self.dynwidths {
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
-                }
-                let es = self.vir_expr_to_state(*e);
-                let mut new_state = State { ..es };
-
-                let val = self.get_expr_value(&*ty);
-                new_state.val = match val {
-                    Some(32) => cls::a64cls32(self, es.val, tyvar),
-                    Some(64) => cls::cls64(self, es.val, tyvar),
-                    Some(w) => {
-                        println!("Unexpected A64CLS width {}", w);
-                        self.assert(self.smt.false_());
-                        es.val
-                    }
-                    None => {
-                        println!("Need static A64CLS width");
-                        self.assert(self.smt.false_());
-                        es.val
-                    }
-                };
-
-                return new_state;
-            }
             Expr::Rev(e) => {
                 let tyvar = *tyvar.unwrap();
                 if self.dynwidths {
@@ -1289,32 +1213,6 @@ impl SolverCtx {
                     Some(64) => rev::rev64(self, es.val, tyvar),
                     Some(w) => unreachable!("Unexpected CLS width {}", w),
                     None => unreachable!("Need static CLS width"),
-                };
-
-                return new_state;
-            }
-            Expr::A64Rev(ty, e) => {
-                let tyvar = *tyvar.unwrap();
-                if self.dynwidths {
-                    self.assume_same_width_from_sexpr(width.unwrap(), &*e);
-                }
-                let es = self.vir_expr_to_state(*e);
-                let mut new_state = State { ..es };
-
-                let val = self.get_expr_value(&*ty);
-                new_state.val = match val {
-                    Some(32) => rev::rbit32(self, es.val, tyvar),
-                    Some(64) => rev::rev64(self, es.val, tyvar),
-                    Some(w) => {
-                        println!("Unexpected A64Rev width {}", w);
-                        self.assert(self.smt.false_());
-                        es.val
-                    }
-                    None => {
-                        println!("Need static A64Rev width");
-                        self.assert(self.smt.false_());
-                        es.val
-                    }
                 };
 
                 return new_state;

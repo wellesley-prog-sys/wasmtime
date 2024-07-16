@@ -5,6 +5,7 @@
 //! Note: annotations use the higher-level IR in annotation_ir.rs.
 pub mod annotation_ir;
 
+use std::fmt;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -147,11 +148,8 @@ pub enum Expr {
 
     // Count leading zeros
     CLZ(Box<Expr>),
-    A64CLZ(Box<Expr>, Box<Expr>),
     CLS(Box<Expr>),
-    A64CLS(Box<Expr>, Box<Expr>),
     Rev(Box<Expr>),
-    A64Rev(Box<Expr>, Box<Expr>),
 
     BVPopcnt(Box<Expr>),
 
@@ -185,13 +183,95 @@ pub enum Expr {
     BVSignExtToVarWidth(Box<Expr>, Box<Expr>),
 
     // Conversion to wider/narrower bits, without an explicit extend
-    BVConvTo(Box<Expr>),
-    BVConvToVarWidth(Box<Expr>, Box<Expr>),
+    BVConvTo(Box<Expr>, Box<Expr>),
 
     WidthOf(Box<Expr>),
 
     Load(Box<Expr>, Box<Expr>, Box<Expr>),
     Store(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>),
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Expr::Terminal(t) => match t {
+                Terminal::Var(v) => write!(f, "{}", v),
+                Terminal::Literal(v, _) => write!(f, "{}", v),
+                Terminal::Const(c, _) => write!(f, "{}", c),
+                Terminal::True => write!(f, "true"),
+                Terminal::False =>  write!(f, "false"),
+                Terminal::Wildcard(_) =>  write!(f, "_"),
+            },
+            Expr::Unary(o, e) => {
+                let op = match o {
+                    UnaryOp::Not => "not",
+                    UnaryOp::BVNeg => "bvneg",
+                    UnaryOp::BVNot => "bvnot",
+                };
+                write!(f, "({} {})", op, e)
+            },
+            Expr::Binary(o, x, y) => {
+                let op = match o {
+                    BinaryOp::And => "and",
+                    BinaryOp::Or => "or",
+                    BinaryOp::Imp => "=>",
+                    BinaryOp::Eq => "=",
+                    BinaryOp::Lte => "<=",
+                    BinaryOp::Lt => "<",
+                    BinaryOp::BVSgt => "bvsgt",
+                    BinaryOp::BVSgte => "bvsgte",
+                    BinaryOp::BVSlt => "bvslt",
+                    BinaryOp::BVSlte => "bvslte",
+                    BinaryOp::BVUgt => "bvugt",
+                    BinaryOp::BVUgte => "bvugte",
+                    BinaryOp::BVUlt => "bvult",
+                    BinaryOp::BVUlte => "bvulte",
+                    BinaryOp::BVMul => "bvmul",
+                    BinaryOp::BVUDiv => "bvudiv",
+                    BinaryOp::BVSDiv => "bvsdiv",
+                    BinaryOp::BVAdd => "bvadd",
+                    BinaryOp::BVSub => "bvsub",
+                    BinaryOp::BVUrem => "bvurem",
+                    BinaryOp::BVSrem => "bvsrem",
+                    BinaryOp::BVAnd => "bvand",
+                    BinaryOp::BVOr => "bvor",
+                    BinaryOp::BVXor => "bvxor",
+                    BinaryOp::BVRotl => "bvrotl",
+                    BinaryOp::BVRotr => "bvrotr",
+                    BinaryOp::BVShl => "bvshl",
+                    BinaryOp::BVShr => "bvshr",
+                    BinaryOp::BVAShr => "bvashr",
+                    BinaryOp::BVSaddo => "bvsaddo",
+                };
+                write!(f, "({} {} {})", op, x, y)
+        }
+            Expr::CLZ(e) => write!(f, "(clz {})", e), 
+            Expr::CLS(e) =>  write!(f, "(cls {})", e), 
+            Expr::Rev(e) => write!(f, "(rev {})", e), 
+            Expr::BVPopcnt(e) => write!(f, "(popcnt {})", e), 
+            Expr::BVSubs(t, x, y) =>  write!(f, "(subs {} {} {})", t, x, y), 
+            Expr::Conditional(c, t, e) => write!(f, "(if {} {} {})", c, t, e), 
+            Expr::Switch(m, cs) => {
+                let cases : Vec<String>= cs.iter().map(|(c, m)|  format!("({} {})", c, m)).collect();
+                write!(f, "(switch {} {})", m, cases.join(""))
+            }
+            Expr::BVExtract(h, l, e) => write!(f, "(extract {} {} {})", *h, *l, e),
+            Expr::BVConcat(es) => {
+                let vs : Vec<String>= es.iter().map(|v|  format!("{}", v)).collect();
+                write!(f, "(concat {})", vs.join(""))
+            }
+            Expr::BVIntToBV(t, e) => write!(f, "(int2bv {} {})", t, e),
+            Expr::BVToInt(b) => write!(f, "(bv2int {})", b),
+            Expr::BVZeroExtTo(d, e) =>  write!(f, "(zero_ext {} {})", *d, e),
+            Expr::BVZeroExtToVarWidth(d, e) => write!(f, "(zero_ext {} {})", d, e),
+            Expr::BVSignExtTo(d, e) => write!(f, "(sign_ext {} {})", *d, e),
+            Expr::BVSignExtToVarWidth(d, e) => write!(f, "(sign_ext {} {})", *d, e),
+            Expr::BVConvTo(_, _) => todo!(),
+            Expr::WidthOf(_) => todo!(),
+            Expr::Load(_, _, _) => todo!(),
+            Expr::Store(_, _, _, _) => todo!(),
+        }
+    }
 }
 
 /// To-be-flushed-out verification counterexample for failures

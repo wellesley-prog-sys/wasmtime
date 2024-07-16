@@ -163,11 +163,8 @@ pub enum Expr {
     BVNeg(Box<Expr>),
     BVNot(Box<Expr>),
     CLZ(Box<Expr>),
-    A64CLZ(Box<Expr>, Box<Expr>),
     CLS(Box<Expr>),
-    A64CLS(Box<Expr>, Box<Expr>),
     Rev(Box<Expr>),
-    A64Rev(Box<Expr>, Box<Expr>),
     BVPopcnt(Box<Expr>),
 
     // Binary operators
@@ -212,9 +209,8 @@ pub enum Expr {
     BVToInt(Box<Expr>),
 
     // Conversion to wider/narrower bits, without an explicit extend
-    BVConvTo(Box<Width>, Box<Expr>),
     // Allow the destination width to be symbolic.
-    BVConvToVarWidth(Box<Expr>, Box<Expr>),
+    BVConvTo(Box<Expr>, Box<Expr>),
 
     // Conditional if-then-else
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),

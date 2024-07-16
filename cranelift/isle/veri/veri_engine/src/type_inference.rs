@@ -1020,27 +1020,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-
         annotation_ir::Expr::BVConvTo(w, x) => {
-            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
-            let t = tree.next_type_var;
-            tree.next_type_var += 1;
-
-            let width = match *w {
-                annotation_ir::Width::Const(x) => x,
-                annotation_ir::Width::RegWidth => REG_WIDTH,
-            };
-
-            tree.concrete_constraints.insert(TypeExpr::Concrete(
-                t,
-                annotation_ir::Type::BitVectorWithWidth(width),
-            ));
-            tree.bv_constraints
-                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
-
-            (veri_ir::Expr::BVConvTo(Box::new(e1)), t)
-        }
-        annotation_ir::Expr::BVConvToVarWidth(w, x) => {
             let (we, wt) = add_annotation_constraints(*w, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
@@ -1058,7 +1038,7 @@ fn add_annotation_constraints(
                 tree.bv_constraints
                     .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
 
-                (veri_ir::Expr::BVConvTo(Box::new(e1)), t)
+                (veri_ir::Expr::BVConvTo(Box::new(Expr::Terminal(veri_ir::Terminal::Const(w, 0))), Box::new(e1)), t)
             } else {
                 tree.concrete_constraints.insert(TypeExpr::WidthInt(t, wt));
                 tree.bv_constraints
@@ -1067,7 +1047,7 @@ fn add_annotation_constraints(
                     .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
 
                 (
-                    veri_ir::Expr::BVConvToVarWidth(Box::new(we), Box::new(e1)),
+                    veri_ir::Expr::BVConvTo(Box::new(we), Box::new(e1)),
                     t,
                 )
             }
@@ -1262,23 +1242,6 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::CLZ(Box::new(e1)), t)
         }
-        annotation_ir::Expr::A64CLZ(ty, x) => {
-            let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
-            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
-
-            let t = tree.next_type_var;
-            tree.concrete_constraints.insert(TypeExpr::Concrete(
-                t,
-                annotation_ir::Type::BitVectorWithWidth(REG_WIDTH),
-            ));
-            tree.concrete_constraints
-                .insert(TypeExpr::Concrete(t0, annotation_ir::Type::Int));
-            tree.bv_constraints
-                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
-
-            tree.next_type_var += 1;
-            (veri_ir::Expr::A64CLZ(Box::new(e0), Box::new(e1)), t)
-        }
         annotation_ir::Expr::CLS(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
@@ -1292,23 +1255,6 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::CLS(Box::new(e1)), t)
         }
-        annotation_ir::Expr::A64CLS(ty, x) => {
-            let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
-            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
-
-            let t = tree.next_type_var;
-            tree.concrete_constraints.insert(TypeExpr::Concrete(
-                t,
-                annotation_ir::Type::BitVectorWithWidth(REG_WIDTH),
-            ));
-            tree.concrete_constraints
-                .insert(TypeExpr::Concrete(t0, annotation_ir::Type::Int));
-            tree.bv_constraints
-                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
-
-            tree.next_type_var += 1;
-            (veri_ir::Expr::A64CLS(Box::new(e0), Box::new(e1)), t)
-        }
         annotation_ir::Expr::Rev(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
@@ -1321,23 +1267,6 @@ fn add_annotation_constraints(
 
             tree.next_type_var += 1;
             (veri_ir::Expr::Rev(Box::new(e1)), t)
-        }
-        annotation_ir::Expr::A64Rev(ty, x) => {
-            let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
-            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
-
-            let t = tree.next_type_var;
-            tree.concrete_constraints.insert(TypeExpr::Concrete(
-                t,
-                annotation_ir::Type::BitVectorWithWidth(REG_WIDTH),
-            ));
-            tree.concrete_constraints
-                .insert(TypeExpr::Concrete(t0, annotation_ir::Type::Int));
-            tree.bv_constraints
-                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
-
-            tree.next_type_var += 1;
-            (veri_ir::Expr::A64Rev(Box::new(e0), Box::new(e1)), t)
         }
         annotation_ir::Expr::BVSubs(ty, x, y) => {
             let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
@@ -1854,7 +1783,7 @@ fn solve_constraints(
                                         match (e1, e2) {
                                             (Some(e1), Some(e2)) =>
                                             panic!(
-                                                "type conflict at constraint {:#?}:\nt{}:{:?}\n has type {:#?},\nt{}:{:?}\n has type {:#?}",
+                                                "type conflict at constraint {:#?}: \nt{}:{}\nhas type {:#?},\nt{}: {}\nhas type {:#?}",
                                                 v, v1, e1, x, v2, e2, y
                                                 ),
                                             _ => continue,
