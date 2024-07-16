@@ -140,7 +140,8 @@
 ;; Put the given value into one or more registers.
 ;;
 ;; As a side effect, this marks the value as used.
-(spec (put_in_regs arg) (provide (= (conv_to 64 arg) result)))
+(spec (put_in_regs arg) 
+    (provide (= result (if (<= (widthof arg) 64) (conv_to 64 arg) arg))))
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
 
@@ -392,6 +393,9 @@
         (output_none)))
 
 (decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)
+(spec (side_effect_concat inst1 inst2) 
+      (provide (= result inst1)
+               (= result inst2)))
 (rule (side_effect_concat (SideEffectNoResult.Inst inst1) (SideEffectNoResult.Inst inst2))
       (SideEffectNoResult.Inst2 inst1 inst2))
 (rule (side_effect_concat (SideEffectNoResult.Inst inst1) (SideEffectNoResult.Inst2 inst2 inst3))

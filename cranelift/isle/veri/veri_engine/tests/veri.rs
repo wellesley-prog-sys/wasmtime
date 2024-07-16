@@ -3513,3 +3513,19 @@ fn test_named_store_x64_movrm() {
         )
     });
 }
+
+#[test]
+fn test_named_store_x64_movimm_m() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "store_x64_movimm_m",
+            "store",
+            vec![
+                (Bitwidth::I8, VerificationResult::InapplicableRule),
+                (Bitwidth::I16, VerificationResult::InapplicableRule),
+                (Bitwidth::I32, VerificationResult::Success),
+                (Bitwidth::I64, VerificationResult::Success),
+            ],
+        )
+    });
+}

@@ -1191,6 +1191,8 @@
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
 (decl amode_offset (Amode i32) Amode)
+(spec (amode_offset amode offset)
+      (provide (= result (bvadd amode offset))))
 (extern constructor amode_offset amode_offset)
 
 ;; Return a zero offset as an `Offset32`.
@@ -1706,6 +1708,11 @@
 ;;
 ;; Asserts that the register is a GPR.
 (decl value_regs_get_gpr (ValueRegs usize) Gpr)
+(spec (value_regs_get_gpr regs n)
+      (provide (= result (switch n
+                        (#b0 (extract 63 0 regs))
+                        (#b1 (extract 127 64 regs)))
+)))
 (rule (value_regs_get_gpr regs n)
       (gpr_new (value_regs_get regs n)))
 
@@ -2556,6 +2563,9 @@
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
 
 (decl x64_movimm_m (Type SyntheticAmode i32) SideEffectNoResult)
+(spec (x64_movimm_m ty addr imm)
+       (provide (= result (store (extract 79 64 addr) ty (conv_to ty imm) (extract 63 0 addr))))
+       (require (and (= (widthof imm) 32) (<= ty 64))))
 (rule (x64_movimm_m ty addr imm)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovImmM size imm addr))))

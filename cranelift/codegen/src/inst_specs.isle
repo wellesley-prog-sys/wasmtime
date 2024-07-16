@@ -244,6 +244,7 @@
     ((args (bv 16) (bv 16) (bv 64) (bv 32)) (ret Unit) (canon (bv 16)))
     ((args (bv 16) (bv 32) (bv 64) (bv 32)) (ret Unit) (canon (bv 32)))
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret Unit) (canon (bv 64)))
+    ((args (bv 16) (bv 128) (bv 64) (bv 32)) (ret Unit) (canon (bv 128)))
 )
 (spec (store flags val_to_store addr offset)
     (provide 
