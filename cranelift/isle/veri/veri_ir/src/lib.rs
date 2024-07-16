@@ -63,6 +63,18 @@ pub enum Type {
     Unit,
 }
 
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::BitVector(None) => write!(f, "bv"),
+            Type::BitVector(Some(s)) => write!(f, "bv{}", *s),
+            Type::Bool => write!(f, "Bool"),
+            Type::Int => write!(f, "Int"),
+            Type::Unit => write!(f, "Unit"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TermSignature {
     pub args: Vec<Type>,
@@ -266,10 +278,10 @@ impl fmt::Display for Expr {
             Expr::BVZeroExtToVarWidth(d, e) => write!(f, "(zero_ext {} {})", d, e),
             Expr::BVSignExtTo(d, e) => write!(f, "(sign_ext {} {})", *d, e),
             Expr::BVSignExtToVarWidth(d, e) => write!(f, "(sign_ext {} {})", *d, e),
-            Expr::BVConvTo(_, _) => todo!(),
-            Expr::WidthOf(_) => todo!(),
-            Expr::Load(_, _, _) => todo!(),
-            Expr::Store(_, _, _, _) => todo!(),
+            Expr::BVConvTo(x, y) => write!(f, "(conv_to {} {})", x, y),
+            Expr::WidthOf(e) => write!(f, "(widthof {})", e),
+            Expr::Load(x, y, z) => write!(f, "(load {} {} {})", x, y, z),
+            Expr::Store(w, x, y, z) =>  write!(f, "(store {} {} {} {})", w, x, y, z),
         }
     }
 }

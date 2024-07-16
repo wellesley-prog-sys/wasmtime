@@ -1783,8 +1783,8 @@ fn solve_constraints(
                                         match (e1, e2) {
                                             (Some(e1), Some(e2)) =>
                                             panic!(
-                                                "type conflict at constraint {:#?}: \nt{}:{}\nhas type {:#?},\nt{}: {}\nhas type {:#?}",
-                                                v, v1, e1, x, v2, e2, y
+                                                "type conflict\n\t{}\nhas type\n\t{}\nbut\n\t{}\nhas type\n\t{}",
+                                                e1, x, e2, y
                                                 ),
                                             _ => continue,
                                         }

@@ -2,6 +2,7 @@
 /// This allows annotations to be generic over possible types, which
 /// corresponds to how ISLE rewrites are written.
 
+use std::fmt;
 /// A bound variable, including the VIR type
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoundVar {
@@ -101,6 +102,20 @@ pub enum Type {
 
     /// Unit, removed before SMT-Lib
     Unit,
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::Poly(_) => write!(f, "poly"),
+            Type::BitVector => write!(f, "bv"),
+            Type::BitVectorWithWidth(w) => write!(f, "bv{}", *w),
+            Type::BitVectorUnknown(_) => write!(f, "bv"),
+            Type::Int =>  write!(f, "Int"),
+            Type::Bool =>  write!(f, "Bool"),
+            Type::Unit =>  write!(f, "Unit"),
+        }
+    }
 }
 
 impl Type {
