@@ -160,6 +160,7 @@ impl std::fmt::Display for Expr {
     }
 }
 
+// QUESTION(mbm): is `Call` the right name? consider `Term`, `TermInstance`, ...?
 #[derive(Debug)]
 pub struct Call {
     pub term: TermId,

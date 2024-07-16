@@ -93,7 +93,7 @@ fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()>
     conditions.pretty_print(prog);
 
     // Type constraints.
-    let constraints = type_constraints(&conditions)?;
+    let constraints = type_constraints(&conditions);
     // TOOD(mbm): pretty print method for type constraints
     println!("type constraints = [");
     for constraint in &constraints {

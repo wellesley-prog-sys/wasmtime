@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::zip};
 
-use crate::veri::{Conditions, Const, Expr, ExprId, Type};
+use crate::veri::{Call, Conditions, Const, Expr, ExprId, Type};
 
 #[derive(Debug)]
 pub enum Constraint {
@@ -25,7 +25,7 @@ impl std::fmt::Display for Constraint {
     }
 }
 
-pub fn type_constraints(conditions: &Conditions) -> anyhow::Result<Vec<Constraint>> {
+pub fn type_constraints(conditions: &Conditions) -> Vec<Constraint> {
     let builder = ConstraintsBuilder::new(conditions);
     builder.build()
 }
@@ -44,7 +44,7 @@ impl<'a> ConstraintsBuilder<'a> {
         }
     }
 
-    fn build(mut self) -> anyhow::Result<Vec<Constraint>> {
+    fn build(mut self) -> Vec<Constraint> {
         // Expression constraints.
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
             self.veri_expr(ExprId(i), expr);
@@ -60,9 +60,12 @@ impl<'a> ConstraintsBuilder<'a> {
             self.boolean(*a);
         }
 
-        // TODO(mbm): term instantiations
+        // Calls.
+        for call in &self.conditions.calls {
+            self.call(call);
+        }
 
-        Ok(self.constraints)
+        self.constraints
     }
 
     fn veri_expr(&mut self, x: ExprId, expr: &Expr) {
@@ -117,6 +120,27 @@ impl<'a> ConstraintsBuilder<'a> {
                 self.width_of(*y, x);
             }
         }
+    }
+
+    fn call(&mut self, call: &Call) {
+        if call.signatures.is_empty() {
+            return;
+        }
+
+        // TODO(mbm): support multiple term signatures
+        if call.signatures.len() > 1 {
+            todo!("multiple term signatures");
+        }
+        let sig = &call.signatures[0];
+
+        // Arguments.
+        assert_eq!(call.args.len(), sig.args.len());
+        for (a, ty) in zip(&call.args, &sig.args) {
+            self.concrete(*a, ty.clone());
+        }
+
+        // Return.
+        self.concrete(call.ret, sig.ret.clone());
     }
 
     fn bit_vector(&mut self, x: ExprId) {
