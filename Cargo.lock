@@ -735,6 +735,7 @@ dependencies = [
  "clap",
  "cranelift-codegen-meta",
  "cranelift-isle",
+ "easy-smt",
  "env_logger",
  "log",
 ]
@@ -1038,6 +1039,16 @@ name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
+
+[[package]]
+name = "easy-smt"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e58f860dd24f605d14a0c94c904d5b8c1b564087c5eab215f9c89ee7cade6b8"
+dependencies = [
+ "log",
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "egg"
@@ -3081,6 +3092,12 @@ checksum = "854cbdc4f7bc6ae19c820d44abdc3277ac3e1b2b93db20a636825d9322fb60e6"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4c87d22b6e3f4a18d4d40ef354e97c90fcb14dd91d7dc0aa9d8a1172ebf7202"
 
 [[package]]
 name = "unicode-width"

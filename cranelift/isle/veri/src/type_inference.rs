@@ -217,7 +217,8 @@ impl Assignment {
         }
     }
 
-    fn expect_expr_type(&self, x: ExprId) -> anyhow::Result<&Type> {
+    // TODO(mbm): better name for expect_expr_type?
+    pub fn expect_expr_type(&self, x: ExprId) -> anyhow::Result<&Type> {
         self.expr_type.get(&x).ok_or(anyhow::format_err!(
             "expression {x} missing type assignment",
             x = x.index()

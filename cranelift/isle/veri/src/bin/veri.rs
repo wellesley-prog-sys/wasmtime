@@ -4,7 +4,8 @@ use cranelift_isle_veri::{
     debug::print_expansion,
     expand::{Expansion, ExpansionsBuilder},
     program::Program,
-    type_inference::{type_constraints, Solver},
+    solver::Solver,
+    type_inference::{self, type_constraints},
     veri::Conditions,
 };
 
@@ -101,10 +102,19 @@ fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()>
     }
     println!("]");
 
-    // Solve.
-    let solver = Solver::new();
-    let assignment = solver.solve(&constraints)?;
+    // Infer types.
+    let type_solver = type_inference::Solver::new();
+    let assignment = type_solver.solve(&constraints)?;
     assignment.pretty_print(&conditions);
+
+    // Solve.
+    let replay_file = std::fs::File::create("veri.smt2")?;
+    let smt = easy_smt::ContextBuilder::new()
+        .solver("z3", ["-smt2", "-in"])
+        .replay_file(Some(replay_file))
+        .build()?;
+    let mut solver = Solver::new(smt, &conditions, &assignment);
+    solver.solve()?;
 
     Ok(())
 }

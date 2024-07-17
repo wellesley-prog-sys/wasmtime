@@ -10,3 +10,4 @@ log = { workspace = true }
 env_logger = { workspace = true }
 anyhow = { workspace = true, features = ['std'] }
 clap = { workspace = true, features = ['default'] }
+easy-smt = "0.2"

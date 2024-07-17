@@ -152,6 +152,12 @@ pub enum Expr {
     WidthOf(ExprId),
 }
 
+impl Expr {
+    pub fn is_variable(&self) -> bool {
+        matches!(self, Self::Variable(_))
+    }
+}
+
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
