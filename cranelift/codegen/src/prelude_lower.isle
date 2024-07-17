@@ -141,7 +141,7 @@
 ;;
 ;; As a side effect, this marks the value as used.
 (spec (put_in_regs arg) 
-    (provide (= result (if (<= (widthof arg) 64) (conv_to 64 arg) arg))))
+    (provide (= result (conv_to (if (<= (widthof arg) 64) 64 128) arg))))
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
 

@@ -2983,6 +2983,7 @@
        (x64_movdqu_store (to_amode flags address offset) value)))
 
 ;; Stores of I128 values: store the two 64-bit halves separately.
+;; This rule requires multiple stores on the RHS, which we currently do not support. 
 (rule store_I128_x64_movrm 0 (lower (store flags
                     value @ (value_type $I128)
                     address

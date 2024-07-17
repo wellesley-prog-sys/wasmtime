@@ -2233,7 +2233,7 @@ fn create_parse_tree_pattern(
                 "true" => 1,
                 "false" => 0,
                 // Not currently used, but parsed
-                "I128" => 16,
+                "I128" => 128,
                 _ => todo!("{:?}", &name),
             };
             let name = format!("{}__{}", name, type_var);
