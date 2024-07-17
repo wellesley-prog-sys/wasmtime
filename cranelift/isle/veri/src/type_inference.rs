@@ -172,12 +172,12 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 }
 
-pub struct Solver {
-    expr_type: HashMap<ExprId, Type>,
-    int_value: HashMap<ExprId, i128>,
+pub struct Assignment {
+    pub expr_type: HashMap<ExprId, Type>,
+    pub int_value: HashMap<ExprId, i128>,
 }
 
-impl Solver {
+impl Assignment {
     pub fn new() -> Self {
         Self {
             expr_type: HashMap::new(),
@@ -185,9 +185,140 @@ impl Solver {
         }
     }
 
-    pub fn solve(mut self, constraints: &Vec<Constraint>) -> anyhow::Result<HashMap<ExprId, Type>> {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Assigned types should all be concrete.
+        for (x, ty) in &self.expr_type {
+            if !ty.is_concrete() {
+                anyhow::bail!(
+                    "non-concrete type {ty} assigned to expression {x}",
+                    x = x.index()
+                );
+            }
+        }
+
+        // TODO(mbm): everything with an integer value should have integer type
+
+        Ok(())
+    }
+
+    pub fn satisfies_constraints(&self, constraints: &Vec<Constraint>) -> anyhow::Result<()> {
+        constraints
+            .iter()
+            .map(|c| self.satisfies_constraint(c))
+            .collect()
+    }
+
+    pub fn satisfies_constraint(&self, constraint: &Constraint) -> anyhow::Result<()> {
+        match constraint {
+            &Constraint::Concrete { x, ref ty } => self.expect_expr_type_refinement(x, ty),
+            &Constraint::Same { x, y } => self.expect_same(x, y),
+            &Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
+            &Constraint::IntValue { x, v } => self.expect_int_value(x, v),
+        }
+    }
+
+    fn expect_expr_type(&self, x: ExprId) -> anyhow::Result<&Type> {
+        self.expr_type.get(&x).ok_or(anyhow::format_err!(
+            "expression {x} missing type assignment",
+            x = x.index()
+        ))
+    }
+
+    fn expect_expr_type_refinement(&self, x: ExprId, base: &Type) -> anyhow::Result<()> {
+        let ty = self.expect_expr_type(x)?;
+        if !ty.is_refinement_of(base) {
+            anyhow::bail!("expected type {ty} to be refinement of {base}")
+        }
+        Ok(())
+    }
+
+    fn expect_same(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
+        let tx = self.expect_expr_type(x)?;
+        let ty = self.expect_expr_type(y)?;
+        if tx != ty {
+            anyhow::bail!(
+                "expressions {x} and {y} should have same type: got {tx} and {ty}",
+                x = x.index(),
+                y = y.index()
+            )
+        }
+
+        // TODO(mbm): if integers, the values should match
+
+        Ok(())
+    }
+
+    fn expect_width_of(&self, x: ExprId, w: ExprId) -> anyhow::Result<()> {
+        // Expression x should be a concrete bitvector.
+        let tx = self.expect_expr_type(x)?;
+        let &Type::BitVector(Some(width)) = tx else {
+            anyhow::bail!(
+                "expression {x} should be a bit-vector of known width; got {tx}",
+                x = x.index()
+            );
+        };
+
+        // Expression w should be an integer equal to the width.
+        self.expect_int_value(w, width.try_into().unwrap())?;
+
+        Ok(())
+    }
+
+    fn expect_int_value(&self, x: ExprId, expect: i128) -> anyhow::Result<()> {
+        // Expression x should be an integer.
+        let tx = self.expect_expr_type(x)?;
+        if *tx != Type::Int {
+            anyhow::bail!(
+                "expression {x} should be an integer; got {tx}",
+                x = x.index()
+            );
+        };
+
+        // Should have an integer assignment.
+        let got = self.int_value.get(&x).copied().ok_or(anyhow::format_err!(
+            "expression {x} missing integer value",
+            x = x.index()
+        ))?;
+
+        if got != expect {
+            anyhow::bail!("expected integer value {expect}; got {got}");
+        }
+
+        Ok(())
+    }
+
+    pub fn pretty_print(&self, conditions: &Conditions) {
+        for (i, expr) in conditions.exprs.iter().enumerate() {
+            print!("{i}:\t");
+            match self.expr_type.get(&ExprId(i)) {
+                None => print!("false\t-"),
+                Some(typ) => print!("{}\t{typ}", typ.is_concrete()),
+            }
+            println!("\t{expr}");
+        }
+    }
+}
+
+pub struct Solver {
+    assignment: Assignment,
+}
+
+impl Solver {
+    pub fn new() -> Self {
+        Self {
+            assignment: Assignment::new(),
+        }
+    }
+
+    pub fn solve(mut self, constraints: &Vec<Constraint>) -> anyhow::Result<Assignment> {
+        // Iterate until no changes.
         while self.iterate(constraints)? {}
-        Ok(self.expr_type)
+
+        // Check assignment is reasonable.
+        self.assignment.validate()?;
+        self.assignment.satisfies_constraints(constraints)?;
+
+        Ok(self.assignment)
     }
 
     fn iterate(&mut self, constraints: &Vec<Constraint>) -> anyhow::Result<bool> {
@@ -210,16 +341,16 @@ impl Solver {
 
     fn set_type(&mut self, x: ExprId, ty: &Type) -> anyhow::Result<bool> {
         // If we don't know a type for the expression, record it.
-        if !self.expr_type.contains_key(&x) {
-            self.expr_type.insert(x, ty.clone());
+        if !self.assignment.expr_type.contains_key(&x) {
+            self.assignment.expr_type.insert(x, ty.clone());
             return Ok(true);
         }
 
         // If we do, merge this type with the existing one.
-        let existing = &self.expr_type[&x];
+        let existing = &self.assignment.expr_type[&x];
         let merged = Type::merge(existing, ty)?;
         if merged != *existing {
-            self.expr_type.insert(x, merged);
+            self.assignment.expr_type.insert(x, merged);
             return Ok(true);
         }
 
@@ -230,14 +361,17 @@ impl Solver {
     fn same(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
         // TODO(mbm): union find
         // TODO(mbm): simplify by initializing all expression types to unknown
-        match (self.expr_type.get(&x), self.expr_type.get(&y)) {
+        match (
+            self.assignment.expr_type.get(&x),
+            self.assignment.expr_type.get(&y),
+        ) {
             (None, None) => Ok(false),
             (Some(tx), None) => {
-                self.expr_type.insert(y, tx.clone());
+                self.assignment.expr_type.insert(y, tx.clone());
                 Ok(true)
             }
             (None, Some(ty)) => {
-                self.expr_type.insert(x, ty.clone());
+                self.assignment.expr_type.insert(x, ty.clone());
                 Ok(true)
             }
             (Some(tx), Some(ty)) => {
@@ -245,15 +379,18 @@ impl Solver {
                     return Ok(false);
                 }
                 let merged = Type::merge(tx, ty)?;
-                self.expr_type.insert(x, merged.clone());
-                self.expr_type.insert(y, merged.clone());
+                self.assignment.expr_type.insert(x, merged.clone());
+                self.assignment.expr_type.insert(y, merged.clone());
                 Ok(true)
             }
         }
     }
 
     fn width_of(&mut self, x: ExprId, w: ExprId) -> anyhow::Result<bool> {
-        match (self.expr_type.get(&x), self.int_value.get(&w)) {
+        match (
+            self.assignment.expr_type.get(&x),
+            self.assignment.int_value.get(&w),
+        ) {
             (Some(&Type::BitVector(Some(width))), _) => {
                 self.set_int_value(w, width.try_into().unwrap())
             }
@@ -263,9 +400,9 @@ impl Solver {
     }
 
     fn set_int_value(&mut self, x: ExprId, v: i128) -> anyhow::Result<bool> {
-        match self.int_value.get(&x) {
+        match self.assignment.int_value.get(&x) {
             None => {
-                self.int_value.insert(x, v);
+                self.assignment.int_value.insert(x, v);
                 Ok(true)
             }
             Some(u) if *u == v => Ok(false),

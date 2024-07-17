@@ -57,6 +57,18 @@ impl Type {
             _ => anyhow::bail!("types {left} and {right} are incompatible"),
         })
     }
+
+    pub fn is_refined_by(&self, ty: &Self) -> bool {
+        match (self, ty) {
+            (Self::Unknown, _) => true,
+            (Self::BitVector(None), Self::BitVector(Some(_))) => true,
+            (s, t) => s == t,
+        }
+    }
+
+    pub fn is_refinement_of(&self, ty: &Self) -> bool {
+        ty.is_refined_by(self)
+    }
 }
 
 impl std::fmt::Display for Type {

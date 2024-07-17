@@ -58,6 +58,8 @@ impl Expansion {
     }
 
     fn validate(&self) {
+        // TODO(mbm): return errors in expansion validation rather than assert?
+
         // Bindings: all references should be valid.
         for binding in self.bindings.iter().flatten() {
             for source in binding.sources() {
