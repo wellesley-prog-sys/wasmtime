@@ -103,11 +103,13 @@ fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()>
     println!("]");
 
     // Infer types.
+    println!("type assignment:");
     let type_solver = type_inference::Solver::new();
     let assignment = type_solver.solve(&constraints)?;
     assignment.pretty_print(&conditions);
 
     // Solve.
+    println!("solve:");
     let replay_file = std::fs::File::create("veri.smt2")?;
     let smt = easy_smt::ContextBuilder::new()
         .solver("z3", ["-smt2", "-in"])

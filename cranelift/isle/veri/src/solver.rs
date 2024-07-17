@@ -33,6 +33,11 @@ impl<'a> Solver<'a> {
         // Verification Condition
         self.verification_condition()?;
 
+        // Check
+        let response = self.smt.check()?;
+        // TODO(mbm): return response
+        println!("response = {response:?}");
+
         Ok(())
     }
 
