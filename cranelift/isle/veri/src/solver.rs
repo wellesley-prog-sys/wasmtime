@@ -30,7 +30,8 @@ impl<'a> Solver<'a> {
             }
         }
 
-        // TODO(mbm): (not (assumptions => assertions))
+        // Verification Condition
+        self.verification_condition()?;
 
         Ok(())
     }
@@ -133,6 +134,32 @@ impl<'a> Solver<'a> {
 
         // Substitute known constant width.
         Ok(self.smt.numeral(width))
+    }
+
+    fn verification_condition(&mut self) -> anyhow::Result<()> {
+        // Assumptions
+        let assumptions = self.smt.and_many(
+            self.conditions
+                .assumptions
+                .iter()
+                .map(|a| self.expr_atom(*a)),
+        );
+
+        // Assertions
+        let assertions = self.smt.and_many(
+            self.conditions
+                .assertions
+                .iter()
+                .map(|a| self.expr_atom(*a)),
+        );
+
+        // (<assumptions> => <assertions>)
+        let vc = self.smt.imp(assumptions, assertions);
+
+        // Assert negation.
+        self.smt.assert(self.smt.not(vc))?;
+
+        Ok(())
     }
 
     fn expr_atom(&self, x: ExprId) -> SExpr {
