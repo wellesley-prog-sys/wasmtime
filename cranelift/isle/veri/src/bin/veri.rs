@@ -26,6 +26,10 @@ struct Opts {
     /// Filter to expansions involving this rule.
     #[arg(long, required = true)]
     rule: String,
+
+    /// Path to SMT2 replay file.
+    #[arg(long, required = true)]
+    smt2_replay_path: std::path::PathBuf,
 }
 
 impl Opts {
@@ -82,13 +86,17 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         print_expansion(&prog, expansion);
-        verify_expansion(expansion, &prog)?;
+        verify_expansion(expansion, &prog, &opts.smt2_replay_path)?;
     }
 
     Ok(())
 }
 
-fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()> {
+fn verify_expansion(
+    expansion: &Expansion,
+    prog: &Program,
+    replay_path: &std::path::Path,
+) -> anyhow::Result<()> {
     // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
     conditions.pretty_print(prog);
@@ -110,7 +118,7 @@ fn verify_expansion(expansion: &Expansion, prog: &Program) -> anyhow::Result<()>
 
     // Solve.
     println!("solve:");
-    let replay_file = std::fs::File::create("veri.smt2")?;
+    let replay_file = std::fs::File::create(replay_path)?;
     let smt = easy_smt::ContextBuilder::new()
         .solver("z3", ["-smt2", "-in"])
         .replay_file(Some(replay_file))
