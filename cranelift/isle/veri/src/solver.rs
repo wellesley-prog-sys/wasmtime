@@ -48,7 +48,7 @@ impl<'a> Solver<'a> {
         // Map to corresponding SMT2 type.
         let sort = self.type_to_sort(ty)?;
 
-        // Delcare.
+        // Declare.
         self.smt.declare_const(self.expr_name(x), sort)?;
 
         Ok(())
@@ -172,6 +172,11 @@ impl<'a> Solver<'a> {
     }
 
     fn expr_name(&self, x: ExprId) -> String {
-        format!("e{}", x.index())
+        // TODO(mbm): ensure expression name uniqueness
+        let expr = &self.conditions.exprs[x.index()];
+        match expr {
+            Expr::Variable(v) => self.conditions.variables[v.index()].name.clone(),
+            _ => format!("e{}", x.index()),
+        }
     }
 }

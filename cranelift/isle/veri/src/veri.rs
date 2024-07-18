@@ -178,6 +178,19 @@ impl std::fmt::Display for Expr {
     }
 }
 
+// QUESTION(mbm): does the distinction between expressions and variables make sense?
+#[derive(Debug)]
+pub struct Variable {
+    pub ty: Type,
+    pub name: String,
+}
+
+impl Variable {
+    fn component_name(prefix: &str, field: &str) -> String {
+        format!("{prefix}_{field}")
+    }
+}
+
 // QUESTION(mbm): is `Call` the right name? consider `Term`, `TermInstance`, ...?
 #[derive(Debug)]
 pub struct Call {
@@ -193,7 +206,7 @@ pub struct Conditions {
     pub exprs: Vec<Expr>,
     pub assumptions: Vec<ExprId>,
     pub assertions: Vec<ExprId>,
-    pub variable_type: Vec<Type>,
+    pub variables: Vec<Variable>,
     pub calls: Vec<Call>,
 }
 
@@ -227,10 +240,10 @@ impl Conditions {
         }
         println!("\t]");
 
-        // Variable Types
+        // Variables
         println!("\tvariable_type = [");
-        for (i, ty) in self.variable_type.iter().enumerate() {
-            println!("\t\t{i}:\t{ty}");
+        for (i, v) in self.variables.iter().enumerate() {
+            println!("\t\t{i}:\t{ty}", ty = v.ty);
         }
         println!("\t]");
 
@@ -393,7 +406,8 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Allocate a value.
         let binding_type = self.binding_type(binding);
-        let value = self.alloc_binding_value(&binding_type)?;
+        let name = format!("b{}", id.index());
+        let value = self.alloc_binding_value(&binding_type, name)?;
         self.binding_value.insert(id, value);
 
         // Ensure dependencies have been added.
@@ -935,7 +949,11 @@ impl<'a> ConditionsBuilder<'a> {
         )
     }
 
-    fn alloc_binding_value(&mut self, binding_type: &BindingType) -> anyhow::Result<Value> {
+    fn alloc_binding_value(
+        &mut self,
+        binding_type: &BindingType,
+        name: String,
+    ) -> anyhow::Result<Value> {
         match binding_type {
             BindingType::Base(type_id) => {
                 // TODO(mbm): how to handle missing type models? use unknown default or error?
@@ -946,26 +964,34 @@ impl<'a> ConditionsBuilder<'a> {
                     .get(type_id)
                     .map(Type::from_spec)
                     .unwrap_or(Type::Unknown);
-                Ok(Value::Var(self.alloc_variable(ty)))
+                Ok(Value::Var(self.alloc_variable(ty, name)))
             }
             BindingType::Option(inner_type) => {
-                let some = self.alloc_variable(Type::Bool);
-                let inner = Box::new(self.alloc_binding_value(inner_type)?);
+                let some = self.alloc_variable(Type::Bool, Variable::component_name(&name, "some"));
+                let inner = Box::new(
+                    self.alloc_binding_value(inner_type, Variable::component_name(&name, "inner"))?,
+                );
                 Ok(Value::Option(OptionValue { some, inner }))
             }
             BindingType::Tuple(inners) => {
                 let inners = inners
                     .iter()
-                    .map(|inner_type| self.alloc_binding_value(inner_type))
+                    .enumerate()
+                    .map(|(i, inner_type)| {
+                        self.alloc_binding_value(
+                            inner_type,
+                            Variable::component_name(&name, &i.to_string()),
+                        )
+                    })
                     .collect::<anyhow::Result<_>>()?;
                 Ok(Value::Tuple(inners))
             }
         }
     }
 
-    fn alloc_variable(&mut self, ty: Type) -> VariableId {
-        let id = self.conditions.variable_type.len();
-        self.conditions.variable_type.push(ty);
+    fn alloc_variable(&mut self, ty: Type, name: String) -> VariableId {
+        let id = self.conditions.variables.len();
+        self.conditions.variables.push(Variable { ty, name });
         VariableId(id)
     }
 

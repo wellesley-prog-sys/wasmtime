@@ -78,7 +78,7 @@ impl<'a> ConstraintsBuilder<'a> {
                 self.concrete(x, c.ty());
             }
             Expr::Variable(v) => {
-                let ty = self.conditions.variable_type[v.index()].clone();
+                let ty = self.conditions.variables[v.index()].ty.clone();
                 self.concrete(x, ty);
             }
             Expr::And(y, z) | Expr::Or(y, z) | Expr::Imp(y, z) => {

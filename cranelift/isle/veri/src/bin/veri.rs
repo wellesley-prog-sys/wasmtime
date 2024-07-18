@@ -119,10 +119,12 @@ fn verify_expansion(
     // Solve.
     println!("solve:");
     let replay_file = std::fs::File::create(replay_path)?;
-    let smt = easy_smt::ContextBuilder::new()
+    let mut smt = easy_smt::ContextBuilder::new()
         .solver("z3", ["-smt2", "-in"])
         .replay_file(Some(replay_file))
         .build()?;
+    smt.set_option(":dump-models", smt.true_())?;
+
     let mut solver = Solver::new(smt, &conditions, &assignment);
     solver.solve()?;
 
