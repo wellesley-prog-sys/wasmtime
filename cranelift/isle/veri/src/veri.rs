@@ -9,10 +9,14 @@ use cranelift_isle::{
     sema::{self, Sym, TermId, TypeId, VariantId},
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
-use std::{collections::HashMap, iter::zip};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::zip,
+};
 
 declare_id!(
     /// The id of an expression within verification Conditions.
+    #[must_use]
     ExprId
 );
 
@@ -156,6 +160,26 @@ impl Expr {
     pub fn is_variable(&self) -> bool {
         matches!(self, Self::Variable(_))
     }
+
+    pub fn sources(&self) -> Vec<ExprId> {
+        match self {
+            Self::Const(_) | Self::Variable(_) => Vec::new(),
+            // Unary
+            &Self::WidthOf(x) => vec![x],
+
+            // Binary
+            &Self::And(x, y)
+            | &Self::Or(x, y)
+            | &Self::Imp(x, y)
+            | &Self::Eq(x, y)
+            | &Self::Lte(x, y)
+            | &Self::BVAdd(x, y)
+            | &Self::BVConvTo(x, y) => vec![x, y],
+
+            // Ternary
+            &Self::Conditional(c, t, e) => vec![c, t, e],
+        }
+    }
 }
 
 impl std::fmt::Display for Expr {
@@ -283,6 +307,39 @@ impl Conditions {
 
         println!("}}");
     }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Ensure there are no dangling expressions.
+        let reachable = self.reachable();
+        for x in (0..self.exprs.len()).map(ExprId) {
+            if !reachable.contains(&x) {
+                anyhow::bail!("expression {x} is unreachable", x = x.index());
+            }
+        }
+
+        Ok(())
+    }
+
+    fn reachable(&self) -> HashSet<ExprId> {
+        let mut reach = HashSet::new();
+
+        let mut stack: Vec<ExprId> = Vec::new();
+        stack.extend(&self.assumptions);
+        stack.extend(&self.assertions);
+
+        while !stack.is_empty() {
+            let x = stack.pop().unwrap();
+            if reach.contains(&x) {
+                continue;
+            }
+
+            reach.insert(x);
+            let expr = &self.exprs[x.index()];
+            stack.extend(expr.sources());
+        }
+
+        reach
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -392,8 +449,12 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Equals.
         for (a, b) in self.expansion.equalities() {
-            self.bindings_equal(a, b);
+            let eq = self.bindings_equal(a, b);
+            self.conditions.assumptions.push(eq);
         }
+
+        // Validate
+        self.conditions.validate()?;
 
         Ok(self.conditions)
     }
@@ -472,7 +533,8 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Assumption: variable equals constant value.
         let v = self.var(v);
-        self.exprs_equal(v, value);
+        let eq = self.exprs_equal(v, value);
+        self.conditions.assumptions.push(eq);
 
         Ok(())
     }
@@ -497,7 +559,8 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Assumption: variable equals constant value.
         let v = self.var(v);
-        self.exprs_equal(v, value);
+        let eq = self.exprs_equal(v, value);
+        self.conditions.assumptions.push(eq);
 
         Ok(())
     }
@@ -613,7 +676,8 @@ impl<'a> ConditionsBuilder<'a> {
         if let Domain::Partial(p) = domain {
             let in_domain = self.var(p);
             let all_requires = self.all(requires.clone());
-            self.exprs_equal(in_domain, all_requires);
+            let eq = self.exprs_equal(in_domain, all_requires);
+            self.conditions.assumptions.push(eq);
         }
 
         // Assert/assume depending on caller or callee.
