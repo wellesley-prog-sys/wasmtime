@@ -13,6 +13,14 @@ pub enum Verdict {
 }
 
 impl Verdict {
+    fn from_response_expect_sat(response: Response) -> Self {
+        match response {
+            Response::Sat => Self::Success,
+            Response::Unsat => Self::Failure,
+            Response::Unknown => Self::Unknown,
+        }
+    }
+
     fn from_response_expect_unsat(response: Response) -> Self {
         match response {
             Response::Sat => Self::Failure,
@@ -58,6 +66,23 @@ impl<'a> Solver<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn check_assumptions_feasibility(&mut self) -> anyhow::Result<Verdict> {
+        // Enter solver context frame.
+        self.smt.push()?;
+
+        // Assumptions
+        let assumptions = self.all(&self.conditions.assumptions);
+        self.smt.assert(assumptions)?;
+
+        // Check
+        let response = self.smt.check()?;
+
+        // Leave solver context frame.
+        self.smt.pop()?;
+
+        Ok(Verdict::from_response_expect_sat(response))
     }
 
     pub fn check_verification_condition(&mut self) -> anyhow::Result<Verdict> {
@@ -177,29 +202,16 @@ impl<'a> Solver<'a> {
     }
 
     fn verification_condition(&mut self) -> anyhow::Result<()> {
-        // Assumptions
-        let assumptions = self.smt.and_many(
-            self.conditions
-                .assumptions
-                .iter()
-                .map(|a| self.expr_atom(*a)),
-        );
-
-        // Assertions
-        let assertions = self.smt.and_many(
-            self.conditions
-                .assertions
-                .iter()
-                .map(|a| self.expr_atom(*a)),
-        );
-
-        // (<assumptions> => <assertions>)
+        // (not (<assumptions> => <assertions>))
+        let assumptions = self.all(&self.conditions.assumptions);
+        let assertions = self.all(&self.conditions.assertions);
         let vc = self.smt.imp(assumptions, assertions);
-
-        // Assert negation.
         self.smt.assert(self.smt.not(vc))?;
-
         Ok(())
+    }
+
+    fn all(&self, xs: &Vec<ExprId>) -> SExpr {
+        self.smt.and_many(xs.iter().map(|x| self.expr_atom(*x)))
     }
 
     fn expr_atom(&self, x: ExprId) -> SExpr {

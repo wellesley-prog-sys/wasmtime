@@ -126,8 +126,10 @@ fn verify_expansion(
 
     let mut solver = Solver::new(smt, &conditions, &assignment);
     solver.encode()?;
-    let verdict = solver.check_verification_condition()?;
-    println!("verdict = {verdict}");
+    let applicable = solver.check_assumptions_feasibility()?;
+    println!("applicable = {applicable}");
+    let verified = solver.check_verification_condition()?;
+    println!("verified = {verified}");
 
     Ok(())
 }
