@@ -1,9 +1,36 @@
-use easy_smt::{Context, SExpr};
+use easy_smt::{Context, Response, SExpr};
 
 use crate::{
     type_inference::Assignment,
     veri::{Conditions, Const, Expr, ExprId, Type},
 };
+
+#[derive(Debug)]
+pub enum Verdict {
+    Success,
+    Failure,
+    Unknown,
+}
+
+impl Verdict {
+    fn from_response_expect_unsat(response: Response) -> Self {
+        match response {
+            Response::Sat => Self::Failure,
+            Response::Unsat => Self::Success,
+            Response::Unknown => Self::Unknown,
+        }
+    }
+}
+
+impl std::fmt::Display for Verdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Success => "success",
+            Self::Failure => "failure",
+            Self::Unknown => "unknown",
+        })
+    }
+}
 
 pub struct Solver<'a> {
     smt: Context,
@@ -20,7 +47,7 @@ impl<'a> Solver<'a> {
         }
     }
 
-    pub fn solve(&mut self) -> anyhow::Result<()> {
+    pub fn encode(&mut self) -> anyhow::Result<()> {
         // Expressions
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
             let x = ExprId(i);
@@ -30,15 +57,23 @@ impl<'a> Solver<'a> {
             }
         }
 
+        Ok(())
+    }
+
+    pub fn check_verification_condition(&mut self) -> anyhow::Result<Verdict> {
+        // Enter solver context frame.
+        self.smt.push()?;
+
         // Verification Condition
         self.verification_condition()?;
 
         // Check
         let response = self.smt.check()?;
-        // TODO(mbm): return response
-        println!("response = {response:?}");
 
-        Ok(())
+        // Leave solver context frame.
+        self.smt.pop()?;
+
+        Ok(Verdict::from_response_expect_unsat(response))
     }
 
     fn declare_expr(&mut self, x: ExprId) -> anyhow::Result<()> {
