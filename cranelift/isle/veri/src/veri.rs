@@ -143,14 +143,19 @@ pub enum Expr {
     Eq(ExprId, ExprId),
     Lte(ExprId, ExprId),
 
+    BVUlt(ExprId, ExprId),
+
     // Binary.
     BVAdd(ExprId, ExprId),
+    BVAnd(ExprId, ExprId),
 
     // ITE
     Conditional(ExprId, ExprId, ExprId),
 
     // Bitwidth conversion.
+    BVZeroExt(ExprId, ExprId),
     BVConvTo(ExprId, ExprId),
+    BVExtract(usize, usize, ExprId),
 
     // Bitwidth.
     WidthOf(ExprId),
@@ -165,7 +170,7 @@ impl Expr {
         match self {
             Self::Const(_) | Self::Variable(_) => Vec::new(),
             // Unary
-            &Self::WidthOf(x) => vec![x],
+            &Self::BVExtract(_, _, x) | &Self::WidthOf(x) => vec![x],
 
             // Binary
             &Self::And(x, y)
@@ -173,7 +178,10 @@ impl Expr {
             | &Self::Imp(x, y)
             | &Self::Eq(x, y)
             | &Self::Lte(x, y)
+            | &Self::BVUlt(x, y)
             | &Self::BVAdd(x, y)
+            | &Self::BVAnd(x, y)
+            | &Self::BVZeroExt(x, y)
             | &Self::BVConvTo(x, y) => vec![x, y],
 
             // Ternary
@@ -192,11 +200,15 @@ impl std::fmt::Display for Expr {
             Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
             Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
             Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
+            Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
+            Self::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
             Self::Conditional(c, t, e) => {
                 write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
             }
+            Self::BVZeroExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
             Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
+            Self::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
             Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
         }
     }
@@ -265,9 +277,9 @@ impl Conditions {
         println!("\t]");
 
         // Variables
-        println!("\tvariable_type = [");
+        println!("\tvariables = [");
         for (i, v) in self.variables.iter().enumerate() {
-            println!("\t\t{i}:\t{ty}", ty = v.ty);
+            println!("\t\t{i}:\t{ty}\t{name}", ty = v.ty, name = v.name);
         }
         println!("\t]");
 
@@ -874,10 +886,22 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.dedup_expr(Expr::Lte(x, y)))
             }
 
+            spec::Expr::BVUlt(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVUlt(x, y)))
+            }
+
             spec::Expr::BVAdd(x, y) => {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
                 Ok(self.dedup_expr(Expr::BVAdd(x, y)))
+            }
+
+            spec::Expr::BVAnd(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVAnd(x, y)))
             }
 
             spec::Expr::Conditional(c, t, e) => {
@@ -887,10 +911,21 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.dedup_expr(Expr::Conditional(c, t, e)))
             }
 
-            spec::Expr::BVConvToVarWidth(w, x) => {
+            spec::Expr::BVZeroExt(w, x) => {
+                let w = self.spec_expr(w, vars)?;
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::BVZeroExt(w, x)))
+            }
+
+            spec::Expr::BVConvTo(w, x) => {
                 let w = self.spec_expr(w, vars)?;
                 let x = self.spec_expr(x, vars)?;
                 Ok(self.dedup_expr(Expr::BVConvTo(w, x)))
+            }
+
+            spec::Expr::BVExtract(h, l, x) => {
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::BVExtract(*h, *l, x)))
             }
 
             spec::Expr::WidthOf(x) => {

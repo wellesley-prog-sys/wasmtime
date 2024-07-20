@@ -95,7 +95,15 @@ impl<'a> ConstraintsBuilder<'a> {
                 self.integer(*y);
                 self.integer(*z);
             }
-            Expr::BVAdd(y, z) => {
+            Expr::BVUlt(y, z) => {
+                self.boolean(x);
+                self.bit_vector(*y);
+                self.bit_vector(*z);
+
+                self.same(*y, *z);
+            }
+
+            Expr::BVAdd(y, z) | Expr::BVAnd(y, z) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
@@ -108,11 +116,18 @@ impl<'a> ConstraintsBuilder<'a> {
                 self.same(x, *t);
                 self.same(x, *e);
             }
-            Expr::BVConvTo(w, y) => {
+            Expr::BVZeroExt(w, y) | Expr::BVConvTo(w, y) => {
                 self.bit_vector(x);
                 self.integer(*w);
                 self.bit_vector(*y);
                 self.width_of(x, *w);
+            }
+            Expr::BVExtract(h, l, y) => {
+                let width = 1 + h
+                    .checked_sub(*l)
+                    .expect("high bit should not be less than low bit");
+                self.bit_vector_of_width(x, width);
+                self.bit_vector(*y);
             }
             Expr::WidthOf(y) => {
                 self.integer(x);
@@ -141,6 +156,10 @@ impl<'a> ConstraintsBuilder<'a> {
 
         // Return.
         self.concrete(call.ret, sig.ret.clone());
+    }
+
+    fn bit_vector_of_width(&mut self, x: ExprId, width: usize) {
+        self.concrete(x, Type::BitVector(Some(width)));
     }
 
     fn bit_vector(&mut self, x: ExprId) {
@@ -332,6 +351,7 @@ impl Solver {
     }
 
     fn constraint(&mut self, constraint: &Constraint) -> anyhow::Result<bool> {
+        log::trace!("process type constraint: {constraint}");
         match constraint {
             Constraint::Concrete { x, ty } => self.set_type(*x, ty),
             Constraint::Same { x, y } => self.same(*x, *y),

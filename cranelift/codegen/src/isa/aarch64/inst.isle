@@ -1009,6 +1009,24 @@
                   (= rd (bvadd rn rm))))
       (require (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))))
 
+(spec (MInst.AluRRImm12 alu_op size rd rn imm12)
+      (provide
+            (= result #b1)
+            (=>
+                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+                        (= rd (bvadd rn (zero_ext 64 imm12)))
+            )
+      )
+      (require
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+            ; Imm12 immediate is well-formed.
+            (or
+                  (= imm12 (bvand imm12 #x000fff))
+                  (= imm12 (bvand imm12 #xfff000))
+            )
+      )
+)
+
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
 (type ALUOp
@@ -1086,6 +1104,7 @@
 
 (type UImm5 (primitive UImm5))
 (type Imm12 (primitive Imm12))
+(model Imm12 (type (bv 24)))
 (type ImmLogic (primitive ImmLogic))
 (type ImmShift (primitive ImmShift))
 (type ShiftOpAndAmt (primitive ShiftOpAndAmt))
@@ -1855,6 +1874,21 @@
 (extern constructor is_zero_uimm12 is_zero_uimm12)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
+; REVIEW(mbm): is imm12_from_value spec correct?
+; NOTE(mbm): compare with https://github.com/avanhatt/wasmtime/blob/94ccb9d4d55a479893cb04bc796ec620ed24cee2/cranelift/codegen/src/isa/aarch64/inst.isle#L1867-L1874
+(spec (imm12_from_value imm12)
+      (provide
+            ; REVIEW(mbm): zero_ext vs conv_to?
+            (= result (zero_ext (widthof result) imm12))
+      )
+      (require
+            ; REVIEW(mbm): correct formulation of imm12?
+            (or
+                  (= imm12 (bvand imm12 #x000fff))
+                  (= imm12 (bvand imm12 #xfff000))
+            )
+      )
+)
 (decl imm12_from_value (Imm12) Value)
 (extractor
   (imm12_from_value n)
@@ -2057,7 +2091,7 @@
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
 (decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
-(rule (alu_rr_imm12 op ty src imm)
+(rule alu_rr_imm12_to_emit (alu_rr_imm12 op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImm12 op (operand_size ty) dst src imm))))
         dst))
@@ -2502,7 +2536,7 @@
 (rule add_to_alu_rrr (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
 
 (decl add_imm (Type Reg Imm12) Reg)
-(rule (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))
+(rule add_imm_to_alu_rr_imm12 (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))
 
 (decl add_extend (Type Reg ExtendedValue) Reg)
 (rule (add_extend ty x y) (alu_rr_extend_reg (ALUOp.Add) ty x y))

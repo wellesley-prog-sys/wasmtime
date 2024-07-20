@@ -138,13 +138,17 @@ impl<'a> Solver<'a> {
             &Expr::Imp(x, y) => Ok(self.smt.imp(self.expr_atom(x), self.expr_atom(y))),
             &Expr::Eq(x, y) => Ok(self.smt.eq(self.expr_atom(x), self.expr_atom(y))),
             &Expr::Lte(x, y) => Ok(self.smt.lte(self.expr_atom(x), self.expr_atom(y))),
+            &Expr::BVUlt(x, y) => Ok(self.smt.bvult(self.expr_atom(x), self.expr_atom(y))),
             &Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
+            &Expr::BVAnd(x, y) => Ok(self.smt.bvand(self.expr_atom(x), self.expr_atom(y))),
             &Expr::Conditional(c, t, e) => {
                 Ok(self
                     .smt
                     .ite(self.expr_atom(c), self.expr_atom(t), self.expr_atom(e)))
             }
-            &Expr::BVConvTo(w, x) => self.conv_to(w, x),
+            &Expr::BVZeroExt(w, x) => self.bv_zero_ext(w, x),
+            &Expr::BVConvTo(w, x) => self.bv_conv_to(w, x),
+            &Expr::BVExtract(h, l, x) => Ok(self.extend(h, l, self.expr_atom(x))),
             &Expr::WidthOf(x) => self.width_of(x),
             _ => todo!("expr to smt: {expr:?}"),
         }
@@ -159,7 +163,35 @@ impl<'a> Solver<'a> {
         }
     }
 
-    fn conv_to(&self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
+    fn bv_zero_ext(&self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
+        // TODO(mbm): dedupe logic with bv_conv_to?
+
+        // Destination width expression should have known integer value.
+        let dst: usize = self
+            .assignment
+            .int_value
+            .get(&w)
+            .copied()
+            .ok_or(anyhow::anyhow!(
+                "destination width of zero_ext expression should have known integer value"
+            ))?
+            .try_into()
+            .expect("width should be representable as usize");
+
+        // Expression type should be a bit-vector of known width.
+        let tx = self.assignment.expect_expr_type(x)?;
+        let &Type::BitVector(Some(src)) = tx else {
+            anyhow::bail!("source of zero_ext expression should be a bit-vector of known width");
+        };
+
+        // Build zero_extend expression.
+        let padding = dst
+            .checked_sub(src)
+            .expect("cannot zero extend to smaller width");
+        Ok(self.zero_extend(padding, self.expr_atom(x)))
+    }
+
+    fn bv_conv_to(&self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
         // Destination width expression should have known integer value.
         let dst: usize = self
             .assignment
@@ -208,6 +240,28 @@ impl<'a> Solver<'a> {
         let vc = self.smt.imp(assumptions, assertions);
         self.smt.assert(self.smt.not(vc))?;
         Ok(())
+    }
+
+    /// Zero-extend an SMT bit vector to a wider bit vector by adding `padding`
+    /// zeroes to the front.
+    fn zero_extend(&self, padding: usize, v: SExpr) -> SExpr {
+        if padding == 0 {
+            return v;
+        }
+        self.smt.list(vec![
+            self.smt.list(vec![
+                self.smt.atoms().und,
+                self.smt.atom("zero_extend"),
+                self.smt.numeral(padding),
+            ]),
+            v,
+        ])
+    }
+
+    fn extend(&self, high_bit: usize, low_bit: usize, v: SExpr) -> SExpr {
+        assert!(low_bit <= high_bit);
+        self.smt
+            .extract(high_bit.try_into().unwrap(), low_bit.try_into().unwrap(), v)
     }
 
     fn all(&self, xs: &Vec<ExprId>) -> SExpr {

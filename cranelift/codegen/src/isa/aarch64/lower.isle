@@ -56,7 +56,7 @@
       (add ty  x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 4 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
+(rule iadd_imm12_right 4 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
       (add_imm ty x y))
 
 (rule 5 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))

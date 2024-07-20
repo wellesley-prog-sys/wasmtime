@@ -88,7 +88,7 @@ pub enum Expr {
     //BVSlte(Box<Expr>, Box<Expr>),
     //BVUgt(Box<Expr>, Box<Expr>),
     //BVUgte(Box<Expr>, Box<Expr>),
-    //BVUlt(Box<Expr>, Box<Expr>),
+    BVUlt(Box<Expr>, Box<Expr>),
     //BVUlte(Box<Expr>, Box<Expr>),
 
     //BVSaddo(Box<Expr>, Box<Expr>),
@@ -116,6 +116,7 @@ pub enum Expr {
     //BVUrem(Box<Expr>, Box<Expr>),
     //BVSrem(Box<Expr>, Box<Expr>),
     //BVAnd(Box<Expr>, Box<Expr>),
+    BVAnd(Box<Expr>, Box<Expr>),
     //BVOr(Box<Expr>, Box<Expr>),
     //BVXor(Box<Expr>, Box<Expr>),
     //BVRotl(Box<Expr>, Box<Expr>),
@@ -128,16 +129,15 @@ pub enum Expr {
     //BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
 
     //// Conversions
-    //// Zero extend, static and dynamic width
-    //BVZeroExtTo(usize, Box<Expr>),
-    //BVZeroExtToVarWidth(Box<Expr>, Box<Expr>),
+    // Zero extend
+    BVZeroExt(Box<Expr>, Box<Expr>),
 
     //// Sign extend, static and dynamic width
     //BVSignExtTo(usize, Box<Expr>),
     //BVSignExtToVarWidth(Box<Expr>, Box<Expr>),
 
-    //// Extract specified bits
-    //BVExtract(usize, usize, Box<Expr>),
+    // Extract specified bits
+    BVExtract(usize, usize, Box<Expr>),
 
     //// Concat two bitvectors
     //BVConcat(Vec<Expr>),
@@ -148,10 +148,8 @@ pub enum Expr {
     //// Convert bitvector to integer
     //BVToInt(Box<Expr>),
 
-    //// Conversion to wider/narrower bits, without an explicit extend
-    //BVConvTo(usize, Box<Expr>),
-    // Allow the destination width to be symbolic.
-    BVConvToVarWidth(Box<Expr>, Box<Expr>),
+    // Conversion to wider/narrower bits, without an explicit extend.
+    BVConvTo(Box<Expr>, Box<Expr>),
 
     // Conditional if-then-else
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
@@ -161,6 +159,7 @@ pub enum Expr {
 
 macro_rules! unary_expr {
     ($expr:path, $args:ident, $pos:ident) => {{
+        // TODO(mbm): return error instead of assert
         assert_eq!(
             $args.len(),
             1,
@@ -173,6 +172,7 @@ macro_rules! unary_expr {
 
 macro_rules! binary_expr {
     ($expr:path, $args:ident, $pos:ident) => {{
+        // TODO(mbm): return error instead of assert
         assert_eq!(
             $args.len(),
             2,
@@ -188,6 +188,7 @@ macro_rules! binary_expr {
 
 macro_rules! ternary_expr {
     ($expr:path, $args:ident, $pos:ident) => {{
+        // TODO(mbm): return error instead of assert
         assert_eq!(
             $args.len(),
             3,
@@ -204,6 +205,7 @@ macro_rules! ternary_expr {
 
 macro_rules! variadic_binary_expr {
     ($expr:path, $args:ident, $pos:ident) => {{
+        // TODO(mbm): return error instead of assert
         assert!(
             $args.len() >= 1,
             "Unexpected number of args for variadic binary operator {:?}",
@@ -253,7 +255,7 @@ impl Expr {
                 //SpecOp::Gte => binop(|x, y| Expr::Lte(y, x), args, pos, env),
                 SpecOp::Imp => binary_expr!(Expr::Imp, args, pos),
                 //SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
-                //SpecOp::BVAnd => binop(|x, y| Expr::BVAnd(x, y), args, pos, env),
+                SpecOp::BVAnd => binary_expr!(Expr::BVAnd, args, pos),
                 //SpecOp::BVOr => binop(|x, y| Expr::BVOr(x, y), args, pos, env),
                 //SpecOp::BVXor => binop(|x, y| Expr::BVXor(x, y), args, pos, env),
                 SpecOp::BVAdd => binary_expr!(Expr::BVAdd, args, pos),
@@ -269,6 +271,7 @@ impl Expr {
                 //SpecOp::BVSaddo => binop(|x, y| Expr::BVSaddo(x, y), args, pos, env),
                 //SpecOp::BVUle => binop(|x, y| Expr::BVUlte(x, y), args, pos, env),
                 //SpecOp::BVUlt => binop(|x, y| Expr::BVUlt(x, y), args, pos, env),
+                SpecOp::BVUlt => binary_expr!(Expr::BVUlt, args, pos),
                 //SpecOp::BVUgt => binop(|x, y| Expr::BVUgt(x, y), args, pos, env),
                 //SpecOp::BVUge => binop(|x, y| Expr::BVUgte(x, y), args, pos, env),
                 //SpecOp::BVSlt => binop(|x, y| Expr::BVSlt(x, y), args, pos, env),
@@ -277,13 +280,7 @@ impl Expr {
                 //SpecOp::BVSge => binop(|x, y| Expr::BVSgte(x, y), args, pos, env),
                 //SpecOp::Rotr => binop(|x, y| Expr::BVRotr(x, y), args, pos, env),
                 //SpecOp::Rotl => binop(|x, y| Expr::BVRotl(x, y), args, pos, env),
-                //SpecOp::ZeroExt => match spec_to_usize(&args[0]) {
-                //    Some(i) => Expr::BVZeroExtTo(
-                //        Box::new(Width::Const(i)),
-                //        Box::new(spec_to_expr(&args[1], env)),
-                //    ),
-                //    None => binop(|x, y| Expr::BVZeroExtToVarWidth(x, y), args, pos, env),
-                //},
+                SpecOp::ZeroExt => binary_expr!(Expr::BVZeroExt, args, pos),
                 //SpecOp::SignExt => match spec_to_usize(&args[0]) {
                 //    Some(i) => Expr::BVSignExtTo(
                 //        Box::new(Width::Const(i)),
@@ -291,26 +288,27 @@ impl Expr {
                 //    ),
                 //    None => binop(|x, y| Expr::BVSignExtToVarWidth(x, y), args, pos, env),
                 //},
-                SpecOp::ConvTo => binary_expr!(Expr::BVConvToVarWidth, args, pos),
+                SpecOp::ConvTo => binary_expr!(Expr::BVConvTo, args, pos),
 
                 // AVH TODO
                 //SpecOp::Concat => {
                 //    let cases: Vec<Expr> = args.iter().map(|a| spec_to_expr(a, env)).collect();
                 //    Expr::BVConcat(cases)
                 //}
-                //SpecOp::Extract => {
-                //    assert_eq!(
-                //        args.len(),
-                //        3,
-                //        "Unexpected number of args for extract operator {:?}",
-                //        pos
-                //    );
-                //    Expr::BVExtract(
-                //        spec_to_usize(&args[0]).unwrap(),
-                //        spec_to_usize(&args[1]).unwrap(),
-                //        Box::new(spec_to_expr(&args[2], env)),
-                //    )
-                //}
+                SpecOp::Extract => {
+                    // TODO(mbm): return error instead of assert
+                    assert_eq!(
+                        args.len(),
+                        3,
+                        "Unexpected number of args for extract operator at {:?}",
+                        pos
+                    );
+                    Expr::BVExtract(
+                        spec_expr_to_usize(&args[0]).unwrap(),
+                        spec_expr_to_usize(&args[1]).unwrap(),
+                        Box::new(Expr::from_ast(&args[2])),
+                    )
+                }
                 //SpecOp::Int2BV => {
                 //    assert_eq!(
                 //        args.len(),
@@ -374,6 +372,16 @@ impl Expr {
             ast::SpecExpr::Enum { name } => Expr::Enum(name.clone()),
             _ => todo!("ast spec expr: {expr:?}"),
         }
+    }
+}
+
+fn spec_expr_to_usize(expr: &ast::SpecExpr) -> Option<usize> {
+    match expr {
+        &ast::SpecExpr::ConstInt { val, pos: _ } => {
+            // TODO(mbm): return error rather than unwrap
+            Some(val.try_into().expect("constant should be unsigned size"))
+        }
+        _ => None,
     }
 }
 

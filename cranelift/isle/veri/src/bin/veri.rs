@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
     let mut expansions_builder = ExpansionsBuilder::new(&prog, &root_term)?;
     expansions_builder.inline_term(&root_term)?;
     expansions_builder.set_maximal_inlining(true);
-    expansions_builder.set_max_rules(4);
+    expansions_builder.set_max_rules(6);
     expansions_builder.exclude_inline_term("operand_size")?;
 
     // Process expansions.
