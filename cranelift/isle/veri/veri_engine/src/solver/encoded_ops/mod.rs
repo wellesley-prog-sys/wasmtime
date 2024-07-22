@@ -31,6 +31,7 @@ mod tests {
             bitwidth: 64,
             var_map: HashMap::new(),
             width_vars: HashMap::new(),
+            expr_cache: HashMap::new(),
             width_assumptions: vec![],
             additional_decls: vec![],
             additional_assumptions: vec![],

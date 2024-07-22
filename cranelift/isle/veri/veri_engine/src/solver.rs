@@ -78,6 +78,7 @@ pub struct SolverCtx {
     var_map: HashMap<String, SExpr>,
     width_vars: HashMap<u32, String>,
     width_assumptions: Vec<SExpr>,
+    expr_cache: HashMap<u32, SExpr>,
     pub additional_decls: Vec<(String, SExpr)>,
     pub additional_assumptions: Vec<SExpr>,
     pub additional_assertions: Vec<SExpr>,
@@ -1185,6 +1186,8 @@ impl SolverCtx {
                 let es = self.vir_expr_to_state(*e);
                 let mut new_state = State { ..es };
 
+                dbg!(tyvar);
+
                 new_state.val = match static_expr_width {
                     Some(1) => cls::cls1(self, tyvar),
                     Some(8) => cls::cls8(self, es.val, tyvar),
@@ -1897,6 +1900,7 @@ pub fn run_solver(
         bitwidth: MAX_WIDTH,
         var_map: HashMap::new(),
         width_vars: HashMap::new(),
+        expr_cache: HashMap::new(),
         width_assumptions: vec![],
         additional_decls: vec![],
         additional_assumptions: vec![],
@@ -2103,6 +2107,7 @@ pub fn run_solver_with_static_widths(
         bitwidth: MAX_WIDTH,
         var_map: HashMap::new(),
         width_vars: HashMap::new(),
+        expr_cache: HashMap::new(),
         width_assumptions: vec![],
         additional_decls: vec![],
         additional_assumptions: vec![],
