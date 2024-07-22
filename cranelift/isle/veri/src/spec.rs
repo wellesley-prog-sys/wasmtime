@@ -96,8 +96,8 @@ pub enum Expr {
     //// Bitvector operations
     ////      Note: these follow the naming conventions of the SMT theory of bitvectors:
     ////      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
-    //// Unary operators
-    //BVNeg(Box<Expr>),
+    // Unary operators
+    BVNeg(Box<Expr>),
     //BVNot(Box<Expr>),
     //CLZ(Box<Expr>),
     //A64CLZ(Box<Expr>, Box<Expr>),
@@ -129,12 +129,8 @@ pub enum Expr {
     //BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
 
     //// Conversions
-    // Zero extend
     BVZeroExt(Box<Expr>, Box<Expr>),
-
-    //// Sign extend, static and dynamic width
-    //BVSignExtTo(usize, Box<Expr>),
-    //BVSignExtToVarWidth(Box<Expr>, Box<Expr>),
+    BVSignExt(Box<Expr>, Box<Expr>),
 
     // Extract specified bits
     BVExtract(usize, usize, Box<Expr>),
@@ -227,6 +223,10 @@ impl Expr {
                 ty: Type::Int,
                 value: *val,
             }),
+            ast::SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const {
+                ty: Type::Bool,
+                value: if *val { 1 } else { 0 },
+            }),
             ast::SpecExpr::ConstBitVec { val, width, pos: _ } => Expr::Const(Const {
                 ty: Type::BitVectorWithWidth(*width as usize),
                 value: *val,
@@ -236,7 +236,7 @@ impl Expr {
                 // Unary
                 //SpecOp::Not => unop(|x| Expr::Not(x), args, pos, env),
                 //SpecOp::BVNot => unop(|x| Expr::BVNot(x), args, pos, env),
-                //SpecOp::BVNeg => unop(|x| Expr::BVNeg(x), args, pos, env),
+                SpecOp::BVNeg => unary_expr!(Expr::BVNeg, args, pos),
                 //SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
                 //SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
                 //SpecOp::Cls => unop(|x| Expr::CLS(x), args, pos, env),
@@ -281,13 +281,7 @@ impl Expr {
                 //SpecOp::Rotr => binop(|x, y| Expr::BVRotr(x, y), args, pos, env),
                 //SpecOp::Rotl => binop(|x, y| Expr::BVRotl(x, y), args, pos, env),
                 SpecOp::ZeroExt => binary_expr!(Expr::BVZeroExt, args, pos),
-                //SpecOp::SignExt => match spec_to_usize(&args[0]) {
-                //    Some(i) => Expr::BVSignExtTo(
-                //        Box::new(Width::Const(i)),
-                //        Box::new(spec_to_expr(&args[1], env)),
-                //    ),
-                //    None => binop(|x, y| Expr::BVSignExtToVarWidth(x, y), args, pos, env),
-                //},
+                SpecOp::SignExt => binary_expr!(Expr::BVSignExt, args, pos),
                 SpecOp::ConvTo => binary_expr!(Expr::BVConvTo, args, pos),
 
                 // AVH TODO
@@ -358,11 +352,6 @@ impl Expr {
                 _ => todo!("ast spec op: {op:?}"),
             },
             /*
-            SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const {
-                ty: Type::Bool,
-                value: *val as i128,
-                width: 0,
-            }),
             SpecExpr::Pair { l, r } => {
                 unreachable!(
                     "pairs currently only parsed as part of Switch statements, {:?} {:?}",

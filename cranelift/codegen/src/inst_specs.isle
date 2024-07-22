@@ -1,5 +1,13 @@
+(model Imm64 (type (bv 64)))
+
 (spec (iadd x y)
     (provide (= result (bvadd x y))))
 (instantiate iadd
     ((args (bv 64) (bv 64)) (ret (bv 64)))
+)
+
+(spec (iconst arg)
+    (provide (= arg (zero_ext 64 result))))
+(instantiate iconst
+    ((args (bv 64)) (ret (bv 64)))
 )

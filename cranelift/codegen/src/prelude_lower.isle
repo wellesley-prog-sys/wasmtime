@@ -288,6 +288,9 @@
 
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
+(spec (def_inst arg)
+      (provide true)
+      (require (= result arg)))
 (extern extractor def_inst def_inst)
 
 ;; Extract a constant `u64` from a value defined by an `iconst`.

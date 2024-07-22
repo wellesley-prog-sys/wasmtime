@@ -125,7 +125,13 @@ impl std::fmt::Display for Const {
         match self {
             Self::Bool(b) => write!(f, "{b}"),
             Self::Int(v) => write!(f, "{v}"),
-            Self::BitVector(w, v) => write!(f, "#b{v:0>w$}"),
+            Self::BitVector(w, v) => {
+                if w % 4 == 0 {
+                    write!(f, "#x{v:0>nibbles$x}", nibbles = w / 4)
+                } else {
+                    write!(f, "#b{v:0>bits$b}", bits = w)
+                }
+            }
         }
     }
 }
@@ -145,6 +151,9 @@ pub enum Expr {
 
     BVUlt(ExprId, ExprId),
 
+    // Unary.
+    BVNeg(ExprId),
+
     // Binary.
     BVAdd(ExprId, ExprId),
     BVAnd(ExprId, ExprId),
@@ -154,6 +163,7 @@ pub enum Expr {
 
     // Bitwidth conversion.
     BVZeroExt(ExprId, ExprId),
+    BVSignExt(ExprId, ExprId),
     BVConvTo(ExprId, ExprId),
     BVExtract(usize, usize, ExprId),
 
@@ -170,7 +180,7 @@ impl Expr {
         match self {
             Self::Const(_) | Self::Variable(_) => Vec::new(),
             // Unary
-            &Self::BVExtract(_, _, x) | &Self::WidthOf(x) => vec![x],
+            &Self::BVNeg(x) | &Self::BVExtract(_, _, x) | &Self::WidthOf(x) => vec![x],
 
             // Binary
             &Self::And(x, y)
@@ -182,6 +192,7 @@ impl Expr {
             | &Self::BVAdd(x, y)
             | &Self::BVAnd(x, y)
             | &Self::BVZeroExt(x, y)
+            | &Self::BVSignExt(x, y)
             | &Self::BVConvTo(x, y) => vec![x, y],
 
             // Ternary
@@ -201,12 +212,14 @@ impl std::fmt::Display for Expr {
             Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
             Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
             Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
+            Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
             Self::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
             Self::Conditional(c, t, e) => {
                 write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
             }
             Self::BVZeroExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
+            Self::BVSignExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
             Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
             Self::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
             Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
@@ -643,15 +656,13 @@ impl<'a> ConditionsBuilder<'a> {
         domain: Domain,
     ) -> anyhow::Result<()> {
         // Lookup spec.
+        let term_name = self.prog.term_name(term);
         let term_spec = self
             .prog
             .specenv
             .term_spec
             .get(&term)
-            .ok_or(anyhow::format_err!(
-                "no spec for term {term_name}",
-                term_name = self.prog.term_name(term)
-            ))?;
+            .ok_or(anyhow::format_err!("no spec for term {term_name}",))?;
 
         let args = self.vars(args);
         let ret = self.var(ret);
@@ -660,8 +671,9 @@ impl<'a> ConditionsBuilder<'a> {
         let mut vars = HashMap::new();
 
         // Arguments.
-        // QUESTION(mbm): is mismatch of parameters and spec arguments an assertion failure or error return?
-        assert_eq!(term_spec.args.len(), args.len());
+        if term_spec.args.len() != args.len() {
+            anyhow::bail!("incorrect number of arguments for term {term_name}");
+        }
         for (name, arg) in zip(&term_spec.args, &args) {
             vars.insert(name.0.clone(), *arg);
         }
@@ -892,6 +904,11 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.dedup_expr(Expr::BVUlt(x, y)))
             }
 
+            spec::Expr::BVNeg(x) => {
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::BVNeg(x)))
+            }
+
             spec::Expr::BVAdd(x, y) => {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
@@ -915,6 +932,12 @@ impl<'a> ConditionsBuilder<'a> {
                 let w = self.spec_expr(w, vars)?;
                 let x = self.spec_expr(x, vars)?;
                 Ok(self.dedup_expr(Expr::BVZeroExt(w, x)))
+            }
+
+            spec::Expr::BVSignExt(w, x) => {
+                let w = self.spec_expr(w, vars)?;
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::BVSignExt(w, x)))
             }
 
             spec::Expr::BVConvTo(w, x) => {

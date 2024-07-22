@@ -522,12 +522,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_spec_bool(&mut self) -> Result<i8> {
+    fn parse_spec_bool(&mut self) -> Result<bool> {
         let pos = self.pos();
         let s = self.expect_symbol()?;
         match s.as_str() {
-            "true" => Ok(1),
-            "false" => Ok(0),
+            "true" => Ok(true),
+            "false" => Ok(false),
             x => Err(self.error(pos, format!("Not a valid spec boolean: {x}"))),
         }
     }

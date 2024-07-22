@@ -1806,6 +1806,16 @@
 
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
+(spec (imm12_from_u64 imm12)
+      (provide (= result (zero_ext 64 imm12)))
+      (require
+            ; REVIEW(mbm): correct formulation of imm12?
+            (or
+                  (= imm12 (bvand imm12 #x000fff))
+                  (= imm12 (bvand imm12 #xfff000))
+            )
+      )
+)
 
 (decl u8_into_uimm5 (u8) UImm5)
 (extern constructor u8_into_uimm5 u8_into_uimm5)

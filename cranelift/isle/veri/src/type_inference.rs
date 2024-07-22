@@ -102,7 +102,12 @@ impl<'a> ConstraintsBuilder<'a> {
 
                 self.same(*y, *z);
             }
+            Expr::BVNeg(y) => {
+                self.bit_vector(x);
+                self.bit_vector(*y);
 
+                self.same(x, *y);
+            }
             Expr::BVAdd(y, z) | Expr::BVAnd(y, z) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
@@ -116,7 +121,7 @@ impl<'a> ConstraintsBuilder<'a> {
                 self.same(x, *t);
                 self.same(x, *e);
             }
-            Expr::BVZeroExt(w, y) | Expr::BVConvTo(w, y) => {
+            Expr::BVZeroExt(w, y) | Expr::BVSignExt(w, y) | Expr::BVConvTo(w, y) => {
                 self.bit_vector(x);
                 self.integer(*w);
                 self.bit_vector(*y);
