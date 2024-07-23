@@ -1148,7 +1148,7 @@
       (provide (= result (concat flags (bvadd (bvadd (sign_ext 64 x) (sign_ext 64 y)) (sign_ext 64 offset))))))
 (instantiate to_amode_add
     ((args (bv 16) (bv 32) (bv 32) (bv 32)) (ret (bv 80)) (canon (bv 32)))
-    ((args (bv 16) (bv 32) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
+    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
@@ -2373,21 +2373,26 @@
 
 (decl x64_movzx (ExtMode GprMem) Gpr)
 (spec (x64_movzx mode src)
-      (provide (= result (switch mode 
-                  ((ExtMode.BL) (conv_to 64 (zero_ext 24 (load (extract 79 64 src) 8 (extract 63 0 src)))))
-                  ((ExtMode.BQ) (conv_to 64 (zero_ext 56 (load (extract 79 64 src) 8 (extract 63 0 src)))))
-                  ((ExtMode.WL) (conv_to 64 (zero_ext 16 (load (extract 79 64 src) 16 (extract 63 0 src)))))
-                  ((ExtMode.WQ) (conv_to 64 (zero_ext 48 (load (extract 79 64 src) 16 (extract 63 0 src)))))
-                  ((ExtMode.LQ) (conv_to 64 (zero_ext 32 (load (extract 79 64 src) 32 (extract 63 0 src)))))
-                  )
-            )
-      )
+      (provide 
+            (= result 
+                  (conv_to 
+                        64  
+                        (zero_ext
+                              32
+                              (load 
+                                    (extract 79 64 src)
+                                    (switch mode 
+                                          ((ExtMode.BL) 8)
+                                          ((ExtMode.BQ) 8)
+                                          ((ExtMode.WL) 16)
+                                          ((ExtMode.WQ) 16)
+                                          ((ExtMode.LQ) 32))
+                                    (extract 63 0 src))))))
       (require (or (= mode (ExtMode.BL))
                   (= mode (ExtMode.BQ))
                   (= mode (ExtMode.WL))
                   (= mode (ExtMode.WQ))
-                  (= mode (ExtMode.LQ))))  
-)
+                  (= mode (ExtMode.LQ)))))
 (rule (x64_movzx mode src)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))
@@ -2544,6 +2549,8 @@
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxdq) from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
+(spec (x64_movrm ty addr data)
+       (provide (= result (store (extract 79 64 addr) ty (conv_to ty data) (extract 63 0 addr)))))
 (rule (x64_movrm ty addr data)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))

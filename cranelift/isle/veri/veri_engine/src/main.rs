@@ -40,10 +40,6 @@ struct Args {
     /// Don't check for distinct possible models
     #[clap(long, action=ArgAction::SetTrue)]
     nodistinct: bool,
-
-    /// Allow dynamic widths for the solver query
-    #[clap(short, long, action=ArgAction::SetTrue)]
-    dynwidths: bool,
 }
 
 fn main() {
@@ -125,7 +121,6 @@ fn main() {
     };
 
     let config = Config {
-        dyn_width: args.dynwidths,
         term: args.term,
         names: names,
         distinct_check: !args.nodistinct,

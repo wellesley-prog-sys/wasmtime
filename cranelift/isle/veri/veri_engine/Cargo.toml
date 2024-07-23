@@ -10,7 +10,7 @@ name = "veri_engine_lib"
 path = "src/lib.rs"
 
 [[bin]]
-name = "veri_engine_bin"
+name = "crocus"
 path = "src/main.rs"
 
 [dependencies]

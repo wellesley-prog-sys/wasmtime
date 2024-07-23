@@ -25,7 +25,6 @@ pub const WIDTHS: [usize; 4] = [8, 16, 32, 64];
 pub struct Config {
     pub term: String,
     pub names: Option<Vec<String>>,
-    pub dyn_width: bool,
     pub distinct_check: bool,
 
     // Closure arguments: SMT context, arguments to the term, lhs, rhs
@@ -38,7 +37,6 @@ pub struct Config {
 impl Config {
     pub fn with_term_and_name(term: &str, name: &str) -> Self {
         Config {
-            dyn_width: false,
             term: term.to_string(),
             distinct_check: true,
             custom_verification_condition: None,

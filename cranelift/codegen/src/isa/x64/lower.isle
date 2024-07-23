@@ -2953,7 +2953,7 @@
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8-, 16-, 32- and 64-bit GPR stores.
-(rule -2 (lower (store flags
+(rule store_x64_movrm -2 (lower (store flags
                     value @ (value_type (is_gpr_type ty))
                     address
                     offset))
