@@ -3568,11 +3568,41 @@ fn test_load_add_panic() {
 }
 
 #[test]
-#[should_panic]
+fn test_broken_isub_store_with_load() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/store/broken_isub_store_with_load.isle",
+        "store".to_string(),
+        vec![
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (
+                Bitwidth::I64,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+        ],
+    );
+}
+
+#[test]
 fn test_broken_store_with_load() {
     test_from_file_with_lhs_termname_simple(
         "./examples/store/broken_store_with_load.isle",
-        "lhs".to_string(),
-        all_failure_result(),
+        "store".to_string(),
+        vec![
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (
+                Bitwidth::I64,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+        ],
     );
 }
