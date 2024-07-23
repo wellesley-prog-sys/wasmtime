@@ -16,23 +16,28 @@ where
     N: Printable,
     W: ?Sized + Write,
 {
-    // Confused what this function is achieving...
-    // node.to_doc()
-    //     .render(width, out)
-    //     .map_err(|e| Errors::from_io(e, "failed to print isle"))
+    todo!("Meg TODO")
+
+    // What are the ways to print in a specific width?
+    // How do you return errors?
 }
 
 impl Printable for Defs {
     fn to_doc(&self) -> String {
         // Confused what this function is achieving...
         // let sep = RcDoc::hardline().append(Doc::hardline());
-        // RcDoc::intersperse(self.defs.iter().map(|d| d.to_doc()), sep).append(Doc::hardline()) 
+        // RcDoc::intersperse(self.defs.iter().map(|d| d.to_doc()), sep).append(Doc::hardline())
+
+        format!(
+            "({})",
+            // Join is not defined for Maps
+            self.defs.iter().map(|d| d.to_doc()).join(" ")
+        ) 
     }
 }
 
 impl Printable for Def {
     fn to_doc(&self) -> String {
-        // Missing match arm error?
         match self {
             Def::Pragma(_) => unimplemented!("pragmas not supported"),
             Def::Type(ref t) => {
@@ -54,7 +59,7 @@ impl Printable for Def {
                 parts.push_str(&format!(
                     "{} {} {})", 
                     &r.pattern.to_doc(),
-                    // join is not defined for Maps
+                    // Same error
                     &r.iflets.iter().map(|il| il.to_doc()).join(" "),
                     &r.expr.to_doc()
                 ));
