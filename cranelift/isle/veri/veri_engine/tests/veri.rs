@@ -3551,3 +3551,13 @@ fn test_load_add_panic() {
         all_failure_result(),
     );
 }
+
+#[test]
+#[should_panic]
+fn test_broken_store_with_load() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/store/broken_store_with_load.isle",
+        "lhs".to_string(),
+        all_failure_result(),
+    );
+}
