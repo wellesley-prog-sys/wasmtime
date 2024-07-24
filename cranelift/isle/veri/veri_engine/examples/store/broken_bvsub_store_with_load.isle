@@ -43,10 +43,10 @@
 
 (decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)
-      (provide (= result (store_effect 
+      (provide (= result (store 
                         (extract 79 64 addr) 
                         ty 
-                        (conv_to ty (bvsub (load_effect (extract 79 64 addr) ty (extract 63 0 addr)) (conv_to ty val))) 
+                        (conv_to ty (bvsub (load (extract 79 64 addr) ty (extract 63 0 addr)) (conv_to ty val))) 
                         (extract 63 0 addr))
             )
       )
