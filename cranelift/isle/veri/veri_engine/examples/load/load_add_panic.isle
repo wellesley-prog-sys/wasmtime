@@ -10,13 +10,13 @@
   ((args (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
 )
 (spec (lhs x y) 
-  (provide (= result (bvadd (load #x0000 (widthof x) x) (load #x0000 (widthof y) y)))))
+  (provide (= result (bvadd (load_effect #x0000 (widthof x) x) (load #x0000 (widthof y) y)))))
 (decl lhs (Value Value) Inst)
 (extern extractor lhs lhs)
 (instantiate lhs lhs_form)
 
 (spec (rhs x y) 
-  (provide (= result (bvadd (load #x0000 (widthof x) x) (load #x0000 (widthof y) y)))))
+  (provide (= result (bvadd (load_effect #x0000 (widthof x) x) (load #x0000 (widthof y) y)))))
 (decl rhs (Value Value) Inst)
 (extern constructor rhs rhs)
 
