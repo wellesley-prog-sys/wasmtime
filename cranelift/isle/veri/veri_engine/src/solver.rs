@@ -1249,7 +1249,7 @@ impl SolverCtx {
                     .rev()
                     .fold(last, |acc, x| self.smt.concat(*x, acc))
             }
-            Expr::Load(x, y, z) => {
+            Expr::LoadEffect(x, y, z) => {
                 let ex = self.vir_expr_to_sexp(*x);
                 let ey = self.vir_expr_to_sexp(*y);
                 let ez = self.vir_expr_to_sexp(*z);
@@ -1278,7 +1278,7 @@ impl SolverCtx {
                     self.load_return.unwrap()
                 }
             }
-            Expr::Store(w, x, y, z) => {
+            Expr::StoreEffect(w, x, y, z) => {
                 let ew = self.vir_expr_to_sexp(*w);
                 let ex = self.vir_expr_to_sexp(*x);
                 let ez = self.vir_expr_to_sexp(*z);

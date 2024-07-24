@@ -206,8 +206,8 @@ pub enum SpecOp {
     If,
     Switch,
 
-    Load,
-    Store,
+    LoadEffect,
+    StoreEffect,
 }
 
 /// A specification of the semantics of a term.

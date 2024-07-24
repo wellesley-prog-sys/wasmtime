@@ -2373,7 +2373,7 @@
 
 (decl x64_mov (Amode) Reg)
 (spec (x64_mov addr)
-      (provide (= result (conv_to 64 (load (extract 79 64 addr) 64 (extract 63 0 addr))))))
+      (provide (= result (conv_to 64 (load_effect (extract 79 64 addr) 64 (extract 63 0 addr))))))
 (rule (x64_mov addr)
       (mov64_mr addr))
 
@@ -2385,7 +2385,7 @@
                         64  
                         (zero_ext
                               32
-                              (load 
+                              (load_effect 
                                     (extract 79 64 src)
                                     (switch mode 
                                           ((ExtMode.BL) 8)
@@ -2556,7 +2556,7 @@
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (spec (x64_movrm ty addr data)
-       (provide (= result (store (extract 79 64 addr) ty (conv_to ty data) (extract 63 0 addr)))))
+       (provide (= result (store_effect (extract 79 64 addr) ty (conv_to ty data) (extract 63 0 addr)))))
 (rule (x64_movrm ty addr data)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
@@ -4628,10 +4628,10 @@
 
 (decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)
-      (provide (= result (store 
+      (provide (= result (store_effect 
                         (extract 79 64 addr) 
                         ty 
-                        (conv_to ty (bvadd (load (extract 79 64 addr) ty (extract 63 0 addr)) (conv_to ty val))) 
+                        (conv_to ty (bvadd (load_effect (extract 79 64 addr) ty (extract 63 0 addr)) (conv_to ty val))) 
                         (extract 63 0 addr))
             )
       )

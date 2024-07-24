@@ -3588,9 +3588,9 @@ fn test_broken_isub_store_with_load() {
 }
 
 #[test]
-fn test_broken_store_with_load() {
+fn test_broken_bvsub_store_with_load() {
     test_from_file_with_lhs_termname_simple(
-        "./examples/store/broken_store_with_load.isle",
+        "./examples/store/broken_bvsub_store_with_load.isle",
         "store".to_string(),
         vec![
             (Bitwidth::I8, VerificationResult::InapplicableRule),
