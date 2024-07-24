@@ -927,7 +927,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ]));
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 32);
         solver.smt.concat(padding, ret6)
     } else {
@@ -1286,7 +1286,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ]));
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 16);
         solver.smt.concat(padding, ret6)
     } else {
@@ -1571,7 +1571,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ]));
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 8);
         solver.smt.concat(padding, ret6)
     } else {
@@ -1597,7 +1597,7 @@ pub fn clz1(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
             .eq(clz1ret, solver.smt.list(vec![solver.smt.atom("bvnot"), x])),
     );
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 1);
         solver.smt.concat(padding, clz1ret)
     } else {

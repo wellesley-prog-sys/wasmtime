@@ -291,6 +291,11 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
 
 fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
     match s {
+        SpecExpr::ConstUnit { pos: _ } => Expr::Const(Const {
+            ty: Type::Unit,
+            value: 0,
+            width: 0,
+        }),
         SpecExpr::ConstInt { val, pos: _ } => Expr::Const(Const {
             ty: Type::Int,
             value: *val,

@@ -150,9 +150,9 @@
 (extern extractor valid_reg valid_reg)
 
 (spec (u32_lteq  a b)
-    (provide (<= a b)
-             (= (widthof result) 1))
-    (require (= (widthof a) 32)
+    (provide (= result ()))
+    (require (<= a b)
+             (= (widthof a) 32)
              (= (widthof b) 32)))
 (decl pure u32_lteq (u32 u32) Unit)
 (extern constructor u32_lteq u32_lteq)

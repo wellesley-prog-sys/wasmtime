@@ -16,7 +16,6 @@ fn test_named_iadd_base_concrete() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "iadd_base_case",
             "iadd",
-            false,
             ConcreteTest {
                 termname: "iadd".to_string(),
                 args: vec![
@@ -153,7 +152,6 @@ fn test_named_iadd_extend_right_concrete() {
     test_concrete_aarch64_rule_with_lhs_termname(
         "iadd_extend_right",
         "iadd",
-        false,
         ConcreteTest {
             termname: "iadd".to_string(),
             args: vec![
@@ -175,7 +173,6 @@ fn test_named_iadd_extend_right_concrete() {
     test_concrete_aarch64_rule_with_lhs_termname(
         "iadd_extend_right",
         "iadd",
-        false,
         ConcreteTest {
             termname: "iadd".to_string(),
             args: vec![
@@ -537,7 +534,6 @@ fn test_named_isub_imm12_concrete() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "isub_imm12",
             "isub",
-            false,
             ConcreteTest {
                 termname: "isub".to_string(),
                 args: vec![
@@ -620,7 +616,6 @@ fn test_named_isub_imm12_neg_concrete32() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "isub_imm12_neg",
             "isub",
-            false,
             ConcreteTest {
                 termname: "isub".to_string(),
                 args: vec![
@@ -653,7 +648,6 @@ fn test_named_isub_imm12_neg_concrete64() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "isub_imm12_neg",
             "isub",
-            false,
             ConcreteTest {
                 termname: "isub".to_string(),
                 args: vec![
@@ -1062,7 +1056,6 @@ fn test_named_urem_concrete() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "urem",
             "urem",
-            false,
             ConcreteTest {
                 termname: "urem".to_string(),
                 args: vec![
@@ -1434,7 +1427,6 @@ fn test_broken_ctz_16() {
 fn test_named_small_rotr() {
     run_and_retry(|| {
         let config = Config {
-            dyn_width: false,
             term: "small_rotr".to_string(),
             distinct_check: true,
             custom_assumptions: None,
@@ -1464,7 +1456,6 @@ fn test_named_small_rotr() {
 fn test_broken_small_rotr_to_shifts() {
     run_and_retry(|| {
         let config = Config {
-            dyn_width: false,
             term: "small_rotr".to_string(),
             distinct_check: true,
             custom_assumptions: None,
@@ -1501,7 +1492,6 @@ fn test_broken_small_rotr_to_shifts() {
 fn test_broken_small_rotr_to_shifts_2() {
     run_and_retry(|| {
         let config = Config {
-            dyn_width: false,
             term: "small_rotr".to_string(),
             distinct_check: true,
             custom_assumptions: None,
@@ -1538,7 +1528,6 @@ fn test_broken_small_rotr_to_shifts_2() {
 fn test_named_small_rotr_imm() {
     run_and_retry(|| {
         let config = Config {
-            dyn_width: false,
             term: "small_rotr_imm".to_string(),
             distinct_check: true,
             custom_assumptions: None,
@@ -2031,7 +2020,6 @@ fn test_named_ishl_64_concrete() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "ishl_64",
             "ishl",
-            false,
             ConcreteTest {
                 termname: "ishl".to_string(),
                 args: vec![
@@ -2078,7 +2066,6 @@ fn test_named_ishl_fits_in_32_concrete() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "ishl_fits_in_32",
             "ishl",
-            false,
             ConcreteTest {
                 termname: "ishl".to_string(),
                 args: vec![
@@ -2133,7 +2120,6 @@ fn test_named_sshr_fits_in_32_concrete() {
     test_concrete_aarch64_rule_with_lhs_termname(
         "sshr_fits_in_32",
         "sshr",
-        false,
         ConcreteTest {
             termname: "sshr".to_string(),
             args: vec![
@@ -2187,7 +2173,6 @@ fn test_named_ushr_fits_in_32_concrete() {
     test_concrete_aarch64_rule_with_lhs_termname(
         "ushr_fits_in_32",
         "ushr",
-        false,
         ConcreteTest {
             termname: "ushr".to_string(),
             args: vec![
@@ -2227,7 +2212,6 @@ fn test_named_do_shift_64_base_case() {
 #[test]
 fn test_named_do_shift_imm() {
     let config = Config {
-        dyn_width: false,
         term: "do_shift".to_string(),
         distinct_check: true,
         custom_assumptions: None,
@@ -2242,7 +2226,6 @@ fn test_named_do_shift_imm() {
     };
     test_aarch64_with_config_simple(config, vec![(Bitwidth::I8, VerificationResult::Success)]);
     let config = Config {
-        dyn_width: false,
         term: "do_shift".to_string(),
         distinct_check: true,
         custom_assumptions: None,
@@ -2257,7 +2240,6 @@ fn test_named_do_shift_imm() {
     };
     test_aarch64_with_config_simple(config, vec![(Bitwidth::I16, VerificationResult::Success)]);
     let config = Config {
-        dyn_width: false,
         term: "do_shift".to_string(),
         distinct_check: true,
         custom_assumptions: None,
@@ -2282,7 +2264,6 @@ fn test_named_do_shift_imm() {
 fn test_named_do_shift_fits_in_16() {
     run_and_retry(|| {
         let config = Config {
-            dyn_width: false,
             term: "do_shift".to_string(),
             distinct_check: true,
             custom_assumptions: None,
@@ -2329,7 +2310,6 @@ fn test_named_do_shift_fits_in_16_concrete() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "do_shift_fits_in_16",
             "do_shift",
-            false,
             ConcreteTest {
                 termname: "do_shift".to_string(),
                 args: vec![
@@ -2374,7 +2354,6 @@ fn test_named_do_shift_32_base_case() {
         ],
     );
     let config = Config {
-        dyn_width: false,
         term: "do_shift".to_string(),
         distinct_check: true,
         custom_assumptions: None,
@@ -2402,7 +2381,6 @@ fn test_broken_do_shift_32() {
         ],
     );
     let config = Config {
-        dyn_width: false,
         term: "do_shift".to_string(),
         distinct_check: true,
         custom_assumptions: None,
@@ -2467,7 +2445,6 @@ fn test_broken_sshr_to_do_shift_fits_in_32_concrete() {
     test_concrete_input_from_file_with_lhs_termname(
         "./examples/broken/shifts/broken_sshr_to_do_shift_fits_in_32.isle",
         "sshr".to_string(),
-        false,
         ConcreteTest {
             termname: "sshr".to_string(),
             args: vec![
@@ -2556,7 +2533,6 @@ fn test_named_lower_icmp_into_reg_8_16_32_64_concrete_1() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "lower_icmp_into_reg_8_16_32_64",
             "lower_icmp_into_reg",
-            false,
             ConcreteTest {
                 termname: "lower_icmp_into_reg".to_string(),
                 args: vec![
@@ -2596,7 +2572,6 @@ fn test_named_lower_icmp_into_reg_8_16_32_64_concrete_2() {
         test_concrete_aarch64_rule_with_lhs_termname(
             "lower_icmp_into_reg_8_16_32_64",
             "lower_icmp_into_reg",
-            false,
             ConcreteTest {
                 termname: "lower_icmp_into_reg".to_string(),
                 args: vec![
@@ -2747,7 +2722,6 @@ fn test_named_lower_icmp_const_32_64_sgte() {
     // distinctness check
     run_and_retry(|| {
         let config = Config {
-            dyn_width: false,
             term: "lower_icmp_const".to_string(),
             distinct_check: false,
             custom_verification_condition: None,
@@ -2781,7 +2755,6 @@ fn test_named_lower_icmp_const_32_64_ugte() {
     // distinctness check
     run_and_retry(|| {
         let config = Config {
-            dyn_width: false,
             term: "lower_icmp_const".to_string(),
             distinct_check: false,
             custom_verification_condition: None,
@@ -3072,7 +3045,6 @@ fn test_named_operand_size_32() {
         ];
         for (ty, result) in &EXPECTED {
             let config = Config {
-                dyn_width: false,
                 term: "operand_size".to_string(),
                 distinct_check: true,
                 custom_verification_condition: None,
@@ -3101,7 +3073,6 @@ fn test_named_operand_size_64() {
         ];
         for (ty, result) in &EXPECTED {
             let config = Config {
-                dyn_width: false,
                 term: "operand_size".to_string(),
                 distinct_check: true,
                 custom_verification_condition: None,
@@ -3151,7 +3122,6 @@ fn test_broken_imm_udiv_cve_underlying() {
         ];
         for (ty, result) in &EXPECTED {
             let config = Config {
-                dyn_width: false,
                 term: "imm".to_string(),
                 distinct_check: true,
                 custom_verification_condition: None,
@@ -3181,7 +3151,6 @@ fn test_broken_imm_udiv_cve_underlying_32() {
         )];
         for (ty, result) in &EXPECTED {
             let config = Config {
-                dyn_width: false,
                 term: "imm".to_string(),
                 distinct_check: true,
                 custom_verification_condition: None,

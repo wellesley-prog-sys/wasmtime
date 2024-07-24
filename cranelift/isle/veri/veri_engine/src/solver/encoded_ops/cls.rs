@@ -2032,7 +2032,7 @@ pub fn cls32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         solver.smt.eq(cls32ret, clsret),
     ]));
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 32);
         solver.smt.concat(padding, cls32ret)
     } else {
@@ -2821,7 +2821,7 @@ pub fn cls16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         solver.smt.eq(cls16ret, clsret),
     ]));
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 16);
         solver.smt.concat(padding, cls16ret)
     } else {
@@ -3464,7 +3464,7 @@ pub fn cls8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         solver.smt.eq(cls8ret, clsret),
     ]));
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 8);
         solver.smt.concat(padding, cls8ret)
     } else {
@@ -3491,7 +3491,7 @@ pub fn cls1(solver: &mut SolverCtx, id: u32) -> SExpr {
         ]),
     ));
 
-    if solver.dynwidths {
+    if solver.find_widths {
         let padding = solver.new_fresh_bits(solver.bitwidth - 1);
         solver.smt.concat(padding, cls1ret)
     } else {

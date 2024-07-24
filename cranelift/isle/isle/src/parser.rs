@@ -460,7 +460,7 @@ impl<'a> Parser<'a> {
             // Unit
             if self.is_rparen() {
                 self.expect_rparen()?;
-                return Ok(SpecExpr::ConstBool { val: 1, pos });
+                return Ok(SpecExpr::ConstUnit { pos });
             }
         }
         Err(self.error(pos, "Unexpected spec expression".into()))
@@ -519,8 +519,8 @@ impl<'a> Parser<'a> {
             "rev" => Ok(SpecOp::Rev),
             "cls" => Ok(SpecOp::Cls),
             "clz" => Ok(SpecOp::Clz),
-            "load" => Ok(SpecOp::Load),
-            "store" => Ok(SpecOp::Store),
+            "load_effect" => Ok(SpecOp::Load),
+            "store_effect" => Ok(SpecOp::Store),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
     }

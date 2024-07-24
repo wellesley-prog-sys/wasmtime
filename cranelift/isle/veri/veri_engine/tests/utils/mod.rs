@@ -193,7 +193,6 @@ pub fn test_from_file_with_lhs_termname(file: &str, termname: String, tr: TestRe
     inputs.push(build_clif_lower_isle());
     inputs.push(PathBuf::from(file));
     let config = Config {
-        dyn_width: false,
         term: termname,
         distinct_check: true,
         custom_verification_condition: None,
@@ -237,7 +236,6 @@ pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: T
             .join("lower.isle"),
     );
     let config = Config {
-        dyn_width: false,
         term: termname.to_string(),
         distinct_check: true,
         custom_verification_condition: None,
@@ -282,7 +280,6 @@ pub fn test_x64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestR
             .join("lower.isle"),
     );
     let config = Config {
-        dyn_width: false,
         term: termname.to_string(),
         distinct_check: true,
         custom_verification_condition: None,
@@ -359,7 +356,6 @@ pub fn test_aarch64_with_config(config: Config, tr: TestResult) -> () {
 pub fn test_concrete_aarch64_rule_with_lhs_termname(
     rulename: &str,
     termname: &str,
-    dynwidth: bool,
     concrete: ConcreteTest,
 ) -> () {
     println!(
@@ -396,7 +392,6 @@ pub fn test_concrete_aarch64_rule_with_lhs_termname(
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     let config = Config {
-        dyn_width: dynwidth,
         term: termname.to_string(),
         distinct_check: false,
         custom_verification_condition: None,
@@ -428,7 +423,6 @@ pub fn test_concrete_aarch64_rule_with_lhs_termname(
 pub fn test_concrete_input_from_file_with_lhs_termname(
     file: &str,
     termname: String,
-    dynwidth: bool,
     concrete: ConcreteTest,
 ) -> () {
     println!(
@@ -456,7 +450,6 @@ pub fn test_concrete_input_from_file_with_lhs_termname(
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     let config = Config {
-        dyn_width: dynwidth,
         term: termname.clone(),
         distinct_check: false,
         custom_verification_condition: None,
