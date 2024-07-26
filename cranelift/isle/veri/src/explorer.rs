@@ -1,3 +1,5 @@
+use cranelift_isle::lexer::Pos;
+
 use crate::program::Program;
 use std::{
     fs::File,
@@ -19,6 +21,7 @@ impl<'a> ExplorerWriter<'a> {
     pub fn write(&self) -> anyhow::Result<()> {
         self.write_index()?;
         self.write_files()?;
+        self.write_terms()?;
         Ok(())
     }
 
@@ -30,9 +33,11 @@ impl<'a> ExplorerWriter<'a> {
             r#"
         <ul>
             <li><a href="/{file_link}">Source Files</a></li>
+            <li><a href="/{term_link}">Terms</a></li>
         </ul>
         "#,
             file_link = self.file_dir().display(),
+            term_link = self.term_dir().display(),
         )?;
         self.footer(&mut output)?;
         Ok(())
@@ -78,13 +83,38 @@ impl<'a> ExplorerWriter<'a> {
 
         writeln!(&mut output, "<pre>")?;
         for (i, line) in file_text.lines().enumerate() {
-            writeln!(&mut output, "{n:4}:\t{line}", n = i + 1)?;
+            let n = i + 1;
+            writeln!(
+                &mut output,
+                "{n:4}:\t<span id=\"{fragment}\">{line}</span>",
+                fragment = self.line_url_fragment(n)
+            )?;
         }
         writeln!(&mut output, "</pre>")?;
 
         // Footer.
         self.footer(&mut output)?;
 
+        Ok(())
+    }
+
+    fn write_terms(&self) -> anyhow::Result<()> {
+        let mut output = self.create(self.term_dir().join("index.html"))?;
+        self.header("Terms", &mut output)?;
+
+        // Files.
+        writeln!(output, "<ul>")?;
+        for term in &self.prog.termenv.terms {
+            writeln!(
+                output,
+                r#"<li>{name} {pos}</li>"#,
+                name = self.prog.term_name(term.id),
+                pos = self.pos(term.decl_pos)
+            )?;
+        }
+        writeln!(output, "</ul>")?;
+
+        self.footer(&mut output)?;
         Ok(())
     }
 
@@ -115,6 +145,34 @@ impl<'a> ExplorerWriter<'a> {
 </html>
         "#
         )
+    }
+
+    fn pos(&self, pos: Pos) -> String {
+        format!(
+            r#"<a href="{href}">{loc}</a>"#,
+            href = self.pos_href(pos),
+            loc = self.loc(pos)
+        )
+    }
+
+    fn loc(&self, pos: Pos) -> String {
+        format!("{}:{}", self.prog.tyenv.filenames[pos.file], pos.line)
+    }
+
+    fn pos_href(&self, pos: Pos) -> String {
+        format!(
+            "/{}#{}",
+            self.file_path(pos.file).display(),
+            self.line_url_fragment(pos.line)
+        )
+    }
+
+    fn line_url_fragment(&self, n: usize) -> String {
+        format!("L{n}")
+    }
+
+    fn term_dir(&self) -> PathBuf {
+        PathBuf::from("term")
     }
 
     fn file_dir(&self) -> PathBuf {
