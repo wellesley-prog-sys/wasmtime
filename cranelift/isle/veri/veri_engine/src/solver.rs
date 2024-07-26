@@ -554,9 +554,9 @@ impl SolverCtx {
     pub fn assume_comparable_types(&mut self, x: &Expr, y: &Expr) {
         match (self.get_type(x), self.get_type(y)) {
             (None, _) | (_, None) => panic!("Missing type(s) {:?} {:?}", x, y),
-            (Some(Type::Bool), Some(Type::Bool)) 
+            (Some(Type::Bool), Some(Type::Bool))
             | (Some(Type::Int), Some(Type::Int))
-            | (Some(Type::Unit), Some(Type::Unit))  => (),
+            | (Some(Type::Unit), Some(Type::Unit)) => (),
             (Some(Type::BitVector(Some(xw))), Some(Type::BitVector(Some(yw)))) => {
                 assert_eq!(xw, yw, "incompatible {:?} {:?}", x, y)
             }
@@ -2087,7 +2087,7 @@ pub fn run_solver_with_static_widths(
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 load_conditions.push(arg_equal);
                 println!("\t{}", ctx.smt.display(arg_equal));
-                full_condition = ctx.smt.and(full_condition, arg_equal)
+                full_condition = ctx.smt.and(full_condition, arg_equal);
             }
             println!();
         }

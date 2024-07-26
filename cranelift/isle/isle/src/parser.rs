@@ -130,7 +130,14 @@ impl<'a> Parser<'a> {
 
     fn is_spec_bool(&self) -> bool {
         self.is(|tok| match tok {
-            Token::Symbol(tok_s) if tok_s == "true" || tok_s == "false" => true,
+            Token::Symbol(tok_s) if tok_s == "$true" || tok_s == "$false" => true,
+            _ => false,
+        })
+    }
+
+    fn is_spec_switch(&self) -> bool {
+        self.is(|tok| match tok {
+            Token::Symbol(tok_s) if tok_s == "switch" => true,
             _ => false,
         })
     }
@@ -419,21 +426,38 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         if self.is_spec_bit_vector() {
             let (val, width) = self.parse_spec_bit_vector()?;
-            Ok(SpecExpr::ConstBitVec { val, width, pos })
+            return Ok(SpecExpr::ConstBitVec { val, width, pos });
         } else if self.is_int() {
-            Ok(SpecExpr::ConstInt {
+            return Ok(SpecExpr::ConstInt {
                 val: self.expect_int()?,
                 pos,
-            })
+            });
         } else if self.is_spec_bool() {
             let val = self.parse_spec_bool()?;
-            Ok(SpecExpr::ConstBool { val, pos })
+            return Ok(SpecExpr::ConstBool { val, pos });
         } else if self.is_sym() {
             let var = self.parse_ident()?;
-            Ok(SpecExpr::Var { var, pos })
+            return Ok(SpecExpr::Var { var, pos });
         } else if self.is_lparen() {
-            // TODO AVH:
             self.expect_lparen()?;
+            if self.is_spec_switch() {
+                let _ = self.expect_symbol()?;
+                let mut args = vec![];
+                args.push(self.parse_spec_expr()?);
+                while !(self.is_rparen()) {
+                    self.expect_lparen()?;
+                    let l = Box::new(self.parse_spec_expr()?);
+                    let r = Box::new(self.parse_spec_expr()?);
+                    self.expect_rparen()?;
+                    args.push(SpecExpr::Pair { l, r });
+                }
+                self.expect_rparen()?;
+                return Ok(SpecExpr::Op {
+                    op: SpecOp::Switch,
+                    args,
+                    pos,
+                });
+            }
             if self.is_sym() && !self.is_spec_bit_vector() {
                 let sym = self.expect_symbol()?;
                 if let Ok(op) = self.parse_spec_op(sym.as_str()) {
@@ -449,23 +473,14 @@ impl<'a> Parser<'a> {
                     self.expect_rparen()?;
                     return Ok(SpecExpr::Enum { name: ident });
                 };
-                // AVH TODO: see if we can simplify this to not backtrack, maybe
-                // kill pairs
-                let r = Box::new(self.parse_spec_expr()?);
-                self.expect_rparen()?;
-                Ok(SpecExpr::Pair {
-                    l: Box::new(SpecExpr::Var { var: ident, pos }),
-                    r,
-                })
-            } else {
-                let l = Box::new(self.parse_spec_expr()?);
-                let r = Box::new(self.parse_spec_expr()?);
-                self.expect_rparen()?;
-                Ok(SpecExpr::Pair { l, r })
             }
-        } else {
-            Err(self.error(pos, "Unexpected spec expression".into()))
+            // Unit
+            if self.is_rparen() {
+                self.expect_rparen()?;
+                return Ok(SpecExpr::ConstBool { val: 1, pos });
+            }
         }
+        Err(self.error(pos, "Unexpected spec expression".into()))
     }
 
     fn parse_spec_op(&mut self, s: &str) -> Result<SpecOp> {
@@ -553,8 +568,8 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         let s = self.expect_symbol()?;
         match s.as_str() {
-            "true" => Ok(1),
-            "false" => Ok(0),
+            "$true" => Ok(1),
+            "$false" => Ok(0),
             x => Err(self.error(pos, format!("Not a valid spec boolean: {x}"))),
         }
     }
@@ -763,7 +778,7 @@ impl<'a> Parser<'a> {
         } else {
             Err(self.error(
                 pos,
-                "Invalid extern: must be (extern constructor ...) or (extern extractor ...)"
+                "Invalid extern: must be (extern constructor ...), (extern extractor ...) or (extern const ...)"
                     .to_string(),
             ))
         }

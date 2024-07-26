@@ -210,7 +210,7 @@ impl Printable for SpecExpr {
                 format!("#b{val:0width$b}", width = *width as usize)
             }),
             SpecExpr::ConstBool { val, .. } => {
-                RcDoc::text(if *val != 0 { "true" } else { "false" })
+                RcDoc::text(if *val != 0 { "$true" } else { "$false" })
             }
             SpecExpr::Var { var, .. } => var.to_doc(),
             SpecExpr::Op { op, args, .. } => sexp(
