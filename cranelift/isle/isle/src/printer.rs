@@ -277,8 +277,8 @@ impl Printable for SpecOp {
             SpecOp::Rev => "rev",
             SpecOp::Cls => "cls",
             SpecOp::Clz => "clz",
-            SpecOp::LoadEffect => "load", 
-            SpecOp::StoreEffect => "store",
+            SpecOp::LoadEffect => "load_effect", 
+            SpecOp::StoreEffect => "store_effect",
         })
     }
 }
