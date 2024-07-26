@@ -3497,3 +3497,81 @@ fn test_named_store_x64_movrm() {
         )
     });
 }
+
+#[test]
+fn test_load_conditional() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/load/load_conditional.isle",
+        "lhs".to_string(),
+        vec![
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
+    );
+}
+
+#[test]
+fn test_store_switch() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/store/store_switch.isle",
+        "lhs".to_string(),
+        vec![
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
+    );
+}
+
+#[test]
+#[should_panic]
+fn test_load_add_panic() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/load/load_add_panic.isle",
+        "lhs".to_string(),
+        all_failure_result(),
+    );
+}
+
+#[test]
+fn test_broken_isub_store_with_load() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/store/broken_isub_store_with_load.isle",
+        "store".to_string(),
+        vec![
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (
+                Bitwidth::I64,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn test_broken_bvsub_store_with_load() {
+    test_from_file_with_lhs_termname_simple(
+        "./examples/store/broken_bvsub_store_with_load.isle",
+        "store".to_string(),
+        vec![
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (
+                Bitwidth::I64,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+        ],
+    );
+}

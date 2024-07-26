@@ -233,9 +233,9 @@ pub enum Expr {
     // Switch
     Switch(Box<Expr>, Vec<(Expr, Expr)>),
 
-    Load(Box<Expr>, Box<Expr>, Box<Expr>),
+    LoadEffect(Box<Expr>, Box<Expr>, Box<Expr>),
 
-    Store(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>), 
+    StoreEffect(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>), 
 }
 
 impl Expr {

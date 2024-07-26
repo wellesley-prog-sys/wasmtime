@@ -113,7 +113,14 @@ impl<'a> Parser<'a> {
 
     fn is_spec_bool(&self) -> bool {
         self.is(|tok| match tok {
-            Token::Symbol(tok_s) if tok_s == "true" || tok_s == "false" => true,
+            Token::Symbol(tok_s) if tok_s == "$true" || tok_s == "$false" => true,
+            _ => false,
+        })
+    }
+
+    fn is_spec_switch(&self) -> bool {
+        self.is(|tok| match tok {
+            Token::Symbol(tok_s) if tok_s == "switch" => true,
             _ => false,
         })
     }
@@ -519,8 +526,8 @@ impl<'a> Parser<'a> {
             "rev" => Ok(SpecOp::Rev),
             "cls" => Ok(SpecOp::Cls),
             "clz" => Ok(SpecOp::Clz),
-            "load_effect" => Ok(SpecOp::Load),
-            "store_effect" => Ok(SpecOp::Store),
+            "load_effect" => Ok(SpecOp::LoadEffect),
+            "store_effect" => Ok(SpecOp::StoreEffect),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
     }
@@ -551,8 +558,8 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         let s = self.expect_symbol()?;
         match s.as_str() {
-            "true" => Ok(1),
-            "false" => Ok(0),
+            "$true" => Ok(1),
+            "$false" => Ok(0),
             x => Err(self.error(pos, format!("Not a valid spec boolean: {x}"))),
         }
     }

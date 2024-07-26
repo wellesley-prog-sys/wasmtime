@@ -1317,7 +1317,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::BVPopcnt(Box::new(e1)), t)
         }
-        annotation_ir::Expr::Load(x, y, z) => {
+        annotation_ir::Expr::LoadEffect(x, y, z) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let (e3, t3) = add_annotation_constraints(*z, tree, annotation_info);
@@ -1334,11 +1334,11 @@ fn add_annotation_constraints(
 
             tree.next_type_var += 1;
             (
-                veri_ir::Expr::Load(Box::new(e1), Box::new(e2), Box::new(e3)),
+                veri_ir::Expr::LoadEffect(Box::new(e1), Box::new(e2), Box::new(e3)),
                 t,
             )
         }
-        annotation_ir::Expr::Store(w, x, y, z) => {
+        annotation_ir::Expr::StoreEffect(w, x, y, z) => {
             let (e0, t0) = add_annotation_constraints(*w, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
@@ -1358,7 +1358,7 @@ fn add_annotation_constraints(
 
             tree.next_type_var += 1;
             (
-                veri_ir::Expr::Store(Box::new(e0), Box::new(e1), Box::new(e2), Box::new(e3)),
+                veri_ir::Expr::StoreEffect(Box::new(e0), Box::new(e1), Box::new(e2), Box::new(e3)),
                 t,
             )
         }
@@ -2034,14 +2034,16 @@ fn create_parse_tree_pattern(
                     ));
 
                     // If this is a bitvector, mark the name for the assumption feasibility check
-                    if let Type::BitVector(Some(w)) = &types.args[i]{
+                    if let Type::BitVector(Some(w)) = &types.args[i] {
                         tree.term_input_bvs.push(child.ident.clone());
 
                         // Hack: width matching
                         let lit = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*w as i128, 0));
                         let eq = veri_ir::Expr::Binary(
                             veri_ir::BinaryOp::Eq,
-                            Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(child.ident.clone()))))),
+                            Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(
+                                veri_ir::Terminal::Var(child.ident.clone()),
+                            )))),
                             Box::new(lit),
                         );
                         assertions.push(eq);
@@ -2063,7 +2065,9 @@ fn create_parse_tree_pattern(
                     let lit = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*w as i128, 0));
                     let eq = veri_ir::Expr::Binary(
                         veri_ir::BinaryOp::Eq,
-                        Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var( format!("{}__{}", name, type_var)))))),
+                        Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(
+                            veri_ir::Terminal::Var(format!("{}__{}", name, type_var)),
+                        )))),
                         Box::new(lit),
                     );
                     assertions.push(eq);
