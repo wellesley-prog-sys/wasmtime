@@ -1,0 +1,71 @@
+:root {
+    --invert-font-color: #fff;
+    --primary-color: #00a0ad;
+}
+
+body {
+    width: 100%;
+    margin: 0;
+    line-height: 1.6;
+    font-family: monospace;
+}
+
+body>header,
+body>main,
+body>footer {
+    width: 100%;
+    margin-right: auto;
+    margin-left: auto;
+    max-width: 950px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: sans-serif;
+    font-weight: 700;
+}
+
+h1 {
+    font-size: 2rem;
+    line-height: 1.125;
+}
+
+h2 {
+    font-size: 1.75rem;
+    line-height: 1.15;
+}
+
+h3 {
+    font-size: 1.5rem;
+    line-height: 1.175;
+}
+
+h4 {
+    font-size: 1.25rem;
+    line-height: 1.2;
+}
+
+h5 {
+    font-size: 1.125rem;
+    line-height: 1.225;
+}
+
+h6 {
+    font-size: 1rem;
+    line-height: 1.25;
+}
+
+a {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+a:hover {
+    background-color: var(--primary-color);
+    color: var(--invert-font-color);
+    text-decoration: none;
+}

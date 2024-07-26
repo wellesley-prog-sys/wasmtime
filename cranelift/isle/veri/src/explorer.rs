@@ -11,18 +11,49 @@ pub struct ExplorerWriter<'a> {
     prog: &'a Program,
 
     root: std::path::PathBuf,
+    dev: bool,
 }
 
 impl<'a> ExplorerWriter<'a> {
     pub fn new(prog: &'a Program, root: std::path::PathBuf) -> Self {
-        Self { prog, root }
+        Self {
+            prog,
+            root,
+            dev: false,
+        }
     }
 
     pub fn write(&self) -> anyhow::Result<()> {
+        self.init()?;
+        self.write_assets()?;
         self.write_index()?;
         self.write_files()?;
         self.write_terms()?;
         self.write_rules()?;
+        Ok(())
+    }
+
+    fn init(&self) -> anyhow::Result<()> {
+        std::fs::create_dir_all(&self.root)?;
+        Ok(())
+    }
+
+    fn write_assets(&self) -> anyhow::Result<()> {
+        // In development mode, setup a symlink.
+        if self.dev {
+            let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            // TODO(mbm): platform-independent symlink
+            let original = crate_root.join("src/assets");
+            let link = self.abs(self.assets_dir());
+            std::os::unix::fs::symlink(original, link)?;
+            return Ok(());
+        }
+
+        // CSS.
+        let style_css = include_bytes!("./assets/style.css");
+        let mut output = self.create(self.style_path())?;
+        output.write(style_css)?;
+
         Ok(())
     }
 
@@ -150,12 +181,13 @@ impl<'a> ExplorerWriter<'a> {
   <head>
     <meta charset="utf-8" />
     <title>{title}</title>
-    <link rel="stylesheet" href="https://unpkg.com/terminal.css@0.7.4/dist/terminal.min.css" />
+    <link rel="stylesheet" href="/{style_path}" />
   </head>
   <body>
     <main>
       <h1>{title}</h1>
-        "#
+        "#,
+            style_path = self.style_path().display()
         )
     }
 
@@ -210,10 +242,26 @@ impl<'a> ExplorerWriter<'a> {
         self.file_dir().join(format!("{id}.html"))
     }
 
-    fn create(&self, path: std::path::PathBuf) -> io::Result<File> {
+    fn assets_dir(&self) -> PathBuf {
+        PathBuf::from("assets")
+    }
+
+    fn asset_path(&self, name: &str) -> PathBuf {
+        self.assets_dir().join(name)
+    }
+
+    fn style_path(&self) -> PathBuf {
+        self.asset_path("style.css")
+    }
+
+    fn abs(&self, path: PathBuf) -> PathBuf {
+        self.root.join(path)
+    }
+
+    fn create(&self, path: PathBuf) -> io::Result<File> {
         assert!(path.is_relative());
         log::info!("create: {}", path.display());
-        let path = self.root.join(path);
+        let path = self.abs(path);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
