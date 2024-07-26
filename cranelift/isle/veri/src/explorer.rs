@@ -19,6 +19,7 @@ impl<'a> ExplorerWriter<'a> {
         Self {
             prog,
             root,
+            // TODO(mbm): configurable dev mode
             dev: true,
         }
     }
@@ -137,16 +138,34 @@ impl<'a> ExplorerWriter<'a> {
         self.header("Terms", &mut output)?;
 
         // Terms.
-        writeln!(output, "<ul>")?;
+        writeln!(
+            output,
+            r#"
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Location</th>
+                </tr>
+            </thead>
+            <tbody>
+        "#
+        )?;
         for term in &self.prog.termenv.terms {
             writeln!(
                 output,
-                r#"<li>{name} {pos}</li>"#,
+                r#"<tr><td>{name}</td><td>{pos}</td></tr>"#,
                 name = self.prog.term_name(term.id),
                 pos = self.pos(term.decl_pos)
             )?;
         }
-        writeln!(output, "</ul>")?;
+        writeln!(
+            output,
+            r#"
+            </tbody>
+        </table>
+        "#
+        )?;
 
         self.footer(&mut output)?;
         Ok(())
@@ -211,7 +230,12 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn loc(&self, pos: Pos) -> String {
-        format!("{}:{}", self.prog.tyenv.filenames[pos.file], pos.line)
+        let path = PathBuf::from(self.prog.tyenv.filenames[pos.file].as_ref());
+        format!(
+            "{}:{}",
+            path.file_name().unwrap().to_string_lossy(),
+            pos.line
+        )
     }
 
     fn pos_href(&self, pos: Pos) -> String {
