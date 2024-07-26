@@ -280,8 +280,8 @@ impl fmt::Display for Expr {
             Expr::BVSignExtToVarWidth(d, e) => write!(f, "(sign_ext {} {})", *d, e),
             Expr::BVConvTo(x, y) => write!(f, "(conv_to {} {})", x, y),
             Expr::WidthOf(e) => write!(f, "(widthof {})", e),
-            Expr::Load(x, y, z) => write!(f, "(load {} {} {})", x, y, z),
-            Expr::Store(w, x, y, z) =>  write!(f, "(store {} {} {} {})", w, x, y, z),
+            Expr::LoadEffect(x, y, z) => write!(f, "(load_effect {} {} {})", x, y, z),
+            Expr::StoreEffect(w, x, y, z) =>  write!(f, "(store_effect {} {} {} {})", w, x, y, z),
         }
     }
 }

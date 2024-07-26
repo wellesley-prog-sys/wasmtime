@@ -125,13 +125,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn is_spec_switch(&self) -> bool {
-        self.is(|tok| match tok {
-            Token::Symbol(tok_s) if tok_s == "switch" => true,
-            _ => false,
-        })
-    }
-
     fn expect_lparen(&mut self) -> Result<()> {
         self.expect(|tok| *tok == Token::LParen).map(|_| ())
     }

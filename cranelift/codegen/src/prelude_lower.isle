@@ -310,13 +310,8 @@
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
 (spec (i32_from_iconst arg) 
-      (provide (= arg 
-      (switch (widthof result) 
-            (8 (sign_ext 32 result))
-            (16 (sign_ext 32 result))
-            (32 result)
-            (64 (extract 31 0 result)))))
-      (require (bvule (zero_ext 64 result) #x00000000ffffffff)))
+      (provide (= arg (extract 31 0 (sign_ext 64 result))))
+      (require (= result (sign_ext (widthof result) arg))))
 (decl i32_from_iconst (i32) Value)
 (extern extractor i32_from_iconst i32_from_iconst)
 
