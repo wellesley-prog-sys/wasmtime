@@ -10,13 +10,13 @@
 )
 
 (spec (lhs cond x y) 
-  (provide (= result (load #x0000 (widthof (if cond x y)) (if cond x y)))))
+  (provide (= result (load_effect #x0000 (widthof (if cond x y)) (if cond x y)))))
 (decl lhs (bool Value Value) Inst)
 (extern extractor lhs lhs)
 (instantiate lhs lhs_form)
 
 (spec (rhs x y) 
-  (provide (= result (load #x0000 (widthof x) x))))
+  (provide (= result (load_effect #x0000 (widthof x) x))))
 (decl rhs (Value Value) Inst)
 (extern constructor rhs rhs)
 
