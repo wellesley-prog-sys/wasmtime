@@ -72,41 +72,42 @@ where
     F: Fn() -> (),
     F: Send + 'static + Copy,
 {
-    let delay_before_retrying = retry::delay::Fixed::from_millis(1);
-    let num_retries = 5;
-    let timeout_per_try = Duration::from_secs(4 * 60);
+    f();
+    // let delay_before_retrying = retry::delay::Fixed::from_millis(1);
+    // let num_retries = 5;
+    // let timeout_per_try = Duration::from_secs(4 * 60);
 
-    use std::{sync::mpsc, thread};
-    let result = retry::retry_with_index(delay_before_retrying, |current_try| {
-        if current_try > num_retries {
-            return retry::OperationResult::Err(format!(
-                "Test did not succeed within {} tries",
-                num_retries
-            ));
-        }
-        if current_try > 1 {
-            println!("Retrying test that timed out, try #{}", current_try);
-        }
+    // use std::{sync::mpsc, thread};
+    // let result = retry::retry_with_index(delay_before_retrying, |current_try| {
+    //     if current_try > num_retries {
+    //         return retry::OperationResult::Err(format!(
+    //             "Test did not succeed within {} tries",
+    //             num_retries
+    //         ));
+    //     }
+    //     if current_try > 1 {
+    //         println!("Retrying test that timed out, try #{}", current_try);
+    //     }
 
-        // From: https://github.com/rust-lang/rfcs/issues/2798
-        let (done_tx, done_rx) = mpsc::channel();
-        let handle = thread::spawn(move || {
-            f();
-            done_tx.send(()).expect("Unable to send completion signal");
-        });
+    //     // From: https://github.com/rust-lang/rfcs/issues/2798
+    //     let (done_tx, done_rx) = mpsc::channel();
+    //     let handle = thread::spawn(move || {
+    //         f();
+    //         done_tx.send(()).expect("Unable to send completion signal");
+    //     });
 
-        match done_rx.recv_timeout(timeout_per_try) {
-            Ok(_) => match handle.join() {
-                Ok(_) => retry::OperationResult::Ok("Test thread succeeded"),
-                Err(e) => retry::OperationResult::Err(format!("Test thread panicked {:?}", e)),
-            },
-            Err(_) => match handle.join() {
-                Ok(_) => retry::OperationResult::Retry("Test thread took too long".to_string()),
-                Err(e) => retry::OperationResult::Err(format!("Test thread panicked {:?}", e)),
-            },
-        }
-    });
-    result.unwrap();
+    //     match done_rx.recv_timeout(timeout_per_try) {
+    //         Ok(_) => match handle.join() {
+    //             Ok(_) => retry::OperationResult::Ok("Test thread succeeded"),
+    //             Err(e) => retry::OperationResult::Err(format!("Test thread panicked {:?}", e)),
+    //         },
+    //         Err(_) => match handle.join() {
+    //             Ok(_) => retry::OperationResult::Retry("Test thread took too long".to_string()),
+    //             Err(e) => retry::OperationResult::Err(format!("Test thread panicked {:?}", e)),
+    //         },
+    //     }
+    // });
+    // result.unwrap();
 }
 
 fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) -> () {

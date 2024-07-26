@@ -1042,10 +1042,8 @@ fn add_annotation_constraints(
                 let width = Expr::Terminal(veri_ir::Terminal::Const(w, t2));
                 tree.type_var_to_val_map.insert(t2, w);
                 tree.ty_vars.insert(width.clone(), t2);
-                tree.concrete_constraints.insert(TypeExpr::Concrete(
-                    t2,
-                    annotation_ir::Type::Int
-                ));
+                tree.concrete_constraints
+                    .insert(TypeExpr::Concrete(t2, annotation_ir::Type::Int));
                 (veri_ir::Expr::BVConvTo(Box::new(width), Box::new(e1)), t)
             } else {
                 tree.concrete_constraints.insert(TypeExpr::WidthInt(t, wt));
@@ -1054,10 +1052,7 @@ fn add_annotation_constraints(
                 tree.bv_constraints
                     .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
 
-                (
-                    veri_ir::Expr::BVConvTo(Box::new(we), Box::new(e1)),
-                    t,
-                )
+                (veri_ir::Expr::BVConvTo(Box::new(we), Box::new(e1)), t)
             }
         }
         annotation_ir::Expr::BVSignExtToVarWidth(w, x) => {
