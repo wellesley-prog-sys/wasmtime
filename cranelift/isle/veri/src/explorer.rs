@@ -22,6 +22,7 @@ impl<'a> ExplorerWriter<'a> {
         self.write_index()?;
         self.write_files()?;
         self.write_terms()?;
+        self.write_rules()?;
         Ok(())
     }
 
@@ -32,12 +33,14 @@ impl<'a> ExplorerWriter<'a> {
             output,
             r#"
         <ul>
-            <li><a href="/{file_link}">Source Files</a></li>
-            <li><a href="/{term_link}">Terms</a></li>
+            <li><a href="/{files_href}">Files</a></li>
+            <li><a href="/{terms_href}">Terms</a></li>
+            <li><a href="/{rules_href}">Rules</a></li>
         </ul>
         "#,
-            file_link = self.file_dir().display(),
-            term_link = self.term_dir().display(),
+            files_href = self.file_dir().display(),
+            terms_href = self.term_dir().display(),
+            rules_href = self.rule_dir().display(),
         )?;
         self.footer(&mut output)?;
         Ok(())
@@ -53,7 +56,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_files_index(&self) -> anyhow::Result<()> {
         let mut output = self.create(self.file_dir().join("index.html"))?;
-        self.header("Source Files", &mut output)?;
+        self.header("Files", &mut output)?;
 
         // Files.
         writeln!(output, "<ul>")?;
@@ -102,7 +105,7 @@ impl<'a> ExplorerWriter<'a> {
         let mut output = self.create(self.term_dir().join("index.html"))?;
         self.header("Terms", &mut output)?;
 
-        // Files.
+        // Terms.
         writeln!(output, "<ul>")?;
         for term in &self.prog.termenv.terms {
             writeln!(
@@ -110,6 +113,26 @@ impl<'a> ExplorerWriter<'a> {
                 r#"<li>{name} {pos}</li>"#,
                 name = self.prog.term_name(term.id),
                 pos = self.pos(term.decl_pos)
+            )?;
+        }
+        writeln!(output, "</ul>")?;
+
+        self.footer(&mut output)?;
+        Ok(())
+    }
+
+    fn write_rules(&self) -> anyhow::Result<()> {
+        let mut output = self.create(self.rule_dir().join("index.html"))?;
+        self.header("Rules", &mut output)?;
+
+        // Rules.
+        writeln!(output, "<ul>")?;
+        for rule in &self.prog.termenv.rules {
+            writeln!(
+                output,
+                r#"<li><a href="{href}">{identifier}</a></li>"#,
+                href = self.pos_href(rule.pos),
+                identifier = rule.identifier(&self.prog.tyenv)
             )?;
         }
         writeln!(output, "</ul>")?;
@@ -173,6 +196,10 @@ impl<'a> ExplorerWriter<'a> {
 
     fn term_dir(&self) -> PathBuf {
         PathBuf::from("term")
+    }
+
+    fn rule_dir(&self) -> PathBuf {
+        PathBuf::from("rule")
     }
 
     fn file_dir(&self) -> PathBuf {
