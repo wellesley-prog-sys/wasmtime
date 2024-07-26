@@ -19,7 +19,7 @@ impl<'a> ExplorerWriter<'a> {
         Self {
             prog,
             root,
-            dev: false,
+            dev: true,
         }
     }
 
@@ -120,7 +120,7 @@ impl<'a> ExplorerWriter<'a> {
             let n = i + 1;
             writeln!(
                 &mut output,
-                "{n:4}:\t<span id=\"{fragment}\">{line}</span>",
+                "{n:4}:\t<span id=\"{fragment}\" class=\"line\">{line}</span>",
                 fragment = self.line_url_fragment(n)
             )?;
         }

@@ -1,6 +1,7 @@
 :root {
     --invert-font-color: #fff;
     --primary-color: #00a0ad;
+    --highlight-color: #6ce3cc;
 }
 
 body {
@@ -68,4 +69,8 @@ a:hover {
     background-color: var(--primary-color);
     color: var(--invert-font-color);
     text-decoration: none;
+}
+
+pre .line:target {
+    background-color: var(--highlight-color);
 }
