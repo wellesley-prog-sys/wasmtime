@@ -97,6 +97,7 @@ impl<'a> ExplorerWriter<'a> {
   <head>
     <meta charset="utf-8" />
     <title>{title}</title>
+    <link rel="stylesheet" href="https://unpkg.com/terminal.css@0.7.4/dist/terminal.min.css" />
   </head>
   <body>
     <main>
