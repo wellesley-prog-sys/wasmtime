@@ -74,6 +74,24 @@ a:hover {
     text-decoration: none;
 }
 
+menu {
+    margin: 0;
+    padding: 0;
+    border-top: .1rem solid var(--light-color);
+}
+
+menu li {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    border-bottom: .1rem solid var(--light-color);
+}
+
+menu a {
+    display: block;
+    padding: 1rem;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;

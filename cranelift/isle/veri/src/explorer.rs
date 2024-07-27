@@ -65,12 +65,12 @@ impl<'a> ExplorerWriter<'a> {
         writeln!(
             output,
             r#"
-        <ul>
+        <menu>
             <li><a href="/{files_href}">Files</a></li>
             <li><a href="/{types_href}">Types</a></li>
             <li><a href="/{terms_href}">Terms</a></li>
             <li><a href="/{rules_href}">Rules</a></li>
-        </ul>
+        </menu>
         "#,
             files_href = self.file_dir().display(),
             types_href = self.type_dir().display(),
