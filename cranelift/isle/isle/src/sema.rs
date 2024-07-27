@@ -153,6 +153,9 @@ pub struct Variant {
 
     /// The data fields of this enum variant.
     pub fields: Vec<Field>,
+
+    /// The ISLE source position where this variant is defined.
+    pub pos: Pos,
 }
 
 /// A field of a `Variant`.
@@ -1086,6 +1089,7 @@ impl TypeEnv {
                         fullname,
                         id,
                         fields,
+                        pos: variant.pos,
                     });
                 }
                 Some(Type::Enum {
@@ -1318,7 +1322,7 @@ impl TermEnv {
                         let ret_ty = id;
                         self.terms.push(Term {
                             id: tid,
-                            decl_pos: pos,
+                            decl_pos: variant.pos,
                             name: variant.fullname,
                             arg_tys,
                             ret_ty,
@@ -2495,6 +2499,12 @@ mod test {
                                 ty: TypeId(0),
                             },
                         ],
+                        pos: Pos {
+                            file: 0,
+                            offset: 73,
+                            line: 3,
+                            col: 33,
+                        },
                     },
                     Variant {
                         name: sym_c,
@@ -2505,6 +2515,12 @@ mod test {
                             id: FieldId(0),
                             ty: TypeId(0),
                         }],
+                        pos: Pos {
+                            file: 0,
+                            offset: 95,
+                            line: 3,
+                            col: 55,
+                        },
                     },
                 ],
                 pos: Pos {
