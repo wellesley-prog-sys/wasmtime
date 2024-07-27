@@ -2,7 +2,8 @@
 
 set -exuo pipefail
 
-output_dir="output/explorer"
+output_dir="tmp/explorer"
+rm -rf "${output_dir}"
 cargo run --bin explorer -- \
     --codegen-crate-dir ../../codegen/ \
     --work-dir /tmp \

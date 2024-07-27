@@ -2,7 +2,7 @@
 
 set -exuo pipefail
 
-output_dir="output/explorer"
+output_dir="tmp/explorer"
 port="5050"
 
 miniserve \
