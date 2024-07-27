@@ -1,4 +1,6 @@
 :root {
+    font-size: 15px;
+
     --invert-font-color: #fff;
     --primary-color: #00a0ad;
     --light-color: #ccc;
@@ -9,6 +11,7 @@ body {
     margin: 0;
     line-height: 1.6;
     font-family: monospace;
+    font-size: 1rem;
 }
 
 body>header,
