@@ -1,5 +1,6 @@
 use cranelift_isle::{
     ast::{self, Defs, Ident, Model, ModelType, SpecOp},
+    lexer::Pos,
     sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
 };
 use std::collections::HashMap;
@@ -382,6 +383,7 @@ pub struct Spec {
     pub ret: Ident,
     pub provides: Vec<Expr>,
     pub requires: Vec<Expr>,
+    pub pos: Pos,
 }
 
 impl Spec {
@@ -391,6 +393,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: Vec::new(),
             requires: Vec::new(),
+            pos: Pos::default(),
         }
     }
 
@@ -400,6 +403,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: spec.provides.iter().map(Expr::from_ast).collect(),
             requires: spec.requires.iter().map(Expr::from_ast).collect(),
+            pos: spec.pos,
         }
     }
 

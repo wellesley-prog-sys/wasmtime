@@ -121,7 +121,7 @@ impl<'a> ExplorerWriter<'a> {
             let n = i + 1;
             writeln!(
                 &mut output,
-                r#"<code id=\"{fragment}\">{line}</code>"#,
+                r#"<code id="{fragment}">{line}</code>"#,
                 fragment = self.line_url_fragment(n)
             )?;
         }
@@ -144,20 +144,37 @@ impl<'a> ExplorerWriter<'a> {
         <table>
             <thead>
                 <tr>
+                    <th class="id">&num;</th>
                     <th>Name</th>
                     <th>Location</th>
+                    <th>Spec</th>
                 </tr>
             </thead>
             <tbody>
         "#
         )?;
         for term in &self.prog.termenv.terms {
+            writeln!(output, "<tr>")?;
+            writeln!(output, r#"<td class="id">{id}</td>"#, id = term.id.index())?;
+
+            // Name.
             writeln!(
                 output,
-                r#"<tr><td>{name}</td><td>{pos}</td></tr>"#,
-                name = self.prog.term_name(term.id),
-                pos = self.pos(term.decl_pos)
+                r"<td>{name}</td>",
+                name = self.prog.term_name(term.id)
             )?;
+
+            // Location.
+            writeln!(output, "<td>{pos}</td>", pos = self.pos(term.decl_pos))?;
+
+            // Spec.
+            if let Some(spec) = self.prog.specenv.term_spec.get(&term.id) {
+                writeln!(output, "<td>{pos}</td>", pos = self.pos(spec.pos))?;
+            } else {
+                writeln!(output, "<td></td>")?;
+            }
+
+            writeln!(output, "</tr>")?;
         }
         writeln!(
             output,

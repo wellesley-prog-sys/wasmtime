@@ -3,7 +3,7 @@
 
     --invert-font-color: #fff;
     --primary-color: #00a0ad;
-    --light-color: #ccc;
+    --light-color: #bbb;
 }
 
 body {
@@ -81,11 +81,16 @@ table {
 
 td,
 th {
+    padding: .2rem;
     border-bottom: .1rem solid var(--light-color);
 }
 
 th {
     text-align: left;
+}
+
+table .id {
+    text-align: right;
 }
 
 pre {
@@ -110,4 +115,8 @@ pre code::before {
 pre code:target::before {
     color: var(--primary-color);
     font-weight: bold;
+}
+
+.id {
+    color: var(--light-color);
 }

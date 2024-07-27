@@ -386,6 +386,7 @@ impl<'a> Parser<'a> {
             args,
             provides,
             requires,
+            pos,
         })
     }
 

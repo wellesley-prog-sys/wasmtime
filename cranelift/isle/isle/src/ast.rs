@@ -220,6 +220,7 @@ pub struct Spec {
     pub provides: Vec<SpecExpr>,
     /// Require statements, which express preconditions on the term
     pub requires: Vec<SpecExpr>,
+    pub pos: Pos,
 }
 
 /// A model of an SMT-LIB type.
