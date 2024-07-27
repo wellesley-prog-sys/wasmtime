@@ -41,7 +41,7 @@ impl Expansion {
             }
         }
 
-        return true;
+        true
     }
 
     fn add_constraint(&mut self, binding_id: BindingId, constraint: Constraint) {
@@ -250,7 +250,7 @@ impl<'a> Expander<'a> {
                 continue;
             }
 
-            if exclude.contains(&term_id) {
+            if exclude.contains(term_id) {
                 continue;
             }
 
@@ -271,8 +271,7 @@ impl<'a> Expander<'a> {
     }
 
     pub fn expand(&mut self) {
-        while !self.stack.is_empty() {
-            let expansion = self.stack.pop().unwrap();
+        while let Some(expansion) = self.stack.pop() {
             self.extend(expansion);
         }
     }
@@ -337,7 +336,7 @@ impl Application {
         &mut self,
         rule_set: &RuleSet,
         rule: &Rule,
-        parameters: &Box<[BindingId]>,
+        parameters: &[BindingId],
         call_site: BindingId,
     ) -> Expansion {
         // Record the application of this rule.
@@ -440,7 +439,7 @@ impl Application {
 
         // Record binding mapping.
         self.import_reindex.map(binding_id, expansion_binding_id);
-        return expansion_binding_id;
+        expansion_binding_id
     }
 }
 
@@ -463,10 +462,10 @@ impl Reindex {
     }
 
     fn id(&self, binding_id: &BindingId) -> BindingId {
-        self.to.get(binding_id).unwrap_or(binding_id).clone()
+        *self.to.get(binding_id).unwrap_or(binding_id)
     }
 
-    fn ids(&self, binding_ids: &Box<[BindingId]>) -> Box<[BindingId]> {
+    fn ids(&self, binding_ids: &[BindingId]) -> Box<[BindingId]> {
         binding_ids
             .iter()
             .map(|binding_id| self.id(binding_id))
@@ -562,7 +561,7 @@ impl<'a> ExpansionsBuilder<'a> {
     pub fn inline_term(&mut self, term_name: &str) -> anyhow::Result<()> {
         let term_id = self
             .prog
-            .get_term_by_name(&term_name)
+            .get_term_by_name(term_name)
             .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
         self.inline.push(term_id);
         Ok(())
@@ -590,7 +589,7 @@ impl<'a> ExpansionsBuilder<'a> {
     pub fn exclude_inline_term(&mut self, term_name: &str) -> anyhow::Result<()> {
         let term_id = self
             .prog
-            .get_term_by_name(&term_name)
+            .get_term_by_name(term_name)
             .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
         self.exclude_inline.insert(term_id);
         Ok(())

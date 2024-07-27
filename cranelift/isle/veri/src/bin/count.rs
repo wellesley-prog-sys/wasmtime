@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
     }
     for exclude_term_name in &opts.exclude_inline {
         let exclude_term_id = prog
-            .get_term_by_name(&exclude_term_name)
+            .get_term_by_name(exclude_term_name)
             .ok_or(anyhow::format_err!("unknown term {exclude_term_name}"))?;
         expansion_counter.disable_expansion(exclude_term_id);
     }
@@ -178,7 +178,7 @@ impl<'a> ExpansionCounter<'a> {
             return false;
         }
 
-        return true;
+        true
     }
 
     fn rule_set(&mut self, rule_set: &RuleSet, indent: String) -> usize {
@@ -236,9 +236,7 @@ fn rule_bindings(rule_set: &RuleSet, rule: &Rule) -> BTreeSet<BindingId> {
 
     // Collect dependencies.
     let mut binding_ids = BTreeSet::new();
-    while !stack.is_empty() {
-        let binding_id = stack.pop().unwrap();
-
+    while let Some(binding_id) = stack.pop() {
         if binding_ids.contains(&binding_id) {
             continue;
         }

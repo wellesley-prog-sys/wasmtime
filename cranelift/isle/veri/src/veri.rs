@@ -352,8 +352,7 @@ impl Conditions {
         stack.extend(&self.assumptions);
         stack.extend(&self.assertions);
 
-        while !stack.is_empty() {
-            let x = stack.pop().unwrap();
+        while let Some(x) = stack.pop() {
             if reach.contains(&x) {
                 continue;
             }
@@ -518,7 +517,7 @@ impl<'a> ConditionsBuilder<'a> {
 
             Binding::Constructor {
                 term, parameters, ..
-            } => self.constructor(id, *term, &*parameters, Invocation::Caller),
+            } => self.constructor(id, *term, parameters, Invocation::Caller),
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings"),
 
@@ -526,7 +525,7 @@ impl<'a> ConditionsBuilder<'a> {
                 ty,
                 variant,
                 fields,
-            } => self.make_variant(id, *ty, *variant, &*fields),
+            } => self.make_variant(id, *ty, *variant, fields),
 
             Binding::MatchVariant { .. } => todo!("binding: match_variant"),
 
@@ -650,7 +649,7 @@ impl<'a> ConditionsBuilder<'a> {
     fn call(
         &mut self,
         term: TermId,
-        args: &Vec<VariableId>,
+        args: &[VariableId],
         ret: VariableId,
         invocation: Invocation,
         domain: Domain,
@@ -1044,7 +1043,7 @@ impl<'a> ConditionsBuilder<'a> {
             .unwrap_or_else(|| self.boolean(true))
     }
 
-    fn vars(&mut self, vs: &Vec<VariableId>) -> Vec<ExprId> {
+    fn vars(&mut self, vs: &[VariableId]) -> Vec<ExprId> {
         vs.iter().map(|v| self.var(*v)).collect()
     }
 
@@ -1121,7 +1120,7 @@ impl<'a> ConditionsBuilder<'a> {
         if let Some(id) = self.expr_map.get(&expr) {
             *id
         } else {
-            let id = ExprId(self.conditions.exprs.len().try_into().unwrap());
+            let id = ExprId(self.conditions.exprs.len());
             self.conditions.exprs.push(expr.clone());
             self.expr_map.insert(expr, id);
             id

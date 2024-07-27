@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use easy_smt::{Context, Response, SExpr};
 
 use crate::{
@@ -115,10 +117,10 @@ impl<'a> Solver<'a> {
     }
 
     fn type_to_sort(&self, ty: &Type) -> anyhow::Result<SExpr> {
-        match ty {
-            &Type::BitVector(Some(width)) => Ok(self.smt.bit_vec_sort(self.smt.numeral(width))),
-            &Type::Int => Ok(self.smt.int_sort()),
-            &Type::Bool => Ok(self.smt.bool_sort()),
+        match *ty {
+            Type::BitVector(Some(width)) => Ok(self.smt.bit_vec_sort(self.smt.numeral(width))),
+            Type::Int => Ok(self.smt.int_sort()),
+            Type::Bool => Ok(self.smt.bool_sort()),
             _ => anyhow::bail!("no smt2 sort for type {ty}"),
         }
     }
@@ -131,35 +133,35 @@ impl<'a> Solver<'a> {
     }
 
     fn expr_to_smt(&self, expr: &Expr) -> anyhow::Result<SExpr> {
-        match expr {
-            &Expr::Const(ref c) => self.constant(c),
-            &Expr::And(x, y) => Ok(self.smt.and(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::Or(x, y) => Ok(self.smt.or(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::Imp(x, y) => Ok(self.smt.imp(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::Eq(x, y) => Ok(self.smt.eq(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::Lte(x, y) => Ok(self.smt.lte(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::BVUlt(x, y) => Ok(self.smt.bvult(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::BVAnd(x, y) => Ok(self.smt.bvand(self.expr_atom(x), self.expr_atom(y))),
-            &Expr::Conditional(c, t, e) => {
+        match *expr {
+            Expr::Const(ref c) => self.constant(c),
+            Expr::And(x, y) => Ok(self.smt.and(self.expr_atom(x), self.expr_atom(y))),
+            Expr::Or(x, y) => Ok(self.smt.or(self.expr_atom(x), self.expr_atom(y))),
+            Expr::Imp(x, y) => Ok(self.smt.imp(self.expr_atom(x), self.expr_atom(y))),
+            Expr::Eq(x, y) => Ok(self.smt.eq(self.expr_atom(x), self.expr_atom(y))),
+            Expr::Lte(x, y) => Ok(self.smt.lte(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVUlt(x, y) => Ok(self.smt.bvult(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVAnd(x, y) => Ok(self.smt.bvand(self.expr_atom(x), self.expr_atom(y))),
+            Expr::Conditional(c, t, e) => {
                 Ok(self
                     .smt
                     .ite(self.expr_atom(c), self.expr_atom(t), self.expr_atom(e)))
             }
-            &Expr::BVZeroExt(w, x) => self.bv_zero_ext(w, x),
-            &Expr::BVConvTo(w, x) => self.bv_conv_to(w, x),
-            &Expr::BVExtract(h, l, x) => Ok(self.extend(h, l, self.expr_atom(x))),
-            &Expr::WidthOf(x) => self.width_of(x),
+            Expr::BVZeroExt(w, x) => self.bv_zero_ext(w, x),
+            Expr::BVConvTo(w, x) => self.bv_conv_to(w, x),
+            Expr::BVExtract(h, l, x) => Ok(self.extend(h, l, self.expr_atom(x))),
+            Expr::WidthOf(x) => self.width_of(x),
             _ => todo!("expr to smt: {expr:?}"),
         }
     }
 
     fn constant(&self, constant: &Const) -> anyhow::Result<SExpr> {
-        match constant {
-            &Const::Bool(true) => Ok(self.smt.true_()),
-            &Const::Bool(false) => Ok(self.smt.false_()),
-            &Const::Int(v) => Ok(self.smt.numeral(v)),
-            &Const::BitVector(w, v) => Ok(self.smt.binary(w, v)),
+        match *constant {
+            Const::Bool(true) => Ok(self.smt.true_()),
+            Const::Bool(false) => Ok(self.smt.false_()),
+            Const::Int(v) => Ok(self.smt.numeral(v)),
+            Const::BitVector(w, v) => Ok(self.smt.binary(w, v)),
         }
     }
 
@@ -211,12 +213,10 @@ impl<'a> Solver<'a> {
         };
 
         // Handle depending on source and destination widths.
-        if dst > src {
-            todo!("conv_to extend")
-        } else if dst < src {
-            todo!("conv_to extract")
-        } else {
-            Ok(self.expr_atom(x))
+        match dst.cmp(&src) {
+            Ordering::Greater => todo!("conv_to extend"),
+            Ordering::Less => todo!("conv_to extract"),
+            Ordering::Equal => Ok(self.expr_atom(x)),
         }
     }
 
@@ -264,7 +264,7 @@ impl<'a> Solver<'a> {
             .extract(high_bit.try_into().unwrap(), low_bit.try_into().unwrap(), v)
     }
 
-    fn all(&self, xs: &Vec<ExprId>) -> SExpr {
+    fn all(&self, xs: &[ExprId]) -> SExpr {
         self.smt.and_many(xs.iter().map(|x| self.expr_atom(*x)))
     }
 

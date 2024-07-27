@@ -30,8 +30,7 @@ impl<'a> Reachability<'a> {
         let mut reachable = HashSet::new();
         let mut stack = vec![term_id];
 
-        while !stack.is_empty() {
-            let term_id = stack.pop().unwrap();
+        while let Some(term_id) = stack.pop() {
             if !self.term_rule_sets.contains_key(&term_id) {
                 continue;
             }
@@ -58,8 +57,7 @@ pub fn used_terms(rule_set: &RuleSet) -> HashSet<TermId> {
     rule_set
         .bindings
         .iter()
-        .map(binding_used_term)
-        .flatten()
+        .filter_map(binding_used_term)
         .collect()
 }
 

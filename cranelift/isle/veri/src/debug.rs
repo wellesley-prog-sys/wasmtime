@@ -28,11 +28,11 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
     println!("\tbindings = [");
     for (i, binding) in expansion.bindings.iter().enumerate() {
         if let Some(binding) = binding {
-            let ty = binding_type(binding, expansion.term, &prog, lookup_binding);
+            let ty = binding_type(binding, expansion.term, prog, lookup_binding);
             println!(
                 "\t\t{i}: {}\t{}",
                 ty.display(&prog.tyenv),
-                binding_string(binding, expansion.term, &prog, lookup_binding),
+                binding_string(binding, expansion.term, prog, lookup_binding),
             );
         }
     }
@@ -47,7 +47,7 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
             println!(
                 "\t\t{}:\t{}",
                 binding_id.index(),
-                constraint_string(&constraint, &prog.tyenv)
+                constraint_string(constraint, &prog.tyenv)
             );
         }
     }
@@ -86,11 +86,11 @@ pub fn print_rule_set(prog: &Program, term_id: &TermId, rule_set: &RuleSet) {
     let lookup_binding = |binding_id: BindingId| rule_set.bindings[binding_id.index()].clone();
     println!("\tbindings = [");
     for (i, binding) in rule_set.bindings.iter().enumerate() {
-        let ty = binding_type(binding, *term_id, &prog, lookup_binding);
+        let ty = binding_type(binding, *term_id, prog, lookup_binding);
         println!(
             "\t\t{i}: {}\t{}",
             ty.display(&prog.tyenv),
-            binding_string(binding, *term_id, &prog, lookup_binding),
+            binding_string(binding, *term_id, prog, lookup_binding),
         );
     }
     println!("\t]");

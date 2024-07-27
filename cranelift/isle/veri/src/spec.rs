@@ -461,12 +461,12 @@ impl SpecEnv {
 
     fn collect_models(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
         for def in &defs.defs {
-            match def {
-                ast::Def::Model(Model { name, val }) => match val {
+            if let ast::Def::Model(Model { name, val }) = def {
+                match val {
                     ast::ModelValue::TypeValue(model_type) => {
                         // TODO(mbm): error on missing type rather than panic
                         let type_id = tyenv
-                            .get_type_by_name(&name)
+                            .get_type_by_name(name)
                             .expect("type name should be defined");
                         self.type_model
                             .insert(type_id, Type::from_model(model_type));
@@ -505,8 +505,7 @@ impl SpecEnv {
                             self.term_spec.insert(term_id, spec);
                         }
                     }
-                },
-                _ => (),
+                }
             }
         }
     }
@@ -515,42 +514,32 @@ impl SpecEnv {
         // Collect form signatures first, as they may be referenced by instantiations.
         let mut form_signature = HashMap::new();
         for def in &defs.defs {
-            match def {
-                ast::Def::Form(form) => {
-                    let signatures: Vec<_> =
-                        form.signatures.iter().map(Signature::from_ast).collect();
-                    form_signature.insert(form.name.0.clone(), signatures);
-                }
-                _ => {}
+            if let ast::Def::Form(form) = def {
+                let signatures: Vec<_> = form.signatures.iter().map(Signature::from_ast).collect();
+                form_signature.insert(form.name.0.clone(), signatures);
             }
         }
 
         // Collect instantiations.
         for def in &defs.defs {
-            match def {
-                ast::Def::Instantiation(inst) => {
-                    let term_id = termenv.get_term_by_name(tyenv, &inst.term).unwrap();
-                    let sigs = match &inst.form {
-                        Some(form) => form_signature[&form.0].clone(),
-                        None => inst.signatures.iter().map(Signature::from_ast).collect(),
-                    };
-                    self.term_instantiations.insert(term_id, sigs);
-                }
-                _ => {}
+            if let ast::Def::Instantiation(inst) = def {
+                let term_id = termenv.get_term_by_name(tyenv, &inst.term).unwrap();
+                let sigs = match &inst.form {
+                    Some(form) => form_signature[&form.0].clone(),
+                    None => inst.signatures.iter().map(Signature::from_ast).collect(),
+                };
+                self.term_instantiations.insert(term_id, sigs);
             }
         }
     }
 
     fn collect_specs(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
         for def in &defs.defs {
-            match def {
-                ast::Def::Spec(spec) => {
-                    let term_id = termenv
-                        .get_term_by_name(tyenv, &spec.term)
-                        .expect("spec term should exist");
-                    self.term_spec.insert(term_id, Spec::from_ast(spec));
-                }
-                _ => {}
+            if let ast::Def::Spec(spec) = def {
+                let term_id = termenv
+                    .get_term_by_name(tyenv, &spec.term)
+                    .expect("spec term should exist");
+                self.term_spec.insert(term_id, Spec::from_ast(spec));
             }
         }
     }

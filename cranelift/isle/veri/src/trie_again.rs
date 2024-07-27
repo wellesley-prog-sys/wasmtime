@@ -123,15 +123,9 @@ pub fn binding_type(
 fn external_sig_return_type(sig: &ExternalSig) -> BindingType {
     // Multiple return types are represented as a tuple.
     let ty = if sig.ret_tys.len() == 1 {
-        BindingType::Base(sig.ret_tys[0].clone())
+        BindingType::Base(sig.ret_tys[0])
     } else {
-        BindingType::Tuple(
-            sig.ret_tys
-                .iter()
-                .copied()
-                .map(|type_id| BindingType::Base(type_id))
-                .collect(),
-        )
+        BindingType::Tuple(sig.ret_tys.iter().copied().map(BindingType::Base).collect())
     };
 
     // Fallible terms return option type.

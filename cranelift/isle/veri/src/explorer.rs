@@ -54,7 +54,7 @@ impl<'a> ExplorerWriter<'a> {
         // CSS.
         let style_css = include_bytes!("./assets/style.css");
         let mut output = self.create(self.style_path())?;
-        output.write(style_css)?;
+        output.write_all(style_css)?;
 
         Ok(())
     }
@@ -295,7 +295,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn pos(&self, pos: Pos) -> String {
         if pos.is_unknown() {
-            return "&lt;unknown&gt;".to_string();
+            "&lt;unknown&gt;".to_string()
         } else {
             format!(
                 r#"<a href="{href}">{loc}</a>"#,

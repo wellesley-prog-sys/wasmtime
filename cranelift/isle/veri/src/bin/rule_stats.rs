@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
         println!("{}\t{}\t{}", prog.term_name(term.id), class, rule_ids.len());
     }
 
-    println!("");
+    println!();
     println!("TOTAL: num_terms = {total_num_terms}",);
     println!("TOTAL: num_rules = {total_num_rules}");
     for (class, count) in term_class_counts {
@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn classify_term(prog: &Program, term: &Term, rule_ids: &Vec<RuleId>) -> String {
+fn classify_term(prog: &Program, term: &Term, rule_ids: &[RuleId]) -> String {
     if term.is_enum_variant() {
         return "enum_variant".to_string();
     }
@@ -92,7 +92,7 @@ fn classify_term(prog: &Program, term: &Term, rule_ids: &Vec<RuleId>) -> String 
         return "macro".to_string();
     }
 
-    return "constructor".to_string();
+    "constructor".to_string()
 }
 
 fn is_macro_rule(rule: &Rule) -> bool {
@@ -106,12 +106,12 @@ fn is_macro_rule(rule: &Rule) -> bool {
         }
     }
 
-    return true;
+    true
 }
 
 fn is_any_pattern(pattern: &Pattern) -> bool {
     match pattern {
-        Pattern::BindPattern(_, _, subpat) => is_any_pattern(&subpat),
+        Pattern::BindPattern(_, _, subpat) => is_any_pattern(subpat),
         Pattern::Wildcard(_) => true,
         _ => false,
     }

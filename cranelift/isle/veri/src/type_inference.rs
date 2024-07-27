@@ -1,4 +1,7 @@
-use std::{collections::HashMap, iter::zip};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    iter::zip,
+};
 
 use crate::veri::{Call, Conditions, Const, Expr, ExprId, Type};
 
@@ -196,6 +199,7 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 }
 
+#[derive(Default)]
 pub struct Assignment {
     pub expr_type: HashMap<ExprId, Type>,
     pub int_value: HashMap<ExprId, i128>,
@@ -225,19 +229,18 @@ impl Assignment {
         Ok(())
     }
 
-    pub fn satisfies_constraints(&self, constraints: &Vec<Constraint>) -> anyhow::Result<()> {
+    pub fn satisfies_constraints(&self, constraints: &[Constraint]) -> anyhow::Result<()> {
         constraints
             .iter()
-            .map(|c| self.satisfies_constraint(c))
-            .collect()
+            .try_for_each(|c| self.satisfies_constraint(c))
     }
 
     pub fn satisfies_constraint(&self, constraint: &Constraint) -> anyhow::Result<()> {
-        match constraint {
-            &Constraint::Concrete { x, ref ty } => self.expect_expr_type_refinement(x, ty),
-            &Constraint::Same { x, y } => self.expect_same(x, y),
-            &Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
-            &Constraint::IntValue { x, v } => self.expect_int_value(x, v),
+        match *constraint {
+            Constraint::Concrete { x, ref ty } => self.expect_expr_type_refinement(x, ty),
+            Constraint::Same { x, y } => self.expect_same(x, y),
+            Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
+            Constraint::IntValue { x, v } => self.expect_int_value(x, v),
         }
     }
 
@@ -324,6 +327,7 @@ impl Assignment {
     }
 }
 
+#[derive(Default)]
 pub struct Solver {
     assignment: Assignment,
 }
@@ -367,8 +371,8 @@ impl Solver {
 
     fn set_type(&mut self, x: ExprId, ty: &Type) -> anyhow::Result<bool> {
         // If we don't know a type for the expression, record it.
-        if !self.assignment.expr_type.contains_key(&x) {
-            self.assignment.expr_type.insert(x, ty.clone());
+        if let Entry::Vacant(e) = self.assignment.expr_type.entry(x) {
+            e.insert(ty.clone());
             return Ok(true);
         }
 
@@ -381,7 +385,7 @@ impl Solver {
         }
 
         // No change.
-        return Ok(false);
+        Ok(false)
     }
 
     fn same(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {

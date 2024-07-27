@@ -66,8 +66,8 @@ fn main() -> anyhow::Result<()> {
     // Generate expansions.
     // TODO(mbm): don't hardcode the expansion configuration
     let root_term = "lower";
-    let mut expansions_builder = ExpansionsBuilder::new(&prog, &root_term)?;
-    expansions_builder.inline_term(&root_term)?;
+    let mut expansions_builder = ExpansionsBuilder::new(&prog, root_term)?;
+    expansions_builder.inline_term(root_term)?;
     expansions_builder.set_maximal_inlining(true);
     expansions_builder.set_max_rules(6);
     expansions_builder.exclude_inline_term("operand_size")?;
