@@ -15,6 +15,7 @@
 
 use crate::ast;
 use crate::error::*;
+use crate::files::Files;
 use crate::lexer::Pos;
 use crate::log;
 use crate::stablemapset::{StableMap, StableSet};
@@ -904,10 +905,10 @@ impl Rule {
     }
 
     /// Identifier is a name or position for referring to the rule.
-    pub fn identifier(&self, tyenv: &TypeEnv) -> String {
+    pub fn identifier(&self, tyenv: &TypeEnv, files: &Files) -> String {
         match self.name {
             Some(sym) => tyenv.syms[sym.index()].clone(),
-            None => self.pos.pretty_print_line(&tyenv.filenames),
+            None => self.pos.pretty_print_line(files),
         }
     }
 }

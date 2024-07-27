@@ -422,7 +422,7 @@ impl<'a> Parser<'a> {
                 let ident = self.str_to_ident(pos, &sym)?;
                 if self.is_rparen() {
                     self.expect_rparen()?;
-                    return Ok(SpecExpr::Enum { name: ident });
+                    return Ok(SpecExpr::Enum { name: ident, pos });
                 };
                 // AVH TODO: see if we can simplify this to not backtrack, maybe
                 // kill pairs
@@ -431,12 +431,13 @@ impl<'a> Parser<'a> {
                 Ok(SpecExpr::Pair {
                     l: Box::new(SpecExpr::Var { var: ident, pos }),
                     r,
+                    pos,
                 })
             } else {
                 let l = Box::new(self.parse_spec_expr()?);
                 let r = Box::new(self.parse_spec_expr()?);
                 self.expect_rparen()?;
-                Ok(SpecExpr::Pair { l, r })
+                Ok(SpecExpr::Pair { l, r, pos })
             }
         } else {
             Err(self.error(pos, "Unexpected spec expression".into()))

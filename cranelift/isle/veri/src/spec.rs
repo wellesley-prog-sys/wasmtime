@@ -62,6 +62,8 @@ pub struct Const {
 /// Spec expression.
 #[derive(Debug, Clone)]
 pub enum Expr {
+    // TODO(mbm): plumb positional information through spec expressions
+
     // Terminal nodes
     Var(Ident),
     Const(Const),
@@ -359,7 +361,7 @@ impl Expr {
                     l, r
                 )
             }*/
-            ast::SpecExpr::Enum { name } => Expr::Enum(name.clone()),
+            ast::SpecExpr::Enum { name, pos: _ } => Expr::Enum(name.clone()),
             _ => todo!("ast spec expr: {expr:?}"),
         }
     }
@@ -442,7 +444,6 @@ impl SpecEnv {
         env.collect_models(defs, termenv, tyenv);
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv);
-        env.generate_enum_value_specs();
 
         env
     }
@@ -478,7 +479,19 @@ impl SpecEnv {
                                 .expect("enum variant should exist");
                             // TODO(mbm): enforce that the enum value expression is constant
                             let val = Expr::from_ast(expr);
-                            self.enum_value.insert(term_id, val);
+                            self.enum_value.insert(term_id, val.clone());
+
+                            // Synthesize spec.
+                            //
+                            // Enum values are sugar for term specs of the form
+                            // `(provide (= result <value>))`.
+                            let mut spec = Spec::new();
+                            spec.pos = expr.pos();
+                            spec.provides.push(Expr::Eq(
+                                Box::new(Expr::Var(spec.ret.clone())),
+                                Box::new(val.clone()),
+                            ));
+                            self.term_spec.insert(term_id, spec);
                         }
                     }
                 },
@@ -528,18 +541,6 @@ impl SpecEnv {
                 }
                 _ => {}
             }
-        }
-    }
-
-    fn generate_enum_value_specs(&mut self) {
-        // Enum values are sugar for term specs of the form `(provide (= result <value>))`.
-        for (term_id, val) in &self.enum_value {
-            let mut spec = Spec::new();
-            spec.provides.push(Expr::Eq(
-                Box::new(Expr::Var(spec.ret.clone())),
-                Box::new(val.clone()),
-            ));
-            self.term_spec.insert(*term_id, spec);
         }
     }
 }

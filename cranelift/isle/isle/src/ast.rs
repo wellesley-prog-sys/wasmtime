@@ -126,11 +126,27 @@ pub enum SpecExpr {
     Pair {
         l: Box<SpecExpr>,
         r: Box<SpecExpr>,
+        pos: Pos,
     },
     /// Enums variant values (enums defined by model)
     Enum {
         name: Ident,
+        pos: Pos,
     },
+}
+
+impl SpecExpr {
+    pub fn pos(&self) -> Pos {
+        match self {
+            &Self::ConstInt { pos, .. }
+            | &Self::ConstBitVec { pos, .. }
+            | &Self::ConstBool { pos, .. }
+            | &Self::Var { pos, .. }
+            | &Self::Op { pos, .. }
+            | &Self::Pair { pos, .. }
+            | &Self::Enum { pos, .. } => pos,
+        }
+    }
 }
 
 /// An operation used to specify term semantics, similar to SMT-LIB syntax.

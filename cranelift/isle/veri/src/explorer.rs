@@ -239,11 +239,15 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn pos(&self, pos: Pos) -> String {
-        format!(
-            r#"<a href="{href}">{loc}</a>"#,
-            href = self.pos_href(pos),
-            loc = self.loc(pos)
-        )
+        if pos.is_unknown() {
+            return "&lt;unknown&gt;".to_string();
+        } else {
+            format!(
+                r#"<a href="{href}">{loc}</a>"#,
+                href = self.pos_href(pos),
+                loc = self.loc(pos)
+            )
+        }
     }
 
     fn loc(&self, pos: Pos) -> String {
