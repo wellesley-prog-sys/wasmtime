@@ -115,6 +115,13 @@ pub enum Type {
 }
 
 impl Type {
+    /// Get the ID of this `Type`.
+    pub fn id(&self) -> TypeId {
+        match self {
+            Self::Primitive(id, _, _) | Self::Enum { id, .. } => *id,
+        }
+    }
+
     /// Get the name of this `Type`.
     pub fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
         match self {

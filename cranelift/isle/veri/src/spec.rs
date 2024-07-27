@@ -36,6 +36,17 @@ impl Type {
     }
 }
 
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::BitVector => write!(f, "bv _"),
+            Self::BitVectorWithWidth(w) => write!(f, "bv {w}"),
+            Self::Int => write!(f, "int"),
+            Self::Bool => write!(f, "bool"),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Signature {
     pub args: Vec<Type>,

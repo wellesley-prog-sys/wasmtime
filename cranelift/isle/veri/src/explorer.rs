@@ -29,6 +29,7 @@ impl<'a> ExplorerWriter<'a> {
         self.write_assets()?;
         self.write_index()?;
         self.write_files()?;
+        self.write_types()?;
         self.write_terms()?;
         self.write_rules()?;
         Ok(())
@@ -66,11 +67,13 @@ impl<'a> ExplorerWriter<'a> {
             r#"
         <ul>
             <li><a href="/{files_href}">Files</a></li>
+            <li><a href="/{types_href}">Types</a></li>
             <li><a href="/{terms_href}">Terms</a></li>
             <li><a href="/{rules_href}">Rules</a></li>
         </ul>
         "#,
             files_href = self.file_dir().display(),
+            types_href = self.type_dir().display(),
             terms_href = self.term_dir().display(),
             rules_href = self.rule_dir().display(),
         )?;
@@ -130,6 +133,58 @@ impl<'a> ExplorerWriter<'a> {
         // Footer.
         self.footer(&mut output)?;
 
+        Ok(())
+    }
+
+    fn write_types(&self) -> anyhow::Result<()> {
+        let mut output = self.create(self.type_dir().join("index.html"))?;
+        self.header("Types", &mut output)?;
+
+        // Types.
+        writeln!(
+            output,
+            r#"
+        <table>
+            <thead>
+                <tr>
+                    <th class="id">&num;</th>
+                    <th>Name</th>
+                    <th>Location</th>
+                    <th>Model</th>
+                </tr>
+            </thead>
+            <tbody>
+        "#
+        )?;
+        for ty in &self.prog.tyenv.types {
+            writeln!(output, "<tr>")?;
+            writeln!(output, r#"<td class="id">{id}</td>"#, id = ty.id().index())?;
+
+            // Name.
+            writeln!(output, r"<td>{name}</td>", name = ty.name(&self.prog.tyenv))?;
+
+            // Location.
+            writeln!(output, "<td>{pos}</td>", pos = self.pos(ty.pos()))?;
+
+            // Model.
+            if let Some(model) = self.prog.specenv.type_model.get(&ty.id()) {
+                // TODO(mbm): link type model to source position
+                writeln!(output, "<td>{model}</td>")?;
+            } else {
+                writeln!(output, "<td></td>")?;
+            }
+
+            writeln!(output, "</tr>")?;
+        }
+        writeln!(
+            output,
+            r#"
+            </tbody>
+        </table>
+        "#
+        )?;
+
+        self.footer(&mut output)?;
         Ok(())
     }
 
@@ -269,6 +324,10 @@ impl<'a> ExplorerWriter<'a> {
 
     fn line_url_fragment(&self, n: usize) -> String {
         format!("L{n}")
+    }
+
+    fn type_dir(&self) -> PathBuf {
+        PathBuf::from("type")
     }
 
     fn term_dir(&self) -> PathBuf {
