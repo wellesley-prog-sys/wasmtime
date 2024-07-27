@@ -121,7 +121,7 @@ impl<'a> ExplorerWriter<'a> {
             let n = i + 1;
             writeln!(
                 &mut output,
-                "{n:4}:\t<span id=\"{fragment}\" class=\"line\">{line}</span>",
+                r#"<code id=\"{fragment}\">{line}</code>"#,
                 fragment = self.line_url_fragment(n)
             )?;
         }

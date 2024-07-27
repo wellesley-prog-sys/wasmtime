@@ -1,8 +1,7 @@
 :root {
     --invert-font-color: #fff;
     --primary-color: #00a0ad;
-    --highlight-color: #6ce3cc;
-    --border-color: #ccc;
+    --light-color: #ccc;
 }
 
 body {
@@ -79,13 +78,33 @@ table {
 
 td,
 th {
-    border-bottom: .1rem solid var(--border-color);
+    border-bottom: .1rem solid var(--light-color);
 }
 
 th {
     text-align: left;
 }
 
-pre .line:target {
-    background-color: var(--highlight-color);
+pre {
+    counter-reset: line;
+}
+
+pre code {
+    counter-increment: line;
+}
+
+pre code::before {
+    content: counter(line);
+    user-select: none;
+    color: var(--light-color);
+    display: inline-block;
+    width: 4em;
+    padding-right: .5em;
+    margin-right: .5em;
+    text-align: right;
+}
+
+pre code:target::before {
+    color: var(--primary-color);
+    font-weight: bold;
 }
