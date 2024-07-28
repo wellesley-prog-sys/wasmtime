@@ -1,4 +1,7 @@
-use cranelift_isle::{lexer::Pos, sema::Rule};
+use cranelift_isle::{
+    lexer::Pos,
+    sema::{RuleId, TermId},
+};
 
 use crate::{expand::Expansion, program::Program};
 use std::{
@@ -257,17 +260,50 @@ impl<'a> ExplorerWriter<'a> {
         self.header("Rules", &mut output)?;
 
         // Rules.
-        writeln!(output, "<ul>")?;
-        for rule in &self.prog.termenv.rules {
-            writeln!(
-                output,
-                "<li>{rule_ref}</li>",
-                rule_ref = self.rule_ref(rule)
-            )?;
-        }
-        writeln!(output, "</ul>")?;
+        let rule_ids = (0..self.prog.termenv.rules.len()).map(RuleId);
+        self.write_rules_list(&mut output, rule_ids)?;
 
         self.footer(&mut output)?;
+        Ok(())
+    }
+
+    fn write_rules_list(
+        &self,
+        dst: &mut dyn Write,
+        rule_ids: impl Iterator<Item = RuleId>,
+    ) -> anyhow::Result<()> {
+        writeln!(
+            dst,
+            r#"
+        <table>
+            <thead>
+                <tr>
+                    <th class="id">&num;</th>
+                    <th>Identifier</th>
+                </tr>
+            </thead>
+            <tbody>
+        "#
+        )?;
+
+        for rule_id in rule_ids {
+            writeln!(dst, "<tr>")?;
+            writeln!(dst, r#"<td class="id">{id}</td>"#, id = rule_id.index())?;
+            writeln!(
+                dst,
+                "<td>{rule_ref}</td>",
+                rule_ref = self.rule_ref(rule_id)
+            )?;
+            writeln!(dst, "</tr>")?;
+        }
+
+        writeln!(
+            dst,
+            r#"
+            </tbody>
+        </table>
+        "#
+        )?;
         Ok(())
     }
 
@@ -312,11 +348,10 @@ impl<'a> ExplorerWriter<'a> {
                 .rules
                 .first()
                 .expect("expansion must have at least one rule");
-            let rule = self.prog.rule(*rule_id);
             writeln!(
                 output,
                 "<td>{rule_ref}</td>",
-                rule_ref = self.rule_ref(rule)
+                rule_ref = self.rule_ref(*rule_id)
             )?;
 
             writeln!(output, "</tr>")?;
@@ -339,6 +374,23 @@ impl<'a> ExplorerWriter<'a> {
         // Header.
         let title = format!("Expansion: &num;{id}");
         self.header(&title, &mut output)?;
+
+        // Term.
+        writeln!(
+            output,
+            "<p>Term: {term_ref}</p>",
+            term_ref = self.term_ref(expansion.term)
+        )?;
+
+        // Rules
+        writeln!(output, "<h2>Rules</h2>")?;
+        self.write_rules_list(&mut output, expansion.rules.iter().copied())?;
+
+        // TODO(mbm): Bindings
+        // TODO(mbm): Constraints
+        // TODO(mbm): Equals
+        // TODO(mbm): Parameters
+        // TODO(mbm): Result
 
         // Footer.
         self.footer(&mut output)?;
@@ -376,7 +428,17 @@ impl<'a> ExplorerWriter<'a> {
         )
     }
 
-    fn rule_ref(&self, rule: &Rule) -> String {
+    fn term_ref(&self, term_id: TermId) -> String {
+        let term = self.prog.term(term_id);
+        format!(
+            r#"<a href="{href}">{name}</a>"#,
+            href = self.pos_href(term.decl_pos),
+            name = self.prog.term_name(term_id)
+        )
+    }
+
+    fn rule_ref(&self, rule_id: RuleId) -> String {
+        let rule = self.prog.rule(rule_id);
         format!(
             r#"<a href="{href}">{identifier}</a>"#,
             href = self.pos_href(rule.pos),

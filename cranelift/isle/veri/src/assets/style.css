@@ -109,6 +109,8 @@ th {
 
 table .id {
     text-align: right;
+    width: 1em;
+    white-space: nowrap;
 }
 
 pre {
