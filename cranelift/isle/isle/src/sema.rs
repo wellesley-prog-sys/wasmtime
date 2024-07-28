@@ -1810,6 +1810,28 @@ impl TermEnv {
                 _ => {}
             }
         }
+
+        // Populate default rule names.
+        //
+        // Unnamed rules that are the only rule for their root term adopt the
+        // name of the root term.
+        let mut term_rule_count: HashMap<TermId, usize> = HashMap::new();
+        for rule in &self.rules {
+            *term_rule_count.entry(rule.root_term).or_default() += 1;
+        }
+
+        for rule in &mut self.rules {
+            if rule.name.is_none()
+                && term_rule_count
+                    .get(&rule.root_term)
+                    .copied()
+                    .unwrap_or_default()
+                    == 1
+            {
+                let term = &self.terms[rule.root_term.index()];
+                rule.name = Some(term.name);
+            }
+        }
     }
 
     fn check_for_undefined_decls(&self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
