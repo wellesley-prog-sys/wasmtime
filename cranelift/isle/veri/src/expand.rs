@@ -296,7 +296,7 @@ impl<'a> Expander<'a> {
         };
 
         let rule_set = &self.term_rule_sets[term_id];
-        for rule in &rule_set.rules {
+        for rule in rule_set.rules.iter().rev() {
             let mut apply = Application::new(expansion.clone());
             let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
             if !self.prune_infeasible || inlined.is_feasible() {
