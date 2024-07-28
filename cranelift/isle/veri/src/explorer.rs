@@ -1,6 +1,6 @@
-use cranelift_isle::lexer::Pos;
+use cranelift_isle::{lexer::Pos, sema::Rule};
 
-use crate::program::Program;
+use crate::{expand::Expansion, program::Program};
 use std::{
     fs::File,
     io::{self, Write},
@@ -9,15 +9,21 @@ use std::{
 
 pub struct ExplorerWriter<'a> {
     prog: &'a Program,
+    expansions: &'a Vec<Expansion>,
 
     root: std::path::PathBuf,
     dev: bool,
 }
 
 impl<'a> ExplorerWriter<'a> {
-    pub fn new(prog: &'a Program, root: std::path::PathBuf) -> Self {
+    pub fn new(
+        root: std::path::PathBuf,
+        prog: &'a Program,
+        expansions: &'a Vec<Expansion>,
+    ) -> Self {
         Self {
             prog,
+            expansions,
             root,
             // TODO(mbm): configurable dev mode
             dev: true,
@@ -32,6 +38,7 @@ impl<'a> ExplorerWriter<'a> {
         self.write_types()?;
         self.write_terms()?;
         self.write_rules()?;
+        self.write_expansions()?;
         Ok(())
     }
 
@@ -70,12 +77,14 @@ impl<'a> ExplorerWriter<'a> {
             <li><a href="/{types_href}">Types</a></li>
             <li><a href="/{terms_href}">Terms</a></li>
             <li><a href="/{rules_href}">Rules</a></li>
+            <li><a href="/{expansions_href}">Expansions</a></li>
         </menu>
         "#,
             files_href = self.file_dir().display(),
             types_href = self.type_dir().display(),
             terms_href = self.term_dir().display(),
             rules_href = self.rule_dir().display(),
+            expansions_href = self.expansion_dir().display(),
         )?;
         self.footer(&mut output)?;
         Ok(())
@@ -252,14 +261,88 @@ impl<'a> ExplorerWriter<'a> {
         for rule in &self.prog.termenv.rules {
             writeln!(
                 output,
-                r#"<li><a href="{href}">{identifier}</a></li>"#,
-                href = self.pos_href(rule.pos),
-                identifier = rule.identifier(&self.prog.tyenv)
+                "<li>{rule_ref}</li>",
+                rule_ref = self.rule_ref(rule)
             )?;
         }
         writeln!(output, "</ul>")?;
 
         self.footer(&mut output)?;
+        Ok(())
+    }
+
+    fn write_expansions(&self) -> anyhow::Result<()> {
+        self.write_expansions_index()?;
+        for (id, expansion) in self.expansions.iter().enumerate() {
+            self.write_expansion(id, expansion)?;
+        }
+        Ok(())
+    }
+
+    fn write_expansions_index(&self) -> anyhow::Result<()> {
+        let mut output = self.create(self.expansion_dir().join("index.html"))?;
+        self.header("Expansions", &mut output)?;
+
+        // Expansions.
+        writeln!(
+            output,
+            r#"
+        <table>
+            <thead>
+                <tr>
+                    <th>&num;</th>
+                    <th>First Rule</th>
+                </tr>
+            </thead>
+            <tbody>
+        "#
+        )?;
+        for (id, expansion) in self.expansions.iter().enumerate() {
+            writeln!(output, "<tr>")?;
+
+            // ID
+            writeln!(
+                output,
+                r#"<td><a href="/{link}">&num;{id}</a></td>"#,
+                link = self.expansion_path(id).display()
+            )?;
+
+            // First Rule
+            let rule_id = expansion
+                .rules
+                .first()
+                .expect("expansion must have at least one rule");
+            let rule = self.prog.rule(*rule_id);
+            writeln!(
+                output,
+                "<td>{rule_ref}</td>",
+                rule_ref = self.rule_ref(rule)
+            )?;
+
+            writeln!(output, "</tr>")?;
+        }
+        writeln!(
+            output,
+            r#"
+            </tbody>
+        </table>
+        "#
+        )?;
+
+        self.footer(&mut output)?;
+        Ok(())
+    }
+
+    fn write_expansion(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+        let mut output = self.create(self.expansion_path(id))?;
+
+        // Header.
+        let title = format!("Expansion: &num;{id}");
+        self.header(&title, &mut output)?;
+
+        // Footer.
+        self.footer(&mut output)?;
+
         Ok(())
     }
 
@@ -290,6 +373,14 @@ impl<'a> ExplorerWriter<'a> {
   </body>
 </html>
         "#
+        )
+    }
+
+    fn rule_ref(&self, rule: &Rule) -> String {
+        format!(
+            r#"<a href="{href}">{identifier}</a>"#,
+            href = self.pos_href(rule.pos),
+            identifier = rule.identifier(&self.prog.tyenv)
         )
     }
 
@@ -336,6 +427,14 @@ impl<'a> ExplorerWriter<'a> {
 
     fn rule_dir(&self) -> PathBuf {
         PathBuf::from("rule")
+    }
+
+    fn expansion_dir(&self) -> PathBuf {
+        PathBuf::from("expansion")
+    }
+
+    fn expansion_path(&self, id: usize) -> PathBuf {
+        self.expansion_dir().join(format!("{id}.html"))
     }
 
     fn file_dir(&self) -> PathBuf {

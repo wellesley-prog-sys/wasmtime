@@ -1,6 +1,6 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle_veri::{explorer::ExplorerWriter, program::Program};
+use cranelift_isle_veri::{expand::ExpansionsBuilder, explorer::ExplorerWriter, program::Program};
 
 #[derive(Parser)]
 struct Opts {
@@ -50,8 +50,18 @@ fn main() -> anyhow::Result<()> {
     let expand_internal_extractors = false;
     let prog = Program::from_files(&inputs, expand_internal_extractors)?;
 
+    // Generate expansions.
+    // TODO(mbm): don't hardcode the expansion configuration
+    let root_term = "lower";
+    let mut expansions_builder = ExpansionsBuilder::new(&prog, root_term)?;
+    expansions_builder.inline_term(root_term)?;
+    expansions_builder.set_maximal_inlining(true);
+    expansions_builder.set_max_rules(6);
+    expansions_builder.exclude_inline_term("operand_size")?;
+    let expansions = expansions_builder.expansions()?;
+
     // Generate explorer.
-    let explorer_writer = ExplorerWriter::new(&prog, opts.output_dir);
+    let explorer_writer = ExplorerWriter::new(opts.output_dir, &prog, &expansions);
     explorer_writer.write()?;
 
     Ok(())
