@@ -77,14 +77,14 @@ a:hover {
 menu {
     margin: 0;
     padding: 0;
-    border-top: .1rem solid var(--light-color);
+    border-top: 1px solid var(--light-color);
 }
 
 menu li {
     list-style-type: none;
     margin: 0;
     padding: 0;
-    border-bottom: .1rem solid var(--light-color);
+    border-bottom: 1px solid var(--light-color);
 }
 
 menu a {
@@ -100,7 +100,7 @@ table {
 td,
 th {
     padding: .2rem;
-    border-bottom: .1rem solid var(--light-color);
+    border-bottom: 1px solid var(--light-color);
 }
 
 th {
