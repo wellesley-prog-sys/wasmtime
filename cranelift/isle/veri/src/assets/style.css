@@ -117,6 +117,7 @@ pre {
 
 pre code {
     counter-increment: line;
+    position: relative;
 }
 
 pre code::before {
@@ -124,9 +125,9 @@ pre code::before {
     user-select: none;
     color: var(--light-color);
     display: inline-block;
+    position: absolute;
+    left: -5em;
     width: 4em;
-    padding-right: .5em;
-    margin-right: .5em;
     text-align: right;
 }
 
