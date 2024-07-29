@@ -77,7 +77,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_index(&self) -> anyhow::Result<()> {
         let mut output = self.create(PathBuf::from("index.html"))?;
-        self.header("ISLE Explorer", &mut output)?;
+        self.header(&mut output, "ISLE Explorer")?;
         writeln!(
             output,
             r#"
@@ -109,7 +109,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_files_index(&self) -> anyhow::Result<()> {
         let mut output = self.create(self.file_dir().join("index.html"))?;
-        self.header("Files", &mut output)?;
+        self.header(&mut output, "Files")?;
 
         // Files.
         writeln!(output, "<ul>")?;
@@ -132,7 +132,7 @@ impl<'a> ExplorerWriter<'a> {
         // Header.
         let filename = &self.prog.tyenv.filenames[id];
         let title = format!("File: {filename}");
-        self.header(&title, &mut output)?;
+        self.header(&mut output, &title)?;
 
         // Source code.
         let file_text = &self.prog.tyenv.file_texts[id];
@@ -156,7 +156,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_types(&self) -> anyhow::Result<()> {
         let mut output = self.create(self.type_dir().join("index.html"))?;
-        self.header("Types", &mut output)?;
+        self.header(&mut output, "Types")?;
 
         // Types.
         writeln!(
@@ -208,7 +208,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_terms(&self) -> anyhow::Result<()> {
         let mut output = self.create(self.term_dir().join("index.html"))?;
-        self.header("Terms", &mut output)?;
+        self.header(&mut output, "Terms")?;
 
         // Terms.
         let term_ids = (0..self.prog.termenv.terms.len()).map(TermId);
@@ -275,7 +275,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_rules(&self) -> anyhow::Result<()> {
         let mut output = self.create(self.rule_dir().join("index.html"))?;
-        self.header("Rules", &mut output)?;
+        self.header(&mut output, "Rules")?;
 
         // Rules.
         let rule_ids = (0..self.prog.termenv.rules.len()).map(RuleId);
@@ -287,11 +287,11 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_rules_list(
         &self,
-        dst: &mut dyn Write,
+        output: &mut dyn Write,
         rule_ids: impl Iterator<Item = RuleId>,
     ) -> anyhow::Result<()> {
         writeln!(
-            dst,
+            output,
             r#"
         <table>
             <thead>
@@ -305,18 +305,18 @@ impl<'a> ExplorerWriter<'a> {
         )?;
 
         for rule_id in rule_ids {
-            writeln!(dst, "<tr>")?;
-            writeln!(dst, r#"<td class="id">{id}</td>"#, id = rule_id.index())?;
+            writeln!(output, "<tr>")?;
+            writeln!(output, r#"<td class="id">{id}</td>"#, id = rule_id.index())?;
             writeln!(
-                dst,
+                output,
                 "<td>{rule_ref}</td>",
                 rule_ref = self.rule_ref(rule_id)
             )?;
-            writeln!(dst, "</tr>")?;
+            writeln!(output, "</tr>")?;
         }
 
         writeln!(
-            dst,
+            output,
             r#"
             </tbody>
         </table>
@@ -335,7 +335,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_expansions_index(&self) -> anyhow::Result<()> {
         let mut output = self.create(self.expansion_dir().join("index.html"))?;
-        self.header("Expansions", &mut output)?;
+        self.header(&mut output, "Expansions")?;
 
         // Expansions.
         writeln!(
@@ -391,7 +391,7 @@ impl<'a> ExplorerWriter<'a> {
 
         // Header.
         let title = format!("Expansion: &num;{id}");
-        self.header(&title, &mut output)?;
+        self.header(&mut output, &title)?;
 
         // Term.
         writeln!(
@@ -498,9 +498,9 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn header(&self, title: &str, dst: &mut dyn Write) -> io::Result<()> {
+    fn header(&self, output: &mut dyn Write, title: &str) -> io::Result<()> {
         write!(
-            dst,
+            output,
             r#"
 <!DOCTYPE html>
 <html lang="en">
@@ -517,9 +517,9 @@ impl<'a> ExplorerWriter<'a> {
         )
     }
 
-    fn footer(&self, dst: &mut dyn Write) -> io::Result<()> {
+    fn footer(&self, output: &mut dyn Write) -> io::Result<()> {
         write!(
-            dst,
+            output,
             r#"
     </main>
   </body>
