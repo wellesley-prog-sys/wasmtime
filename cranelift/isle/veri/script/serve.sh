@@ -9,4 +9,5 @@ miniserve \
     --port "${port}" \
     --index index.html \
     --disable-indexing \
+    --verbose \
     "${output_dir}"
