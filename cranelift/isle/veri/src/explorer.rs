@@ -21,6 +21,7 @@ pub struct ExplorerWriter<'a> {
     expansions: &'a Vec<Expansion>,
 
     root: std::path::PathBuf,
+    graphs: bool,
     dev: bool,
 }
 
@@ -34,9 +35,13 @@ impl<'a> ExplorerWriter<'a> {
             prog,
             expansions,
             root,
-            // TODO(mbm): configurable dev mode
-            dev: true,
+            graphs: false,
+            dev: true, // TODO(mbm): configurable dev mode
         }
+    }
+
+    pub fn enable_graphs(&mut self) {
+        self.graphs = true;
     }
 
     pub fn write(&self) -> anyhow::Result<()> {
@@ -90,10 +95,10 @@ impl<'a> ExplorerWriter<'a> {
         </menu>
         "#,
             files_href = self.file_dir().display(),
-            types_href = self.type_dir().display(),
-            terms_href = self.term_dir().display(),
-            rules_href = self.rule_dir().display(),
-            expansions_href = self.expansion_dir().display(),
+            types_href = self.types_dir().display(),
+            terms_href = self.terms_dir().display(),
+            rules_href = self.rules_dir().display(),
+            expansions_href = self.expansions_dir().display(),
         )?;
         self.footer(&mut output)?;
         Ok(())
@@ -155,7 +160,7 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn write_types(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.type_dir().join("index.html"))?;
+        let mut output = self.create(self.types_dir().join("index.html"))?;
         self.header(&mut output, "Types")?;
 
         // Types.
@@ -207,7 +212,7 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn write_terms(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.term_dir().join("index.html"))?;
+        let mut output = self.create(self.terms_dir().join("index.html"))?;
         self.header(&mut output, "Terms")?;
 
         // Terms.
@@ -274,7 +279,7 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn write_rules(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.rule_dir().join("index.html"))?;
+        let mut output = self.create(self.rules_dir().join("index.html"))?;
         self.header(&mut output, "Rules")?;
 
         // Rules.
@@ -334,7 +339,7 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn write_expansions_index(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.expansion_dir().join("index.html"))?;
+        let mut output = self.create(self.expansions_dir().join("index.html"))?;
         self.header(&mut output, "Expansions")?;
 
         // Expansions.
@@ -387,6 +392,14 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn write_expansion(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+        self.write_expansion_index(id, expansion)?;
+        if self.graphs {
+            self.write_expansion_graph(id, expansion)?;
+        }
+        Ok(())
+    }
+
+    fn write_expansion_index(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
         let mut output = self.create(self.expansion_path(id))?;
 
         // Header.
@@ -411,6 +424,15 @@ impl<'a> ExplorerWriter<'a> {
 
         // Bindings
         writeln!(output, "<h2>Bindings</h2>")?;
+        if self.graphs {
+            writeln!(
+                output,
+                r#"<p>Graph: <a href="/{svg_path}">SVG</a>, <a href="/{dot_path}">DOT</a>.</p>"#,
+                svg_path = self.expansion_graph_svg_path(id).display(),
+                dot_path = self.expansion_graph_dot_path(id).display(),
+            )?;
+        }
+
         writeln!(
             output,
             r#"
@@ -494,6 +516,66 @@ impl<'a> ExplorerWriter<'a> {
 
         // Footer.
         self.footer(&mut output)?;
+
+        Ok(())
+    }
+
+    fn write_expansion_graph(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+        self.write_expansion_graph_dot(id, expansion)?;
+        self.generate_expansion_graph_svg(id)?;
+        Ok(())
+    }
+
+    fn write_expansion_graph_dot(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+        let mut output = self.create(self.expansion_graph_dot_path(id))?;
+
+        // Header.
+        writeln!(&mut output, "graph {{")?;
+        writeln!(&mut output, "\tnode [shape=box, fontname=monospace];")?;
+
+        // Binding nodes.
+        let lookup_binding =
+            |binding_id: BindingId| expansion.bindings[binding_id.index()].clone().unwrap();
+        for (i, binding) in expansion.bindings.iter().enumerate() {
+            if let Some(binding) = binding {
+                writeln!(
+                    &mut output,
+                    "\tb{i} [label=\"{i}: {}\"];",
+                    binding_string(binding, expansion.term, self.prog, lookup_binding)
+                )?;
+            }
+        }
+
+        // Edges.
+        for (i, binding) in expansion.bindings.iter().enumerate() {
+            if let Some(binding) = binding {
+                for source in binding.sources() {
+                    writeln!(&mut output, "\tb{i} -- b{j};", j = source.index())?;
+                }
+            }
+        }
+
+        writeln!(&mut output, "}}")?;
+
+        Ok(())
+    }
+
+    fn generate_expansion_graph_svg(&self, id: usize) -> anyhow::Result<()> {
+        let dot_path = self.expansion_graph_dot_path(id);
+        let svg_path = self.expansion_graph_svg_path(id);
+
+        // Invoke graphviz.
+        let status = std::process::Command::new("dot")
+            .current_dir(&self.root)
+            .arg("-Tsvg")
+            .arg("-o")
+            .arg(svg_path)
+            .arg(dot_path)
+            .status()?;
+
+        if !status.success() {
+            anyhow::bail!("dot exit status: {status}");
+        }
 
         Ok(())
     }
@@ -603,24 +685,36 @@ impl<'a> ExplorerWriter<'a> {
         format!("L{n}")
     }
 
-    fn type_dir(&self) -> PathBuf {
+    fn types_dir(&self) -> PathBuf {
         PathBuf::from("type")
     }
 
-    fn term_dir(&self) -> PathBuf {
+    fn terms_dir(&self) -> PathBuf {
         PathBuf::from("term")
     }
 
-    fn rule_dir(&self) -> PathBuf {
+    fn rules_dir(&self) -> PathBuf {
         PathBuf::from("rule")
     }
 
-    fn expansion_dir(&self) -> PathBuf {
+    fn expansions_dir(&self) -> PathBuf {
         PathBuf::from("expansion")
     }
 
+    fn expansion_dir(&self, id: usize) -> PathBuf {
+        self.expansions_dir().join(id.to_string())
+    }
+
     fn expansion_path(&self, id: usize) -> PathBuf {
-        self.expansion_dir().join(format!("{id}.html"))
+        self.expansion_dir(id).join("index.html")
+    }
+
+    fn expansion_graph_dot_path(&self, id: usize) -> PathBuf {
+        self.expansion_dir(id).join("graph.dot")
+    }
+
+    fn expansion_graph_svg_path(&self, id: usize) -> PathBuf {
+        self.expansion_dir(id).join("graph.svg")
     }
 
     fn file_dir(&self) -> PathBuf {

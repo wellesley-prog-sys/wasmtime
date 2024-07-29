@@ -2,6 +2,8 @@
 
 set -exuo pipefail
 
+export RUST_LOG=info
+
 output_dir="tmp/explorer"
 rm -rf "${output_dir}"
 cargo run --bin explorer -- \

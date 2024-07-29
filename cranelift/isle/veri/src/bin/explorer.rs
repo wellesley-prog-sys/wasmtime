@@ -19,6 +19,10 @@ struct Opts {
     /// Output directory for explorer files.
     #[arg(long, required = true)]
     output_dir: std::path::PathBuf,
+
+    /// Whether to enable graph generation.
+    #[arg(long)]
+    graphs: bool,
 }
 
 impl Opts {
@@ -61,7 +65,10 @@ fn main() -> anyhow::Result<()> {
     let expansions = expansions_builder.expansions()?;
 
     // Generate explorer.
-    let explorer_writer = ExplorerWriter::new(opts.output_dir, &prog, &expansions);
+    let mut explorer_writer = ExplorerWriter::new(opts.output_dir, &prog, &expansions);
+    if opts.graphs {
+        explorer_writer.enable_graphs();
+    }
     explorer_writer.write()?;
 
     Ok(())
