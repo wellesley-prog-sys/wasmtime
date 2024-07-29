@@ -1,9 +1,15 @@
 use cranelift_isle::{
     lexer::Pos,
-    sema::{RuleId, TermId},
+    sema::{RuleId, TermId, TypeId},
+    trie_again::BindingId,
 };
 
-use crate::{expand::Expansion, program::Program};
+use crate::{
+    debug::binding_string,
+    expand::Expansion,
+    program::Program,
+    trie_again::{binding_type, BindingType},
+};
 use std::{
     fs::File,
     io::{self, Write},
@@ -386,7 +392,40 @@ impl<'a> ExplorerWriter<'a> {
         writeln!(output, "<h2>Rules</h2>")?;
         self.write_rules_list(&mut output, expansion.rules.iter().copied())?;
 
-        // TODO(mbm): Bindings
+        // Bindings
+        writeln!(output, "<h2>Bindings</h2>")?;
+        writeln!(
+            output,
+            r#"
+        <table>
+            <thead>
+                <tr>
+                    <th>&num;</th>
+                    <th>Type</th>
+                    <th>Binding</th>
+                </tr>
+            </thead>
+            <tbody>
+        "#
+        )?;
+        let lookup_binding =
+            |binding_id: BindingId| expansion.bindings[binding_id.index()].clone().unwrap();
+        for (id, binding) in expansion.bindings.iter().enumerate() {
+            if let Some(binding) = binding {
+                writeln!(output, "<tr>")?;
+                let ty = binding_type(binding, expansion.term, &self.prog, lookup_binding);
+                writeln!(output, "<td>{id}</td>")?;
+                writeln!(output, "<td>{ty}</td>", ty = self.binding_type(&ty))?;
+                writeln!(
+                    output,
+                    "<td>{binding}</td>",
+                    binding = binding_string(binding, expansion.term, &self.prog, lookup_binding)
+                )?;
+                writeln!(output, "</tr>")?;
+            }
+        }
+
+        // TODO(mbm): Terms
         // TODO(mbm): Constraints
         // TODO(mbm): Equals
         // TODO(mbm): Parameters
@@ -425,6 +464,30 @@ impl<'a> ExplorerWriter<'a> {
   </body>
 </html>
         "#
+        )
+    }
+
+    fn binding_type(&self, ty: &BindingType) -> String {
+        match ty {
+            BindingType::Base(type_id) => self.type_ref(*type_id),
+            BindingType::Option(inner) => format!("Option({})", self.binding_type(inner)),
+            BindingType::Tuple(inners) => format!(
+                "({inners})",
+                inners = inners
+                    .iter()
+                    .map(|inner| self.binding_type(inner))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+
+    fn type_ref(&self, type_id: TypeId) -> String {
+        let ty = self.prog.ty(type_id);
+        format!(
+            r#"<a href="{href}">{name}</a>"#,
+            href = self.pos_href(ty.pos()),
+            name = self.prog.type_name(ty.id())
         )
     }
 
