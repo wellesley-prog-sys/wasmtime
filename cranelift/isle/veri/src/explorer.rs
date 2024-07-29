@@ -401,6 +401,14 @@ impl<'a> ExplorerWriter<'a> {
             <thead>
                 <tr>
                     <th>&num;</th>
+        "#
+        )?;
+        if !expansion.equals.is_empty() {
+            writeln!(output, "<th>&equals;</th>")?;
+        }
+        writeln!(
+            output,
+            r#"
                     <th>Type</th>
                     <th>Binding</th>
                     <th>Constraints</th>
@@ -419,6 +427,13 @@ impl<'a> ExplorerWriter<'a> {
 
                 // ID
                 writeln!(output, "<td>{id}</td>", id = id.index())?;
+
+                // Equals
+                if let Some(eq) = expansion.equals.find(id) {
+                    if id != eq {
+                        write!(output, "<td>&equals; {}</td>", eq.index())?;
+                    }
+                }
 
                 // Type
                 writeln!(output, "<td>{ty}</td>", ty = self.binding_type(&ty))?;
@@ -450,7 +465,6 @@ impl<'a> ExplorerWriter<'a> {
         }
 
         // TODO(mbm): Terms
-        // TODO(mbm): Equals
         // TODO(mbm): Parameters
         // TODO(mbm): Result
 
