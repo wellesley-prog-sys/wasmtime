@@ -5,7 +5,7 @@ use cranelift_isle::{
 };
 
 use crate::{
-    debug::binding_string,
+    debug::{binding_string, constraint_string},
     expand::Expansion,
     program::Program,
     trie_again::{binding_type, BindingType},
@@ -403,6 +403,7 @@ impl<'a> ExplorerWriter<'a> {
                     <th>&num;</th>
                     <th>Type</th>
                     <th>Binding</th>
+                    <th>Constraints</th>
                 </tr>
             </thead>
             <tbody>
@@ -410,23 +411,45 @@ impl<'a> ExplorerWriter<'a> {
         )?;
         let lookup_binding =
             |binding_id: BindingId| expansion.bindings[binding_id.index()].clone().unwrap();
-        for (id, binding) in expansion.bindings.iter().enumerate() {
+        for (i, binding) in expansion.bindings.iter().enumerate() {
+            let id: BindingId = i.try_into().unwrap();
             if let Some(binding) = binding {
                 writeln!(output, "<tr>")?;
                 let ty = binding_type(binding, expansion.term, &self.prog, lookup_binding);
-                writeln!(output, "<td>{id}</td>")?;
+
+                // ID
+                writeln!(output, "<td>{id}</td>", id = id.index())?;
+
+                // Type
                 writeln!(output, "<td>{ty}</td>", ty = self.binding_type(&ty))?;
+
+                // Binding
                 writeln!(
                     output,
                     "<td>{binding}</td>",
                     binding = binding_string(binding, expansion.term, &self.prog, lookup_binding)
                 )?;
+
+                // Constraints
+                if let Some(constraints) = expansion.constraints.get(&id) {
+                    writeln!(
+                        output,
+                        "<td>{}</td>",
+                        constraints
+                            .iter()
+                            .map(|c| constraint_string(c, &self.prog.tyenv))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )?;
+                } else {
+                    writeln!(output, "<td></td>")?;
+                }
+
                 writeln!(output, "</tr>")?;
             }
         }
 
         // TODO(mbm): Terms
-        // TODO(mbm): Constraints
         // TODO(mbm): Equals
         // TODO(mbm): Parameters
         // TODO(mbm): Result
