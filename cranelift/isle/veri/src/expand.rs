@@ -108,6 +108,19 @@ impl Expansion {
         eqs
     }
 
+    pub fn terms(&self, prog: &Program) -> Vec<TermId> {
+        let mut terms: Vec<_> = self
+            .bindings
+            .iter()
+            .flatten()
+            .filter_map(|b| b.term(&prog.tyenv, &prog.termenv))
+            .collect();
+        // TODO(mbm): dedupe and preserve order
+        terms.sort();
+        terms.dedup();
+        terms
+    }
+
     fn substitute(&mut self, target: BindingId, replace: BindingId) {
         // Reindex bindings.
         let mut reindex = Reindex::new();

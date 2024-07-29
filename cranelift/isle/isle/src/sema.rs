@@ -2469,6 +2469,16 @@ impl TermEnv {
             .and_then(|sym| self.term_map.get(&sym))
             .copied()
     }
+
+    /// Lookup the term corresponding to the given enum variant.
+    pub fn get_variant_term(&self, tyenv: &TypeEnv, ty: TypeId, variant: VariantId) -> TermId {
+        let ty = &tyenv.types[ty.index()];
+        let Type::Enum { variants, .. } = ty else {
+            unreachable!("make_variant type must be an enum")
+        };
+        let variant = &variants[variant.index()];
+        self.term_map[&variant.fullname]
+    }
 }
 
 #[cfg(test)]

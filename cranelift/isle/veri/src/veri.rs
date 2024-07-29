@@ -6,7 +6,7 @@ use crate::{
 };
 use cranelift_isle::{
     ast,
-    sema::{self, Sym, TermId, TypeId, VariantId},
+    sema::{Sym, TermId, TypeId, VariantId},
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use std::{
@@ -747,12 +747,7 @@ impl<'a> ConditionsBuilder<'a> {
         log::warn!("make_variant binding partially implemented");
 
         // Lookup term corresponding to variant.
-        let ty = self.prog.ty(ty);
-        let sema::Type::Enum { variants, .. } = ty else {
-            unreachable!("make_variant type must be an enum")
-        };
-        let variant = &variants[variant.index()];
-        let variant_term_id = self.prog.termenv.term_map[&variant.fullname];
+        let variant_term_id = self.prog.get_variant_term(ty, variant);
 
         // Invoke as a constructor.
         self.constructor(id, variant_term_id, fields, Invocation::Caller)?;

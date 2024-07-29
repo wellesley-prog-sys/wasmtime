@@ -1,7 +1,9 @@
 use cranelift_isle::ast::Ident;
 use cranelift_isle::error::{Errors, ErrorsBuilder};
 use cranelift_isle::lexer::Pos;
-use cranelift_isle::sema::{self, Rule, RuleId, Term, TermEnv, TermId, Type, TypeEnv, TypeId};
+use cranelift_isle::sema::{
+    self, Rule, RuleId, Term, TermEnv, TermId, Type, TypeEnv, TypeId, VariantId,
+};
 use cranelift_isle::trie_again::{self, RuleSet};
 use cranelift_isle::{lexer, parser};
 use std::collections::HashMap;
@@ -53,6 +55,10 @@ impl Program {
     pub fn term_name(&self, term_id: TermId) -> &str {
         let term = self.term(term_id);
         &self.tyenv.syms[term.name.index()]
+    }
+
+    pub fn get_variant_term(&self, ty: TypeId, variant: VariantId) -> TermId {
+        self.termenv.get_variant_term(&self.tyenv, ty, variant)
     }
 
     pub fn rule(&self, rule_id: RuleId) -> &Rule {

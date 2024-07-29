@@ -3,7 +3,7 @@
 use crate::disjointsets::DisjointSets;
 use crate::error::{Error, Span};
 use crate::lexer::Pos;
-use crate::sema::{self, RuleId};
+use crate::sema::{self, RuleId, TermEnv, TermId, TypeEnv};
 use crate::stablemapset::StableSet;
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -260,6 +260,27 @@ impl Binding {
             Binding::MakeSome { inner } => std::slice::from_ref(inner),
             Binding::MatchSome { source } => std::slice::from_ref(source),
             Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
+        }
+    }
+
+    /// Returns the term referenced by this binding.
+    // QUESTION(mbm): does Binding::term method make sense here?
+    pub fn term(&self, tyenv: &TypeEnv, termenv: &TermEnv) -> Option<TermId> {
+        match self {
+            Binding::ConstInt { .. } => None,
+            Binding::ConstPrim { .. } => None,
+            Binding::Argument { .. } => None,
+            Binding::Extractor { term, .. } => Some(*term),
+            Binding::Constructor { term, .. } => Some(*term),
+            Binding::Iterator { .. } => None,
+            Binding::MakeVariant { ty, variant, .. } => {
+                // QUESTION(mbm): include variant terms in Binding::term output?
+                Some(termenv.get_variant_term(tyenv, *ty, *variant))
+            }
+            Binding::MatchVariant { .. } => None,
+            Binding::MakeSome { .. } => None,
+            Binding::MatchSome { .. } => None,
+            Binding::MatchTuple { .. } => None,
         }
     }
 }

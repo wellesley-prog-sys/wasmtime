@@ -211,6 +211,18 @@ impl<'a> ExplorerWriter<'a> {
         self.header("Terms", &mut output)?;
 
         // Terms.
+        let term_ids = (0..self.prog.termenv.terms.len()).map(TermId);
+        self.write_terms_list(&mut output, term_ids)?;
+
+        self.footer(&mut output)?;
+        Ok(())
+    }
+
+    fn write_terms_list(
+        &self,
+        output: &mut dyn Write,
+        term_ids: impl Iterator<Item = TermId>,
+    ) -> anyhow::Result<()> {
         writeln!(
             output,
             r#"
@@ -226,7 +238,9 @@ impl<'a> ExplorerWriter<'a> {
             <tbody>
         "#
         )?;
-        for term in &self.prog.termenv.terms {
+        for term_id in term_ids {
+            let term = self.prog.term(term_id);
+
             writeln!(output, "<tr>")?;
             writeln!(output, r#"<td class="id">{id}</td>"#, id = term.id.index())?;
 
@@ -256,8 +270,6 @@ impl<'a> ExplorerWriter<'a> {
         </table>
         "#
         )?;
-
-        self.footer(&mut output)?;
         Ok(())
     }
 
@@ -392,6 +404,11 @@ impl<'a> ExplorerWriter<'a> {
         writeln!(output, "<h2>Rules</h2>")?;
         self.write_rules_list(&mut output, expansion.rules.iter().copied())?;
 
+        // Terms
+        writeln!(output, "<h2>Terms</h2>")?;
+        let terms = expansion.terms(self.prog);
+        self.write_terms_list(&mut output, terms.into_iter())?;
+
         // Bindings
         writeln!(output, "<h2>Bindings</h2>")?;
         writeln!(
@@ -423,7 +440,7 @@ impl<'a> ExplorerWriter<'a> {
             let id: BindingId = i.try_into().unwrap();
             if let Some(binding) = binding {
                 writeln!(output, "<tr>")?;
-                let ty = binding_type(binding, expansion.term, &self.prog, lookup_binding);
+                let ty = binding_type(binding, expansion.term, self.prog, lookup_binding);
 
                 // ID
                 writeln!(output, "<td>{id}</td>", id = id.index())?;
@@ -442,7 +459,7 @@ impl<'a> ExplorerWriter<'a> {
                 writeln!(
                     output,
                     "<td>{binding}</td>",
-                    binding = binding_string(binding, expansion.term, &self.prog, lookup_binding)
+                    binding = binding_string(binding, expansion.term, self.prog, lookup_binding)
                 )?;
 
                 // Constraints
@@ -464,9 +481,16 @@ impl<'a> ExplorerWriter<'a> {
             }
         }
 
-        // TODO(mbm): Terms
         // TODO(mbm): Parameters
         // TODO(mbm): Result
+
+        writeln!(
+            output,
+            r#"
+            </tbody>
+        </table>
+        "#
+        )?;
 
         // Footer.
         self.footer(&mut output)?;
