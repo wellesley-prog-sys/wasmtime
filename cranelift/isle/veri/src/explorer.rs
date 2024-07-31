@@ -13,7 +13,7 @@ use crate::{
 use std::{
     fs::File,
     io::{self, Write},
-    path::PathBuf,
+    path::{Component, Path, PathBuf},
 };
 
 pub struct ExplorerWriter<'a> {
@@ -21,6 +21,7 @@ pub struct ExplorerWriter<'a> {
     expansions: &'a Vec<Expansion>,
 
     root: std::path::PathBuf,
+    base: std::path::PathBuf,
     graphs: bool,
     dev: bool,
 }
@@ -35,6 +36,7 @@ impl<'a> ExplorerWriter<'a> {
             prog,
             expansions,
             root,
+            base: PathBuf::new(),
             graphs: false,
             dev: true, // TODO(mbm): configurable dev mode
         }
@@ -44,7 +46,7 @@ impl<'a> ExplorerWriter<'a> {
         self.graphs = true;
     }
 
-    pub fn write(&self) -> anyhow::Result<()> {
+    pub fn write(&mut self) -> anyhow::Result<()> {
         self.init()?;
         self.write_assets()?;
         self.write_index()?;
@@ -61,50 +63,50 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_assets(&self) -> anyhow::Result<()> {
+    fn write_assets(&mut self) -> anyhow::Result<()> {
         // In development mode, setup a symlink.
         if self.dev {
             let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             // TODO(mbm): platform-independent symlink
             let original = crate_root.join("src/assets");
-            let link = self.abs(self.assets_dir());
-            std::os::unix::fs::symlink(original, link)?;
+            let link_path = self.abs(&self.assets_dir());
+            std::os::unix::fs::symlink(original, link_path)?;
             return Ok(());
         }
 
         // CSS.
         let style_css = include_bytes!("./assets/style.css");
-        let mut output = self.create(self.style_path())?;
+        let mut output = self.create(&self.style_path())?;
         output.write_all(style_css)?;
 
         Ok(())
     }
 
-    fn write_index(&self) -> anyhow::Result<()> {
-        let mut output = self.create(PathBuf::from("index.html"))?;
+    fn write_index(&mut self) -> anyhow::Result<()> {
+        let mut output = self.create(&PathBuf::from("index.html"))?;
         self.header(&mut output, "ISLE Explorer")?;
         writeln!(
             output,
             r#"
         <menu>
-            <li><a href="/{files_href}">Files</a></li>
-            <li><a href="/{types_href}">Types</a></li>
-            <li><a href="/{terms_href}">Terms</a></li>
-            <li><a href="/{rules_href}">Rules</a></li>
-            <li><a href="/{expansions_href}">Expansions</a></li>
+            <li><a href="{files_href}">Files</a></li>
+            <li><a href="{types_href}">Types</a></li>
+            <li><a href="{terms_href}">Terms</a></li>
+            <li><a href="{rules_href}">Rules</a></li>
+            <li><a href="{expansions_href}">Expansions</a></li>
         </menu>
         "#,
-            files_href = self.file_dir().display(),
-            types_href = self.types_dir().display(),
-            terms_href = self.terms_dir().display(),
-            rules_href = self.rules_dir().display(),
-            expansions_href = self.expansions_dir().display(),
+            files_href = self.link(&self.file_dir()),
+            types_href = self.link(&self.types_dir()),
+            terms_href = self.link(&self.terms_dir()),
+            rules_href = self.link(&self.rules_dir()),
+            expansions_href = self.link(&self.expansions_dir()),
         )?;
         self.footer(&mut output)?;
         Ok(())
     }
 
-    fn write_files(&self) -> anyhow::Result<()> {
+    fn write_files(&mut self) -> anyhow::Result<()> {
         self.write_files_index()?;
         for id in 0..self.prog.tyenv.filenames.len() {
             self.write_file(id)?;
@@ -112,8 +114,8 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_files_index(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.file_dir().join("index.html"))?;
+    fn write_files_index(&mut self) -> anyhow::Result<()> {
+        let mut output = self.create(&self.file_dir().join("index.html"))?;
         self.header(&mut output, "Files")?;
 
         // Files.
@@ -121,8 +123,8 @@ impl<'a> ExplorerWriter<'a> {
         for (id, filename) in self.prog.tyenv.filenames.iter().enumerate() {
             writeln!(
                 output,
-                r#"<li><a href="/{link}">{filename}</a></li>"#,
-                link = self.file_path(id).display()
+                r#"<li><a href="{link}">{filename}</a></li>"#,
+                link = self.link(&self.file_path(id)),
             )?;
         }
         writeln!(output, "</ul>")?;
@@ -131,8 +133,8 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_file(&self, id: usize) -> anyhow::Result<()> {
-        let mut output = self.create(self.file_path(id))?;
+    fn write_file(&mut self, id: usize) -> anyhow::Result<()> {
+        let mut output = self.create(&self.file_path(id))?;
 
         // Header.
         let filename = &self.prog.tyenv.filenames[id];
@@ -159,8 +161,8 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_types(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.types_dir().join("index.html"))?;
+    fn write_types(&mut self) -> anyhow::Result<()> {
+        let mut output = self.create(&self.types_dir().join("index.html"))?;
         self.header(&mut output, "Types")?;
 
         // Types.
@@ -211,8 +213,8 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_terms(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.terms_dir().join("index.html"))?;
+    fn write_terms(&mut self) -> anyhow::Result<()> {
+        let mut output = self.create(&self.terms_dir().join("index.html"))?;
         self.header(&mut output, "Terms")?;
 
         // Terms.
@@ -278,8 +280,8 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_rules(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.rules_dir().join("index.html"))?;
+    fn write_rules(&mut self) -> anyhow::Result<()> {
+        let mut output = self.create(&self.rules_dir().join("index.html"))?;
         self.header(&mut output, "Rules")?;
 
         // Rules.
@@ -330,7 +332,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansions(&self) -> anyhow::Result<()> {
+    fn write_expansions(&mut self) -> anyhow::Result<()> {
         self.write_expansions_index()?;
         for (id, expansion) in self.expansions.iter().enumerate() {
             self.write_expansion(id, expansion)?;
@@ -338,8 +340,8 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansions_index(&self) -> anyhow::Result<()> {
-        let mut output = self.create(self.expansions_dir().join("index.html"))?;
+    fn write_expansions_index(&mut self) -> anyhow::Result<()> {
+        let mut output = self.create(&self.expansions_dir().join("index.html"))?;
         self.header(&mut output, "Expansions")?;
 
         // Expansions.
@@ -362,8 +364,8 @@ impl<'a> ExplorerWriter<'a> {
             // ID
             writeln!(
                 output,
-                r#"<td><a href="/{link}">&num;{id}</a></td>"#,
-                link = self.expansion_path(id).display()
+                r#"<td><a href="{link}">&num;{id}</a></td>"#,
+                link = self.link(&self.expansion_path(id))
             )?;
 
             // First Rule
@@ -391,7 +393,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansion(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+    fn write_expansion(&mut self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
         self.write_expansion_index(id, expansion)?;
         if self.graphs {
             self.write_expansion_graph(id, expansion)?;
@@ -399,8 +401,8 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansion_index(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
-        let mut output = self.create(self.expansion_path(id))?;
+    fn write_expansion_index(&mut self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+        let mut output = self.create(&self.expansion_path(id))?;
 
         // Header.
         let title = format!("Expansion: &num;{id}");
@@ -427,9 +429,9 @@ impl<'a> ExplorerWriter<'a> {
         if self.graphs {
             writeln!(
                 output,
-                r#"<p>Graph: <a href="/{svg_path}">SVG</a>, <a href="/{dot_path}">DOT</a>.</p>"#,
-                svg_path = self.expansion_graph_svg_path(id).display(),
-                dot_path = self.expansion_graph_dot_path(id).display(),
+                r#"<p>Graph: <a href="{svg_href}">SVG</a>, <a href="{dot_href}">DOT</a>.</p>"#,
+                svg_href = self.link(&self.expansion_graph_svg_path(id)),
+                dot_href = self.link(&self.expansion_graph_dot_path(id)),
             )?;
         }
 
@@ -520,14 +522,18 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansion_graph(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+    fn write_expansion_graph(&mut self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
         self.write_expansion_graph_dot(id, expansion)?;
         self.generate_expansion_graph_svg(id)?;
         Ok(())
     }
 
-    fn write_expansion_graph_dot(&self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
-        let mut output = self.create(self.expansion_graph_dot_path(id))?;
+    fn write_expansion_graph_dot(
+        &mut self,
+        id: usize,
+        expansion: &Expansion,
+    ) -> anyhow::Result<()> {
+        let mut output = self.create(&self.expansion_graph_dot_path(id))?;
 
         // Header.
         writeln!(&mut output, "graph {{")?;
@@ -589,13 +595,13 @@ impl<'a> ExplorerWriter<'a> {
   <head>
     <meta charset="utf-8" />
     <title>{title}</title>
-    <link rel="stylesheet" href="/{style_path}" />
+    <link rel="stylesheet" href="{style_path}" />
   </head>
   <body>
     <main>
       <h1>{title}</h1>
         "#,
-            style_path = self.style_path().display()
+            style_path = self.link(&self.style_path())
         )
     }
 
@@ -675,8 +681,8 @@ impl<'a> ExplorerWriter<'a> {
 
     fn pos_href(&self, pos: Pos) -> String {
         format!(
-            "/{}#{}",
-            self.file_path(pos.file).display(),
+            "{}#{}",
+            self.link(&self.file_path(pos.file)),
             self.line_url_fragment(pos.line)
         )
     }
@@ -737,17 +743,36 @@ impl<'a> ExplorerWriter<'a> {
         self.asset_path("style.css")
     }
 
-    fn abs(&self, path: PathBuf) -> PathBuf {
+    fn abs(&self, path: &Path) -> PathBuf {
         self.root.join(path)
     }
 
-    fn create(&self, path: PathBuf) -> io::Result<File> {
+    fn link(&self, path: &Path) -> String {
         assert!(path.is_relative());
+        assert!(self.base.is_relative());
+
+        let mut comps = Vec::new();
+        for _ in self.base.components() {
+            comps.push(Component::ParentDir);
+        }
+        comps.extend(path.components());
+        let rel: PathBuf = comps.iter().map(|c| c.as_os_str()).collect();
+        rel.display().to_string()
+    }
+
+    fn create(&mut self, path: &Path) -> io::Result<File> {
+        // Path expected to be relative to site root.
+        assert!(path.is_relative());
+
+        // Update base directory for relative links.
+        self.base = path.parent().expect("should have parent path").into();
+
+        // Create the file, and any parent directories if necessary.
         log::info!("create: {}", path.display());
         let path = self.abs(path);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        File::create(path)
+        File::create(&path)
     }
 }
