@@ -154,7 +154,7 @@ impl SolverCtx {
         op: &str,
     ) -> SExpr {
         if dest_width < source_width {
-            println!(
+            log::warn!(
                 "Unexpected extend widths for {}: dest {} source {} ",
                 self.smt.display(source),
                 dest_width,
@@ -1212,34 +1212,18 @@ impl SolverCtx {
         term_input_bs: &Vec<String>,
         config: &Config,
     ) -> VerificationResult {
-        println!("Checking assumption feasibility");
+        log::debug!("Checking assumption feasibility");
         self.smt.push().unwrap();
         for (i, a) in assumptions.iter().enumerate() {
             self.smt
                 .assert(self.smt.named(format!("assum{i}"), *a))
                 .unwrap();
-
-            // println!("assum{}: {}", i, self.smt.display(*a));
-
-            //     self.smt.push().unwrap();
-            //     match self.smt.check() {
-            //         Ok(Response::Sat) => (),
-            //         Ok(Response::Unsat) => (),
-            //         Ok(Response::Unknown) => {
-            //             panic!("Assertion list is unknown!");
-            //         }
-            //         Err(err) => {
-            //             unreachable!("Error! {:?}", err);
-            //         }
-            //     };
-            //     self.smt.pop().unwrap();
         }
-        // print!("done with debugging");
 
         let res = match self.smt.check() {
             Ok(Response::Sat) => {
                 if !config.distinct_check || term_input_bs.len() < 1 {
-                    println!("Assertion list is feasible for at least one input!");
+                    log::debug!("Assertion list is feasible for at least one input!");
                     self.smt.pop().unwrap();
                     return VerificationResult::Success;
                 }
@@ -1260,11 +1244,11 @@ impl SolverCtx {
                 }
                 match self.smt.check() {
                     Ok(Response::Sat) => {
-                        println!("Assertion list is feasible for two distinct inputs");
+                        log::debug!("Assertion list is feasible for two distinct inputs");
                         VerificationResult::Success
                     }
                     Ok(Response::Unsat) => {
-                        println!("Assertion list is only feasible for one input with distinct BV values!");
+                        log::debug!("Assertion list is only feasible for one input with distinct BV values!");
                         VerificationResult::NoDistinctModels
                     }
                     Ok(Response::Unknown) => {
@@ -1276,9 +1260,9 @@ impl SolverCtx {
                 }
             }
             Ok(Response::Unsat) => {
-                println!("Assertion list is infeasible!");
+                log::debug!("Assertion list is infeasible!");
                 let unsat = self.smt.get_unsat_core().unwrap();
-                println!("Unsat core:\n{}", self.smt.display(unsat));
+                log::debug!("Unsat core:\n{}", self.smt.display(unsat));
                 VerificationResult::InapplicableRule
             }
             Ok(Response::Unknown) => {
@@ -1394,9 +1378,7 @@ impl SolverCtx {
         let matches: Vec<&(String, String)> =
             vars.iter().filter(|(v, _)| v.starts_with(prefix)).collect();
         if matches.len() == 0 {
-            println!("Can't find match for: {}", prefix);
-            println!("{:?}", vars);
-            panic!();
+            panic!("Can't find match for: {}\n{:?}", prefix, vars);
         } else if matches.len() == 3 {
             assert!(
                 self.find_widths,
@@ -1480,7 +1462,6 @@ impl SolverCtx {
         lhs_sexpr: SExpr,
         rhs_sexpr: SExpr,
     ) {
-        // println!("Quantified variables:");
         let mut vars = vec![];
         let mut lhs_value = None;
         let mut rhs_value = None;
@@ -1507,11 +1488,8 @@ impl SolverCtx {
         }
         vars.sort_by_key(|x| x.0.clone());
         vars.dedup();
-        // for (v, x) in &vars {
-        //     println!("{}", v);
-        //     println!("{}\n", x);
-        // }
 
+        // TODO VERBOSE
         println!("Counterexample summary");
         let lhs = self.display_isle_pattern(
             termenv,
@@ -1559,12 +1537,12 @@ impl SolverCtx {
         config: &Config,
     ) -> (Vec<SExpr>, Vec<SExpr>) {
         let mut assumptions: Vec<SExpr> = vec![];
-        // println!("Declaring quantified variables");
+        log::trace!("Declaring quantified variables");
         for v in &rule_sem.quantified_vars {
             let name = &v.name;
             let ty = self.tyctx.tymap[&v.tyvar].clone();
             let var_ty = self.vir_to_smt_ty(&ty);
-            // println!("\t{} : {}", name, self.smt.display(var_ty));
+            log::trace!("\t{} : {}", name, self.smt.display(var_ty));
             if let Type::BitVector(w) = ty {
                 if self.find_widths {
                     let wide = self.widen_to_register_width(
@@ -1593,14 +1571,11 @@ impl SolverCtx {
             assumptions.push(p)
         }
         if self.find_widths {
-            // println!("Adding width assumptions");
             for a in &self.width_assumptions {
                 assumptions.push(a.clone());
             }
         }
-        if self.additional_assumptions.len() > 0 {
-            // println!("Adding additional assumptions");
-        }
+        if self.additional_assumptions.len() > 0 {}
         for a in &self.additional_assumptions {
             assumptions.push(a.clone());
         }
@@ -1611,9 +1586,7 @@ impl SolverCtx {
             .map(|a| self.vir_expr_to_sexp(a.clone()))
             .collect();
 
-        // println!("Declaring additional variables");
         for (name, ty) in &self.additional_decls {
-            // println!("\t{} : {}", name, self.smt.display(*ty));
             self.smt.declare_const(name, *ty).unwrap();
         }
 
@@ -1624,10 +1597,10 @@ impl SolverCtx {
                 .map(|s| self.smt.atom(s))
                 .collect();
             let custom_assumptions = a(&self.smt, term_args);
-            // println!(
-            //     "Custom assumptions:\n\t{}\n",
-            //     self.smt.display(custom_assumptions)
-            // );
+            log::debug!(
+                "Custom assumptions:\n\t{}\n",
+                self.smt.display(custom_assumptions)
+            );
             assumptions.push(custom_assumptions);
         }
         (assumptions, assertions)
@@ -1647,7 +1620,7 @@ pub fn run_solver(
     _types: &TermSignature,
 ) -> VerificationResult {
     if std::env::var("SKIP_SOLVER").is_ok() {
-        println!("Environment variable SKIP_SOLVER set, returning Unknown");
+        log::debug!("Environment variable SKIP_SOLVER set, returning Unknown");
         return VerificationResult::Unknown;
     }
 
@@ -1699,12 +1672,10 @@ pub fn run_solver(
                         let eq = ctx
                             .smt
                             .eq(ctx.smt.atom(&width_name), ctx.smt.numeral(bitwidth));
-                        // println!("Width from inference {} ({})", width_name, bitwidth);
                         ctx.width_assumptions.push(eq);
                     }
                     None => {
-                        println!("Unresolved width: {:?} ({})", &_e, *t);
-                        // Assume the width is greater than 0
+                        log::debug!("Unresolved width: {:?} ({})", &_e, *t);
                         ctx.width_assumptions
                             .push(ctx.smt.gt(ctx.smt.atom(&width_name), ctx.smt.numeral(0)));
                         unresolved_widths.push(width_name.clone());
@@ -1717,20 +1688,18 @@ pub fn run_solver(
     }
 
     if unresolved_widths.len() == 0 {
-        println!("All widths resolved after basic type inference");
+        log::debug!("All widths resolved after basic type inference");
         return run_solver_with_static_widths(
             rule_sem, rule, termenv, typeenv, &ctx.tyctx, concrete, config,
         );
     }
 
-    println!("Some unresolved widths after basic type inference");
-    println!("Finding widths from the solver");
+    log::debug!("Some unresolved widths after basic type inference");
+    log::debug!("Finding widths from the solver");
     ctx.find_widths = true;
     let (assumptions, _) = ctx.declare_variables(&rule_sem, config);
     ctx.smt.push().unwrap();
-    println!("Adding assumptions to determine widths");
     for (i, a) in assumptions.iter().enumerate() {
-        // println!("dyn{}: {}", i, ctx.smt.display(*a));
         ctx.smt
             .assert(ctx.smt.named(format!("dyn{i}"), *a))
             .unwrap();
@@ -1790,7 +1759,7 @@ fn resolve_dynamic_widths(
                         }
 
                         if unresolved_widths.contains(&width_name) {
-                            println!("\tResolved width: {}, {}", width_name, width_int);
+                            log::debug!("\tResolved width: {}, {}", width_name, width_int);
                             width_resolutions.insert(width_name, width_int);
                             cur_tyctx
                                 .tymap
@@ -1833,11 +1802,11 @@ fn resolve_dynamic_widths(
         }
         Ok(Response::Unsat) => {
             if attempt == 0 {
-                println!(
+                log::error!(
                     "Rule not applicable as written for rule assumptions, skipping full query"
                 );
                 let unsat = ctx.smt.get_unsat_core().unwrap();
-                println!("Unsat core:\n{}", ctx.smt.display(unsat));
+                log::error!("Unsat core:\n{}", ctx.smt.display(unsat));
                 return VerificationResult::InapplicableRule;
             } else {
                 // If this is not the first attempt, some previous width assignment must
@@ -1901,7 +1870,7 @@ pub fn run_solver_with_static_widths(
     let feasibility =
         ctx.check_assumptions_feasibility(&assumptions, &rule_sem.term_input_bvs, config);
     if feasibility != VerificationResult::Success {
-        println!("Rule not applicable as written for rule assumptions, skipping full query");
+        log::error!("Rule not applicable as written for rule assumptions, skipping full query");
         return feasibility;
     }
 
@@ -1917,7 +1886,7 @@ pub fn run_solver_with_static_widths(
             w1
         }
         (None, None) => {
-            println!(
+            log::warn!(
                 "Width of relevant bits of LHS and RHS unknown, using full register bitwidth: {}",
                 MAX_WIDTH
             );
@@ -1952,7 +1921,7 @@ pub fn run_solver_with_static_widths(
     let condition = if let Some(condition) = &config.custom_verification_condition {
         let term_args = rule_sem.term_args.iter().map(|s| ctx.smt.atom(s)).collect();
         let custom_condition = condition(&ctx.smt, term_args, lhs, rhs);
-        println!(
+        log::debug!(
             "Custom verification condition:\n\t{}\n",
             ctx.smt.display(custom_condition)
         );
@@ -1960,8 +1929,8 @@ pub fn run_solver_with_static_widths(
     } else {
         // Note: this is where we ask if the LHS and the RHS are equal
         let side_equality = ctx.smt.eq(lhs_care_bits, rhs_care_bits);
-        println!(
-            "LHS and RHS equality condition:\n\t{}\n",
+        log::debug!(
+            "LHS and RHS equality condition:{}",
             ctx.smt.display(side_equality)
         );
         side_equality
@@ -1984,24 +1953,23 @@ pub fn run_solver_with_static_widths(
         (Some(_), Some(_)) => {
             let lhs_args_vec = ctx.lhs_load_args.clone().unwrap();
             let rhs_args_vec = ctx.rhs_load_args.clone().unwrap();
-            println!("Load argument conditions:");
+            log::debug!("Load argument conditions:");
             for i in 0..lhs_args_vec.len() {
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 load_conditions.push(arg_equal);
-                println!("\t{}", ctx.smt.display(arg_equal));
+                log::debug!("\t{}", ctx.smt.display(arg_equal));
                 full_condition = ctx.smt.and(full_condition, arg_equal);
             }
-            println!();
         }
         (None, None) => (),
         (Some(_), None) => {
-            println!("Verification failed");
-            println!("Left hand side has load statement but right hand side does not.");
+            log::debug!("Verification failed");
+            log::debug!("Left hand side has load statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
-            println!("Verification failed");
-            println!("Right hand side has load statement but left hand side does not.");
+            log::debug!("Verification failed");
+            log::debug!("Right hand side has load statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
     }
@@ -2011,49 +1979,48 @@ pub fn run_solver_with_static_widths(
         (Some(_), Some(_)) => {
             let lhs_args_vec = ctx.lhs_store_args.clone().unwrap();
             let rhs_args_vec = ctx.rhs_store_args.clone().unwrap();
-            println!("Store argument conditions:");
+            log::debug!("Store argument conditions:");
 
             for i in 0..lhs_args_vec.len() {
                 let arg_equal = ctx.smt.eq(lhs_args_vec[i], rhs_args_vec[i]);
                 store_conditions.push(arg_equal);
-                println!("\t{}", ctx.smt.display(arg_equal));
+                log::debug!("\t{}", ctx.smt.display(arg_equal));
                 full_condition = ctx.smt.and(full_condition, arg_equal)
             }
-            println!();
         }
         (None, None) => (),
         (Some(_), None) => {
-            println!("Verification failed");
-            println!("Left hand side has store statement but right hand side does not.");
+            log::debug!("Verification failed");
+            log::debug!("Left hand side has store statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
-            println!("Verification failed");
-            println!("Right hand side has store statement but left hand side does not.");
+            log::debug!("Verification failed");
+            log::debug!("Right hand side has store statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
     }
 
-    println!(
-        "Full verification condition:\n\t{}\n",
+    log::trace!(
+        "Full verification condition:{}",
         ctx.smt.display(full_condition)
     );
     let query = ctx
         .smt
         .not(ctx.smt.imp(assumption_conjunction, full_condition));
-    println!("Running query");
+    log::trace!("Running query");
     ctx.smt.assert(query).unwrap();
 
     match ctx.smt.check() {
         Ok(Response::Sat) => {
-            println!("Verification failed");
+            log::error!("Verification failed");
             ctx.display_model(termenv, typeenv, rule, lhs, rhs);
             let vals = ctx.smt.get_value(vec![condition]).unwrap();
             for (variable, value) in vals {
                 if value == ctx.smt.false_() {
-                    println!("Failed condition:\n{}", ctx.smt.display(variable));
+                    log::error!("Failed condition:\n{}", ctx.smt.display(variable));
                 } else if value == ctx.smt.true_() {
-                    println!("Condition met, but failed some assertion(s).")
+                    log::error!("Condition met, but failed some assertion(s).")
                 }
             }
 
@@ -2061,7 +2028,7 @@ pub fn run_solver_with_static_widths(
                 let vals = ctx.smt.get_value(assertions).unwrap();
                 for (variable, value) in vals {
                     if value == ctx.smt.false_() {
-                        println!("Failed assertion:\n{}", ctx.smt.display(variable));
+                        log::error!("Failed assertion:\n{}", ctx.smt.display(variable));
                     }
                 }
             }
@@ -2070,14 +2037,14 @@ pub fn run_solver_with_static_widths(
                 let vals = ctx.smt.get_value(load_conditions).unwrap();
                 for (variable, value) in vals {
                     if value == ctx.smt.false_() {
-                        println!("Failed load condition:\n{}", ctx.smt.display(variable));
+                        log::error!("Failed load condition:\n{}", ctx.smt.display(variable));
                     }
                 }
             }
             VerificationResult::Failure(Counterexample {})
         }
         Ok(Response::Unsat) => {
-            println!("Verification succeeded");
+            log::debug!("Verification succeeded");
             VerificationResult::Success
         }
         Ok(Response::Unknown) => {
@@ -2104,7 +2071,6 @@ pub fn test_concrete_with_static_widths(
     // Test code only: test against concrete input/output
     // Check that our expected output is valid
     for (i, a) in assumptions.iter().enumerate() {
-        // println!("conc{}: {}", i, ctx.smt.display(*a));
         ctx.smt
             .assert(ctx.smt.named(format!("conc{i}"), *a))
             .unwrap();
@@ -2145,7 +2111,7 @@ pub fn test_concrete_with_static_widths(
             ctx.display_hex_to_bin(val)
         );
     } else {
-        println!(
+        log::debug!(
             "Expected concrete result matched: {}",
             concrete.output.literal
         );
@@ -2167,7 +2133,7 @@ pub fn test_concrete_with_static_widths(
         let val = ctx.smt.get_value(vec![rhs_care_bits]).unwrap()[0].1;
         ctx.display_model(termenv, typeenv, rule, lhs, rhs);
         // AVH TODO: should probably elevate back to an error with custom verification condition
-        println!(
+        log::error!(
             "WARNING: Expected ONLY {}, got POSSIBLE {}",
             concrete.output.literal,
             ctx.display_hex_to_bin(val)

@@ -4,8 +4,7 @@
 //!
 //! Note: annotations use the higher-level IR in annotation_ir.rs.
 pub mod annotation_ir;
-
-use std::fmt;
+use core::fmt;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,7 +66,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::BitVector(None) => write!(f, "bv"),
-            Type::BitVector(Some(s)) => write!(f, "bv{}", *s),
+            Type::BitVector(Some(s)) => write!(f, "(bv {})", *s),
             Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),
             Type::Unit => write!(f, "Unit"),
@@ -83,6 +82,14 @@ pub struct TermSignature {
     // Which type varies for different bitwidth Values, that is, the type that
     // is used as a key for testing for that type.
     pub canonical_type: Option<Type>,
+}
+
+impl fmt::Display for TermSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let args =  self.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(" ");
+        let canon = self.canonical_type.map(|c| format!("(canon {})", c)).unwrap_or_default();
+        write!(f, "((args {}) (ret {}) {})", args, self.ret, canon)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

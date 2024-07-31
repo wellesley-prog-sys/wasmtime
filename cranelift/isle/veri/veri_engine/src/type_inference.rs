@@ -139,14 +139,6 @@ pub fn type_rules_with_term_and_types(
             &types,
             concrete,
         ) {
-            // Uncomment for debugging
-            // for a in &s.annotation_infos {
-            //     println!("{}", a.term);
-            //     for (var, type_var) in &a.var_to_type_var {
-            //         println!("{}: {:#?}", var, s.type_var_to_type[type_var]);
-            //     }
-            //     println!();
-            // }
             solutions.insert(rule.id, s);
         }
     }
@@ -261,8 +253,7 @@ fn type_annotations_using_rule<'a>(
     );
     let rhs = &mut create_parse_tree_expr(rule, &rule.rhs, &mut parse_tree, typeenv, termenv);
 
-    println!("Typing rule:");
-    print!("\tLHS:");
+    log::trace!("LHS:");
     let lhs_expr = add_rule_constraints(
         &mut parse_tree,
         lhs,
@@ -275,7 +266,7 @@ fn type_annotations_using_rule<'a>(
     if lhs_expr.is_none() {
         return None;
     }
-    print!("\n\tRHS:");
+    log::trace!("\n\tRHS:");
     let rhs_expr = add_rule_constraints(
         &mut parse_tree,
         rhs,
@@ -288,7 +279,6 @@ fn type_annotations_using_rule<'a>(
     if rhs_expr.is_none() {
         return None;
     }
-    println!();
 
     match (lhs_expr, rhs_expr) {
         (Some(lhs_expr), Some(rhs_expr)) => {
@@ -1519,13 +1509,13 @@ fn add_rule_constraints(
             let term_name = typeenv.syms[term.name.index()].clone();
 
             // Print term for debugging
-            print!(" {}", term_name);
+            log::trace!(" {}", term_name);
 
             tree.quantified_vars
                 .insert((curr.ident.clone(), curr.type_var));
             let a = annotation_env.get_annotation_for_term(term_id);
             if a.is_none() {
-                println!("\nSkipping rule with unannotated term: {}", term_name);
+                log::error!("\nSkipping rule with unannotated term: {}", term_name);
                 return None;
             }
             let annotation = a.unwrap();

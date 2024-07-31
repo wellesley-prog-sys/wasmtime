@@ -111,19 +111,17 @@ pub fn verify_rules_for_term(
             if !names.contains(name) {
                 continue;
             } else {
-                println!("VERIFYING rule with name: {}", name);
+                log::debug!("Verifying rule: {}", name);
             }
         }
         let ctx = Context::new(typesols);
         if ctx.typesols.get(&rule.id).is_none() {
-            println!("ABORTING rule not found in the context");
+            log::error!("Aborting: rule not found in the context");
             continue;
         }
         let rule_sem = &ctx.typesols[&rule.id];
-        println!(
-            "Verifying rule with term {} and types\n{:?}",
-            config.term, types
-        );
+        log::debug!("Term: {}", config.term);
+        log::debug!("Type instantiation: {}", types);
         let result = run_solver(rule_sem, rule, termenv, typeenv, concrete, config, &types);
         rules_checked += 1;
         if result != VerificationResult::Success {

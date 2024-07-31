@@ -66,50 +66,6 @@ pub fn custom_result(f: &TestResultBuilder) -> Vec<(Bitwidth, VerificationResult
     Bitwidth::iter().map(|w| f(w)).collect()
 }
 
-/// Run the test with a 4 minute timeout, retrying 5 times if timeout hit, waiting 1ms between tries
-pub fn run_and_retry<F>(f: F) -> ()
-where
-    F: Fn() -> (),
-    F: Send + 'static + Copy,
-{
-    f();
-    // let delay_before_retrying = retry::delay::Fixed::from_millis(1);
-    // let num_retries = 5;
-    // let timeout_per_try = Duration::from_secs(4 * 60);
-
-    // use std::{sync::mpsc, thread};
-    // let result = retry::retry_with_index(delay_before_retrying, |current_try| {
-    //     if current_try > num_retries {
-    //         return retry::OperationResult::Err(format!(
-    //             "Test did not succeed within {} tries",
-    //             num_retries
-    //         ));
-    //     }
-    //     if current_try > 1 {
-    //         println!("Retrying test that timed out, try #{}", current_try);
-    //     }
-
-    //     // From: https://github.com/rust-lang/rfcs/issues/2798
-    //     let (done_tx, done_rx) = mpsc::channel();
-    //     let handle = thread::spawn(move || {
-    //         f();
-    //         done_tx.send(()).expect("Unable to send completion signal");
-    //     });
-
-    //     match done_rx.recv_timeout(timeout_per_try) {
-    //         Ok(_) => match handle.join() {
-    //             Ok(_) => retry::OperationResult::Ok("Test thread succeeded"),
-    //             Err(e) => retry::OperationResult::Err(format!("Test thread panicked {:?}", e)),
-    //         },
-    //         Err(_) => match handle.join() {
-    //             Ok(_) => retry::OperationResult::Retry("Test thread took too long".to_string()),
-    //             Err(e) => retry::OperationResult::Err(format!("Test thread panicked {:?}", e)),
-    //         },
-    //     }
-    // });
-    // result.unwrap();
-}
-
 fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) -> () {
     let lexer = cranelift_isle::lexer::Lexer::from_files(&inputs).unwrap();
     let defs = cranelift_isle::parser::parse(lexer).expect("should parse");
