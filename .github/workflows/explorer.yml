@@ -1,0 +1,22 @@
+name: explorer
+
+on:
+  push:
+    branches:
+      - mbm/x-rule-chaining
+  workflow_dispatch:
+
+# Sets permissions to allow deployment to Github Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
