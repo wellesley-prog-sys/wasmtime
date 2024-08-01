@@ -104,7 +104,7 @@ impl<'a> ConstraintsBuilder<'a> {
 
         // Assumptions.
         for a in &self.conditions.assumptions {
-            self.boolean(*a);
+            self.boolean_value(*a, true);
         }
 
         // Assertions.
@@ -237,6 +237,10 @@ impl<'a> ConstraintsBuilder<'a> {
 
     fn width_of(&mut self, x: ExprId, w: ExprId) {
         self.constraints.push(Constraint::WidthOf { x, w });
+    }
+
+    fn boolean_value(&mut self, x: ExprId, b: bool) {
+        self.value(x, Const::Bool(b))
     }
 
     fn value(&mut self, x: ExprId, c: Const) {
