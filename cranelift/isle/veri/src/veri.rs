@@ -114,69 +114,6 @@ impl PartialOrd for Type {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_partial_order_properties<T>(elements: &[T])
-    where
-        T: PartialOrd,
-    {
-        // Equality
-        for a in elements {
-            for b in elements {
-                assert_eq!(a == b, a.partial_cmp(b) == Some(Ordering::Equal));
-            }
-        }
-
-        // Transitivity
-        for a in elements {
-            for b in elements {
-                for c in elements {
-                    assert!(!(a < b && b < c && !(a < c)));
-                }
-            }
-        }
-
-        // Duality
-        for a in elements {
-            for b in elements {
-                assert_eq!(a < b, b > a);
-            }
-        }
-    }
-
-    #[test]
-    fn test_width_partial_order_less_than() {
-        assert!(Width::Unknown < Width::Bits(64));
-    }
-
-    #[test]
-    fn test_width_partial_order_properties() {
-        assert_partial_order_properties(&[Width::Unknown, Width::Bits(32), Width::Bits(64)]);
-    }
-
-    #[test]
-    fn test_type_partial_order_less_than() {
-        assert!(Type::Unknown < Type::BitVector(Width::Unknown));
-        assert!(Type::BitVector(Width::Unknown) < Type::BitVector(Width::Bits(64)));
-        assert!(Type::Unknown < Type::Int);
-        assert!(Type::Unknown < Type::Bool);
-    }
-
-    #[test]
-    fn test_type_partial_order_properties() {
-        assert_partial_order_properties(&[
-            Type::Unknown,
-            Type::BitVector(Width::Unknown),
-            Type::BitVector(Width::Bits(32)),
-            Type::BitVector(Width::Bits(64)),
-            Type::Int,
-            Type::Bool,
-        ]);
-    }
-}
-
 #[derive(Debug)]
 pub struct Signature {
     pub args: Vec<Type>,
@@ -1210,5 +1147,68 @@ impl<'a> ConditionsBuilder<'a> {
             self.expr_map.insert(expr, id);
             id
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_partial_order_properties<T>(elements: &[T])
+    where
+        T: PartialOrd,
+    {
+        // Equality
+        for a in elements {
+            for b in elements {
+                assert_eq!(a == b, a.partial_cmp(b) == Some(Ordering::Equal));
+            }
+        }
+
+        // Transitivity
+        for a in elements {
+            for b in elements {
+                for c in elements {
+                    assert!(!(a < b && b < c && !(a < c)));
+                }
+            }
+        }
+
+        // Duality
+        for a in elements {
+            for b in elements {
+                assert_eq!(a < b, b > a);
+            }
+        }
+    }
+
+    #[test]
+    fn test_width_partial_order_less_than() {
+        assert!(Width::Unknown < Width::Bits(64));
+    }
+
+    #[test]
+    fn test_width_partial_order_properties() {
+        assert_partial_order_properties(&[Width::Unknown, Width::Bits(32), Width::Bits(64)]);
+    }
+
+    #[test]
+    fn test_type_partial_order_less_than() {
+        assert!(Type::Unknown < Type::BitVector(Width::Unknown));
+        assert!(Type::BitVector(Width::Unknown) < Type::BitVector(Width::Bits(64)));
+        assert!(Type::Unknown < Type::Int);
+        assert!(Type::Unknown < Type::Bool);
+    }
+
+    #[test]
+    fn test_type_partial_order_properties() {
+        assert_partial_order_properties(&[
+            Type::Unknown,
+            Type::BitVector(Width::Unknown),
+            Type::BitVector(Width::Bits(32)),
+            Type::BitVector(Width::Bits(64)),
+            Type::Int,
+            Type::Bool,
+        ]);
     }
 }
