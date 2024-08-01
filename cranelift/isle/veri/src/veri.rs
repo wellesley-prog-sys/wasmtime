@@ -33,6 +33,18 @@ pub enum Width {
     Bits(usize),
 }
 
+impl PartialOrd for Width {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Width::Unknown, Width::Unknown) => Some(Ordering::Equal),
+            (Width::Unknown, Width::Bits(_)) => Some(Ordering::Less),
+            (Width::Bits(_), Width::Unknown) => Some(Ordering::Greater),
+            (Width::Bits(l), Width::Bits(r)) if l == r => Some(Ordering::Equal),
+            (Width::Bits(_), Width::Bits(_)) => None,
+        }
+    }
+}
+
 // QUESTION(mbm): do we need yet another type enum?
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
@@ -99,36 +111,12 @@ impl PartialOrd for Type {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Type::Unknown, Type::Unknown) => Some(Ordering::Equal),
-            (Type::Unknown, Type::BitVector(_)) => Some(Ordering::Less),
-            (Type::Unknown, Type::Int) => Some(Ordering::Less),
-            (Type::Unknown, Type::Bool) => Some(Ordering::Less),
-            (Type::BitVector(_), Type::Unknown) => Some(Ordering::Greater),
-            (Type::BitVector(Width::Unknown), Type::BitVector(Width::Unknown)) => {
-                Some(Ordering::Equal)
-            }
-            (Type::BitVector(Width::Unknown), Type::BitVector(Width::Bits(_))) => {
-                Some(Ordering::Less)
-            }
-            (Type::BitVector(Width::Bits(_)), Type::BitVector(Width::Unknown)) => {
-                Some(Ordering::Greater)
-            }
-            (Type::BitVector(Width::Bits(l)), Type::BitVector(Width::Bits(r))) => {
-                if l == r {
-                    Some(Ordering::Equal)
-                } else {
-                    None
-                }
-            }
-            (Type::BitVector(_), Type::Int) => None,
-            (Type::BitVector(_), Type::Bool) => None,
-            (Type::Int, Type::Unknown) => Some(Ordering::Greater),
-            (Type::Int, Type::BitVector(_)) => None,
+            (Type::Unknown, _) => Some(Ordering::Less),
+            (_, Type::Unknown) => Some(Ordering::Greater),
+            (Type::BitVector(l), Type::BitVector(r)) => l.partial_cmp(r),
             (Type::Int, Type::Int) => Some(Ordering::Equal),
-            (Type::Int, Type::Bool) => None,
-            (Type::Bool, Type::Unknown) => Some(Ordering::Greater),
-            (Type::Bool, Type::BitVector(_)) => None,
-            (Type::Bool, Type::Int) => None,
             (Type::Bool, Type::Bool) => Some(Ordering::Equal),
+            (_, _) => None,
         }
     }
 }
@@ -163,6 +151,16 @@ mod tests {
                 assert_eq!(a < b, b > a);
             }
         }
+    }
+
+    #[test]
+    fn test_width_partial_order_less_than() {
+        assert!(Width::Unknown < Width::Bits(64));
+    }
+
+    #[test]
+    fn test_width_partial_order_properties() {
+        assert_partial_order_properties(&[Width::Unknown, Width::Bits(32), Width::Bits(64)]);
     }
 
     #[test]
