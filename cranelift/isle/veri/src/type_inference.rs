@@ -24,64 +24,6 @@ impl PartialOrd for TypeValue {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::testing::{assert_partial_order_properties, assert_strictly_increasing};
-
-    #[test]
-    fn test_type_value_partial_order_bit_vector() {
-        assert_strictly_increasing(&[
-            TypeValue::Type(Type::Unknown),
-            TypeValue::Type(Type::BitVector(Width::Unknown)),
-            TypeValue::Type(Type::BitVector(Width::Bits(64))),
-            TypeValue::Value(Const::BitVector(64, 42)),
-        ])
-    }
-
-    #[test]
-    fn test_type_value_partial_order_int() {
-        assert_strictly_increasing(&[
-            TypeValue::Type(Type::Unknown),
-            TypeValue::Type(Type::Int),
-            TypeValue::Value(Const::Int(42)),
-        ])
-    }
-
-    #[test]
-    fn test_type_value_partial_order_bool() {
-        assert_strictly_increasing(&[
-            TypeValue::Type(Type::Unknown),
-            TypeValue::Type(Type::Bool),
-            TypeValue::Value(Const::Bool(true)),
-        ])
-    }
-
-    #[test]
-    fn test_type_value_partial_order_properties() {
-        assert_partial_order_properties(&[
-            // Unknown
-            TypeValue::Type(Type::Unknown),
-            // BitVectors
-            TypeValue::Type(Type::BitVector(Width::Unknown)),
-            TypeValue::Type(Type::BitVector(Width::Bits(32))),
-            TypeValue::Value(Const::BitVector(32, 42)),
-            TypeValue::Value(Const::BitVector(32, 43)),
-            TypeValue::Type(Type::BitVector(Width::Bits(64))),
-            TypeValue::Value(Const::BitVector(64, 42)),
-            TypeValue::Value(Const::BitVector(64, 43)),
-            // Int
-            TypeValue::Type(Type::Int),
-            TypeValue::Value(Const::Int(42)),
-            TypeValue::Value(Const::Int(43)),
-            // Bool
-            TypeValue::Type(Type::Bool),
-            TypeValue::Value(Const::Bool(false)),
-            TypeValue::Value(Const::Bool(true)),
-        ]);
-    }
-}
-
 #[derive(Debug)]
 pub enum Constraint {
     /// Expression x has the given concrete type.
@@ -515,5 +457,63 @@ impl Solver {
             Some(u) if *u == v => Ok(false),
             Some(_) => anyhow::bail!("incompatible integer values"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::{assert_partial_order_properties, assert_strictly_increasing};
+
+    #[test]
+    fn test_type_value_partial_order_bit_vector() {
+        assert_strictly_increasing(&[
+            TypeValue::Type(Type::Unknown),
+            TypeValue::Type(Type::BitVector(Width::Unknown)),
+            TypeValue::Type(Type::BitVector(Width::Bits(64))),
+            TypeValue::Value(Const::BitVector(64, 42)),
+        ])
+    }
+
+    #[test]
+    fn test_type_value_partial_order_int() {
+        assert_strictly_increasing(&[
+            TypeValue::Type(Type::Unknown),
+            TypeValue::Type(Type::Int),
+            TypeValue::Value(Const::Int(42)),
+        ])
+    }
+
+    #[test]
+    fn test_type_value_partial_order_bool() {
+        assert_strictly_increasing(&[
+            TypeValue::Type(Type::Unknown),
+            TypeValue::Type(Type::Bool),
+            TypeValue::Value(Const::Bool(true)),
+        ])
+    }
+
+    #[test]
+    fn test_type_value_partial_order_properties() {
+        assert_partial_order_properties(&[
+            // Unknown
+            TypeValue::Type(Type::Unknown),
+            // BitVectors
+            TypeValue::Type(Type::BitVector(Width::Unknown)),
+            TypeValue::Type(Type::BitVector(Width::Bits(32))),
+            TypeValue::Value(Const::BitVector(32, 42)),
+            TypeValue::Value(Const::BitVector(32, 43)),
+            TypeValue::Type(Type::BitVector(Width::Bits(64))),
+            TypeValue::Value(Const::BitVector(64, 42)),
+            TypeValue::Value(Const::BitVector(64, 43)),
+            // Int
+            TypeValue::Type(Type::Int),
+            TypeValue::Value(Const::Int(42)),
+            TypeValue::Value(Const::Int(43)),
+            // Bool
+            TypeValue::Type(Type::Bool),
+            TypeValue::Value(Const::Bool(false)),
+            TypeValue::Value(Const::Bool(true)),
+        ]);
     }
 }
