@@ -10,6 +10,7 @@ use cranelift_isle::{
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use std::{
+    cmp::Ordering,
     collections::{HashMap, HashSet},
     iter::zip,
 };
@@ -84,6 +85,91 @@ impl std::fmt::Display for Type {
             Self::Int => write!(f, "int"),
             Self::Bool => write!(f, "bool"),
         }
+    }
+}
+
+impl PartialOrd for Type {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Type::Unknown, Type::Unknown) => Some(Ordering::Equal),
+            (Type::Unknown, Type::BitVector(_)) => Some(Ordering::Less),
+            (Type::Unknown, Type::Int) => Some(Ordering::Less),
+            (Type::Unknown, Type::Bool) => Some(Ordering::Less),
+            (Type::BitVector(_), Type::Unknown) => Some(Ordering::Greater),
+            (Type::BitVector(None), Type::BitVector(None)) => Some(Ordering::Equal),
+            (Type::BitVector(None), Type::BitVector(Some(_))) => Some(Ordering::Less),
+            (Type::BitVector(Some(_)), Type::BitVector(None)) => Some(Ordering::Greater),
+            (Type::BitVector(Some(l)), Type::BitVector(Some(r))) => {
+                if l == r {
+                    Some(Ordering::Equal)
+                } else {
+                    None
+                }
+            }
+            (Type::BitVector(_), Type::Int) => None,
+            (Type::BitVector(_), Type::Bool) => None,
+            (Type::Int, Type::Unknown) => Some(Ordering::Greater),
+            (Type::Int, Type::BitVector(_)) => None,
+            (Type::Int, Type::Int) => Some(Ordering::Equal),
+            (Type::Int, Type::Bool) => None,
+            (Type::Bool, Type::Unknown) => Some(Ordering::Greater),
+            (Type::Bool, Type::BitVector(_)) => None,
+            (Type::Bool, Type::Int) => None,
+            (Type::Bool, Type::Bool) => Some(Ordering::Equal),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_partial_order_properties<T>(elements: &[T])
+    where
+        T: PartialOrd,
+    {
+        // Equality
+        for a in elements {
+            for b in elements {
+                assert_eq!(a == b, a.partial_cmp(b) == Some(Ordering::Equal));
+            }
+        }
+
+        // Transitivity
+        for a in elements {
+            for b in elements {
+                for c in elements {
+                    assert!(!(a < b && b < c && !(a < c)));
+                }
+            }
+        }
+
+        // Duality
+        for a in elements {
+            for b in elements {
+                assert_eq!(a < b, b > a);
+            }
+        }
+    }
+
+    #[test]
+    fn test_type_partial_order_less_than() {
+        assert!(Type::Unknown < Type::BitVector(None));
+        assert!(Type::BitVector(None) < Type::BitVector(Some(64)));
+        assert!(Type::Unknown < Type::Int);
+        assert!(Type::Unknown < Type::Bool);
+    }
+
+    #[test]
+    fn test_type_partial_order_properties() {
+        assert_partial_order_properties(&[
+            Type::Unknown,
+            Type::BitVector(None),
+            Type::BitVector(Some(32)),
+            Type::BitVector(Some(64)),
+            Type::Int,
+            Type::Bool,
+        ]);
     }
 }
 
