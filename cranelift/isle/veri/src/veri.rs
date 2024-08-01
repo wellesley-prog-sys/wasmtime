@@ -26,11 +26,18 @@ declare_id!(
     VariableId
 );
 
+/// Width of a bit vector.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Width {
+    Unknown,
+    Bits(usize),
+}
+
 // QUESTION(mbm): do we need yet another type enum?
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
     Unknown,
-    BitVector(Option<usize>),
+    BitVector(Width),
     Int,
     Bool,
 }
@@ -38,8 +45,8 @@ pub enum Type {
 impl Type {
     fn from_spec(spec_type: &spec::Type) -> Self {
         match spec_type {
-            spec::Type::BitVector => Self::BitVector(None),
-            spec::Type::BitVectorWithWidth(width) => Self::BitVector(Some(*width)),
+            spec::Type::BitVector => Self::BitVector(Width::Unknown),
+            spec::Type::BitVectorWithWidth(width) => Self::BitVector(Width::Bits(*width)),
             spec::Type::Int => Self::Int,
             spec::Type::Bool => Self::Bool,
         }
@@ -47,8 +54,8 @@ impl Type {
 
     pub fn is_concrete(&self) -> bool {
         match self {
-            Self::BitVector(Some(_)) | Self::Int | Self::Bool => true,
-            Self::Unknown | Self::BitVector(None) => false,
+            Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
+            Self::Unknown | Self::BitVector(Width::Unknown) => false,
         }
     }
 
@@ -56,8 +63,8 @@ impl Type {
         Ok(match (left, right) {
             (Self::Unknown, r) => r.clone(),
             (l, Self::Unknown) => l.clone(),
-            (Self::BitVector(None), r @ Self::BitVector(Some(_))) => r.clone(),
-            (l @ Self::BitVector(Some(_)), Self::BitVector(None)) => l.clone(),
+            (Self::BitVector(Width::Unknown), r @ Self::BitVector(Width::Bits(_))) => r.clone(),
+            (l @ Self::BitVector(Width::Bits(_)), Self::BitVector(Width::Unknown)) => l.clone(),
             (l, r) if l == r => l.clone(),
             _ => anyhow::bail!("types {left} and {right} are incompatible"),
         })
@@ -66,7 +73,7 @@ impl Type {
     pub fn is_refined_by(&self, ty: &Self) -> bool {
         match (self, ty) {
             (Self::Unknown, _) => true,
-            (Self::BitVector(None), Self::BitVector(Some(_))) => true,
+            (Self::BitVector(Width::Unknown), Self::BitVector(Width::Bits(_))) => true,
             (s, t) => s == t,
         }
     }
@@ -80,8 +87,8 @@ impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Unknown => write!(f, "unk"),
-            Self::BitVector(Some(w)) => write!(f, "bv {w}"),
-            Self::BitVector(None) => write!(f, "bv _"),
+            Self::BitVector(Width::Bits(w)) => write!(f, "bv {w}"),
+            Self::BitVector(Width::Unknown) => write!(f, "bv _"),
             Self::Int => write!(f, "int"),
             Self::Bool => write!(f, "bool"),
         }
@@ -96,10 +103,16 @@ impl PartialOrd for Type {
             (Type::Unknown, Type::Int) => Some(Ordering::Less),
             (Type::Unknown, Type::Bool) => Some(Ordering::Less),
             (Type::BitVector(_), Type::Unknown) => Some(Ordering::Greater),
-            (Type::BitVector(None), Type::BitVector(None)) => Some(Ordering::Equal),
-            (Type::BitVector(None), Type::BitVector(Some(_))) => Some(Ordering::Less),
-            (Type::BitVector(Some(_)), Type::BitVector(None)) => Some(Ordering::Greater),
-            (Type::BitVector(Some(l)), Type::BitVector(Some(r))) => {
+            (Type::BitVector(Width::Unknown), Type::BitVector(Width::Unknown)) => {
+                Some(Ordering::Equal)
+            }
+            (Type::BitVector(Width::Unknown), Type::BitVector(Width::Bits(_))) => {
+                Some(Ordering::Less)
+            }
+            (Type::BitVector(Width::Bits(_)), Type::BitVector(Width::Unknown)) => {
+                Some(Ordering::Greater)
+            }
+            (Type::BitVector(Width::Bits(l)), Type::BitVector(Width::Bits(r))) => {
                 if l == r {
                     Some(Ordering::Equal)
                 } else {
@@ -154,8 +167,8 @@ mod tests {
 
     #[test]
     fn test_type_partial_order_less_than() {
-        assert!(Type::Unknown < Type::BitVector(None));
-        assert!(Type::BitVector(None) < Type::BitVector(Some(64)));
+        assert!(Type::Unknown < Type::BitVector(Width::Unknown));
+        assert!(Type::BitVector(Width::Unknown) < Type::BitVector(Width::Bits(64)));
         assert!(Type::Unknown < Type::Int);
         assert!(Type::Unknown < Type::Bool);
     }
@@ -164,9 +177,9 @@ mod tests {
     fn test_type_partial_order_properties() {
         assert_partial_order_properties(&[
             Type::Unknown,
-            Type::BitVector(None),
-            Type::BitVector(Some(32)),
-            Type::BitVector(Some(64)),
+            Type::BitVector(Width::Unknown),
+            Type::BitVector(Width::Bits(32)),
+            Type::BitVector(Width::Bits(64)),
             Type::Int,
             Type::Bool,
         ]);
@@ -201,7 +214,7 @@ impl Const {
         match self {
             Self::Bool(_) => Type::Bool,
             Self::Int(_) => Type::Int,
-            Self::BitVector(w, _) => Type::BitVector(Some(*w)),
+            Self::BitVector(w, _) => Type::BitVector(Width::Bits(*w)),
         }
     }
 }

@@ -3,7 +3,7 @@ use std::{
     iter::zip,
 };
 
-use crate::veri::{Call, Conditions, Const, Expr, ExprId, Type};
+use crate::veri::{Call, Conditions, Const, Expr, ExprId, Type, Width};
 
 #[derive(Debug)]
 pub enum Constraint {
@@ -167,11 +167,11 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 
     fn bit_vector_of_width(&mut self, x: ExprId, width: usize) {
-        self.concrete(x, Type::BitVector(Some(width)));
+        self.concrete(x, Type::BitVector(Width::Bits(width)));
     }
 
     fn bit_vector(&mut self, x: ExprId) {
-        self.concrete(x, Type::BitVector(None));
+        self.concrete(x, Type::BitVector(Width::Unknown));
     }
 
     fn integer(&mut self, x: ExprId) {
@@ -279,7 +279,7 @@ impl Assignment {
     fn expect_width_of(&self, x: ExprId, w: ExprId) -> anyhow::Result<()> {
         // Expression x should be a concrete bitvector.
         let tx = self.expect_expr_type(x)?;
-        let &Type::BitVector(Some(width)) = tx else {
+        let &Type::BitVector(Width::Bits(width)) = tx else {
             anyhow::bail!(
                 "expression {x} should be a bit-vector of known width; got {tx}",
                 x = x.index()
@@ -421,10 +421,10 @@ impl Solver {
             self.assignment.expr_type.get(&x),
             self.assignment.int_value.get(&w),
         ) {
-            (Some(&Type::BitVector(Some(width))), _) => {
+            (Some(&Type::BitVector(Width::Bits(width))), _) => {
                 self.set_int_value(w, width.try_into().unwrap())
             }
-            (_, Some(&v)) => self.set_type(x, &Type::BitVector(Some(v.try_into().unwrap()))),
+            (_, Some(&v)) => self.set_type(x, &Type::BitVector(Width::Bits(v.try_into().unwrap()))),
             _ => Ok(false),
         }
     }

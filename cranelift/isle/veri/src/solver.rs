@@ -4,7 +4,7 @@ use easy_smt::{Context, Response, SExpr};
 
 use crate::{
     type_inference::Assignment,
-    veri::{Conditions, Const, Expr, ExprId, Type},
+    veri::{Conditions, Const, Expr, ExprId, Type, Width},
 };
 
 #[derive(Debug)]
@@ -118,7 +118,9 @@ impl<'a> Solver<'a> {
 
     fn type_to_sort(&self, ty: &Type) -> anyhow::Result<SExpr> {
         match *ty {
-            Type::BitVector(Some(width)) => Ok(self.smt.bit_vec_sort(self.smt.numeral(width))),
+            Type::BitVector(Width::Bits(width)) => {
+                Ok(self.smt.bit_vec_sort(self.smt.numeral(width)))
+            }
             Type::Int => Ok(self.smt.int_sort()),
             Type::Bool => Ok(self.smt.bool_sort()),
             _ => anyhow::bail!("no smt2 sort for type {ty}"),
@@ -182,7 +184,7 @@ impl<'a> Solver<'a> {
 
         // Expression type should be a bit-vector of known width.
         let tx = self.assignment.expect_expr_type(x)?;
-        let &Type::BitVector(Some(src)) = tx else {
+        let &Type::BitVector(Width::Bits(src)) = tx else {
             anyhow::bail!("source of zero_ext expression should be a bit-vector of known width");
         };
 
@@ -208,7 +210,7 @@ impl<'a> Solver<'a> {
 
         // Expression type should be a bit-vector of known width.
         let tx = self.assignment.expect_expr_type(x)?;
-        let &Type::BitVector(Some(src)) = tx else {
+        let &Type::BitVector(Width::Bits(src)) = tx else {
             anyhow::bail!("source of conv_to expression should be a bit-vector of known width");
         };
 
@@ -225,7 +227,7 @@ impl<'a> Solver<'a> {
 
         // Expression type should be a bit-vector of known width.
         let tx = self.assignment.expect_expr_type(x)?;
-        let &Type::BitVector(Some(width)) = tx else {
+        let &Type::BitVector(Width::Bits(width)) = tx else {
             anyhow::bail!("target of width_of expression should be a bit-vector of known width");
         };
 
