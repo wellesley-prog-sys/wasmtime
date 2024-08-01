@@ -122,12 +122,8 @@ impl<'a> ConstraintsBuilder<'a> {
 
     fn veri_expr(&mut self, x: ExprId, expr: &Expr) {
         match expr {
-            Expr::Const(Const::Int(v)) => {
-                self.integer(x);
-                self.int_value(x, *v);
-            }
             Expr::Const(c) => {
-                self.ty(x, c.ty());
+                self.value(x, c.clone());
             }
             Expr::Variable(v) => {
                 let ty = self.conditions.variables[v.index()].ty.clone();
@@ -241,10 +237,6 @@ impl<'a> ConstraintsBuilder<'a> {
 
     fn width_of(&mut self, x: ExprId, w: ExprId) {
         self.constraints.push(Constraint::WidthOf { x, w });
-    }
-
-    fn int_value(&mut self, x: ExprId, v: i128) {
-        self.value(x, Const::Int(v));
     }
 
     fn value(&mut self, x: ExprId, c: Const) {
