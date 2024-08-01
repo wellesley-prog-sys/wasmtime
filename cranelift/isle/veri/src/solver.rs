@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use anyhow::Context as _;
 use easy_smt::{Context, Response, SExpr};
 
 use crate::{
@@ -104,11 +105,11 @@ impl<'a> Solver<'a> {
     }
 
     fn declare_expr(&mut self, x: ExprId) -> anyhow::Result<()> {
-        // Determine expression type.
-        let ty = self.assignment.expect_expr_type(x)?;
+        // Determine expression type value.
+        let tv = self.assignment.assignment(x)?;
 
         // Map to corresponding SMT2 type.
-        let sort = self.type_to_sort(ty)?;
+        let sort = self.type_to_sort(&tv.ty())?;
 
         // Declare.
         self.smt.declare_const(self.expr_name(x), sort)?;
@@ -173,20 +174,16 @@ impl<'a> Solver<'a> {
         // Destination width expression should have known integer value.
         let dst: usize = self
             .assignment
-            .int_value
-            .get(&w)
-            .copied()
-            .ok_or(anyhow::anyhow!(
-                "destination width of zero_ext expression should have known integer value"
-            ))?
+            .int_value(w)
+            .context("destination width of zero_ext expression should have known integer value")?
             .try_into()
             .expect("width should be representable as usize");
 
         // Expression type should be a bit-vector of known width.
-        let tx = self.assignment.expect_expr_type(x)?;
-        let &Type::BitVector(Width::Bits(src)) = tx else {
-            anyhow::bail!("source of zero_ext expression should be a bit-vector of known width");
-        };
+        let src = self
+            .assignment
+            .bit_vector_width(x)
+            .context("source of zero_ext expression should be a bit-vector of known width")?;
 
         // Build zero_extend expression.
         let padding = dst
@@ -199,20 +196,16 @@ impl<'a> Solver<'a> {
         // Destination width expression should have known integer value.
         let dst: usize = self
             .assignment
-            .int_value
-            .get(&w)
-            .copied()
-            .ok_or(anyhow::anyhow!(
-                "destination width of conv_to expression should have known integer value"
-            ))?
+            .int_value(w)
+            .context("destination width of conv_to expression should have known integer value")?
             .try_into()
             .expect("width should be representable as usize");
 
         // Expression type should be a bit-vector of known width.
-        let tx = self.assignment.expect_expr_type(x)?;
-        let &Type::BitVector(Width::Bits(src)) = tx else {
-            anyhow::bail!("source of conv_to expression should be a bit-vector of known width");
-        };
+        let src = self
+            .assignment
+            .bit_vector_width(x)
+            .context("source of conv_to expression should be a bit-vector of known width")?;
 
         // Handle depending on source and destination widths.
         match dst.cmp(&src) {
@@ -226,10 +219,10 @@ impl<'a> Solver<'a> {
         // QUESTION(mbm): should width_of expressions be elided or replaced after type inference?
 
         // Expression type should be a bit-vector of known width.
-        let tx = self.assignment.expect_expr_type(x)?;
-        let &Type::BitVector(Width::Bits(width)) = tx else {
-            anyhow::bail!("target of width_of expression should be a bit-vector of known width");
-        };
+        let width = self
+            .assignment
+            .bit_vector_width(x)
+            .context("target of width_of expression should be a bit-vector of known width")?;
 
         // Substitute known constant width.
         Ok(self.smt.numeral(width))

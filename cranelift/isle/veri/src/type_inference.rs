@@ -12,6 +12,27 @@ pub enum TypeValue {
     Value(Const),
 }
 
+impl TypeValue {
+    pub fn ty(&self) -> Type {
+        match self {
+            TypeValue::Type(ty) => ty.clone(),
+            TypeValue::Value(c) => c.ty(),
+        }
+    }
+
+    pub fn refines_type(&self, ty: &Type) -> bool {
+        self >= &Self::Type(ty.clone())
+    }
+
+    pub fn merge(left: &Self, right: &Self) -> anyhow::Result<Self> {
+        Ok(match left.partial_cmp(right) {
+            Some(Ordering::Greater) => left.clone(),
+            Some(Ordering::Less | Ordering::Equal) => right.clone(),
+            None => anyhow::bail!("incompatible type values: {left} and {right}"),
+        })
+    }
+}
+
 impl PartialOrd for TypeValue {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
@@ -20,6 +41,15 @@ impl PartialOrd for TypeValue {
             (TypeValue::Value(v), TypeValue::Type(ty)) if &v.ty() >= ty => Some(Ordering::Greater),
             (TypeValue::Value(l), TypeValue::Value(r)) if l == r => Some(Ordering::Equal),
             _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for TypeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeValue::Type(ty) => ty.fmt(f),
+            TypeValue::Value(c) => c.fmt(f),
         }
     }
 }
@@ -220,21 +250,20 @@ impl<'a> ConstraintsBuilder<'a> {
 
 #[derive(Default)]
 pub struct Assignment {
-    pub expr_type: HashMap<ExprId, Type>,
-    pub int_value: HashMap<ExprId, i128>,
+    pub expr_type_value: HashMap<ExprId, TypeValue>,
 }
 
 impl Assignment {
     pub fn new() -> Self {
         Self {
-            expr_type: HashMap::new(),
-            int_value: HashMap::new(),
+            expr_type_value: HashMap::new(),
         }
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {
         // Assigned types should all be concrete.
-        for (x, ty) in &self.expr_type {
+        for (x, tv) in &self.expr_type_value {
+            let ty = tv.ty();
             if !ty.is_concrete() {
                 anyhow::bail!(
                     "non-concrete type {ty} assigned to expression {x}",
@@ -242,8 +271,6 @@ impl Assignment {
                 );
             }
         }
-
-        // TODO(mbm): everything with an integer value should have integer type
 
         Ok(())
     }
@@ -263,25 +290,24 @@ impl Assignment {
         }
     }
 
-    // TODO(mbm): better name for expect_expr_type?
-    pub fn expect_expr_type(&self, x: ExprId) -> anyhow::Result<&Type> {
-        self.expr_type.get(&x).ok_or(anyhow::format_err!(
-            "expression {x} missing type assignment",
+    pub fn assignment(&self, x: ExprId) -> anyhow::Result<&TypeValue> {
+        self.expr_type_value.get(&x).ok_or(anyhow::format_err!(
+            "expression {x} missing assignment",
             x = x.index()
         ))
     }
 
     fn expect_expr_type_refinement(&self, x: ExprId, base: &Type) -> anyhow::Result<()> {
-        let ty = self.expect_expr_type(x)?;
-        if !ty.is_refinement_of(base) {
-            anyhow::bail!("expected type {ty} to be refinement of {base}")
+        let tv = self.assignment(x)?;
+        if !tv.refines_type(base) {
+            anyhow::bail!("expected type {tv} to be refinement of {base}")
         }
         Ok(())
     }
 
     fn expect_same(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
-        let tx = self.expect_expr_type(x)?;
-        let ty = self.expect_expr_type(y)?;
+        let tx = self.assignment(x)?.ty();
+        let ty = self.assignment(y)?.ty();
         if tx != ty {
             anyhow::bail!(
                 "expressions {x} and {y} should have same type: got {tx} and {ty}",
@@ -289,21 +315,23 @@ impl Assignment {
                 y = y.index()
             )
         }
-
-        // TODO(mbm): if integers, the values should match
-
         Ok(())
+    }
+
+    pub fn bit_vector_width(&self, x: ExprId) -> anyhow::Result<usize> {
+        let tyx = self.assignment(x)?.ty();
+        let Type::BitVector(Width::Bits(width)) = tyx else {
+            anyhow::bail!(
+                "expression {x} should be a bit-vector of known width; got {tyx}",
+                x = x.index()
+            );
+        };
+        Ok(width)
     }
 
     fn expect_width_of(&self, x: ExprId, w: ExprId) -> anyhow::Result<()> {
         // Expression x should be a concrete bitvector.
-        let tx = self.expect_expr_type(x)?;
-        let &Type::BitVector(Width::Bits(width)) = tx else {
-            anyhow::bail!(
-                "expression {x} should be a bit-vector of known width; got {tx}",
-                x = x.index()
-            );
-        };
+        let width = self.bit_vector_width(x)?;
 
         // Expression w should be an integer equal to the width.
         self.expect_int_value(w, width.try_into().unwrap())?;
@@ -311,35 +339,31 @@ impl Assignment {
         Ok(())
     }
 
-    fn expect_int_value(&self, x: ExprId, expect: i128) -> anyhow::Result<()> {
-        // Expression x should be an integer.
-        let tx = self.expect_expr_type(x)?;
-        if *tx != Type::Int {
+    pub fn int_value(&self, x: ExprId) -> anyhow::Result<i128> {
+        let tvx = self.assignment(x)?;
+        let &TypeValue::Value(Const::Int(v)) = tvx else {
             anyhow::bail!(
-                "expression {x} should be an integer; got {tx}",
+                "expression {x} should be a known integer value; got {tvx}",
                 x = x.index()
             );
         };
+        Ok(v)
+    }
 
-        // Should have an integer assignment.
-        let got = self.int_value.get(&x).copied().ok_or(anyhow::format_err!(
-            "expression {x} missing integer value",
-            x = x.index()
-        ))?;
-
+    fn expect_int_value(&self, x: ExprId, expect: i128) -> anyhow::Result<()> {
+        let got = self.int_value(x)?;
         if got != expect {
             anyhow::bail!("expected integer value {expect}; got {got}");
         }
-
         Ok(())
     }
 
     pub fn pretty_print(&self, conditions: &Conditions) {
         for (i, expr) in conditions.exprs.iter().enumerate() {
             print!("{i}:\t");
-            match self.expr_type.get(&ExprId(i)) {
+            match self.expr_type_value.get(&ExprId(i)) {
                 None => print!("false\t-"),
-                Some(typ) => print!("{}\t{typ}", typ.is_concrete()),
+                Some(tv) => print!("{}\t{tv}", tv.ty().is_concrete()),
             }
             println!("\t{expr}");
         }
@@ -381,25 +405,27 @@ impl Solver {
     fn constraint(&mut self, constraint: &Constraint) -> anyhow::Result<bool> {
         log::trace!("process type constraint: {constraint}");
         match constraint {
-            Constraint::Concrete { x, ty } => self.set_type(*x, ty),
+            Constraint::Concrete { x, ty } => self.set_type(*x, ty.clone()),
             Constraint::Same { x, y } => self.same(*x, *y),
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
             Constraint::IntValue { x, v } => self.set_int_value(*x, *v),
         }
     }
 
-    fn set_type(&mut self, x: ExprId, ty: &Type) -> anyhow::Result<bool> {
-        // If we don't know a type for the expression, record it.
-        if let Entry::Vacant(e) = self.assignment.expr_type.entry(x) {
-            e.insert(ty.clone());
+    fn set_type_value(&mut self, x: ExprId, tv: TypeValue) -> anyhow::Result<bool> {
+        log::trace!("set type value: {x:?} = {tv:?}");
+
+        // If we don't have an assignment for the expression, record it.
+        if let Entry::Vacant(e) = self.assignment.expr_type_value.entry(x) {
+            e.insert(tv);
             return Ok(true);
         }
 
-        // If we do, merge this type with the existing one.
-        let existing = &self.assignment.expr_type[&x];
-        let merged = Type::merge(existing, ty)?;
+        // If we do, merge this type value with the existing one.
+        let existing = &self.assignment.expr_type_value[&x];
+        let merged = TypeValue::merge(existing, &tv)?;
         if merged != *existing {
-            self.assignment.expr_type.insert(x, merged);
+            self.assignment.expr_type_value.insert(x, merged);
             return Ok(true);
         }
 
@@ -407,56 +433,45 @@ impl Solver {
         Ok(false)
     }
 
+    fn set_type(&mut self, x: ExprId, ty: Type) -> anyhow::Result<bool> {
+        self.set_type_value(x, TypeValue::Type(ty))
+    }
+
     fn same(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
         // TODO(mbm): union find
         // TODO(mbm): simplify by initializing all expression types to unknown
         match (
-            self.assignment.expr_type.get(&x),
-            self.assignment.expr_type.get(&y),
+            self.assignment.expr_type_value.get(&x).cloned(),
+            self.assignment.expr_type_value.get(&y).cloned(),
         ) {
             (None, None) => Ok(false),
-            (Some(tx), None) => {
-                self.assignment.expr_type.insert(y, tx.clone());
-                Ok(true)
-            }
-            (None, Some(ty)) => {
-                self.assignment.expr_type.insert(x, ty.clone());
-                Ok(true)
-            }
-            (Some(tx), Some(ty)) => {
-                if tx == ty {
-                    return Ok(false);
-                }
-                let merged = Type::merge(tx, ty)?;
-                self.assignment.expr_type.insert(x, merged.clone());
-                self.assignment.expr_type.insert(y, merged.clone());
-                Ok(true)
-            }
+            (Some(tvx), None) => self.set_type(y, tvx.ty()),
+            (None, Some(tvy)) => self.set_type(x, tvy.ty()),
+            (Some(tvx), Some(tvy)) => Ok(self.set_type(x, tvy.ty())? | self.set_type(y, tvx.ty())?),
         }
     }
 
     fn width_of(&mut self, x: ExprId, w: ExprId) -> anyhow::Result<bool> {
         match (
-            self.assignment.expr_type.get(&x),
-            self.assignment.int_value.get(&w),
+            self.assignment.expr_type_value.get(&x),
+            self.assignment.expr_type_value.get(&w),
         ) {
-            (Some(&Type::BitVector(Width::Bits(width))), _) => {
-                self.set_int_value(w, width.try_into().unwrap())
+            (
+                Some(
+                    &TypeValue::Type(Type::BitVector(Width::Bits(width)))
+                    | &TypeValue::Value(Const::BitVector(width, _)),
+                ),
+                _,
+            ) => self.set_int_value(w, width.try_into().unwrap()),
+            (_, Some(&TypeValue::Value(Const::Int(v)))) => {
+                self.set_type(x, Type::BitVector(Width::Bits(v.try_into().unwrap())))
             }
-            (_, Some(&v)) => self.set_type(x, &Type::BitVector(Width::Bits(v.try_into().unwrap()))),
             _ => Ok(false),
         }
     }
 
     fn set_int_value(&mut self, x: ExprId, v: i128) -> anyhow::Result<bool> {
-        match self.assignment.int_value.get(&x) {
-            None => {
-                self.assignment.int_value.insert(x, v);
-                Ok(true)
-            }
-            Some(u) if *u == v => Ok(false),
-            Some(_) => anyhow::bail!("incompatible integer values"),
-        }
+        self.set_type_value(x, TypeValue::Value(Const::Int(v)))
     }
 }
 

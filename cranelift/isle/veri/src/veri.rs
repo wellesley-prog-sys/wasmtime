@@ -70,22 +70,6 @@ impl Type {
             Self::Unknown | Self::BitVector(Width::Unknown) => false,
         }
     }
-
-    pub fn merge(left: &Self, right: &Self) -> anyhow::Result<Self> {
-        Ok(match left.partial_cmp(right) {
-            Some(Ordering::Greater) => left.clone(),
-            Some(Ordering::Less | Ordering::Equal) => right.clone(),
-            None => anyhow::bail!("types {left} and {right} are incompatible"),
-        })
-    }
-
-    pub fn is_refined_by(&self, ty: &Self) -> bool {
-        self <= ty
-    }
-
-    pub fn is_refinement_of(&self, ty: &Self) -> bool {
-        self >= ty
-    }
 }
 
 impl std::fmt::Display for Type {
