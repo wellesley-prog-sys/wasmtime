@@ -72,26 +72,19 @@ impl Type {
     }
 
     pub fn merge(left: &Self, right: &Self) -> anyhow::Result<Self> {
-        Ok(match (left, right) {
-            (Self::Unknown, r) => r.clone(),
-            (l, Self::Unknown) => l.clone(),
-            (Self::BitVector(Width::Unknown), r @ Self::BitVector(Width::Bits(_))) => r.clone(),
-            (l @ Self::BitVector(Width::Bits(_)), Self::BitVector(Width::Unknown)) => l.clone(),
-            (l, r) if l == r => l.clone(),
-            _ => anyhow::bail!("types {left} and {right} are incompatible"),
+        Ok(match left.partial_cmp(right) {
+            Some(Ordering::Greater) => left.clone(),
+            Some(Ordering::Less | Ordering::Equal) => right.clone(),
+            None => anyhow::bail!("types {left} and {right} are incompatible"),
         })
     }
 
     pub fn is_refined_by(&self, ty: &Self) -> bool {
-        match (self, ty) {
-            (Self::Unknown, _) => true,
-            (Self::BitVector(Width::Unknown), Self::BitVector(Width::Bits(_))) => true,
-            (s, t) => s == t,
-        }
+        self <= ty
     }
 
     pub fn is_refinement_of(&self, ty: &Self) -> bool {
-        ty.is_refined_by(self)
+        self >= ty
     }
 }
 
