@@ -63,7 +63,7 @@ pub enum Constraint {
     /// Expression x is a bitvector with width given by the integer expression w.
     WidthOf { x: ExprId, w: ExprId },
     /// Expression x is an integer with known constant value v.
-    IntValue { x: ExprId, v: i128 },
+    Value { x: ExprId, c: Const },
 }
 
 impl std::fmt::Display for Constraint {
@@ -72,7 +72,7 @@ impl std::fmt::Display for Constraint {
             Self::Concrete { x, ty } => write!(f, "{} = {ty}", x.index()),
             Self::Same { x, y } => write!(f, "{} == {}", x.index(), y.index()),
             Self::WidthOf { x, w } => write!(f, "{} = width_of({})", w.index(), x.index()),
-            Self::IntValue { x, v } => write!(f, "{} = int({v})", x.index()),
+            Self::Value { x, c } => write!(f, "{} = value({c})", x.index()),
         }
     }
 }
@@ -244,7 +244,11 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 
     fn int_value(&mut self, x: ExprId, v: i128) {
-        self.constraints.push(Constraint::IntValue { x, v });
+        self.value(x, Const::Int(v));
+    }
+
+    fn value(&mut self, x: ExprId, c: Const) {
+        self.constraints.push(Constraint::Value { x, c });
     }
 }
 
@@ -286,7 +290,7 @@ impl Assignment {
             Constraint::Concrete { x, ref ty } => self.expect_expr_type_refinement(x, ty),
             Constraint::Same { x, y } => self.expect_same(x, y),
             Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
-            Constraint::IntValue { x, v } => self.expect_int_value(x, v),
+            Constraint::Value { x, ref c } => self.expect_value(x, c),
         }
     }
 
@@ -334,26 +338,37 @@ impl Assignment {
         let width = self.bit_vector_width(x)?;
 
         // Expression w should be an integer equal to the width.
-        self.expect_int_value(w, width.try_into().unwrap())?;
+        self.expect_value(w, &Const::Int(width.try_into().unwrap()))?;
 
         Ok(())
     }
 
-    pub fn int_value(&self, x: ExprId) -> anyhow::Result<i128> {
+    pub fn value(&self, x: ExprId) -> anyhow::Result<&Const> {
         let tvx = self.assignment(x)?;
-        let &TypeValue::Value(Const::Int(v)) = tvx else {
+        let TypeValue::Value(c) = tvx else {
             anyhow::bail!(
-                "expression {x} should be a known integer value; got {tvx}",
+                "expression {x} should be a known value; got {tvx}",
+                x = x.index()
+            );
+        };
+        Ok(c)
+    }
+
+    pub fn int_value(&self, x: ExprId) -> anyhow::Result<i128> {
+        let c = self.value(x)?;
+        let &Const::Int(v) = c else {
+            anyhow::bail!(
+                "expression {x} should be a known integer value; got {c}",
                 x = x.index()
             );
         };
         Ok(v)
     }
 
-    fn expect_int_value(&self, x: ExprId, expect: i128) -> anyhow::Result<()> {
-        let got = self.int_value(x)?;
+    fn expect_value(&self, x: ExprId, expect: &Const) -> anyhow::Result<()> {
+        let got = self.value(x)?;
         if got != expect {
-            anyhow::bail!("expected integer value {expect}; got {got}");
+            anyhow::bail!("expected value {expect}; got {got}");
         }
         Ok(())
     }
@@ -408,7 +423,7 @@ impl Solver {
             Constraint::Concrete { x, ty } => self.set_type(*x, ty.clone()),
             Constraint::Same { x, y } => self.same(*x, *y),
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
-            Constraint::IntValue { x, v } => self.set_int_value(*x, *v),
+            Constraint::Value { x, c } => self.set_value(*x, c.clone()),
         }
     }
 
@@ -471,7 +486,11 @@ impl Solver {
     }
 
     fn set_int_value(&mut self, x: ExprId, v: i128) -> anyhow::Result<bool> {
-        self.set_type_value(x, TypeValue::Value(Const::Int(v)))
+        self.set_value(x, Const::Int(v))
+    }
+
+    fn set_value(&mut self, x: ExprId, c: Const) -> anyhow::Result<bool> {
+        self.set_type_value(x, TypeValue::Value(c))
     }
 }
 
