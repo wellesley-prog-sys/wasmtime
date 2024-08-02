@@ -60,19 +60,25 @@ pub enum Constraint {
     Type { x: ExprId, ty: Type },
     /// Expressions have the same type.
     Same { x: ExprId, y: ExprId },
+    /// Expressions have the same type and value.
+    Identical { x: ExprId, y: ExprId },
     /// Expression x is a bitvector with width given by the integer expression w.
     WidthOf { x: ExprId, w: ExprId },
     /// Expression x has known constant value v.
     Value { x: ExprId, c: Const },
+    /// Constraint conditioned on a boolean.
+    Implies { c: ExprId, then: Box<Constraint> },
 }
 
 impl std::fmt::Display for Constraint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Type { x, ty } => write!(f, "type({}) = {ty}", x.index()),
-            Self::Same { x, y } => write!(f, "type({}) = type({})", x.index(), y.index()),
+            Self::Same { x, y } => write!(f, "type({}) == type({})", x.index(), y.index()),
+            Self::Identical { x, y } => write!(f, "{} == {}", x.index(), y.index()),
             Self::WidthOf { x, w } => write!(f, "{} = width_of({})", w.index(), x.index()),
             Self::Value { x, c } => write!(f, "{} = value({c})", x.index()),
+            Self::Implies { c, then } => write!(f, "{} => {then}", c.index()),
         }
     }
 }
@@ -137,6 +143,10 @@ impl<'a> ConstraintsBuilder<'a> {
             Expr::Eq(y, z) => {
                 self.boolean(x);
                 self.same(*y, *z);
+                self.constraints.push(Constraint::Implies {
+                    c: x,
+                    then: Box::new(Constraint::Identical { x: *y, y: *z }),
+                });
             }
             Expr::Lte(y, z) => {
                 self.boolean(x);
@@ -287,6 +297,7 @@ impl Assignment {
             Constraint::Same { x, y } => self.expect_same(x, y),
             Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
             Constraint::Value { x, ref c } => self.expect_value(x, c),
+            ref c => todo!("satisfies constraint: {c:?}"),
         }
     }
 
@@ -418,8 +429,10 @@ impl Solver {
         match constraint {
             Constraint::Type { x, ty } => self.set_type(*x, ty.clone()),
             Constraint::Same { x, y } => self.same(*x, *y),
+            Constraint::Identical { x, y } => self.identical(*x, *y),
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
             Constraint::Value { x, c } => self.set_value(*x, c.clone()),
+            Constraint::Implies { c, then } => self.implies(*c, then),
         }
     }
 
@@ -462,6 +475,20 @@ impl Solver {
         }
     }
 
+    fn identical(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
+        match (
+            self.assignment.expr_type_value.get(&x).cloned(),
+            self.assignment.expr_type_value.get(&y).cloned(),
+        ) {
+            (None, None) => Ok(false),
+            (Some(tvx), None) => self.set_type_value(y, tvx),
+            (None, Some(tvy)) => self.set_type_value(x, tvy),
+            (Some(tvx), Some(tvy)) => {
+                Ok(self.set_type_value(x, tvy)? | self.set_type_value(y, tvx)?)
+            }
+        }
+    }
+
     fn width_of(&mut self, x: ExprId, w: ExprId) -> anyhow::Result<bool> {
         match (
             self.assignment.expr_type_value.get(&x),
@@ -478,6 +505,14 @@ impl Solver {
                 self.set_type(x, Type::BitVector(Width::Bits(v.try_into().unwrap())))
             }
             _ => Ok(false),
+        }
+    }
+
+    fn implies(&mut self, c: ExprId, then: &Constraint) -> anyhow::Result<bool> {
+        if self.assignment.expr_type_value.get(&c) == Some(&TypeValue::Value(Const::Bool(true))) {
+            self.constraint(then)
+        } else {
+            Ok(false)
         }
     }
 
