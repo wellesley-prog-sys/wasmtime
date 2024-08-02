@@ -68,7 +68,7 @@
       (if-let imm12_neg (imm12_from_negated_value y))
       (sub_imm ty x imm12_neg))
 
-(rule 3 (lower (has_type (fits_in_64 ty) (iadd x y)))
+(rule iadd_imm12_neg_left 3 (lower (has_type (fits_in_64 ty) (iadd x y)))
       (if-let imm12_neg (imm12_from_negated_value x))
       (sub_imm ty y imm12_neg))
 

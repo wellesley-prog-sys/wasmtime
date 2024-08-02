@@ -19,6 +19,7 @@ rules=(
     "iadd_imm12_right"
     "iadd_imm12_left"
     "iadd_imm12_neg_right"
+    "iadd_imm12_neg_left"
 )
 
 for rule in "${rules[@]}"; do
