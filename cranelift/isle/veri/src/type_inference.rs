@@ -55,19 +55,55 @@ impl std::fmt::Display for TypeValue {
 }
 
 #[derive(Debug)]
+pub enum Literal {
+    Var(ExprId),
+    Not(ExprId),
+}
+
+impl std::fmt::Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::Var(x) => write!(f, "{}", x.index()),
+            Literal::Not(x) => write!(f, "\u{00AC}{}", x.index()),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum Constraint {
     /// Expression x has the given type.
-    Type { x: ExprId, ty: Type },
+    Type {
+        x: ExprId,
+        ty: Type,
+    },
     /// Expressions have the same type.
-    Same { x: ExprId, y: ExprId },
+    Same {
+        x: ExprId,
+        y: ExprId,
+    },
     /// Expressions have the same type and value.
-    Identical { x: ExprId, y: ExprId },
+    Identical {
+        x: ExprId,
+        y: ExprId,
+    },
     /// Expression x is a bitvector with width given by the integer expression w.
-    WidthOf { x: ExprId, w: ExprId },
+    WidthOf {
+        x: ExprId,
+        w: ExprId,
+    },
     /// Expression x has known constant value v.
-    Value { x: ExprId, c: Const },
+    Value {
+        x: ExprId,
+        c: Const,
+    },
     /// Constraint conditioned on a boolean.
-    Implies { c: ExprId, then: Box<Constraint> },
+    Implies {
+        c: ExprId,
+        then: Box<Constraint>,
+    },
+    Clause {
+        literals: Vec<Literal>,
+    },
 }
 
 impl std::fmt::Display for Constraint {
@@ -79,6 +115,15 @@ impl std::fmt::Display for Constraint {
             Self::WidthOf { x, w } => write!(f, "{} = width_of({})", w.index(), x.index()),
             Self::Value { x, c } => write!(f, "{} = value({c})", x.index()),
             Self::Implies { c, then } => write!(f, "{} => {then}", c.index()),
+            Self::Clause { literals } => write!(
+                f,
+                "clause({})",
+                literals
+                    .iter()
+                    .map(|l| l.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" \u{2228} ")
+            ),
         }
     }
 }
@@ -135,10 +180,42 @@ impl<'a> ConstraintsBuilder<'a> {
                 let ty = self.conditions.variables[v.index()].ty.clone();
                 self.ty(x, ty);
             }
-            Expr::And(y, z) | Expr::Or(y, z) | Expr::Imp(y, z) => {
+            Expr::And(y, z) => {
+                // TODO(mbm): clause implies boolean
                 self.boolean(x);
                 self.boolean(*y);
                 self.boolean(*z);
+
+                // ((NOT X) OR Y)
+                self.clause(vec![Literal::Not(x), Literal::Var(*y)]);
+                // ((NOT X) OR Z)
+                self.clause(vec![Literal::Not(x), Literal::Var(*z)]);
+                // (X OR (NOT Y) OR (NOT Z))
+                self.clause(vec![Literal::Var(x), Literal::Not(*y), Literal::Not(*z)]);
+            }
+            Expr::Or(y, z) => {
+                self.boolean(x);
+                self.boolean(*y);
+                self.boolean(*z);
+
+                // ((NOT X) OR Y OR Z)
+                self.clause(vec![Literal::Not(x), Literal::Var(*y), Literal::Var(*z)]);
+                // (X OR (NOT Y))
+                self.clause(vec![Literal::Var(x), Literal::Not(*y)]);
+                // (X OR (NOT Z))
+                self.clause(vec![Literal::Var(x), Literal::Not(*z)]);
+            }
+            Expr::Imp(y, z) => {
+                self.boolean(x);
+                self.boolean(*y);
+                self.boolean(*z);
+
+                // ((NOT X) OR (NOT Y) OR Z)
+                self.clause(vec![Literal::Not(x), Literal::Not(*y), Literal::Var(*z)]);
+                // (X OR Y)
+                self.clause(vec![Literal::Var(x), Literal::Var(*y)]);
+                // (X OR (NOT Z))
+                self.clause(vec![Literal::Var(x), Literal::Not(*y)]);
             }
             Expr::Eq(y, z) => {
                 self.boolean(x);
@@ -255,6 +332,10 @@ impl<'a> ConstraintsBuilder<'a> {
 
     fn value(&mut self, x: ExprId, c: Const) {
         self.constraints.push(Constraint::Value { x, c });
+    }
+
+    fn clause(&mut self, literals: Vec<Literal>) {
+        self.constraints.push(Constraint::Clause { literals })
     }
 }
 
@@ -433,6 +514,7 @@ impl Solver {
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
             Constraint::Value { x, c } => self.set_value(*x, c.clone()),
             Constraint::Implies { c, then } => self.implies(*c, then),
+            ref c => todo!("solve constraint: {c:?}"),
         }
     }
 
