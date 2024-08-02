@@ -82,7 +82,7 @@ pub enum Constraint {
     /// Expression x has the given type.
     Type { x: ExprId, ty: Type },
     /// Expressions have the same type.
-    Same { x: ExprId, y: ExprId },
+    SameType { x: ExprId, y: ExprId },
     /// Expressions have the same type and value.
     Identical { x: ExprId, y: ExprId },
     /// Expression x is a bitvector with width given by the integer expression w.
@@ -99,7 +99,7 @@ impl std::fmt::Display for Constraint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Type { x, ty } => write!(f, "type({}) = {ty}", x.index()),
-            Self::Same { x, y } => write!(f, "type({}) == type({})", x.index(), y.index()),
+            Self::SameType { x, y } => write!(f, "type({}) == type({})", x.index(), y.index()),
             Self::Identical { x, y } => write!(f, "{} == {}", x.index(), y.index()),
             Self::WidthOf { x, w } => write!(f, "{} = width_of({})", w.index(), x.index()),
             Self::Value { x, c } => write!(f, "{} = value({c})", x.index()),
@@ -208,7 +208,7 @@ impl<'a> ConstraintsBuilder<'a> {
             }
             Expr::Eq(y, z) => {
                 self.boolean(x);
-                self.same(*y, *z);
+                self.same_type(*y, *z);
                 self.constraints.push(Constraint::Implies {
                     c: x,
                     then: Box::new(Constraint::Identical { x: *y, y: *z }),
@@ -224,26 +224,26 @@ impl<'a> ConstraintsBuilder<'a> {
                 self.bit_vector(*y);
                 self.bit_vector(*z);
 
-                self.same(*y, *z);
+                self.same_type(*y, *z);
             }
             Expr::BVNeg(y) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
 
-                self.same(x, *y);
+                self.same_type(x, *y);
             }
             Expr::BVAdd(y, z) | Expr::BVSub(y, z) | Expr::BVAnd(y, z) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
 
-                self.same(x, *y);
-                self.same(x, *z);
+                self.same_type(x, *y);
+                self.same_type(x, *z);
             }
             Expr::Conditional(c, t, e) => {
                 self.boolean(*c);
-                self.same(x, *t);
-                self.same(x, *e);
+                self.same_type(x, *t);
+                self.same_type(x, *e);
             }
             Expr::BVZeroExt(w, y) | Expr::BVSignExt(w, y) | Expr::BVConvTo(w, y) => {
                 self.bit_vector(x);
@@ -307,8 +307,8 @@ impl<'a> ConstraintsBuilder<'a> {
         self.constraints.push(Constraint::Type { x, ty });
     }
 
-    fn same(&mut self, x: ExprId, y: ExprId) {
-        self.constraints.push(Constraint::Same { x, y });
+    fn same_type(&mut self, x: ExprId, y: ExprId) {
+        self.constraints.push(Constraint::SameType { x, y });
     }
 
     fn width_of(&mut self, x: ExprId, w: ExprId) {
@@ -364,7 +364,7 @@ impl Assignment {
     pub fn satisfies_constraint(&self, constraint: &Constraint) -> anyhow::Result<()> {
         match *constraint {
             Constraint::Type { x, ref ty } => self.expect_expr_type_refinement(x, ty),
-            Constraint::Same { x, y } => self.expect_same(x, y),
+            Constraint::SameType { x, y } => self.expect_same_type(x, y),
             Constraint::Identical { x, y } => self.expect_identical(x, y),
             Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
             Constraint::Value { x, ref c } => self.expect_value(x, c),
@@ -425,7 +425,7 @@ impl Assignment {
         Ok(())
     }
 
-    fn expect_same(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
+    fn expect_same_type(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
         let tx = self.try_assignment(x)?.ty();
         let ty = self.try_assignment(y)?.ty();
         if tx != ty {
@@ -550,7 +550,7 @@ impl Solver {
         log::trace!("process type constraint: {constraint}");
         match constraint {
             Constraint::Type { x, ty } => self.set_type(*x, ty.clone()),
-            Constraint::Same { x, y } => self.same(*x, *y),
+            Constraint::SameType { x, y } => self.same_type(*x, *y),
             Constraint::Identical { x, y } => self.identical(*x, *y),
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
             Constraint::Value { x, c } => self.set_value(*x, c.clone()),
@@ -584,7 +584,7 @@ impl Solver {
         self.set_type_value(x, TypeValue::Type(ty))
     }
 
-    fn same(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
+    fn same_type(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
         // TODO(mbm): union find
         // TODO(mbm): simplify by initializing all expression types to unknown
         match (
