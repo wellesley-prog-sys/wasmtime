@@ -1016,9 +1016,17 @@
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                         (= rd (bvadd rn (zero_ext 64 imm12)))
             )
+            (=>
+                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+                        (= rd (bvsub rn (zero_ext 64 imm12)))
+            )
       )
       (require
-            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+            ; Implemented (opcode, size) combinations.
+            (or
+                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+            )
             ; Imm12 immediate is well-formed.
             (or
                   (= imm12 (bvand imm12 #x000fff))

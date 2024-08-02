@@ -18,6 +18,7 @@ rules=(
     "iadd_base_case"
     "iadd_imm12_right"
     "iadd_imm12_left"
+    "iadd_imm12_neg_right"
 )
 
 for rule in "${rules[@]}"; do

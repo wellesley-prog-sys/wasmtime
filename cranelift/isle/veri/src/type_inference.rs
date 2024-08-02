@@ -232,7 +232,7 @@ impl<'a> ConstraintsBuilder<'a> {
 
                 self.same(x, *y);
             }
-            Expr::BVAdd(y, z) | Expr::BVAnd(y, z) => {
+            Expr::BVAdd(y, z) | Expr::BVSub(y, z) | Expr::BVAnd(y, z) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);

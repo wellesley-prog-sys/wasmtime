@@ -146,6 +146,7 @@ impl<'a> Solver<'a> {
             Expr::BVUlt(x, y) => Ok(self.smt.bvult(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVNeg(x) => Ok(self.smt.bvneg(self.expr_atom(x))),
             Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSub(x, y) => Ok(self.smt.bvsub(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVAnd(x, y) => Ok(self.smt.bvand(self.expr_atom(x), self.expr_atom(y))),
             Expr::Conditional(c, t, e) => {
                 Ok(self

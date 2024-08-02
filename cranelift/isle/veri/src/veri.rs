@@ -181,6 +181,7 @@ pub enum Expr {
 
     // Binary.
     BVAdd(ExprId, ExprId),
+    BVSub(ExprId, ExprId),
     BVAnd(ExprId, ExprId),
 
     // ITE
@@ -215,6 +216,7 @@ impl Expr {
             | &Self::Lte(x, y)
             | &Self::BVUlt(x, y)
             | &Self::BVAdd(x, y)
+            | &Self::BVSub(x, y)
             | &Self::BVAnd(x, y)
             | &Self::BVZeroExt(x, y)
             | &Self::BVSignExt(x, y)
@@ -239,6 +241,7 @@ impl std::fmt::Display for Expr {
             Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
             Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
+            Self::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
             Self::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
             Self::Conditional(c, t, e) => {
                 write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
@@ -932,6 +935,12 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
                 Ok(self.dedup_expr(Expr::BVAdd(x, y)))
+            }
+
+            spec::Expr::BVSub(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVSub(x, y)))
             }
 
             spec::Expr::BVAnd(x, y) => {
