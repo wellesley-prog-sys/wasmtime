@@ -365,9 +365,11 @@ impl Assignment {
         match *constraint {
             Constraint::Type { x, ref ty } => self.expect_expr_type_refinement(x, ty),
             Constraint::Same { x, y } => self.expect_same(x, y),
+            Constraint::Identical { x, y } => self.expect_identical(x, y),
             Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
             Constraint::Value { x, ref c } => self.expect_value(x, c),
-            ref c => todo!("satisfies constraint: {c:?}"),
+            Constraint::Implies { c, ref then } => self.expect_implies(c, then),
+            Constraint::Clause { ref literals } => self.expect_clause(literals),
         }
     }
 
@@ -436,6 +438,19 @@ impl Assignment {
         Ok(())
     }
 
+    fn expect_identical(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
+        let tvx = self.try_assignment(x)?;
+        let tvy = self.try_assignment(y)?;
+        if tvx != tvy {
+            anyhow::bail!(
+                "expressions {x} and {y} should be identical: got {tvx} and {tvy}",
+                x = x.index(),
+                y = y.index()
+            )
+        }
+        Ok(())
+    }
+
     pub fn bit_vector_width(&self, x: ExprId) -> anyhow::Result<usize> {
         let tyx = self.try_assignment(x)?.ty();
         let Type::BitVector(Width::Bits(width)) = tyx else {
@@ -463,6 +478,28 @@ impl Assignment {
             anyhow::bail!("expected value {expect}; got {got}");
         }
         Ok(())
+    }
+
+    fn expect_implies(&self, c: ExprId, then: &Constraint) -> anyhow::Result<()> {
+        if self.bool_value(c) == Some(true) {
+            self.satisfies_constraint(then)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn expect_clause(&self, literals: &[Literal]) -> anyhow::Result<()> {
+        for literal in literals {
+            match self.literal(literal) {
+                Some(true) | None => {
+                    return Ok(());
+                }
+                Some(false) => {
+                    continue;
+                }
+            }
+        }
+        anyhow::bail!("false clause");
     }
 
     pub fn pretty_print(&self, conditions: &Conditions) {
@@ -494,8 +531,8 @@ impl Solver {
         while self.iterate(constraints)? {}
 
         // Check assignment is reasonable.
-        //self.assignment.validate()?;
-        //self.assignment.satisfies_constraints(constraints)?;
+        self.assignment.validate()?;
+        self.assignment.satisfies_constraints(constraints)?;
 
         Ok(self.assignment)
     }
