@@ -129,6 +129,20 @@ impl Const {
             Self::BitVector(w, _) => Type::BitVector(Width::Bits(*w)),
         }
     }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Const::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<i128> {
+        match self {
+            Const::Int(v) => Some(*v),
+            _ => None,
+        }
+    }
 }
 
 impl std::fmt::Display for Const {

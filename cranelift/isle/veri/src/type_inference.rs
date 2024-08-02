@@ -20,6 +20,13 @@ impl TypeValue {
         }
     }
 
+    fn as_value(&self) -> Option<&Const> {
+        match self {
+            TypeValue::Value(c) => Some(c),
+            _ => None,
+        }
+    }
+
     pub fn refines_type(&self, ty: &Type) -> bool {
         self >= &Self::Type(ty.clone())
     }
@@ -54,6 +61,7 @@ impl std::fmt::Display for TypeValue {
     }
 }
 
+/// Boolean expression or its negation.
 #[derive(Debug)]
 pub enum Literal {
     Var(ExprId),
@@ -72,38 +80,19 @@ impl std::fmt::Display for Literal {
 #[derive(Debug)]
 pub enum Constraint {
     /// Expression x has the given type.
-    Type {
-        x: ExprId,
-        ty: Type,
-    },
+    Type { x: ExprId, ty: Type },
     /// Expressions have the same type.
-    Same {
-        x: ExprId,
-        y: ExprId,
-    },
+    Same { x: ExprId, y: ExprId },
     /// Expressions have the same type and value.
-    Identical {
-        x: ExprId,
-        y: ExprId,
-    },
+    Identical { x: ExprId, y: ExprId },
     /// Expression x is a bitvector with width given by the integer expression w.
-    WidthOf {
-        x: ExprId,
-        w: ExprId,
-    },
+    WidthOf { x: ExprId, w: ExprId },
     /// Expression x has known constant value v.
-    Value {
-        x: ExprId,
-        c: Const,
-    },
+    Value { x: ExprId, c: Const },
     /// Constraint conditioned on a boolean.
-    Implies {
-        c: ExprId,
-        then: Box<Constraint>,
-    },
-    Clause {
-        literals: Vec<Literal>,
-    },
+    Implies { c: ExprId, then: Box<Constraint> },
+    /// Clause is a disjunction that must hold.
+    Clause { literals: Vec<Literal> },
 }
 
 impl std::fmt::Display for Constraint {
@@ -382,15 +371,52 @@ impl Assignment {
         }
     }
 
-    pub fn assignment(&self, x: ExprId) -> anyhow::Result<&TypeValue> {
-        self.expr_type_value.get(&x).ok_or(anyhow::format_err!(
+    pub fn assignment(&self, x: ExprId) -> Option<&TypeValue> {
+        self.expr_type_value.get(&x)
+    }
+
+    pub fn try_assignment(&self, x: ExprId) -> anyhow::Result<&TypeValue> {
+        self.assignment(x).ok_or(anyhow::format_err!(
             "expression {x} missing assignment",
             x = x.index()
         ))
     }
 
+    pub fn value(&self, x: ExprId) -> Option<&Const> {
+        self.assignment(x)?.as_value()
+    }
+
+    pub fn try_value(&self, x: ExprId) -> anyhow::Result<&Const> {
+        self.value(x).ok_or(anyhow::format_err!(
+            "expression {x} should be a known value",
+            x = x.index()
+        ))
+    }
+
+    pub fn bool_value(&self, x: ExprId) -> Option<bool> {
+        self.value(x)?.as_bool()
+    }
+
+    pub fn int_value(&self, x: ExprId) -> Option<i128> {
+        self.value(x)?.as_int()
+    }
+
+    pub fn try_int_value(&self, x: ExprId) -> anyhow::Result<i128> {
+        self.int_value(x).ok_or(anyhow::format_err!(
+            "expression {x} should be a known integer value",
+            x = x.index()
+        ))
+    }
+
+    pub fn literal(&self, lit: &Literal) -> Option<bool> {
+        match *lit {
+            Literal::Var(x) => self.bool_value(x),
+            Literal::Not(x) => Some(!self.bool_value(x)?),
+        }
+    }
+
     fn expect_expr_type_refinement(&self, x: ExprId, base: &Type) -> anyhow::Result<()> {
-        let tv = self.assignment(x)?;
+        let tv = self.try_assignment(x)?;
         if !tv.refines_type(base) {
             anyhow::bail!("expected type {tv} to be refinement of {base}")
         }
@@ -398,8 +424,8 @@ impl Assignment {
     }
 
     fn expect_same(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
-        let tx = self.assignment(x)?.ty();
-        let ty = self.assignment(y)?.ty();
+        let tx = self.try_assignment(x)?.ty();
+        let ty = self.try_assignment(y)?.ty();
         if tx != ty {
             anyhow::bail!(
                 "expressions {x} and {y} should have same type: got {tx} and {ty}",
@@ -411,7 +437,7 @@ impl Assignment {
     }
 
     pub fn bit_vector_width(&self, x: ExprId) -> anyhow::Result<usize> {
-        let tyx = self.assignment(x)?.ty();
+        let tyx = self.try_assignment(x)?.ty();
         let Type::BitVector(Width::Bits(width)) = tyx else {
             anyhow::bail!(
                 "expression {x} should be a bit-vector of known width; got {tyx}",
@@ -431,30 +457,8 @@ impl Assignment {
         Ok(())
     }
 
-    pub fn value(&self, x: ExprId) -> anyhow::Result<&Const> {
-        let tvx = self.assignment(x)?;
-        let TypeValue::Value(c) = tvx else {
-            anyhow::bail!(
-                "expression {x} should be a known value; got {tvx}",
-                x = x.index()
-            );
-        };
-        Ok(c)
-    }
-
-    pub fn int_value(&self, x: ExprId) -> anyhow::Result<i128> {
-        let c = self.value(x)?;
-        let &Const::Int(v) = c else {
-            anyhow::bail!(
-                "expression {x} should be a known integer value; got {c}",
-                x = x.index()
-            );
-        };
-        Ok(v)
-    }
-
     fn expect_value(&self, x: ExprId, expect: &Const) -> anyhow::Result<()> {
-        let got = self.value(x)?;
+        let got = self.try_value(x)?;
         if got != expect {
             anyhow::bail!("expected value {expect}; got {got}");
         }
@@ -514,7 +518,7 @@ impl Solver {
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
             Constraint::Value { x, c } => self.set_value(*x, c.clone()),
             Constraint::Implies { c, then } => self.implies(*c, then),
-            ref c => todo!("solve constraint: {c:?}"),
+            Constraint::Clause { literals } => self.clause(literals),
         }
     }
 
@@ -596,6 +600,48 @@ impl Solver {
         } else {
             Ok(false)
         }
+    }
+
+    fn clause(&mut self, literals: &[Literal]) -> anyhow::Result<bool> {
+        // Check if we can propogate the value of a single unknown literal.
+        let mut unknown = None;
+        for literal in literals {
+            match (self.assignment.literal(literal), unknown) {
+                // One disjunction is known true. Can't deduce anything else.
+                (Some(true), _) => {
+                    return Ok(false);
+                }
+                // Known false: also deduce nothing.
+                (Some(false), _) => {
+                    continue;
+                }
+                // First unknown literal.
+                (None, None) => {
+                    unknown = Some(literal);
+                }
+                // More than one unknown literal: deduce nothing.
+                (None, Some(_)) => {
+                    return Ok(false);
+                }
+            }
+        }
+
+        // Assign true.
+        match unknown {
+            Some(lit) => self.set_literal(lit, true),
+            None => Ok(false),
+        }
+    }
+
+    fn set_literal(&mut self, lit: &Literal, b: bool) -> anyhow::Result<bool> {
+        match *lit {
+            Literal::Var(x) => self.set_bool_value(x, b),
+            Literal::Not(x) => self.set_bool_value(x, !b),
+        }
+    }
+
+    fn set_bool_value(&mut self, x: ExprId, b: bool) -> anyhow::Result<bool> {
+        self.set_value(x, Const::Bool(b))
     }
 
     fn set_int_value(&mut self, x: ExprId, v: i128) -> anyhow::Result<bool> {

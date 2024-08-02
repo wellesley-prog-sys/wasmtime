@@ -106,7 +106,7 @@ impl<'a> Solver<'a> {
 
     fn declare_expr(&mut self, x: ExprId) -> anyhow::Result<()> {
         // Determine expression type value.
-        let tv = self.assignment.assignment(x)?;
+        let tv = self.assignment.try_assignment(x)?;
 
         // Map to corresponding SMT2 type.
         let sort = self.type_to_sort(&tv.ty())?;
@@ -174,7 +174,7 @@ impl<'a> Solver<'a> {
         // Destination width expression should have known integer value.
         let dst: usize = self
             .assignment
-            .int_value(w)
+            .try_int_value(w)
             .context("destination width of zero_ext expression should have known integer value")?
             .try_into()
             .expect("width should be representable as usize");
@@ -196,7 +196,7 @@ impl<'a> Solver<'a> {
         // Destination width expression should have known integer value.
         let dst: usize = self
             .assignment
-            .int_value(w)
+            .try_int_value(w)
             .context("destination width of conv_to expression should have known integer value")?
             .try_into()
             .expect("width should be representable as usize");
