@@ -177,6 +177,7 @@ pub enum Expr {
     BVUlt(ExprId, ExprId),
 
     // Unary.
+    BVNot(ExprId),
     BVNeg(ExprId),
 
     // Binary.
@@ -218,7 +219,8 @@ impl Expr {
         match self {
             Self::Const(_) | Self::Variable(_) => Vec::new(),
             // Unary
-            &Self::BVNeg(x)
+            &Self::BVNot(x)
+            | &Self::BVNeg(x)
             | &Self::BVExtract(_, _, x)
             | &Self::Int2BV(_, x)
             | &Self::WidthOf(x) => vec![x],
@@ -259,6 +261,7 @@ impl std::fmt::Display for Expr {
             Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
             Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
             Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
+            Self::BVNot(x) => write!(f, "bvnot({})", x.index()),
             Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
             Self::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
@@ -950,6 +953,11 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
                 Ok(self.dedup_expr(Expr::BVUlt(x, y)))
+            }
+
+            spec::Expr::BVNot(x) => {
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::BVNot(x)))
             }
 
             spec::Expr::BVNeg(x) => {

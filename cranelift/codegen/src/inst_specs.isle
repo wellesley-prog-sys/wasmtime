@@ -43,3 +43,9 @@
 (instantiate band
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
+
+(spec (bnot x)
+    (provide (= result (bvnot x))))
+(instantiate bnot
+    ((args (bv 64)) (ret (bv 64)))
+)

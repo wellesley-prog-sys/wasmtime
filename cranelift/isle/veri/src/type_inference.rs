@@ -226,7 +226,7 @@ impl<'a> ConstraintsBuilder<'a> {
 
                 self.same_type(*y, *z);
             }
-            Expr::BVNeg(y) => {
+            Expr::BVNot(y) | Expr::BVNeg(y) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
 

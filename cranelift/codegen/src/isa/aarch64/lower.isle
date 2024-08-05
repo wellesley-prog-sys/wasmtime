@@ -1292,9 +1292,9 @@
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 1 (lower (has_type (fits_in_64 ty) (band x (bnot y))))
+(rule band_not_right 1 (lower (has_type (fits_in_64 ty) (band x (bnot y))))
       (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
-(rule 2 (lower (has_type (fits_in_64 ty) (band (bnot y) x)))
+(rule band_not_left 2 (lower (has_type (fits_in_64 ty) (band (bnot y) x)))
       (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
 
 (rule 3 (lower (has_type $I128 (band x (bnot y)))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))

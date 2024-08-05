@@ -112,7 +112,7 @@ pub enum Expr {
     ////      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
     // Unary operators
     BVNeg(Box<Expr>),
-    //BVNot(Box<Expr>),
+    BVNot(Box<Expr>),
     //CLZ(Box<Expr>),
     //A64CLZ(Box<Expr>, Box<Expr>),
     //CLS(Box<Expr>),
@@ -247,7 +247,7 @@ impl Expr {
             ast::SpecExpr::Op { op, args, pos } => match op {
                 // Unary
                 //SpecOp::Not => unop(|x| Expr::Not(x), args, pos, env),
-                //SpecOp::BVNot => unop(|x| Expr::BVNot(x), args, pos, env),
+                SpecOp::BVNot => unary_expr!(Expr::BVNot, args, pos),
                 SpecOp::BVNeg => unary_expr!(Expr::BVNeg, args, pos),
                 //SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
                 //SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),

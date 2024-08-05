@@ -35,6 +35,8 @@ rules=(
 
     # band
     band_fits_in_64
+    band_not_right
+    band_not_left
 )
 
 for rule in "${rules[@]}"; do

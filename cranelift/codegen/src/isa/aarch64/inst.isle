@@ -1018,12 +1018,17 @@
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                         (= rd (bvand rn rm))
             )
+            (=>
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvand rn (bvnot rm)))
+            )
       )
       (require
             (or
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
             )
       )
 )
@@ -1061,11 +1066,16 @@
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                         (= rd (bvand rn imml))
             )
+            (=>
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvand rn (bvnot imml)))
+            )
       )
       (require
             ; Implemented (opcode, size) combinations.
             (or
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
             )
             ; REVIEW(mbm): require properties for logical immediates?
       )
@@ -1137,12 +1147,29 @@
                               )
                         )
             )
+            (=>
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+                        (=
+                              rd
+                              (bvand
+                                    rn
+                                    (bvnot
+                                          (switch (extract 15 8 shiftop)
+                                                ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                                ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                                ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                          )
+                                    )
+                              )
+                        )
+            )
       )
       (require
             (or
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
             )
       )
 )
