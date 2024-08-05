@@ -21,7 +21,7 @@ struct Opts {
     output_dir: std::path::PathBuf,
 
     /// Whether to enable graph generation.
-    #[arg(long)]
+    #[arg(long, env = "ISLE_EXPLORER_GRAPHS")]
     graphs: bool,
 }
 

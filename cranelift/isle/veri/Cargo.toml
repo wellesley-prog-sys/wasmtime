@@ -9,5 +9,5 @@ cranelift-codegen-meta = { version = "*", path = "../../codegen/meta" }
 log = { workspace = true }
 env_logger = { workspace = true }
 anyhow = { workspace = true, features = ['std'] }
-clap = { workspace = true, features = ['default'] }
+clap = { workspace = true, features = ['default', 'env'] }
 easy-smt = "0.2"

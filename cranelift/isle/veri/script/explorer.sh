@@ -10,5 +10,4 @@ cargo run --bin explorer -- \
     --codegen-crate-dir ../../codegen/ \
     --work-dir /tmp \
     --name aarch64 \
-    --graphs \
     --output-dir "${output_dir}"
