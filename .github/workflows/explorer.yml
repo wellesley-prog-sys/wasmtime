@@ -29,6 +29,8 @@ jobs:
       - name: Build Explorer
         working-directory: cranelift/isle/veri
         run: ./script/explorer.sh
+        env:
+          ISLE_EXPLORER_GRAPHS: 'true'
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v2
         with:
