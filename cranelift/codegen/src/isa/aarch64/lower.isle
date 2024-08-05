@@ -87,7 +87,7 @@
       (if-let amt (lshl_from_imm64 ty k))
       (add_shift ty x y amt))
 
-(rule 6 (lower (has_type (fits_in_64 ty)
+(rule iadd_ishl_left 6 (lower (has_type (fits_in_64 ty)
                        (iadd (ishl x (iconst k)) y)))
       (if-let amt (lshl_from_imm64 ty k))
       (add_shift ty y x amt))
