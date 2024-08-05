@@ -32,6 +32,9 @@ rules=(
     isub_imm12_neg
     isub_ishl
     isub_imul
+
+    # band
+    band_fits_in_64
 )
 
 for rule in "${rules[@]}"; do

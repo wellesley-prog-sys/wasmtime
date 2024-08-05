@@ -1014,11 +1014,16 @@
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
                         (= rd (bvsub rn rm))
             )
+            (=>
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                        (= rd (bvand rn rm))
+            )
       )
       (require
             (or
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
             )
       )
 )
@@ -1046,6 +1051,23 @@
                   (= imm12 (bvand imm12 #x000fff))
                   (= imm12 (bvand imm12 #xfff000))
             )
+      )
+)
+
+(spec (MInst.AluRRImmLogic alu_op size rd rn imml)
+      (provide
+            (= result #b1)
+            (=>
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                        (= rd (bvand rn imml))
+            )
+      )
+      (require
+            ; Implemented (opcode, size) combinations.
+            (or
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+            )
+            ; REVIEW(mbm): require properties for logical immediates?
       )
 )
 
@@ -1078,6 +1100,7 @@
                               rd
                               (bvadd
                                     rn
+                                    ; TODO(mbm): extract common spec components with let-bindings or macros
                                     (switch (extract 15 8 shiftop)
                                           ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
                                           ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
@@ -1100,11 +1123,26 @@
                               )
                         )
             )
+            (=>
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                        (=
+                              rd
+                              (bvand
+                                    rn
+                                    (switch (extract 15 8 shiftop)
+                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                    )
+                              )
+                        )
+            )
       )
       (require
             (or
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
             )
       )
 )
@@ -1197,6 +1235,9 @@
 (type Imm12 (primitive Imm12))
 (model Imm12 (type (bv 24)))
 (type ImmLogic (primitive ImmLogic))
+; Note: ImmLogic values can be 32 or 64 bit.
+; QUESTION(mbm): do we want to support "polymorphic" models: (model ImmLogic (type (poly (bv 32) (bv 64))))
+(model ImmLogic (type (bv)))
 (type ImmShift (primitive ImmShift))
 (type ShiftOpAndAmt (primitive ShiftOpAndAmt))
 (model ShiftOpAndAmt (type (bv 16)))
@@ -1891,6 +1932,10 @@
 
 (decl pure partial imm_logic_from_imm64 (Type Imm64) ImmLogic)
 (extern constructor imm_logic_from_imm64 imm_logic_from_imm64)
+; REVIEW(mbm): actually specify the requirements of logical immediates?
+(spec (imm_logic_from_imm64 ty imm64)
+      (provide (= result imm64))
+      (require (or (= ty 32) (= ty 64))))
 
 (decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)

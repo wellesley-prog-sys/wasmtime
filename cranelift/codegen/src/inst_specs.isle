@@ -37,3 +37,9 @@
 (instantiate ishl
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
+
+(spec (band x y)
+    (provide (= result (bvand x y))))
+(instantiate band
+    ((args (bv 64) (bv 64)) (ret (bv 64)))
+)
