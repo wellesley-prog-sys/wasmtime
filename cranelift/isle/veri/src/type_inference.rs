@@ -234,6 +234,7 @@ impl<'a> ConstraintsBuilder<'a> {
             }
             Expr::BVAdd(y, z)
             | Expr::BVSub(y, z)
+            | Expr::BVMul(y, z)
             | Expr::BVAnd(y, z)
             | Expr::BVShl(y, z)
             | Expr::BVLShr(y, z)

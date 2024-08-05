@@ -6,6 +6,12 @@
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
 
+(spec (imul x y)
+    (provide (= result (bvmul x y))))
+(instantiate imul
+    ((args (bv 64) (bv 64)) (ret (bv 64)))
+)
+
 (spec (iconst arg)
     (provide (= arg (zero_ext 64 result))))
 (instantiate iconst

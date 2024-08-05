@@ -1037,6 +1037,19 @@
       )
 )
 
+(spec (MInst.AluRRRR alu_op size rd rn rm ra)
+      (provide
+            (= result #b1)
+            (=>
+                  (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
+                        (= rd (bvadd ra (bvmul rn rm)))
+            )
+      )
+      (require
+            (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
+      )
+)
+
 (spec (MInst.AluRRRShift alu_op size rd rn rm shiftop)
       (provide
             (= result #b1)
@@ -1128,6 +1141,15 @@
     ;; Signed-Multiply-add
     (SMAddL)
 ))
+
+(model ALUOp3
+      (enum (bv 8)
+            (MAdd       #x00)
+            (MSub       #x01)
+            (UMAddL     #x02)
+            (SMAddL     #x03)
+      )
+)
 
 (type MoveWideOp
   (enum

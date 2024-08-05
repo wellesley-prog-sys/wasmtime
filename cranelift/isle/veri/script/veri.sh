@@ -22,9 +22,11 @@ rules=(
     "iadd_imm12_neg_left"
     "iadd_ishl_right"
     "iadd_ishl_left"
+    "iadd_imul_right"
+    "iadd_imul_left"
 )
 
 for rule in "${rules[@]}"; do
     name="${arch}_${rule}"
-    veri --name "${arch}" --rule "${rule}" --smt2-replay-path "output/${name}.smt2" | tee "output/${name}.veri"
+    veri --name "${arch}" --rule "${rule}" --smt2-replay-path "output/${name}.smt2" --timeout 10 | tee "output/${name}.veri"
 done

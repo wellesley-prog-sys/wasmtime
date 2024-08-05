@@ -30,6 +30,10 @@ struct Opts {
     /// Path to SMT2 replay file.
     #[arg(long, required = true)]
     smt2_replay_path: std::path::PathBuf,
+
+    /// Per-query timeout, in seconds.
+    #[arg(long, default_value = "10")]
+    timeout: u32,
 }
 
 impl Opts {
@@ -86,7 +90,7 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         print_expansion(&prog, expansion);
-        verify_expansion(expansion, &prog, &opts.smt2_replay_path)?;
+        verify_expansion(expansion, &prog, &opts.smt2_replay_path, opts.timeout)?;
     }
 
     Ok(())
@@ -96,6 +100,7 @@ fn verify_expansion(
     expansion: &Expansion,
     prog: &Program,
     replay_path: &std::path::Path,
+    timeout_seconds: u32,
 ) -> anyhow::Result<()> {
     // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
@@ -120,7 +125,10 @@ fn verify_expansion(
     println!("solve:");
     let replay_file = std::fs::File::create(replay_path)?;
     let smt = easy_smt::ContextBuilder::new()
-        .solver("z3", ["-smt2", "-in"])
+        .solver(
+            "z3",
+            ["-smt2", "-in", &format!("-t:{}", timeout_seconds * 1000)],
+        )
         .replay_file(Some(replay_file))
         .build()?;
 

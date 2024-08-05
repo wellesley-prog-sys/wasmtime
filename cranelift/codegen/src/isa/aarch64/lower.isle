@@ -93,10 +93,10 @@
       (add_shift ty y x amt))
 
 ;; Fold an `iadd` and `imul` combination into a `madd` instruction.
-(rule 7 (lower (has_type (fits_in_64 ty) (iadd x (imul y z))))
+(rule iadd_imul_right 7 (lower (has_type (fits_in_64 ty) (iadd x (imul y z))))
       (madd ty y z x))
 
-(rule 6 (lower (has_type (fits_in_64 ty) (iadd (imul x y) z)))
+(rule iadd_imul_left 6 (lower (has_type (fits_in_64 ty) (iadd (imul x y) z)))
       (madd ty x y z))
 
 ;; Fold an `isub` and `imul` combination into a `msub` instruction.
