@@ -232,7 +232,12 @@ impl<'a> ConstraintsBuilder<'a> {
 
                 self.same_type(x, *y);
             }
-            Expr::BVAdd(y, z) | Expr::BVSub(y, z) | Expr::BVAnd(y, z) => {
+            Expr::BVAdd(y, z)
+            | Expr::BVSub(y, z)
+            | Expr::BVAnd(y, z)
+            | Expr::BVShl(y, z)
+            | Expr::BVLShr(y, z)
+            | Expr::BVAShr(y, z) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
@@ -257,6 +262,16 @@ impl<'a> ConstraintsBuilder<'a> {
                     .expect("high bit should not be less than low bit");
                 self.bit_vector_of_width(x, width);
                 self.bit_vector(*y);
+            }
+            Expr::BVConcat(y, z) => {
+                self.bit_vector(x);
+                self.bit_vector(*y);
+                self.bit_vector(*z);
+                // TODO(mbm): sum constraint for concat expression
+            }
+            Expr::Int2BV(w, y) => {
+                self.bit_vector_of_width(x, *w);
+                self.integer(*y);
             }
             Expr::WidthOf(y) => {
                 self.integer(x);

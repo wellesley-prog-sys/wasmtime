@@ -82,7 +82,7 @@
 
 ;; Special cases for when we're adding the shift of a different
 ;; register by a constant amount and the shift can get folded into the add.
-(rule 7 (lower (has_type (fits_in_64 ty)
+(rule iadd_ishl_right 7 (lower (has_type (fits_in_64 ty)
                        (iadd x (ishl y (iconst k)))))
       (if-let amt (lshl_from_imm64 ty k))
       (add_shift ty x y amt))

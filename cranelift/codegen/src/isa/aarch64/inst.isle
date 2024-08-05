@@ -1035,6 +1035,29 @@
       )
 )
 
+(spec (MInst.AluRRRShift alu_op size rd rn rm shiftop)
+      (provide
+            (= result #b1)
+            (=>
+                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+                        (=
+                              rd
+                              (bvadd
+                                    rn
+                                    (switch (extract 15 8 shiftop)
+                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                    )
+                              )
+                        )
+            )
+      )
+      (require
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+      )
+)
+
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
 (type ALUOp
@@ -1116,6 +1139,7 @@
 (type ImmLogic (primitive ImmLogic))
 (type ImmShift (primitive ImmShift))
 (type ShiftOpAndAmt (primitive ShiftOpAndAmt))
+(model ShiftOpAndAmt (type (bv 16)))
 (type MoveWideConst (primitive MoveWideConst))
 (type NZCV (primitive NZCV))
 (type ASIMDFPModImm (primitive ASIMDFPModImm))
@@ -1871,6 +1895,9 @@
 (extern constructor lshr_from_u64 lshr_from_u64)
 
 (decl pure partial lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
+(spec (lshl_from_imm64 ty imm)
+    (provide (= result (concat (ALUOp.Lsl) (extract 7 0 imm))))
+    (require (= (extract 63 8 imm) #x00000000000000)))
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 
 (decl pure partial lshl_from_u64 (Type u64) ShiftOpAndAmt)

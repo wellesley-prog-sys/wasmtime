@@ -148,6 +148,9 @@ impl<'a> Solver<'a> {
             Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVSub(x, y) => Ok(self.smt.bvsub(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVAnd(x, y) => Ok(self.smt.bvand(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVShl(x, y) => Ok(self.smt.bvshl(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVLShr(x, y) => Ok(self.smt.bvlshr(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVAShr(x, y) => Ok(self.smt.bvashr(self.expr_atom(x), self.expr_atom(y))),
             Expr::Conditional(c, t, e) => {
                 Ok(self
                     .smt
@@ -157,6 +160,8 @@ impl<'a> Solver<'a> {
             Expr::BVSignExt(w, x) => self.bv_sign_ext(w, x),
             Expr::BVConvTo(w, x) => self.bv_conv_to(w, x),
             Expr::BVExtract(h, l, x) => Ok(self.extend(h, l, self.expr_atom(x))),
+            Expr::BVConcat(x, y) => Ok(self.smt.concat(self.expr_atom(x), self.expr_atom(y))),
+            Expr::Int2BV(w, x) => Ok(self.int2bv(w, self.expr_atom(x))),
             Expr::WidthOf(x) => self.width_of(x),
             _ => todo!("expr to smt: {expr:?}"),
         }
@@ -299,6 +304,18 @@ impl<'a> Solver<'a> {
         assert!(low_bit <= high_bit);
         self.smt
             .extract(high_bit.try_into().unwrap(), low_bit.try_into().unwrap(), v)
+    }
+
+    /// Convert an SMT integer to a bit vector of a given width.
+    fn int2bv(&self, width: usize, value: SExpr) -> SExpr {
+        self.smt.list(vec![
+            self.smt.list(vec![
+                self.smt.atoms().und,
+                self.smt.atom("int2bv"),
+                self.smt.numeral(width),
+            ]),
+            value,
+        ])
     }
 
     fn all(&self, xs: &[ExprId]) -> SExpr {

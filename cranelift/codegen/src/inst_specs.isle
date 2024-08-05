@@ -11,3 +11,17 @@
 (instantiate iconst
     ((args (bv 64)) (ret (bv 64)))
 )
+
+(spec (ishl x y)
+    (provide
+        (= result
+            (bvshl
+                x
+                (bvand y (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) #x0000000000000001)))
+            )
+        )
+    )
+)
+(instantiate ishl
+    ((args (bv 64) (bv 64)) (ret (bv 64)))
+)

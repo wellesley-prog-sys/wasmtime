@@ -183,6 +183,9 @@ pub enum Expr {
     BVAdd(ExprId, ExprId),
     BVSub(ExprId, ExprId),
     BVAnd(ExprId, ExprId),
+    BVShl(ExprId, ExprId),
+    BVLShr(ExprId, ExprId),
+    BVAShr(ExprId, ExprId),
 
     // ITE
     Conditional(ExprId, ExprId, ExprId),
@@ -191,7 +194,15 @@ pub enum Expr {
     BVZeroExt(ExprId, ExprId),
     BVSignExt(ExprId, ExprId),
     BVConvTo(ExprId, ExprId),
+
+    // Extract specified bit range.
     BVExtract(usize, usize, ExprId),
+
+    // Concatenate bitvectors.
+    BVConcat(ExprId, ExprId),
+
+    // Integer conversion.
+    Int2BV(usize, ExprId),
 
     // Bitwidth.
     WidthOf(ExprId),
@@ -206,7 +217,10 @@ impl Expr {
         match self {
             Self::Const(_) | Self::Variable(_) => Vec::new(),
             // Unary
-            &Self::BVNeg(x) | &Self::BVExtract(_, _, x) | &Self::WidthOf(x) => vec![x],
+            &Self::BVNeg(x)
+            | &Self::BVExtract(_, _, x)
+            | &Self::Int2BV(_, x)
+            | &Self::WidthOf(x) => vec![x],
 
             // Binary
             &Self::And(x, y)
@@ -218,9 +232,13 @@ impl Expr {
             | &Self::BVAdd(x, y)
             | &Self::BVSub(x, y)
             | &Self::BVAnd(x, y)
+            | &Self::BVShl(x, y)
+            | &Self::BVLShr(x, y)
+            | &Self::BVAShr(x, y)
             | &Self::BVZeroExt(x, y)
             | &Self::BVSignExt(x, y)
-            | &Self::BVConvTo(x, y) => vec![x, y],
+            | &Self::BVConvTo(x, y)
+            | &Self::BVConcat(x, y) => vec![x, y],
 
             // Ternary
             &Self::Conditional(c, t, e) => vec![c, t, e],
@@ -243,6 +261,9 @@ impl std::fmt::Display for Expr {
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
             Self::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
             Self::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
+            Self::BVShl(x, y) => write!(f, "bvshl({}, {})", x.index(), y.index()),
+            Self::BVLShr(x, y) => write!(f, "bvlshr({}, {})", x.index(), y.index()),
+            Self::BVAShr(x, y) => write!(f, "bvashr({}, {})", x.index(), y.index()),
             Self::Conditional(c, t, e) => {
                 write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
             }
@@ -250,6 +271,8 @@ impl std::fmt::Display for Expr {
             Self::BVSignExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
             Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
             Self::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
+            Self::BVConcat(x, y) => write!(f, "bv_concat({}, {})", x.index(), y.index()),
+            Self::Int2BV(w, x) => write!(f, "int2bv({w}, {})", x.index()),
             Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
         }
     }
@@ -949,12 +972,32 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.dedup_expr(Expr::BVAnd(x, y)))
             }
 
+            spec::Expr::BVShl(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVShl(x, y)))
+            }
+
+            spec::Expr::BVLShr(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVLShr(x, y)))
+            }
+
+            spec::Expr::BVAShr(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVAShr(x, y)))
+            }
+
             spec::Expr::Conditional(c, t, e) => {
                 let c = self.spec_expr(c, vars)?;
                 let t = self.spec_expr(t, vars)?;
                 let e = self.spec_expr(e, vars)?;
                 Ok(self.dedup_expr(Expr::Conditional(c, t, e)))
             }
+
+            spec::Expr::Switch(on, arms) => self.spec_switch(on, arms, vars),
 
             spec::Expr::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?;
@@ -977,6 +1020,17 @@ impl<'a> ConditionsBuilder<'a> {
             spec::Expr::BVExtract(h, l, x) => {
                 let x = self.spec_expr(x, vars)?;
                 Ok(self.dedup_expr(Expr::BVExtract(*h, *l, x)))
+            }
+
+            spec::Expr::BVConcat(x, y) => {
+                let x = self.spec_expr(x, vars)?;
+                let y = self.spec_expr(y, vars)?;
+                Ok(self.dedup_expr(Expr::BVConcat(x, y)))
+            }
+
+            spec::Expr::Int2BV(w, x) => {
+                let x = self.spec_expr(x, vars)?;
+                Ok(self.dedup_expr(Expr::Int2BV(*w, x)))
             }
 
             spec::Expr::WidthOf(x) => {
@@ -1030,6 +1084,38 @@ impl<'a> ConditionsBuilder<'a> {
         self.spec_expr_no_vars(spec_value)
     }
 
+    fn spec_switch(
+        &mut self,
+        on: &spec::Expr,
+        arms: &[(spec::Expr, spec::Expr)],
+        vars: &HashMap<String, ExprId>,
+    ) -> anyhow::Result<ExprId> {
+        // Generate sub-expressions.
+        let on = self.spec_expr(on, vars)?;
+        let mut arms = arms
+            .iter()
+            .map(|(value, then)| {
+                let value = self.spec_expr(value, vars)?;
+                let cond = self.exprs_equal(on, value);
+                Ok((cond, self.spec_expr(then, vars)?))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        // Exhaustiveness: assert one condition must hold.
+        let conds = arms.iter().map(|(cond, _)| cond).copied().collect();
+        let exhaustive = self.any(conds);
+        self.conditions.assertions.push(exhaustive);
+
+        // Represent as nested conditionals.
+        //
+        // Note the condition of the last arm is not explicitly checked: we rely
+        // on the exhaustiveness assertion.
+        let (_, last) = arms.pop().expect("switch must have at least one arm");
+        Ok(arms.iter().rev().fold(last, |acc, (cond, then)| {
+            self.dedup_expr(Expr::Conditional(*cond, *then, acc))
+        }))
+    }
+
     fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {
         // TODO(mbm): can this be done without clones?
         let a = self.binding_value[&a].clone();
@@ -1070,6 +1156,13 @@ impl<'a> ConditionsBuilder<'a> {
             .into_iter()
             .reduce(|acc, e| self.dedup_expr(Expr::And(acc, e)))
             .unwrap_or_else(|| self.boolean(true))
+    }
+
+    fn any(&mut self, exprs: Vec<ExprId>) -> ExprId {
+        exprs
+            .into_iter()
+            .reduce(|acc, e| self.dedup_expr(Expr::Or(acc, e)))
+            .unwrap_or_else(|| self.boolean(false))
     }
 
     fn vars(&mut self, vs: &[VariableId]) -> Vec<ExprId> {

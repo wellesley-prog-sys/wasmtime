@@ -135,36 +135,35 @@ pub enum Expr {
     //BVXor(Box<Expr>, Box<Expr>),
     //BVRotl(Box<Expr>, Box<Expr>),
     //BVRotr(Box<Expr>, Box<Expr>),
-    //BVShl(Box<Expr>, Box<Expr>),
-    //BVShr(Box<Expr>, Box<Expr>),
-    //BVAShr(Box<Expr>, Box<Expr>),
+    BVShl(Box<Expr>, Box<Expr>),
+    BVLShr(Box<Expr>, Box<Expr>),
+    BVAShr(Box<Expr>, Box<Expr>),
 
     //// Includes type
     //BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
 
-    //// Conversions
+    // Conversions
     BVZeroExt(Box<Expr>, Box<Expr>),
     BVSignExt(Box<Expr>, Box<Expr>),
+    // Conversion to wider/narrower bits, without an explicit extend.
+    BVConvTo(Box<Expr>, Box<Expr>),
 
     // Extract specified bits
     BVExtract(usize, usize, Box<Expr>),
 
-    //// Concat two bitvectors
-    //BVConcat(Vec<Expr>),
+    // Concatenate bitvectors.
+    BVConcat(Box<Expr>, Box<Expr>),
 
-    //// Convert integer to bitvector
-    //BVIntToBv(usize, Box<Expr>),
+    // Convert integer to bitvector.
+    Int2BV(usize, Box<Expr>),
 
     //// Convert bitvector to integer
     //BVToInt(Box<Expr>),
 
-    // Conversion to wider/narrower bits, without an explicit extend.
-    BVConvTo(Box<Expr>, Box<Expr>),
-
     // Conditional if-then-else
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
-    //// Switch
-    //Switch(Box<Expr>, Vec<(Expr, Expr)>),
+    // Switch
+    Switch(Box<Expr>, Vec<(Expr, Expr)>),
 }
 
 macro_rules! unary_expr {
@@ -280,9 +279,9 @@ impl Expr {
                 //SpecOp::BVUrem => binop(|x, y| Expr::BVUrem(x, y), args, pos, env),
                 //SpecOp::BVSdiv => binop(|x, y| Expr::BVSDiv(x, y), args, pos, env),
                 //SpecOp::BVSrem => binop(|x, y| Expr::BVSrem(x, y), args, pos, env),
-                //SpecOp::BVShl => binop(|x, y| Expr::BVShl(x, y), args, pos, env),
-                //SpecOp::BVLshr => binop(|x, y| Expr::BVShr(x, y), args, pos, env),
-                //SpecOp::BVAshr => binop(|x, y| Expr::BVAShr(x, y), args, pos, env),
+                SpecOp::BVShl => binary_expr!(Expr::BVShl, args, pos),
+                SpecOp::BVLshr => binary_expr!(Expr::BVLShr, args, pos),
+                SpecOp::BVAshr => binary_expr!(Expr::BVAShr, args, pos),
                 //SpecOp::BVSaddo => binop(|x, y| Expr::BVSaddo(x, y), args, pos, env),
                 //SpecOp::BVUle => binop(|x, y| Expr::BVUlte(x, y), args, pos, env),
                 //SpecOp::BVUlt => binop(|x, y| Expr::BVUlt(x, y), args, pos, env),
@@ -298,12 +297,7 @@ impl Expr {
                 SpecOp::ZeroExt => binary_expr!(Expr::BVZeroExt, args, pos),
                 SpecOp::SignExt => binary_expr!(Expr::BVSignExt, args, pos),
                 SpecOp::ConvTo => binary_expr!(Expr::BVConvTo, args, pos),
-
-                // AVH TODO
-                //SpecOp::Concat => {
-                //    let cases: Vec<Expr> = args.iter().map(|a| spec_to_expr(a, env)).collect();
-                //    Expr::BVConcat(cases)
-                //}
+                SpecOp::Concat => variadic_binary_expr!(Expr::BVConcat, args, pos),
                 SpecOp::Extract => {
                     // TODO(mbm): return error instead of assert
                     assert_eq!(
@@ -318,18 +312,19 @@ impl Expr {
                         Box::new(Expr::from_ast(&args[2])),
                     )
                 }
-                //SpecOp::Int2BV => {
-                //    assert_eq!(
-                //        args.len(),
-                //        2,
-                //        "Unexpected number of args for Int2BV operator {:?}",
-                //        pos
-                //    );
-                //    Expr::BVIntToBv(
-                //        spec_to_usize(&args[0]).unwrap(),
-                //        Box::new(spec_to_expr(&args[1], env)),
-                //    )
-                //}
+                SpecOp::Int2BV => {
+                    // TODO(mbm): return error instead of assert
+                    assert_eq!(
+                        args.len(),
+                        2,
+                        "Unexpected number of args for int2bv operator at {:?}",
+                        pos
+                    );
+                    Expr::Int2BV(
+                        spec_expr_to_usize(&args[0]).unwrap(),
+                        Box::new(Expr::from_ast(&args[1])),
+                    )
+                }
                 //SpecOp::Subs => {
                 //    assert_eq!(
                 //        args.len(),
@@ -345,36 +340,35 @@ impl Expr {
                 //}
                 SpecOp::WidthOf => unary_expr!(Expr::WidthOf, args, pos),
                 SpecOp::If => ternary_expr!(Expr::Conditional, args, pos),
-                //SpecOp::Switch => {
-                //    assert!(
-                //        args.len() > 1,
-                //        "Unexpected number of args for switch operator {:?}",
-                //        pos
-                //    );
-                //    let swith_on = spec_to_expr(&args[0], env);
-                //    let arms: Vec<(Expr, Expr)> = args[1..]
-                //        .iter()
-                //        .map(|a| match a {
-                //            SpecExpr::Pair { l, r } => {
-                //                let l_expr = spec_to_expr(l, env);
-                //                let r_expr = spec_to_expr(r, env);
-                //                (l_expr, r_expr)
-                //            }
-                //            _ => unreachable!(),
-                //        })
-                //        .collect();
-                //    Expr::Switch(Box::new(swith_on), arms)
+                SpecOp::Switch => {
+                    assert!(
+                        args.len() > 1,
+                        "Unexpected number of args for switch operator {:?}",
+                        pos
+                    );
+                    let on = Expr::from_ast(&args[0]);
+                    let arms: Vec<(Expr, Expr)> = args[1..]
+                        .iter()
+                        .map(|p| match p {
+                            ast::SpecExpr::Pair { l, r, pos: _ } => {
+                                (Expr::from_ast(l), Expr::from_ast(r))
+                            }
+                            // TODO(mbm): error rather than panic for non-pair in switch, since it's not actually unreachable
+                            _ => unreachable!("switch expression arguments must be pairs"),
+                        })
+                        .collect();
+                    Expr::Switch(Box::new(on), arms)
+                }
                 _ => todo!("ast spec op: {op:?}"),
             },
-            /*
-            SpecExpr::Pair { l, r } => {
+            ast::SpecExpr::Pair { l, r, pos: _ } => {
+                // QUESTION(mbm): is there a cleaner way to handle switch statements without the pair type?
                 unreachable!(
-                    "pairs currently only parsed as part of Switch statements, {:?} {:?}",
+                    "pairs must only occur in switch expressions, {:?} {:?}",
                     l, r
                 )
-            }*/
+            }
             ast::SpecExpr::Enum { name, pos: _ } => Expr::Enum(name.clone()),
-            _ => todo!("ast spec expr: {expr:?}"),
         }
     }
 }
