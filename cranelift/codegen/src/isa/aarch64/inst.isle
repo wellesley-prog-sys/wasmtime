@@ -1044,9 +1044,16 @@
                   (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
                         (= rd (bvadd ra (bvmul rn rm)))
             )
+            (=>
+                  (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
+                        (= rd (bvsub ra (bvmul rn rm)))
+            )
       )
       (require
-            (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
+            (or
+                  (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
+            )
       )
 )
 

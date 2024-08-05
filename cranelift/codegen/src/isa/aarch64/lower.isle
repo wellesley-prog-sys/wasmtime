@@ -100,7 +100,7 @@
       (madd ty x y z))
 
 ;; Fold an `isub` and `imul` combination into a `msub` instruction.
-(rule (lower (has_type (fits_in_64 ty) (isub x (imul y z))))
+(rule isub_imul (lower (has_type (fits_in_64 ty) (isub x (imul y z))))
       (msub ty y z x))
 
 ;; vectors

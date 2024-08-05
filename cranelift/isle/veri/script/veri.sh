@@ -24,6 +24,7 @@ rules=(
     "iadd_ishl_left"
     "iadd_imul_right"
     "iadd_imul_left"
+    "isub_imul"
 )
 
 for rule in "${rules[@]}"; do

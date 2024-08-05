@@ -6,6 +6,12 @@
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
 
+(spec (isub x y)
+    (provide (= result (bvsub x y))))
+(instantiate isub
+    ((args (bv 64) (bv 64)) (ret (bv 64)))
+)
+
 (spec (imul x y)
     (provide (= result (bvmul x y))))
 (instantiate imul
