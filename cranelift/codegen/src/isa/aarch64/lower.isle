@@ -722,16 +722,16 @@
 ;; `i64` and smaller
 
 ;; Base case, simply subtracting things in registers.
-(rule -4 (lower (has_type (fits_in_64 ty) (isub x y)))
+(rule isub_base_case -4 (lower (has_type (fits_in_64 ty) (isub x y)))
       (sub ty x y))
 
 ;; Special case for when one operand is an immediate that fits in 12 bits.
-(rule 0 (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
+(rule isub_imm12 0 (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
       (sub_imm ty x y))
 
 ;; Same as the previous special case, except we can switch the subtraction to an
 ;; addition if the negated immediate fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (isub x y)))
+(rule isub_imm12_neg 2 (lower (has_type (fits_in_64 ty) (isub x y)))
       (if-let imm12_neg (imm12_from_negated_value y))
       (add_imm ty x imm12_neg))
 
@@ -742,7 +742,7 @@
 
 ;; Finally a special case for when we're subtracting the shift of a different
 ;; register by a constant amount and the shift can get folded into the sub.
-(rule -3 (lower (has_type (fits_in_64 ty)
+(rule isub_ishl -3 (lower (has_type (fits_in_64 ty)
                        (isub x (ishl y (iconst k)))))
       (if-let amt (lshl_from_imm64 ty k))
       (sub_shift ty x y amt))

@@ -15,16 +15,23 @@ rm -f output/*.{veri,smt2}
 # Verify some rules.
 arch="aarch64"
 rules=(
-    "iadd_base_case"
-    "iadd_imm12_right"
-    "iadd_imm12_left"
-    "iadd_imm12_neg_right"
-    "iadd_imm12_neg_left"
-    "iadd_ishl_right"
-    "iadd_ishl_left"
-    "iadd_imul_right"
-    "iadd_imul_left"
-    "isub_imul"
+    # iadd
+    iadd_base_case
+    iadd_imm12_right
+    iadd_imm12_left
+    iadd_imm12_neg_right
+    iadd_imm12_neg_left
+    iadd_ishl_right
+    iadd_ishl_left
+    iadd_imul_right
+    iadd_imul_left
+
+    # isub
+    isub_base_case
+    isub_imm12
+    isub_imm12_neg
+    isub_ishl
+    isub_imul
 )
 
 for rule in "${rules[@]}"; do
