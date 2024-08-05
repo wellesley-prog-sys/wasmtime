@@ -256,7 +256,7 @@ pub enum ModelValue {
     /// Correspond to ISLE types
     TypeValue(ModelType),
     /// Correspond to ISLE enums, identifier is the enum variant name
-    EnumValues(Vec<(Ident, SpecExpr)>),
+    EnumValues(ModelType, Vec<(Ident, SpecExpr)>),
     /// Corresponds to ISLE external constants.
     ConstValue(SpecExpr),
 }

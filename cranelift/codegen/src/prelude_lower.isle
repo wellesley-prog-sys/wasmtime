@@ -5,15 +5,18 @@
 
 ;; `cranelift-entity`-based identifiers.
 (type Inst (primitive Inst))
+(model Inst (type (bv)))
 
 ;; ISLE representation of `Vec<u8>`
 (type VecMask extern (enum))
 
 (type ValueRegs (primitive ValueRegs))
+(model ValueRegs (type (bv)))
 (type WritableValueRegs (primitive WritableValueRegs))
 
 ;; Instruction lowering result: a vector of `ValueRegs`.
 (type InstOutput (primitive InstOutput))
+(model InstOutput (type (bv)))
 ;; (Mutable) builder to incrementally construct an `InstOutput`.
 (type InstOutputBuilder extern (enum))
 
@@ -30,7 +33,9 @@
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Reg (primitive Reg))
+(model Reg (type (bv)))
 (type WritableReg (primitive WritableReg))
+(model WritableReg (type (bv)))
 (type OptionWritableReg (primitive OptionWritableReg))
 (type VecReg extern (enum))
 (type VecWritableReg extern (enum))

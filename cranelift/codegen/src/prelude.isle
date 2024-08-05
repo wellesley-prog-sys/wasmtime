@@ -8,6 +8,8 @@
 
 ;; `()`
 (type Unit (primitive Unit))
+; TODO(mbm): support unit model
+(model Unit (type (bv 1)))
 
 (decl pure unit () Unit)
 (extern constructor unit unit)
@@ -20,6 +22,7 @@
 (type u16 (primitive u16))
 (type u32 (primitive u32))
 (type u64 (primitive u64))
+(model u64 (type (bv 64)))
 (type u128 (primitive u128))
 (type usize (primitive usize))
 
@@ -33,7 +36,9 @@
 
 ;; `cranelift-entity`-based identifiers.
 (type Type (primitive Type))
+(model Type (type Int))
 (type Value (primitive Value))
+(model Value (type (bv)))
 (type ValueList (primitive ValueList))
 (type BlockCall (primitive BlockCall))
 

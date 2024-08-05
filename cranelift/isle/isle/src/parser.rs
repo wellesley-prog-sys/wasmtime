@@ -539,9 +539,11 @@ impl<'a> Parser<'a> {
         let name = self.parse_ident()?;
         self.expect_lparen()?; // body
         let val = if self.eat_sym_str("type")? {
-            let ty = self.parse_model_type();
-            ModelValue::TypeValue(ty?)
+            let ty = self.parse_model_type()?;
+            ModelValue::TypeValue(ty)
         } else if self.eat_sym_str("enum")? {
+            let ty = self.parse_model_type()?;
+
             let mut variants = vec![];
             let mut has_explicit_value = false;
             let mut implicit_idx = None;
@@ -583,7 +585,7 @@ impl<'a> Parser<'a> {
                 self.expect_rparen()?;
                 variants.push((name, val));
             }
-            ModelValue::EnumValues(variants)
+            ModelValue::EnumValues(ty, variants)
         } else if self.eat_sym_str("const")? {
             let val = self.parse_spec_expr()?;
             ModelValue::ConstValue(val)

@@ -1001,6 +1001,8 @@
                        (end Reg)
                        (step Imm12))))
 
+(model MInst (type (bv 1)))
+
 (spec (MInst.AluRRR alu_op size rd rn rm)
       (provide
             (= result #b1)
@@ -1097,7 +1099,7 @@
     (SbcS)
 ))
 
-(model ALUOp (enum
+(model ALUOp (enum (bv 8)
       (Add #x00) ;; 0
       (Sub #x01)
       (Orr #x02)
@@ -1287,6 +1289,7 @@
         (SlotOffset
          (off i64))))
 
+
 ;; A memory argument to a load/store-pair.
 (type PairAMode (enum
   ;; Signed, scaled 7-bit offset from a register.
@@ -1309,7 +1312,8 @@
             Size64))
 
 (model OperandSize
-      (enum (Size32 32)
+      (enum Int
+            (Size32 32)
             (Size64 64)))
 
 (type TestBitAndBranchKind (enum (Z) (NZ)))

@@ -459,12 +459,7 @@ impl SpecEnv {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
                     ast::ModelValue::TypeValue(model_type) => {
-                        // TODO(mbm): error on missing type rather than panic
-                        let type_id = tyenv
-                            .get_type_by_name(name)
-                            .expect("type name should be defined");
-                        self.type_model
-                            .insert(type_id, Type::from_model(model_type));
+                        self.set_model_type(name, model_type, tyenv);
                     }
                     ast::ModelValue::ConstValue(val) => {
                         // TODO(mbm): error on missing constant name rather than panic
@@ -473,7 +468,9 @@ impl SpecEnv {
                         // TODO(mbm): ensure the type of the expression matches the type of the
                         self.const_value.insert(sym, Expr::from_ast(val));
                     }
-                    ast::ModelValue::EnumValues(vals) => {
+                    ast::ModelValue::EnumValues(model_type, vals) => {
+                        self.set_model_type(name, model_type, tyenv);
+
                         // TODO(mbm): validate enum variants against the type definition
                         // TODO(mbm): ensure the enum doesn't have non-unit variants
                         // TODO(mbm): enforce that the enum values are distinct
@@ -503,6 +500,15 @@ impl SpecEnv {
                 }
             }
         }
+    }
+
+    fn set_model_type(&mut self, name: &Ident, model_type: &ModelType, tyenv: &TypeEnv) {
+        // TODO(mbm): error on missing type rather than panic
+        let type_id = tyenv
+            .get_type_by_name(name)
+            .expect("type name should be defined");
+        self.type_model
+            .insert(type_id, Type::from_model(model_type));
     }
 
     fn collect_instantiations(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {

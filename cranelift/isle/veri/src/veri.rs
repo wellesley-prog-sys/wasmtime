@@ -1199,14 +1199,16 @@ impl<'a> ConditionsBuilder<'a> {
     ) -> anyhow::Result<Value> {
         match binding_type {
             BindingType::Base(type_id) => {
-                // TODO(mbm): how to handle missing type models? use unknown default or error?
+                let type_name = self.prog.type_name(*type_id);
                 let ty = self
                     .prog
                     .specenv
                     .type_model
                     .get(type_id)
                     .map(Type::from_spec)
-                    .unwrap_or(Type::Unknown);
+                    .ok_or(anyhow::format_err!(
+                        "unspecified model for type {type_name}"
+                    ))?;
                 Ok(Value::Var(self.alloc_variable(ty, name)))
             }
             BindingType::Option(inner_type) => {
