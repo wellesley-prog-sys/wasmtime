@@ -8,7 +8,7 @@ use crate::{
     veri::{Conditions, Const, Expr, ExprId, Type, Width},
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Verdict {
     Success,
     Failure,
