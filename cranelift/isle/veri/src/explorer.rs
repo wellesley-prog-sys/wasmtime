@@ -536,7 +536,7 @@ impl<'a> ExplorerWriter<'a> {
         let mut output = self.create(&self.expansion_graph_dot_path(id))?;
 
         // Header.
-        writeln!(&mut output, "graph {{")?;
+        writeln!(&mut output, "digraph {{")?;
         writeln!(&mut output, "\tnode [shape=box, fontname=monospace];")?;
 
         // Binding nodes.
@@ -556,7 +556,7 @@ impl<'a> ExplorerWriter<'a> {
         for (i, binding) in expansion.bindings.iter().enumerate() {
             if let Some(binding) = binding {
                 for source in binding.sources() {
-                    writeln!(&mut output, "\tb{i} -- b{j};", j = source.index())?;
+                    writeln!(&mut output, "\tb{i} -> b{j};", j = source.index())?;
                 }
             }
         }
