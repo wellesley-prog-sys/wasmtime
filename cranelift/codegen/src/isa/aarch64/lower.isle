@@ -109,7 +109,7 @@
       (add_vec x y (vector_size ty)))
 
 ;; `i128`
-(rule iadd_i128 -3 (lower (has_type $I128 (iadd x y)))
+(rule -3 (lower (has_type $I128 (iadd x y)))
       (let
           ;; Get the high/low registers for `x`.
           ((x_regs ValueRegs x)

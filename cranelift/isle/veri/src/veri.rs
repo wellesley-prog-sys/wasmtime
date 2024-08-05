@@ -1127,6 +1127,10 @@ impl<'a> ConditionsBuilder<'a> {
         //
         // Note the condition of the last arm is not explicitly checked: we rely
         // on the exhaustiveness assertion.
+        //
+        // QUESTION(mbm): is it correct to always assert the exchaustiveness
+        // condition? Or should it be treated as a requires, which is asserted
+        // or assumed depending on which side it appears on?
         let (_, last) = arms.pop().expect("switch must have at least one arm");
         Ok(arms.iter().rev().fold(last, |acc, (cond, then)| {
             self.dedup_expr(Expr::Conditional(*cond, *then, acc))

@@ -23,10 +23,6 @@ struct Opts {
     #[arg(long, required = true)]
     work_dir: std::path::PathBuf,
 
-    /// Filter to expansions involving this rule.
-    #[arg(long, required = true)]
-    rule: String,
-
     /// Path to SMT2 replay file.
     #[arg(long, required = true)]
     smt2_replay_path: std::path::PathBuf,
@@ -65,14 +61,6 @@ fn main() -> anyhow::Result<()> {
     let expand_internal_extractors = false;
     let prog = Program::from_files(&inputs, expand_internal_extractors)?;
 
-    // Lookup target rule.
-    let rule = prog
-        .get_rule_by_identifier(&opts.rule)
-        .ok_or(anyhow::format_err!(
-            "unknown rule: {rule_name}",
-            rule_name = opts.rule
-        ))?;
-
     // Generate expansions.
     // TODO(mbm): don't hardcode the expansion configuration
     let root_term = "lower";
@@ -86,7 +74,7 @@ fn main() -> anyhow::Result<()> {
     let expansions = expansions_builder.expansions()?;
     println!("expansions = {}", expansions.len());
     for expansion in &expansions {
-        if !expansion.rules.contains(&rule.id) {
+        if !should_verify(expansion, &prog) {
             continue;
         }
         print_expansion(&prog, expansion);
@@ -94,6 +82,17 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Heuristic to select which expansions we attempt verification for.
+/// Specifically, verify all expansions where the first rule is named.
+fn should_verify(expansion: &Expansion, prog: &Program) -> bool {
+    let rule_id = expansion
+        .rules
+        .first()
+        .expect("expansion should have at least one rule");
+    let rule = prog.rule(*rule_id);
+    rule.name.is_some()
 }
 
 fn verify_expansion(
