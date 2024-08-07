@@ -4,7 +4,7 @@ use cranelift_isle_veri::{
     debug::print_expansion,
     expand::{Expansion, ExpansionsBuilder},
     program::Program,
-    solver::{Solver, Verdict},
+    solver::Solver,
     type_inference::{self, type_constraints},
     veri::Conditions,
 };
@@ -135,12 +135,12 @@ fn verify_expansion(
     solver.encode()?;
     let applicable = solver.check_assumptions_feasibility()?;
     println!("applicable = {applicable}");
-    if applicable != Verdict::Success {
+    if applicable.failed() {
         anyhow::bail!("inapplicable rule");
     }
     let verified = solver.check_verification_condition()?;
     println!("verified = {verified}");
-    if verified == Verdict::Failure {
+    if verified.failed() {
         anyhow::bail!("not verified");
     }
 

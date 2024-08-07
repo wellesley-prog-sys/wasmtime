@@ -1,45 +1,39 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap, iter::zip};
 
 use anyhow::Context as _;
-use easy_smt::{Context, Response, SExpr};
+use easy_smt::{Context, Response, SExpr, SExprData};
 
 use crate::{
     type_inference::Assignment,
     veri::{Conditions, Const, Expr, ExprId, Type, Width},
 };
 
+type Model = HashMap<ExprId, Const>;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Verdict {
+    Applicable,
+    Inapplicable,
     Success,
-    Failure,
+    Failure(Model),
     Unknown,
-}
-
-impl Verdict {
-    fn from_response_expect_sat(response: Response) -> Self {
-        match response {
-            Response::Sat => Self::Success,
-            Response::Unsat => Self::Failure,
-            Response::Unknown => Self::Unknown,
-        }
-    }
-
-    fn from_response_expect_unsat(response: Response) -> Self {
-        match response {
-            Response::Sat => Self::Failure,
-            Response::Unsat => Self::Success,
-            Response::Unknown => Self::Unknown,
-        }
-    }
 }
 
 impl std::fmt::Display for Verdict {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.write_str(match self {
+            Self::Applicable => "applicable",
+            Self::Inapplicable => "inapplicable",
             Self::Success => "success",
-            Self::Failure => "failure",
+            Self::Failure(_) => "failure",
             Self::Unknown => "unknown",
         })
+    }
+}
+
+impl Verdict {
+    pub fn failed(&self) -> bool {
+        matches!(self, Verdict::Inapplicable | Verdict::Failure(_))
     }
 }
 
@@ -80,12 +74,16 @@ impl<'a> Solver<'a> {
         self.smt.assert(assumptions)?;
 
         // Check
-        let response = self.smt.check()?;
+        let verdict = match self.smt.check()? {
+            Response::Sat => Verdict::Applicable,
+            Response::Unsat => Verdict::Inapplicable,
+            Response::Unknown => Verdict::Unknown,
+        };
 
         // Leave solver context frame.
         self.smt.pop()?;
 
-        Ok(Verdict::from_response_expect_sat(response))
+        Ok(verdict)
     }
 
     pub fn check_verification_condition(&mut self) -> anyhow::Result<Verdict> {
@@ -96,12 +94,27 @@ impl<'a> Solver<'a> {
         self.verification_condition()?;
 
         // Check
-        let response = self.smt.check()?;
+        let verdict = match self.smt.check()? {
+            Response::Sat => Verdict::Failure(self.model()?),
+            Response::Unsat => Verdict::Success,
+            Response::Unknown => Verdict::Unknown,
+        };
 
         // Leave solver context frame.
         self.smt.pop()?;
 
-        Ok(Verdict::from_response_expect_unsat(response))
+        Ok(verdict)
+    }
+
+    pub fn model(&mut self) -> anyhow::Result<Model> {
+        let xs: Vec<_> = (0..self.conditions.exprs.len()).map(ExprId).collect();
+        let expr_atoms = xs.iter().map(|x| self.expr_atom(*x)).collect();
+        let values = self.smt.get_value(expr_atoms)?;
+        let consts = values
+            .iter()
+            .map(|(_, ref v)| self.const_from_sexpr(v))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(zip(xs, consts).collect())
     }
 
     fn declare_expr(&mut self, x: ExprId) -> anyhow::Result<()> {
@@ -318,6 +331,26 @@ impl<'a> Solver<'a> {
             ]),
             value,
         ])
+    }
+
+    /// Parse a constant SMT literal.
+    fn const_from_sexpr(&self, sexpr: &SExpr) -> anyhow::Result<Const> {
+        let atom = match self.smt.get(*sexpr) {
+            SExprData::Atom(a) => a,
+            SExprData::List(_) => anyhow::bail!("non-atomic smt expression is not a constant"),
+        };
+
+        if atom == "true" {
+            Ok(Const::Bool(true))
+        } else if atom == "false" {
+            Ok(Const::Bool(false))
+        } else if let Some(x) = atom.strip_prefix("#x") {
+            Ok(Const::BitVector(x.len() * 4, i128::from_str_radix(x, 16)?))
+        } else if let Some(x) = atom.strip_prefix("#b") {
+            Ok(Const::BitVector(x.len(), i128::from_str_radix(x, 2)?))
+        } else {
+            todo!("unrecognized constant: {atom}")
+        }
     }
 
     fn all(&self, xs: &[ExprId]) -> SExpr {
