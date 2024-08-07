@@ -10,6 +10,7 @@ use crate::{
 
 type Model = HashMap<ExprId, Const>;
 
+/// QUESTION(mbm): one verdict type or separate for applicability and verification results?
 #[derive(Debug, PartialEq, Eq)]
 pub enum Verdict {
     Applicable,
