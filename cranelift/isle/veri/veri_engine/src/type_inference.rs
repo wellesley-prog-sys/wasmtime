@@ -1907,9 +1907,6 @@ fn solve_constraints(
     };
 
     iterate();
-    iterate();
-    iterate();
-    iterate();
 
     let mut result = HashMap::new();
     let mut bv_unknown_width_sets = HashMap::new();
