@@ -425,21 +425,21 @@ impl Conditions {
 
 #[derive(Clone, Debug)]
 struct OptionValue {
-    some: VariableId,
+    some: ExprId,
     inner: Box<Value>,
 }
 
 #[derive(Clone, Debug)]
 enum Value {
-    Var(VariableId),
+    Expr(ExprId),
     Option(OptionValue),
     Tuple(Vec<Value>),
 }
 
 impl Value {
-    fn as_var(&self) -> Option<VariableId> {
+    fn as_expr(&self) -> Option<ExprId> {
         match self {
-            Self::Var(v) => Some(*v),
+            Self::Expr(x) => Some(*x),
             _ => None,
         }
     }
@@ -473,7 +473,7 @@ enum Invocation {
 
 enum Domain {
     Total,
-    Partial(VariableId),
+    Partial(ExprId),
 }
 
 impl Domain {
@@ -607,14 +607,13 @@ impl<'a> ConditionsBuilder<'a> {
         // Construct value of the determined type.
         let value = self.spec_typed_value(val, ty)?;
 
-        // Destination binding should be a variable.
-        let v = self.binding_value[&id]
-            .as_var()
-            .expect("destination of const_int binding should be a variable");
+        // Destination binding should be a base expression.
+        let x = self.binding_value[&id]
+            .as_expr()
+            .expect("destination of const_int binding should be an expression");
 
-        // Assumption: variable equals constant value.
-        let v = self.var(v);
-        let eq = self.exprs_equal(v, value);
+        // Assumption: expression equals constant value.
+        let eq = self.exprs_equal(x, value);
         self.conditions.assumptions.push(eq);
 
         Ok(())
@@ -633,14 +632,13 @@ impl<'a> ConditionsBuilder<'a> {
             ))?;
         let value = self.spec_expr_no_vars(spec_value)?;
 
-        // Destination binding should be a variable.
-        let v = self.binding_value[&id]
-            .as_var()
-            .expect("destination of const_prim binding should be a variable");
+        // Destination binding should be a base expression.
+        let x = self.binding_value[&id]
+            .as_expr()
+            .expect("destination of const_prim binding should be an expression");
 
-        // Assumption: variable equals constant value.
-        let v = self.var(v);
-        let eq = self.exprs_equal(v, value);
+        // Assumption: expression equals constant value.
+        let eq = self.exprs_equal(x, value);
         self.conditions.assumptions.push(eq);
 
         Ok(())
@@ -659,15 +657,17 @@ impl<'a> ConditionsBuilder<'a> {
 
         let mut args = Vec::new();
         for ret in rets {
-            let v = ret.as_var().expect("extractor return should be a variable");
-            args.push(v);
+            let x = ret
+                .as_expr()
+                .expect("extractor return should be an expression");
+            args.push(x);
         }
 
         // Result maps to the parameter of an extractor.
         let result = self.binding_value[&parameter]
-            .as_var()
+            .as_expr()
             .ok_or(anyhow::format_err!(
-                "extractor parameter must be a variable"
+                "extractor parameter must be an expression"
             ))?;
 
         // Call extractor.
@@ -684,20 +684,20 @@ impl<'a> ConditionsBuilder<'a> {
         // Arguments.
         let mut args = Vec::new();
         for parameter_binding_id in parameters {
-            let v = self
+            let x = self
                 .binding_value
                 .get(parameter_binding_id)
                 .expect("parameter binding should be defined")
-                .as_var()
-                .expect("constructor parameter should be a variable");
-            args.push(v);
+                .as_expr()
+                .expect("constructor parameter should be an expression");
+            args.push(x);
         }
 
         // Return value.
         let (domain, result) = Domain::from_return_value(&self.binding_value[&id]);
         let result = result
-            .as_var()
-            .expect("constructor return should be a variable");
+            .as_expr()
+            .expect("constructor return should be an expression");
 
         // Call constructor.
         self.call(term, &args, result, invocation, domain)
@@ -706,8 +706,8 @@ impl<'a> ConditionsBuilder<'a> {
     fn call(
         &mut self,
         term: TermId,
-        args: &[VariableId],
-        ret: VariableId,
+        args: &[ExprId],
+        ret: ExprId,
         invocation: Invocation,
         domain: Domain,
     ) -> anyhow::Result<()> {
@@ -720,9 +720,6 @@ impl<'a> ConditionsBuilder<'a> {
             .get(&term)
             .ok_or(anyhow::format_err!("no spec for term {term_name}",))?;
 
-        let args = self.vars(args);
-        let ret = self.var(ret);
-
         // Assignment of signature variables to expressions.
         let mut vars = HashMap::new();
 
@@ -730,7 +727,7 @@ impl<'a> ConditionsBuilder<'a> {
         if term_spec.args.len() != args.len() {
             anyhow::bail!("incorrect number of arguments for term {term_name}");
         }
-        for (name, arg) in zip(&term_spec.args, &args) {
+        for (name, arg) in zip(&term_spec.args, args) {
             vars.insert(name.0.clone(), *arg);
         }
 
@@ -754,9 +751,8 @@ impl<'a> ConditionsBuilder<'a> {
         // Partial function.
         // REVIEW(mbm): pin down semantics for partial function specifications.
         if let Domain::Partial(p) = domain {
-            let in_domain = self.var(p);
             let all_requires = self.all(requires.clone());
-            let eq = self.exprs_equal(in_domain, all_requires);
+            let eq = self.exprs_equal(p, all_requires);
             self.conditions.assumptions.push(eq);
         }
 
@@ -785,7 +781,7 @@ impl<'a> ConditionsBuilder<'a> {
             .collect();
         self.conditions.calls.push(Call {
             term,
-            args,
+            args: args.to_vec(),
             ret,
             signatures,
         });
@@ -823,8 +819,7 @@ impl<'a> ConditionsBuilder<'a> {
         let inner = self.binding_value[&inner].clone();
 
         // Assumption: option is Some.
-        let some = self.var(opt.some);
-        self.conditions.assumptions.push(some);
+        self.conditions.assumptions.push(opt.some);
 
         // Assumption: option value is equal to this binding.
         let eq = self.values_equal(&inner, &opt.inner);
@@ -845,9 +840,8 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Assumption: if the option is some, then the inner value
         // equals this binding.
-        let some = self.var(opt.some);
         let eq = self.values_equal(&v, &opt.inner);
-        let constraint = self.dedup_expr(Expr::Imp(some, eq));
+        let constraint = self.dedup_expr(Expr::Imp(opt.some, eq));
         self.conditions.assumptions.push(constraint);
 
         Ok(())
@@ -894,8 +888,7 @@ impl<'a> ConditionsBuilder<'a> {
             .clone();
 
         // Assumption: option is Some.
-        let some = self.var(opt.some);
-        self.conditions.assumptions.push(some);
+        self.conditions.assumptions.push(opt.some);
 
         Ok(())
     }
@@ -1146,7 +1139,7 @@ impl<'a> ConditionsBuilder<'a> {
 
     fn values_equal(&mut self, a: &Value, b: &Value) -> ExprId {
         match (a, b) {
-            (Value::Var(u), Value::Var(v)) => self.variables_equal(*u, *v),
+            (Value::Expr(u), Value::Expr(v)) => self.exprs_equal(*u, *v),
 
             (Value::Tuple(us), Value::Tuple(vs)) => {
                 // Field-wise equality.
@@ -1160,12 +1153,6 @@ impl<'a> ConditionsBuilder<'a> {
 
             _ => todo!("values equal: {a:?} == {b:?}"),
         }
-    }
-
-    fn variables_equal(&mut self, u: VariableId, v: VariableId) -> ExprId {
-        let u = self.var(u);
-        let v = self.var(v);
-        self.exprs_equal(u, v)
     }
 
     fn exprs_equal(&mut self, lhs: ExprId, rhs: ExprId) -> ExprId {
@@ -1184,14 +1171,6 @@ impl<'a> ConditionsBuilder<'a> {
             .into_iter()
             .reduce(|acc, e| self.dedup_expr(Expr::Or(acc, e)))
             .unwrap_or_else(|| self.boolean(false))
-    }
-
-    fn vars(&mut self, vs: &[VariableId]) -> Vec<ExprId> {
-        vs.iter().map(|v| self.var(*v)).collect()
-    }
-
-    fn var(&mut self, v: VariableId) -> ExprId {
-        self.dedup_expr(Expr::Variable(v))
     }
 
     fn boolean(&mut self, value: bool) -> ExprId {
@@ -1230,7 +1209,7 @@ impl<'a> ConditionsBuilder<'a> {
                     .ok_or(anyhow::format_err!(
                         "unspecified model for type {type_name}"
                     ))?;
-                Ok(Value::Var(self.alloc_variable(ty, name)))
+                Ok(Value::Expr(self.alloc_variable(ty, name)))
             }
             BindingType::Option(inner_type) => {
                 let some = self.alloc_variable(Type::Bool, Variable::component_name(&name, "some"));
@@ -1255,10 +1234,10 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
-    fn alloc_variable(&mut self, ty: Type, name: String) -> VariableId {
-        let id = self.conditions.variables.len();
+    fn alloc_variable(&mut self, ty: Type, name: String) -> ExprId {
+        let v = VariableId(self.conditions.variables.len());
         self.conditions.variables.push(Variable { ty, name });
-        VariableId(id)
+        self.dedup_expr(Expr::Variable(v))
     }
 
     fn dedup_expr(&mut self, expr: Expr) -> ExprId {
