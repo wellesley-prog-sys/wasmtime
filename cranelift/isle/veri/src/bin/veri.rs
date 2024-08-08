@@ -4,7 +4,7 @@ use cranelift_isle_veri::{
     debug::print_expansion,
     expand::{Expansion, ExpansionsBuilder},
     program::Program,
-    solver::Solver,
+    solver::{Applicability, Solver, Verification},
     type_inference::{self, type_constraints},
     veri::Conditions,
 };
@@ -133,16 +133,25 @@ fn verify_expansion(
 
     let mut solver = Solver::new(smt, &conditions, &assignment);
     solver.encode()?;
-    let applicable = solver.check_assumptions_feasibility()?;
-    println!("applicable = {applicable}");
-    if applicable.failed() {
-        anyhow::bail!("inapplicable rule");
-    }
-    let verified = solver.check_verification_condition()?;
-    println!("verified = {verified}");
-    if verified.failed() {
-        anyhow::bail!("not verified");
-    }
+
+    let applicability = solver.check_assumptions_feasibility()?;
+    println!("applicability = {applicability}");
+    match applicability {
+        Applicability::Applicable => (),
+        Applicability::Inapplicable => anyhow::bail!("inapplicable rule"),
+        Applicability::Unknown => anyhow::bail!("could not prove applicability"),
+    };
+
+    let verification = solver.check_verification_condition()?;
+    println!("verification = {verification}");
+    match verification {
+        Verification::Failure(model) => {
+            println!("model:");
+            conditions.print_model(&model, prog)?;
+            anyhow::bail!("verification failed");
+        }
+        Verification::Success | Verification::Unknown => (),
+    };
 
     Ok(())
 }

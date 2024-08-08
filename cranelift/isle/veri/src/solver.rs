@@ -1,40 +1,44 @@
-use std::{cmp::Ordering, collections::HashMap, iter::zip};
+use std::{cmp::Ordering, iter::zip};
 
 use anyhow::Context as _;
 use easy_smt::{Context, Response, SExpr, SExprData};
 
 use crate::{
     type_inference::Assignment,
-    veri::{Conditions, Const, Expr, ExprId, Type, Width},
+    veri::{Conditions, Const, Expr, ExprId, Model, Type, Width},
 };
 
-type Model = HashMap<ExprId, Const>;
-
-/// QUESTION(mbm): one verdict type or separate for applicability and verification results?
 #[derive(Debug, PartialEq, Eq)]
-pub enum Verdict {
+pub enum Applicability {
     Applicable,
     Inapplicable,
+    Unknown,
+}
+
+impl std::fmt::Display for Applicability {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            Applicability::Applicable => "applicable",
+            Applicability::Inapplicable => "inapplicable",
+            Applicability::Unknown => "unknown",
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Verification {
     Success,
     Failure(Model),
     Unknown,
 }
 
-impl std::fmt::Display for Verdict {
+impl std::fmt::Display for Verification {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Applicable => "applicable",
-            Self::Inapplicable => "inapplicable",
-            Self::Success => "success",
-            Self::Failure(_) => "failure",
-            Self::Unknown => "unknown",
+            Verification::Success => "success",
+            Verification::Failure(_) => "failure",
+            Verification::Unknown => "unknown",
         })
-    }
-}
-
-impl Verdict {
-    pub fn failed(&self) -> bool {
-        matches!(self, Verdict::Inapplicable | Verdict::Failure(_))
     }
 }
 
@@ -66,7 +70,7 @@ impl<'a> Solver<'a> {
         Ok(())
     }
 
-    pub fn check_assumptions_feasibility(&mut self) -> anyhow::Result<Verdict> {
+    pub fn check_assumptions_feasibility(&mut self) -> anyhow::Result<Applicability> {
         // Enter solver context frame.
         self.smt.push()?;
 
@@ -76,9 +80,9 @@ impl<'a> Solver<'a> {
 
         // Check
         let verdict = match self.smt.check()? {
-            Response::Sat => Verdict::Applicable,
-            Response::Unsat => Verdict::Inapplicable,
-            Response::Unknown => Verdict::Unknown,
+            Response::Sat => Applicability::Applicable,
+            Response::Unsat => Applicability::Inapplicable,
+            Response::Unknown => Applicability::Unknown,
         };
 
         // Leave solver context frame.
@@ -87,7 +91,7 @@ impl<'a> Solver<'a> {
         Ok(verdict)
     }
 
-    pub fn check_verification_condition(&mut self) -> anyhow::Result<Verdict> {
+    pub fn check_verification_condition(&mut self) -> anyhow::Result<Verification> {
         // Enter solver context frame.
         self.smt.push()?;
 
@@ -96,9 +100,9 @@ impl<'a> Solver<'a> {
 
         // Check
         let verdict = match self.smt.check()? {
-            Response::Sat => Verdict::Failure(self.model()?),
-            Response::Unsat => Verdict::Success,
-            Response::Unknown => Verdict::Unknown,
+            Response::Sat => Verification::Failure(self.model()?),
+            Response::Unsat => Verification::Success,
+            Response::Unknown => Verification::Unknown,
         };
 
         // Leave solver context frame.
@@ -349,8 +353,10 @@ impl<'a> Solver<'a> {
             Ok(Const::BitVector(x.len() * 4, i128::from_str_radix(x, 16)?))
         } else if let Some(x) = atom.strip_prefix("#b") {
             Ok(Const::BitVector(x.len(), i128::from_str_radix(x, 2)?))
+        } else if atom.starts_with(|c: char| c.is_ascii_digit()) {
+            Ok(Const::Int(atom.parse()?))
         } else {
-            todo!("unrecognized constant: {atom}")
+            anyhow::bail!("unsupported smt constant: {atom}")
         }
     }
 

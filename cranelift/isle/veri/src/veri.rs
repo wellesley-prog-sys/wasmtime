@@ -297,6 +297,9 @@ impl Variable {
     }
 }
 
+// QUESTION(mbm): can we merge `Model` and `Assignment` from type inference?
+pub type Model = HashMap<ExprId, Const>;
+
 // QUESTION(mbm): is `Call` the right name? consider `Term`, `TermInstance`, ...?
 #[derive(Debug)]
 pub struct Call {
@@ -421,15 +424,39 @@ impl Conditions {
 
         reach
     }
+
+    pub fn print_model(&self, model: &Model, prog: &Program) -> anyhow::Result<()> {
+        // Calls
+        for call in &self.calls {
+            println!(
+                "{term_name}({args}) -> {ret}",
+                term_name = prog.term_name(call.term),
+                args = call
+                    .args
+                    .iter()
+                    .map(|a| Ok(model
+                        .get(a)
+                        .ok_or(anyhow::format_err!("undefined argument in model"))?
+                        .to_string()))
+                    .collect::<anyhow::Result<Vec<_>>>()?
+                    .join(", "),
+                ret = model
+                    .get(&call.ret)
+                    .ok_or(anyhow::format_err!("undefined return value in model"))?
+            );
+        }
+
+        Ok(())
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 struct OptionValue {
     some: ExprId,
     inner: Box<Value>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 enum Value {
     Expr(ExprId),
     Option(OptionValue),
