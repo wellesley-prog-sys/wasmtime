@@ -1,0 +1,37 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (provide (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum)
+)
+
+;;@ (spec (sig (args c, x, y, in_ty, out_ty) (ret))
+;;@   (provide 
+;;@     (= (ret) 
+;;@        (switch (c)
+;;@          ((0i8:bv8) (if (= (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((1i8:bv8) (if (! (= (x) (y))) (1i8:bv8) (0i8:bv8)))
+;;@          ((2i8:bv8) (if (sgt (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((3i8:bv8) (if (sgte (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((4i8:bv8) (if (slt (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((5i8:bv8) (if (slte (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((6i8:bv8) (if (ugt (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((7i8:bv8) (if (ugte (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((8i8:bv8) (if (ult (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@          ((9i8:bv8) (if (ulte (x) (y)) (1i8:bv8) (0i8:bv8)))
+;;@        )),
+;;@        (|| (= (in_ty) (8i8:Int)
+;;@        (|| (= (in_ty) (16i8:Int)
+;;@        (|| (= (in_ty) (32i8:Int)
+;;@        (= (in_ty) (64i8:Int)))),
+;;@
+;;@        (= (in_ty) (widthof (x))),
+;;@        (= (in_ty) (widthof (y))),
+;;@        (= (out_ty) (8i8:Int),
+;;@ ))
+(decl lower_icmp_into_reg (IntCC Value Value Type Type) ValueRegs)
+(extern constructor lower_icmp_into_reg lower_icmp_into_reg)
+
+(rule -1 (lower (icmp cond x @ (value_type in_ty) y))
+      (lower_icmp_into_reg cond x y in_ty $I8))

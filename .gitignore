@@ -23,4 +23,5 @@ vendor
 examples/build
 examples/.cache
 *.coredump
+*.smt2
 crates/explorer/node_modules

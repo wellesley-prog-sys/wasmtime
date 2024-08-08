@@ -1,0 +1,60 @@
+;; TYPES
+(type Inst (primitive Inst))
+(type Type (primitive Type))
+(type Value (primitive Value))
+
+(type Reg (primitive Reg))
+(type ValueRegs (primitive ValueRegs))
+
+;; Imm12 bv12
+(type Imm12 (primitive Imm12))
+
+;; EXTRACTORS
+;;@ (spec (sig (args arg) (ret))
+;;@     (provide (= (arg) (ret))))
+(decl lower (Inst) ValueRegs)
+
+;;@ (spec (sig (args ty, arg) (ret))
+;;@ (provide (= (ty) (widthof (arg))), (= (arg) (ret))))
+(decl has_type (Type Inst) Inst)
+(extern extractor has_type has_type)
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (provide (= (arg) (ret)), (<= (arg) (64i128: Int))))
+(decl fits_in_64 (Type) Type)
+(extern extractor fits_in_64 fits_in_64)
+
+;;@ (spec (sig (args a, b) (r))
+;;@     (provide (= (+ (a) (b)) (r))))
+(decl iadd (Value Value) Inst)
+(extern extractor iadd iadd)
+
+;; IMPLICIT CONVERTERS
+(convert Reg ValueRegs value_reg)
+(convert Value Reg put_in_reg)
+
+;; CONSTRUCTORS
+;;@ (spec (sig (args arg) (ret))
+;;@     (provide (= (arg) (ret))))
+(decl value_reg (Reg) ValueRegs)
+(extern constructor value_reg value_reg)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (provide 
+;;@       (= (+ (conv_to (ty) (a)) (conv_to (ty) (b))) (r))))
+(decl add (Type Reg Reg) Reg)
+(extern constructor add add)
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (provide (= (conv_to (regwidth) (arg)) (ret))))
+(decl put_in_reg (Value) Reg)
+(extern constructor put_in_reg put_in_reg)
+
+;;@ (spec (sig (args) (r))
+;;@     (provide (= (zero_ext (regwidth) (0i1:bv)) (r))))
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+(rule (lower (has_type (fits_in_64 ty) (iadd x y)))
+(let ((x_plus_0 Reg (add ty x (zero_reg))))
+(add ty x_plus_0 y)))

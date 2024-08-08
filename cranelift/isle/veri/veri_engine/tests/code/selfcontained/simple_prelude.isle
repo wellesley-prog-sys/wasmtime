@@ -1,0 +1,69 @@
+        ;; TYPES
+    
+        (type Inst (primitive Inst))
+        (type Type (primitive Type))
+        (type Value (primitive Value))
+    
+        (type Reg (primitive Reg))
+        (type ValueRegs (primitive ValueRegs))
+    
+        ;; Imm12 bv12
+        (type Imm12 (primitive Imm12))
+    
+        ;; EXTRACTORS
+
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (provide (= (conv_to (regwidth) (arg)) (ret))))
+        (decl lower (Inst) ValueRegs)
+
+        ;;@ (spec (sig (args ty, arg) (ret))
+        ;;@ (provide (= (ty) (widthof (arg))), (= (arg) (ret))))
+        (decl has_type (Type Inst) Inst)
+        (extern extractor has_type has_type)
+    
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (provide (= (arg) (ret)), (<= (arg) (64i128: Int))))
+        (decl fits_in_64 (Type) Type)
+        (extern extractor fits_in_64 fits_in_64)
+    
+        (decl fits_in_32 (Type) Type)
+        (extern extractor fits_in_32 fits_in_32)
+    
+        ;; (decl (a b) c bvX) (require (= c (+ a b)))
+        ;;@ (spec (sig (args a, b) (r))
+        ;;@     (provide (= (+ (a) (b)) (r))))
+        (decl iadd (Value Value) Inst)
+        (extern extractor iadd iadd)
+    
+        ;; Note that 4095 = 0xfff and 16773120 = 0xfff000
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (provide (|| (< (- (zero_ext (regwidth) (ret))) (4095i64:bv))
+        ;;@                     (&& (< (- (zero_ext (regwidth) (ret))) (16773120i64:bv))
+        ;;@                         (= (extract 2 0 (- (zero_ext (regwidth) (ret)))) #b000)
+        ;;@                 )),
+        ;;@                 (= (ret) (conv_to (widthof (ret)) (- (zero_ext (regwidth) (arg)))))
+        ;;@ ))
+        (decl imm12_from_negated_value (Imm12) Value)
+        (extern extractor imm12_from_negated_value imm12_from_negated_value)
+    
+        ;; CONSTRUCTORS
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (provide (= (arg) (ret))))
+        (decl value_reg (Reg) ValueRegs)
+        (extern constructor value_reg value_reg)
+    
+        ;;@ (spec (sig (args ty, a, b) (r))
+        ;;@     (provide (= (+ (a) (b)) (r))))
+        (decl add (Type Reg Reg) Reg)
+        (extern constructor add add)
+    
+;;     AVH todo: leave the upper bits undefined
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (provide (= (conv_to (regwidth) (arg)) (ret))))
+        (decl put_in_reg (Value) Reg)
+        (extern constructor put_in_reg put_in_reg)
+    
+        ;;@ (spec (sig (args ty, reg, imm_arg) (ret))
+        ;;@     (provide (= (- (reg) (conv_to (widthof (ret)) (imm_arg))) (ret))))
+        (decl sub_imm (Type Reg Imm12) Reg)
+        (extern constructor sub_imm sub_imm)
