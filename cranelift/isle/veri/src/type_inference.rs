@@ -648,7 +648,7 @@ impl Solver {
     }
 
     fn implies(&mut self, c: ExprId, then: &Constraint) -> anyhow::Result<bool> {
-        if self.assignment.expr_type_value.get(&c) == Some(&TypeValue::Value(Const::Bool(true))) {
+        if self.assignment.bool_value(c) == Some(true) {
             self.constraint(then)
         } else {
             Ok(false)
