@@ -68,17 +68,26 @@ pub fn mem_finalize(
     let mem = match mem {
         &MemArg::RegOffset { off, .. }
         | &MemArg::InitialSPOffset { off }
+        | &MemArg::NominalSPOffset { off }
         | &MemArg::SlotOffset { off } => {
             let base = match mem {
                 &MemArg::RegOffset { reg, .. } => reg,
-                &MemArg::InitialSPOffset { .. } | &MemArg::SlotOffset { .. } => stack_reg(),
+                &MemArg::InitialSPOffset { .. }
+                | &MemArg::NominalSPOffset { .. }
+                | &MemArg::SlotOffset { .. } => stack_reg(),
                 _ => unreachable!(),
             };
             let adj = match mem {
-                &MemArg::InitialSPOffset { .. } => {
-                    state.initial_sp_offset + i64::from(state.frame_layout().outgoing_args_size)
+                &MemArg::InitialSPOffset { .. } => i64::from(
+                    state.frame_layout().clobber_size
+                        + state.frame_layout().fixed_frame_storage_size
+                        + state.frame_layout().outgoing_args_size
+                        + state.nominal_sp_offset,
+                ),
+                &MemArg::SlotOffset { .. } => {
+                    i64::from(state.frame_layout().outgoing_args_size + state.nominal_sp_offset)
                 }
-                &MemArg::SlotOffset { .. } => i64::from(state.frame_layout().outgoing_args_size),
+                &MemArg::NominalSPOffset { .. } => i64::from(state.nominal_sp_offset),
                 _ => 0,
             };
             let off = off + adj;
@@ -1305,7 +1314,11 @@ fn put_with_trap(sink: &mut MachBuffer<Inst>, enc: &[u8], trap_code: TrapCode) {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    pub(crate) initial_sp_offset: i64,
+    /// Offset from the actual SP to the "nominal SP".  The latter is defined
+    /// as the value the stack pointer has after the prolog.  This offset is
+    /// normally always zero, except during a call sequence using the tail-call
+    /// ABI, between the AllocateArgs and the actual call instruction.
+    pub(crate) nominal_sp_offset: u32,
 
     /// Safepoint stack map for upcoming instruction, as provided to
     /// `pre_safepoint()`.
@@ -1325,7 +1338,7 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<S390xMachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            initial_sp_offset: abi.frame_size() as i64,
+            nominal_sp_offset: 0,
             stack_map: None,
             user_stack_map: None,
             ctrl_plane,
@@ -1410,8 +1423,7 @@ impl Inst {
         let isa_requirements = self.available_in_isa();
         if !matches_isa_flags(&isa_requirements) {
             panic!(
-                "Cannot emit inst '{:?}' for target; failed to match ISA requirements: {:?}",
-                self, isa_requirements
+                "Cannot emit inst '{self:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
             )
         }
 
@@ -1882,8 +1894,7 @@ impl Inst {
                     (false, 32, 64) => 0xb916, // LLGFR
                     (true, 32, 64) => 0xb914,  // LGFR
                     _ => panic!(
-                        "Unsupported extend combination: signed = {}, from_bits = {}, to_bits = {}",
-                        signed, from_bits, to_bits
+                        "Unsupported extend combination: signed = {signed}, from_bits = {from_bits}, to_bits = {to_bits}"
                     ),
                 };
                 put(sink, &enc_rre(opcode, rd.to_reg(), rn));
@@ -3238,6 +3249,25 @@ impl Inst {
                 );
             }
 
+            &Inst::AllocateArgs { size } => {
+                let inst = if let Ok(size) = i16::try_from(size) {
+                    Inst::AluRSImm16 {
+                        alu_op: ALUOp::Add64,
+                        rd: writable_stack_reg(),
+                        ri: stack_reg(),
+                        imm: -size,
+                    }
+                } else {
+                    Inst::AluRUImm32 {
+                        alu_op: ALUOp::SubLogical64,
+                        rd: writable_stack_reg(),
+                        ri: stack_reg(),
+                        imm: size,
+                    }
+                };
+                inst.emit(sink, emit_info, state);
+                state.nominal_sp_offset += size;
+            }
             &Inst::Call { link, ref info } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
 
@@ -3267,9 +3297,9 @@ impl Inst {
                 }
 
                 put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
+                sink.add_call_site();
+
+                state.nominal_sp_offset -= info.callee_pop_size;
             }
             &Inst::CallInd { link, ref info } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
@@ -3286,9 +3316,37 @@ impl Inst {
 
                 let opcode = 0x0d; // BASR
                 put(sink, &enc_rr(opcode, link.to_reg(), rn));
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
+                sink.add_call_site();
+
+                state.nominal_sp_offset -= info.callee_pop_size;
+            }
+            &Inst::ReturnCall { ref info } => {
+                for inst in S390xMachineDeps::gen_tail_epilogue(
+                    state.frame_layout(),
+                    info.callee_pop_size,
+                    None,
+                ) {
+                    inst.emit(sink, emit_info, state);
                 }
+
+                let opcode = 0xc04; // BCRL
+                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
+                put(sink, &enc_ril_c(opcode, 15, 0));
+                sink.add_call_site();
+            }
+            &Inst::ReturnCallInd { ref info } => {
+                let mut rn = info.rn;
+                for inst in S390xMachineDeps::gen_tail_epilogue(
+                    state.frame_layout(),
+                    info.callee_pop_size,
+                    Some(&mut rn),
+                ) {
+                    inst.emit(sink, emit_info, state);
+                }
+
+                let opcode = 0x07; // BCR
+                put(sink, &enc_rr(opcode, gpr(15), rn));
+                sink.add_call_site();
             }
             &Inst::Args { .. } => {}
             &Inst::Rets { .. } => {}

@@ -94,7 +94,7 @@ impl StorePtr {
 
     /// The raw contents of this struct
     pub fn as_raw(&self) -> Option<*mut dyn Store> {
-        self.0.clone()
+        self.0
     }
 
     /// Use the StorePtr as a mut ref to the Store.
@@ -732,7 +732,11 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
 
             unsafe {
                 let src = self.instance.wasm_data(init.data.clone());
-                let dst = memory.base.add(usize::try_from(init.offset).unwrap());
+                let offset = usize::try_from(init.offset).unwrap();
+                let dst = memory.base.add(offset);
+
+                assert!(offset + src.len() <= memory.current_length());
+
                 // FIXME audit whether this is safe in the presence of shared
                 // memory
                 // (https://github.com/bytecodealliance/wasmtime/issues/4203).

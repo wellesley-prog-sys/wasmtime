@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Script to re-vendor the WIT files that Wasmtime uses as defined by a
 # particular tag in upstream repositories.
@@ -6,39 +6,64 @@
 # This script is executed on CI to ensure that everything is up-to-date.
 set -ex
 
-# Space-separated list of wasi proposals that are vendored here along with the
-# tag that they're all vendored at.
-#
-# This assumes that the repositories all have the pattern:
-# https://github.com/WebAssembly/wasi-$repo
-# and every repository has a tag `v$tag` here. That is currently done as part
-# of the WASI release process.
-repos="cli clocks filesystem http io random sockets"
-tag=0.2.0
+# The make_vendor function takes a base path (e.g., "wasi") and a list
+# of packages in the format "name@tag". It constructs the full destination
+# path, downloads the tarballs from GitHub, extracts the relevant files, and
+# removes any unwanted directories.
+make_vendor() {
+  local name=$1
+  local packages=$2
+  local path="crates/$name/wit/deps"
 
-# First, replace the existing vendored WIT files in the `wasi` crate.
-dst=crates/wasi/wit/deps
-rm -rf $dst
-mkdir -p $dst
-for repo in $repos; do
-  mkdir $dst/$repo
-  curl -L https://github.com/WebAssembly/wasi-$repo/archive/refs/tags/v$tag.tar.gz | \
-    tar xzf - --strip-components=2 -C $dst/$repo wasi-$repo-$tag/wit
-  rm -rf $dst/$repo/deps*
-done
+  rm -rf $path
+  mkdir -p $path
 
-# Also replace the `wasi-http` WIT files since they match those in the `wasi`
-# crate.
-rm -rf crates/wasi-http/wit/deps
-cp -r $dst crates/wasi-http/wit
+  for package in $packages; do
+    IFS='@' read -r repo tag <<< "$package"
+    mkdir -p $path/$repo
+    cached_extracted_dir="$cache_dir/$repo-$tag"
+
+    if [[ ! -d $cached_extracted_dir ]]; then
+      mkdir -p $cached_extracted_dir
+      curl -sL https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz | \
+        tar xzf - --strip-components=1 -C $cached_extracted_dir
+      rm -rf $cached_extracted_dir/wit/deps*
+    fi
+
+    cp -r $cached_extracted_dir/wit/* $path/$repo
+  done
+}
+
+cache_dir=$(mktemp -d)
+
+make_vendor "wasi" "
+  cli@v0.2.1
+  clocks@v0.2.1
+  filesystem@v0.2.1
+  io@v0.2.1
+  random@v0.2.1
+  sockets@v0.2.1
+"
+
+make_vendor "wasi-http" "
+  cli@v0.2.1
+  clocks@v0.2.1
+  filesystem@v0.2.1
+  io@v0.2.1
+  random@v0.2.1
+  sockets@v0.2.1
+  http@v0.2.1
+"
+
+make_vendor "wasi-runtime-config" "runtime-config@c667fe6"
+
+make_vendor "wasi-keyvalue" "keyvalue@219ea36"
+
+rm -rf $cache_dir
 
 # Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is
 # slightly different than above.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
-revision=e2310b
+revision=0.2.0-rc-2024-06-25
 curl -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
-# TODO: the in-tree `wasi-nn` implementation does not yet fully support the
-# latest WIT specification on `main`. To create a baseline for moving forward,
-# the in-tree WIT incorporates some but not all of the upstream changes. This
-# TODO can be removed once the implementation catches up with the spec.
-# curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit
+curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit

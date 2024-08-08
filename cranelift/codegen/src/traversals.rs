@@ -52,8 +52,7 @@ impl Dfs {
     /// This iterator can be used to perform either pre- or post-order
     /// traversals, or a combination of the two.
     pub fn iter<'a>(&'a mut self, func: &'a ir::Function) -> DfsIter<'a> {
-        self.seen.clear();
-        self.stack.clear();
+        self.clear();
         if let Some(e) = func.layout.entry_block() {
             self.stack.push((Event::Enter, e));
         }
@@ -73,6 +72,13 @@ impl Dfs {
     pub fn post_order_iter<'a>(&'a mut self, func: &'a ir::Function) -> DfsPostOrderIter<'a> {
         DfsPostOrderIter(self.iter(func))
     }
+
+    /// Clear this DFS, but keep its allocations for future reuse.
+    pub fn clear(&mut self) {
+        let Dfs { stack, seen } = self;
+        stack.clear();
+        seen.clear();
+    }
 }
 
 /// An iterator that yields pairs of `(Event, ir::Block)` items as it performs a
@@ -90,31 +96,27 @@ impl Iterator for DfsIter<'_> {
 
         if event == Event::Enter && self.dfs.seen.insert(block) {
             self.dfs.stack.push((Event::Exit, block));
-            if let Some(inst) = self.func.layout.last_inst(block) {
-                self.dfs.stack.extend(
-                    self.func.dfg.insts[inst]
-                        .branch_destination(&self.func.dfg.jump_tables)
-                        .iter()
-                        // Heuristic: chase the children in reverse. This puts
-                        // the first successor block first in the postorder, all
-                        // other things being equal, which tends to prioritize
-                        // loop backedges over out-edges, putting the edge-block
-                        // closer to the loop body and minimizing live-ranges in
-                        // linear instruction space. This heuristic doesn't have
-                        // any effect on the computation of dominators, and is
-                        // purely for other consumers of the postorder we cache
-                        // here.
-                        .rev()
-                        .map(|block| block.block(&self.func.dfg.value_lists))
-                        // This is purely an optimization to avoid additional
-                        // iterations of the loop, and is not required; it's
-                        // merely inlining the check from the outer conditional
-                        // of this case to avoid the extra loop iteration. This
-                        // also avoids potential excess stack growth.
-                        .filter(|block| !self.dfs.seen.contains(*block))
-                        .map(|block| (Event::Enter, block)),
-                );
-            }
+            self.dfs.stack.extend(
+                self.func
+                    .block_successors(block)
+                    // Heuristic: chase the children in reverse. This puts
+                    // the first successor block first in the postorder, all
+                    // other things being equal, which tends to prioritize
+                    // loop backedges over out-edges, putting the edge-block
+                    // closer to the loop body and minimizing live-ranges in
+                    // linear instruction space. This heuristic doesn't have
+                    // any effect on the computation of dominators, and is
+                    // purely for other consumers of the postorder we cache
+                    // here.
+                    .rev()
+                    // This is purely an optimization to avoid additional
+                    // iterations of the loop, and is not required; it's
+                    // merely inlining the check from the outer conditional
+                    // of this case to avoid the extra loop iteration. This
+                    // also avoids potential excess stack growth.
+                    .filter(|block| !self.dfs.seen.contains(*block))
+                    .map(|block| (Event::Enter, block)),
+            );
         }
 
         Some((event, block))

@@ -23,7 +23,7 @@ const CONFIRM: &str = "well at least we ran up to the crash";
 
 fn segfault() -> ! {
     unsafe {
-        println!("{}", CONFIRM);
+        println!("{CONFIRM}");
         io::stdout().flush().unwrap();
         *(0x4 as *mut i32) = 3;
         unreachable!()
@@ -41,7 +41,7 @@ fn allocate_stack_space() -> ! {
 }
 
 fn overrun_the_stack() -> ! {
-    println!("{}", CONFIRM);
+    println!("{CONFIRM}");
     io::stdout().flush().unwrap();
     allocate_stack_space();
 }
@@ -125,7 +125,7 @@ fn main() {
                 let engine = Engine::default();
                 let mut store = Store::new(&engine, ());
                 let module = Module::new(&engine, r#"(import "" "" (func)) (start 0)"#).unwrap();
-                let segfault = Func::wrap(&mut store, || segfault());
+                let segfault = Func::wrap(&mut store, || -> () { segfault() });
                 Instance::new(&mut store, &module, &[segfault.into()]).unwrap();
                 unreachable!();
             },
@@ -140,7 +140,9 @@ fn main() {
                 let mut store = Store::new(&engine, ());
                 let f = Func::wrap_async(&mut store, |_, _: ()| {
                     Box::new(async {
-                        overrun_the_stack();
+                        if true {
+                            overrun_the_stack();
+                        }
                     })
                 });
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
@@ -172,7 +174,9 @@ fn main() {
                 let mut store = Store::new(&engine, ());
                 let f = Func::wrap_async(&mut store, |_, _: ()| {
                     Box::new(async {
-                        overrun_the_stack();
+                        if true {
+                            overrun_the_stack();
+                        }
                     })
                 });
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
@@ -228,23 +232,19 @@ fn run_test(name: &str, stack_overflow: bool) {
         if is_stack_overflow(&output.status, &stderr) {
             assert!(
                 stdout.trim().ends_with(CONFIRM),
-                "failed to find confirmation in test `{}`\n{}",
-                name,
-                desc
+                "failed to find confirmation in test `{name}`\n{desc}"
             );
         } else {
-            panic!("\n\nexpected a stack overflow on `{}`\n{}\n\n", name, desc);
+            panic!("\n\nexpected a stack overflow on `{name}`\n{desc}\n\n");
         }
     } else {
         if is_segfault(&output.status) {
             assert!(
                 stdout.trim().ends_with(CONFIRM) && stderr.is_empty(),
-                "failed to find confirmation in test `{}`\n{}",
-                name,
-                desc
+                "failed to find confirmation in test `{name}`\n{desc}"
             );
         } else {
-            panic!("\n\nexpected a segfault on `{}`\n{}\n\n", name, desc);
+            panic!("\n\nexpected a segfault on `{name}`\n{desc}\n\n");
         }
     }
 }

@@ -11,9 +11,10 @@ mod coredump;
 mod coredump;
 
 use crate::prelude::*;
+use crate::runtime::module::lookup_code;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
-use crate::sync::OnceLock;
+use crate::sync::RwLock;
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use core::ptr;
@@ -24,21 +25,19 @@ pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmC
 
 pub use traphandlers::SignalHandler;
 
-/// Globally-set callback to determine whether a program counter is actually a
-/// wasm trap.
+/// Platform-specific trap-handler state.
 ///
-/// This is initialized during `init_traps` below. The definition lives within
-/// `wasmtime` currently.
-pub(crate) static mut GET_WASM_TRAP: fn(usize) -> Option<wasmtime_environ::Trap> = |_| None;
+/// This state is protected by a lock to synchronize access to it. Right now
+/// it's a `RwLock` but it could be a `Mutex`, and `RwLock` is just chosen for
+/// convenience as it's what's implemented in no_std. The performance here
+/// should not be of consequence.
+///
+/// This is initialized to `None` and then set as part of `init_traps`.
+static TRAP_HANDLER: RwLock<Option<traphandlers::TrapHandler>> = RwLock::new(None);
 
 /// This function is required to be called before any WebAssembly is entered.
 /// This will configure global state such as signal handlers to prepare the
 /// process to receive wasm traps.
-///
-/// The `get_wasm_trap` argument is used when a trap happens to determine if a
-/// program counter is the pc of an actual wasm trap or not. This is then used
-/// to disambiguate faults that happen due to wasm and faults that happen due to
-/// bugs in Rust or elsewhere.
 ///
 /// # Panics
 ///
@@ -47,23 +46,37 @@ pub(crate) static mut GET_WASM_TRAP: fn(usize) -> Option<wasmtime_environ::Trap>
 ///
 /// This function will also panic if the `std` feature is disabled and it's
 /// called concurrently.
-pub fn init_traps(
-    get_wasm_trap: fn(usize) -> Option<wasmtime_environ::Trap>,
-    macos_use_mach_ports: bool,
-) {
-    static INIT: OnceLock<()> = OnceLock::new();
+pub fn init_traps(macos_use_mach_ports: bool) {
+    let mut lock = TRAP_HANDLER.write();
+    match lock.as_mut() {
+        Some(state) => state.validate_config(macos_use_mach_ports),
+        None => *lock = Some(unsafe { traphandlers::TrapHandler::new(macos_use_mach_ports) }),
+    }
+}
 
-    INIT.get_or_init(|| unsafe {
-        GET_WASM_TRAP = get_wasm_trap;
-        traphandlers::platform_init(macos_use_mach_ports);
-    });
-
-    #[cfg(target_os = "macos")]
-    assert_eq!(
-        traphandlers::using_mach_ports(),
-        macos_use_mach_ports,
-        "cannot configure two different methods of signal handling in the same process"
-    );
+/// De-initializes platform-specific state for trap handling.
+///
+/// # Panics
+///
+/// This function will also panic if the `std` feature is disabled and it's
+/// called concurrently.
+///
+/// # Aborts
+///
+/// This may abort the process on some platforms where trap handling state
+/// cannot be unloaded.
+///
+/// # Unsafety
+///
+/// This is not safe to be called unless all wasm code is unloaded. This is not
+/// safe to be called on some platforms, like Unix, when other libraries
+/// installed their own signal handlers after `init_traps` was called.
+///
+/// There's more reasons for unsafety here than those articulated above,
+/// generally this can only be called "if you know what you're doing".
+pub unsafe fn deinit_traps() {
+    let mut lock = TRAP_HANDLER.write();
+    let _ = lock.take();
 }
 
 fn lazy_per_thread_init() {
@@ -206,6 +219,11 @@ impl From<wasmtime_environ::Trap> for TrapReason {
     }
 }
 
+pub(crate) struct TrapRegisters {
+    pub pc: usize,
+    pub fp: usize,
+}
+
 /// Return value from `test_if_trap`.
 pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
@@ -217,8 +235,6 @@ pub(crate) enum TrapTest {
     Trap {
         /// How to longjmp back to the original wasm frame.
         jmp_buf: *const u8,
-        /// The trap code of this trap.
-        trap: wasmtime_environ::Trap,
     },
 }
 
@@ -442,7 +458,8 @@ impl CallThreadState {
     #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
     pub(crate) fn test_if_trap(
         &self,
-        pc: *const u8,
+        regs: TrapRegisters,
+        faulting_addr: Option<usize>,
         call_handler: impl Fn(&SignalHandler) -> bool,
     ) -> TrapTest {
         // If we haven't even started to handle traps yet, bail out.
@@ -460,16 +477,20 @@ impl CallThreadState {
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        let trap = match unsafe { GET_WASM_TRAP(pc as usize) } {
-            Some(trap) => trap,
-            None => return TrapTest::NotWasm,
+        let Some((code, text_offset)) = lookup_code(regs.pc) else {
+            return TrapTest::NotWasm;
         };
+
+        let Some(trap) = code.lookup_trap_code(text_offset) else {
+            return TrapTest::NotWasm;
+        };
+
+        self.set_jit_trap(regs, faulting_addr, trap);
 
         // If all that passed then this is indeed a wasm trap, so return the
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
         TrapTest::Trap {
             jmp_buf: self.take_jmp_buf(),
-            trap,
         }
     }
 
@@ -480,17 +501,16 @@ impl CallThreadState {
     #[cfg_attr(miri, allow(dead_code))] // miri doesn't handle traps yet
     pub(crate) fn set_jit_trap(
         &self,
-        pc: *const u8,
-        fp: usize,
+        TrapRegisters { pc, fp, .. }: TrapRegisters,
         faulting_addr: Option<usize>,
         trap: wasmtime_environ::Trap,
     ) {
-        let backtrace = self.capture_backtrace(self.limits, Some((pc as usize, fp)));
-        let coredump = self.capture_coredump(self.limits, Some((pc as usize, fp)));
+        let backtrace = self.capture_backtrace(self.limits, Some((pc, fp)));
+        let coredump = self.capture_coredump(self.limits, Some((pc, fp)));
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((
                 UnwindReason::Trap(TrapReason::Jit {
-                    pc: pc as usize,
+                    pc,
                     faulting_addr,
                     trap,
                 }),

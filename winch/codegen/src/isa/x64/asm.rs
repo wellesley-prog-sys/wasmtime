@@ -6,7 +6,7 @@ use crate::{
 };
 use cranelift_codegen::{
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, Opcode, SourceLoc, TrapCode,
+        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode,
         UserExternalNameRef,
     },
     isa::{
@@ -59,31 +59,31 @@ impl From<Reg> for WritableXmm {
 
 impl From<Reg> for Gpr {
     fn from(reg: Reg) -> Self {
-        Gpr::new(reg.into()).expect("valid gpr")
+        Gpr::unwrap_new(reg.into())
     }
 }
 
 impl From<Reg> for GprMem {
     fn from(value: Reg) -> Self {
-        GprMem::new(value.into()).expect("valid gpr")
+        GprMem::unwrap_new(value.into())
     }
 }
 
 impl From<Reg> for GprMemImm {
     fn from(reg: Reg) -> Self {
-        GprMemImm::new(reg.into()).expect("valid gpr")
+        GprMemImm::unwrap_new(reg.into())
     }
 }
 
 impl From<Reg> for Imm8Gpr {
     fn from(value: Reg) -> Self {
-        Imm8Gpr::new(Imm8Reg::Reg { reg: value.into() }).expect("valid Imm8Gpr")
+        Imm8Gpr::unwrap_new(Imm8Reg::Reg { reg: value.into() })
     }
 }
 
 impl From<Reg> for Xmm {
     fn from(reg: Reg) -> Self {
-        Xmm::new(reg.into()).expect("valid Xmm register")
+        Xmm::unwrap_new(reg.into())
     }
 }
 
@@ -94,7 +94,7 @@ impl From<OperandSize> for args::OperandSize {
             OperandSize::S16 => Self::Size16,
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
-            s => panic!("Invalid operand size {:?}", s),
+            s => panic!("Invalid operand size {s:?}"),
         }
     }
 }
@@ -348,7 +348,7 @@ impl Assembler {
             let reg_mem = RegMem::mem(src);
             self.emit(Inst::MovzxRmR {
                 ext_mode: ext,
-                src: GprMem::new(reg_mem).expect("valid memory address"),
+                src: GprMem::unwrap_new(reg_mem),
                 dst: dst.into(),
             });
         } else {
@@ -378,7 +378,7 @@ impl Assembler {
         let reg_mem = RegMem::mem(src);
         self.emit(Inst::MovsxRmR {
             ext_mode: ext.into(),
-            src: GprMem::new(reg_mem).expect("valid memory address"),
+            src: GprMem::unwrap_new(reg_mem),
             dst: dst.into(),
         })
     }
@@ -426,7 +426,7 @@ impl Assembler {
 
         self.emit(Inst::XmmUnaryRmRUnaligned {
             op,
-            src: XmmMem::new(src.into()).expect("valid xmm unaligned"),
+            src: XmmMem::unwrap_new(src.into()),
             dst: dst.into(),
         });
     }
@@ -452,7 +452,7 @@ impl Assembler {
         );
         self.emit(Inst::XmmUnaryRmRUnaligned {
             op,
-            src: XmmMem::new(RegMem::mem(src)).expect("valid xmm unaligned"),
+            src: XmmMem::unwrap_new(RegMem::mem(src)),
             dst: dst.into(),
         });
     }
@@ -497,7 +497,7 @@ impl Assembler {
         self.emit(Inst::XmmCmove {
             ty,
             cc: cc.into(),
-            consequent: Xmm::new(src.into()).expect("valid Xmm"),
+            consequent: Xmm::unwrap_new(src.into()),
             alternative: dst.into(),
             dst: dst.into(),
         })
@@ -522,7 +522,7 @@ impl Assembler {
             size: size.into(),
             op: AluRmiROpcode::Sub,
             src1: dst.into(),
-            src2: GprMemImm::new(imm).expect("valid immediate"),
+            src2: GprMemImm::unwrap_new(imm),
             dst: dst.into(),
         });
     }
@@ -544,7 +544,7 @@ impl Assembler {
             size: size.into(),
             op: AluRmiROpcode::And,
             src1: dst.into(),
-            src2: GprMemImm::new(imm).expect("valid immediate"),
+            src2: GprMemImm::unwrap_new(imm),
             dst: dst.into(),
         });
     }
@@ -713,7 +713,7 @@ impl Assembler {
 
         self.emit(Inst::XmmRmRUnaligned {
             op,
-            src2: Xmm::new(src.into()).expect("valid xmm unaligned").into(),
+            src2: Xmm::unwrap_new(src.into()).into(),
             src1: dst.into(),
             dst: dst.into(),
         });
@@ -736,7 +736,7 @@ impl Assembler {
             size: size.into(),
             op: AluRmiROpcode::Or,
             src1: dst.into(),
-            src2: GprMemImm::new(imm).expect("valid immediate"),
+            src2: GprMemImm::unwrap_new(imm),
             dst: dst.into(),
         });
     }
@@ -774,7 +774,7 @@ impl Assembler {
             size: size.into(),
             op: AluRmiROpcode::Xor,
             src1: dst.into(),
-            src2: GprMemImm::new(imm).expect("valid immediate"),
+            src2: GprMemImm::unwrap_new(imm),
             dst: dst.into(),
         });
     }
@@ -814,7 +814,7 @@ impl Assembler {
             size: size.into(),
             kind: kind.into(),
             src: dst.into(),
-            num_bits: Imm8Gpr::new(imm).expect("valid immediate"),
+            num_bits: Imm8Gpr::unwrap_new(imm),
             dst: dst.into(),
         });
     }
@@ -836,7 +836,7 @@ impl Assembler {
                 self.emit(Inst::CmpRmiR {
                     size: size.into(),
                     src1: divisor.into(),
-                    src2: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
+                    src2: GprMemImm::unwrap_new(RegMemImm::imm(0)),
                     opcode: CmpOpcode::Cmp,
                 });
                 self.emit(Inst::TrapIf {
@@ -871,7 +871,7 @@ impl Assembler {
             sign: kind.into(),
             size: size.into(),
             trap,
-            divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
+            divisor: GprMem::unwrap_new(RegMem::reg(divisor.into())),
             dividend_lo: dst.0.into(),
             dividend_hi: dst.1.into(),
             dst_quotient: dst.0.into(),
@@ -921,7 +921,7 @@ impl Assembler {
                     sign: DivSignedness::Unsigned,
                     trap: TrapCode::IntegerDivisionByZero,
                     size: size.into(),
-                    divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
+                    divisor: GprMem::unwrap_new(RegMem::reg(divisor.into())),
                     dividend_lo: dst.0.into(),
                     dividend_hi: dst.1.into(),
                     dst_quotient: dst.0.into(),
@@ -959,7 +959,7 @@ impl Assembler {
             size: size.into(),
             op: AluRmiROpcode::Add,
             src1: dst.into(),
-            src2: GprMemImm::new(imm).expect("valid immediate"),
+            src2: GprMemImm::unwrap_new(imm),
             dst: dst.into(),
         });
     }
@@ -982,7 +982,7 @@ impl Assembler {
             size: size.into(),
             opcode: CmpOpcode::Cmp,
             src1: src1.into(),
-            src2: GprMemImm::new(imm).expect("valid immediate"),
+            src2: GprMemImm::unwrap_new(imm),
         });
     }
 
@@ -1251,7 +1251,6 @@ impl Assembler {
     pub fn call_with_reg(&mut self, callee: Reg) {
         self.emit(Inst::CallUnknown {
             dest: RegMem::reg(callee.into()),
-            opcode: Opcode::Call,
             info: None,
         });
     }
@@ -1259,11 +1258,7 @@ impl Assembler {
     /// Emit a call to a locally defined function through an index.
     pub fn call_with_name(&mut self, name: UserExternalNameRef) {
         let dest = ExternalName::user(name);
-        self.emit(Inst::CallKnown {
-            dest,
-            opcode: Opcode::Call,
-            info: None,
-        });
+        self.emit(Inst::CallKnown { dest, info: None });
     }
 
     /// Emit a call to a well-known libcall.
@@ -1276,7 +1271,7 @@ impl Assembler {
         // emitting to binary.
         //
         // See [wasmtime::engine::Engine::check_compatible_with_shared_flag] and
-        // [wasmtime_cranelift::obj::ModuleTextBuilder::apend_func]
+        // [wasmtime_cranelift::obj::ModuleTextBuilder::append_func]
         self.emit(Inst::LoadExtName {
             dst: Writable::from_reg(dst.into()),
             name: Box::new(dest),

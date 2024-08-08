@@ -432,7 +432,7 @@ where
             let ty = self.func.dfg.ctrl_typevar(inst);
             match self
                 .effectful_gvn_map
-                .entry((ty, self.func.dfg.insts[inst].clone()))
+                .entry((ty, self.func.dfg.insts[inst]))
             {
                 ScopedEntry::Occupied(o) => {
                     let orig_result = *o.get();
@@ -769,7 +769,7 @@ impl<'a> EgraphPass<'a> {
                             debug_assert!(self.func.layout.inst_block(i).is_some());
                         }
                         ValueDef::Union(..) => {
-                            panic!("egraph union node {} still reachable at {}!", arg, inst);
+                            panic!("egraph union node {arg} still reachable at {inst}!");
                         }
                         _ => {}
                     })

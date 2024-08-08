@@ -6061,7 +6061,6 @@ fn test_aarch64_binemit() {
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::Call,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
                 callee_pop_size: 0,
@@ -6078,7 +6077,6 @@ fn test_aarch64_binemit() {
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::CallIndirect,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
                 callee_pop_size: 0,
@@ -7883,10 +7881,7 @@ fn test_aarch64_binemit() {
     let flags = settings::Flags::new(settings::builder());
     let emit_info = EmitInfo::new(flags);
     for (insn, expected_encoding, expected_printing) in insns {
-        println!(
-            "AArch64: {:?}, {}, {}",
-            insn, expected_encoding, expected_printing
-        );
+        println!("AArch64: {insn:?}, {expected_encoding}, {expected_printing}");
 
         // Check the printed text is as expected.
         let actual_printing = insn.print_with_state(&mut EmitState::default());

@@ -1,9 +1,9 @@
 //! A frontend for building Cranelift IR from other languages.
 use crate::ssa::{SSABuilder, SideEffects};
 use crate::variable::Variable;
-use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
 use core::fmt::{self, Debug};
-use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use cranelift_codegen::cursor::{Cursor, CursorPosition, FuncCursor};
 use cranelift_codegen::entity::{EntityRef, EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::IntCC;
@@ -19,6 +19,8 @@ use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::traversals::Dfs;
 use smallvec::SmallVec;
 
+mod safepoints;
+
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
@@ -29,8 +31,9 @@ pub struct FunctionBuilderContext {
     ssa: SSABuilder,
     status: SecondaryMap<Block, BlockStatus>,
     types: SecondaryMap<Variable, Type>,
-    needs_stack_map: EntitySet<Value>,
-    dfs: Dfs,
+    stack_map_vars: EntitySet<Variable>,
+    stack_map_values: EntitySet<Value>,
+    safepoints: safepoints::SafepointSpiller,
 }
 
 /// Temporary object used to build a single Cranelift IR [`Function`].
@@ -65,9 +68,20 @@ impl FunctionBuilderContext {
     }
 
     fn clear(&mut self) {
-        self.ssa.clear();
-        self.status.clear();
-        self.types.clear();
+        let FunctionBuilderContext {
+            ssa,
+            status,
+            types,
+            stack_map_vars,
+            stack_map_values,
+            safepoints,
+        } = self;
+        ssa.clear();
+        status.clear();
+        types.clear();
+        stack_map_values.clear();
+        stack_map_vars.clear();
+        safepoints.clear();
     }
 
     fn is_empty(&self) -> bool {
@@ -104,7 +118,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
         // We only insert the Block in the layout when an instruction is added to it
         self.builder.ensure_inserted_block();
 
-        let inst = self.builder.func.dfg.make_inst(data.clone());
+        let inst = self.builder.func.dfg.make_inst(data);
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
         self.builder.func.layout.append_inst(inst, self.block);
         if !self.builder.srcloc.is_default() {
@@ -382,9 +396,15 @@ impl<'a> FunctionBuilder<'a> {
         self.handle_ssa_side_effects(side_effects);
     }
 
-    /// Declares the type of a variable, so that it can be used later (by calling
-    /// [`FunctionBuilder::use_var`]). This function will return an error if the variable
-    /// has been previously declared.
+    /// Declares the type of a variable.
+    ///
+    /// This allows the variable to be used later (by calling
+    /// [`FunctionBuilder::use_var`]).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the variable has been previously
+    /// declared.
     pub fn try_declare_var(&mut self, var: Variable, ty: Type) -> Result<(), DeclareVariableError> {
         if self.func_ctx.types[var] != types::INVALID {
             return Err(DeclareVariableError::DeclaredMultipleTimes(var));
@@ -393,11 +413,35 @@ impl<'a> FunctionBuilder<'a> {
         Ok(())
     }
 
-    /// In order to use a variable (by calling [`FunctionBuilder::use_var`]), you need
-    /// to first declare its type with this method.
+    /// Declares the type of a variable, panicking if it is already declared.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the variable has already been declared.
     pub fn declare_var(&mut self, var: Variable, ty: Type) {
         self.try_declare_var(var, ty)
-            .unwrap_or_else(|_| panic!("the variable {:?} has been declared multiple times", var))
+            .unwrap_or_else(|_| panic!("the variable {var:?} has been declared multiple times"))
+    }
+
+    /// Declare that all uses of the given variable must be included in stack
+    /// map metadata.
+    ///
+    /// All values that are uses of this variable will be spilled to the stack
+    /// before each safepoint and their location on the stack included in stack
+    /// maps. Stack maps allow the garbage collector to identify the on-stack GC
+    /// roots.
+    ///
+    /// This does not affect any pre-existing uses of the variable.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the variable's type is larger than 16 bytes or if this
+    /// variable has not been declared yet.
+    pub fn declare_var_needs_stack_map(&mut self, var: Variable) {
+        let ty = self.func_ctx.types[var];
+        assert!(ty != types::INVALID);
+        assert!(ty.bytes() <= 16);
+        self.func_ctx.stack_map_vars.insert(var);
     }
 
     /// Returns the Cranelift IR necessary to use a previously defined user
@@ -418,14 +462,20 @@ impl<'a> FunctionBuilder<'a> {
             debug_assert_ne!(
                 ty,
                 types::INVALID,
-                "variable {:?} is used but its type has not been declared",
-                var
+                "variable {var:?} is used but its type has not been declared"
             );
             self.func_ctx
                 .ssa
                 .use_var(self.func, var, ty, self.position.unwrap())
         };
         self.handle_ssa_side_effects(side_effects);
+
+        // If the variable was declared as needing stack maps, then propagate
+        // that requirement to all values derived from using the variable.
+        if self.func_ctx.stack_map_vars.contains(var) {
+            self.declare_value_needs_stack_map(val);
+        }
+
         Ok(val)
     }
 
@@ -433,10 +483,7 @@ impl<'a> FunctionBuilder<'a> {
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
         self.try_use_var(var).unwrap_or_else(|_| {
-            panic!(
-                "variable {:?} is used but its type has not been declared",
-                var
-            )
+            panic!("variable {var:?} is used but its type has not been declared")
         })
     }
 
@@ -453,6 +500,11 @@ impl<'a> FunctionBuilder<'a> {
             return Err(DefVariableError::TypeMismatch(var, val));
         }
 
+        // If `var` needs inclusion in stack maps, then `val` does too.
+        if self.func_ctx.stack_map_vars.contains(var) {
+            self.declare_value_needs_stack_map(val);
+        }
+
         self.func_ctx.ssa.def_var(var, val, self.position.unwrap());
         Ok(())
     }
@@ -463,16 +515,10 @@ impl<'a> FunctionBuilder<'a> {
         self.try_def_var(var, val)
             .unwrap_or_else(|error| match error {
                 DefVariableError::TypeMismatch(var, val) => {
-                    panic!(
-                        "declared type of variable {:?} doesn't match type of value {}",
-                        var, val
-                    );
+                    panic!("declared type of variable {var:?} doesn't match type of value {val}");
                 }
                 DefVariableError::DefinedBeforeDeclared(var) => {
-                    panic!(
-                        "variable {:?} is used but its type has not been declared",
-                        var
-                    );
+                    panic!("variable {var:?} is used but its type has not been declared");
                 }
             })
     }
@@ -513,13 +559,13 @@ impl<'a> FunctionBuilder<'a> {
     /// # Panics
     ///
     /// Panics if `val` is larger than 16 bytes.
-    pub fn declare_needs_stack_map(&mut self, val: Value) {
+    pub fn declare_value_needs_stack_map(&mut self, val: Value) {
         // We rely on these properties in `insert_safepoint_spills`.
         let size = self.func.dfg.value_type(val).bytes();
         assert!(size <= 16);
         assert!(size.is_power_of_two());
 
-        self.func_ctx.needs_stack_map.insert(val);
+        self.func_ctx.stack_map_values.insert(val);
     }
 
     /// Creates a jump table in the function, to be used by [`br_table`](InstBuilder::br_table) instructions.
@@ -635,176 +681,6 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Insert spills for every value that needs to be in a stack map at every
-    /// safepoint.
-    ///
-    /// First, we do a very simple, imprecise, and overapproximating liveness
-    /// analysis. This considers any use (regardless if that use produces side
-    /// effects or flows into another instruction that produces side effects!)
-    /// of a needs-stack-map value to keep the value live. This allows us to do
-    /// this liveness analysis in a single post-order traversal of the IR,
-    /// without any fixed-point loop. The result of this analysis is the set of
-    /// live needs-stack-map values at each instruction that must be a safepoint
-    /// (currently this is just non-tail calls).
-    ///
-    /// Second, take those results, add stack slots so we have a place to spill
-    /// to, and then finally spill the live needs-stack-map values at each
-    /// safepoint.
-    fn insert_safepoint_spills(&mut self) {
-        // A map from each safepoint to the set of GC references that are live
-        // across it.
-        let mut safepoints: crate::HashMap<ir::Inst, SmallVec<[ir::Value; 4]>> =
-            crate::HashMap::new();
-
-        // The maximum number of values we need to store in a stack map at the
-        // same time, bucketed by their type's size. This array is indexed by
-        // the log2 of the type's size. We do not support recording values whose
-        // size is greater than 16 in stack maps.
-        const LOG2_SIZE_CAPACITY: usize = (16u8.ilog2() as usize) + 1;
-        let mut max_vals_in_stack_map_by_log2_size = [0; LOG2_SIZE_CAPACITY];
-
-        // The set of needs-stack-maps values that are currently live in our
-        // traversal.
-        //
-        // NB: use a `BTreeSet` so that iteration is deterministic, as we will
-        // insert spills an order derived from this collection's iteration
-        // order.
-        let mut live = BTreeSet::new();
-
-        // Do our single-pass liveness analysis.
-        //
-        // Use a post-order traversal, traversing the IR backwards from uses to
-        // defs, because liveness is a backwards analysis.
-        //
-        // 1. The definition of a value removes it from our `live` set. Values
-        //    are not live before they are defined.
-        //
-        // 2. When we see any instruction that requires a safepoint (aka
-        //    non-tail calls) we record the current live set of needs-stack-map
-        //    values.
-        //
-        //    We ignore tail calls because this caller and its frame won't exist
-        //    by the time the callee is executing and potentially triggers a GC;
-        //    nothing is live in the function after it exits!
-        //
-        //    Note that this step should actually happen *before* adding uses to
-        //    the `live` set below, in order to avoid holding GC objects alive
-        //    longer than necessary, because arguments to the call that are not
-        //    live afterwards should need not be prevented from reclamation by
-        //    the GC for us, and therefore need not appear in this stack map. It
-        //    is the callee's responsibility to record such arguments in its
-        //    stack maps if it keeps them alive across some call that might
-        //    trigger GC.
-        //
-        // 3. Any use of a needs-stack-map value adds it to our `live` set.
-        //
-        //    Note: we do not flow liveness from block parameters back to branch
-        //    arguments, and instead always consider branch arguments live. That
-        //    additional precision would require a fixed-point loop in the
-        //    presence of back edges.
-        //
-        //    Furthermore, we do not differentiate between uses of a
-        //    needs-stack-map value that ultimately flow into a side-effecting
-        //    operation versus uses that themselves are not live. This could be
-        //    tightened up in the future, but we're starting with the easiest,
-        //    simplest thing. Besides, none of our mid-end optimization passes
-        //    have run at this point in time yet, so there probably isn't much,
-        //    if any, dead code.
-        for block in self.func_ctx.dfs.post_order_iter(&self.func) {
-            let mut option_inst = self.func.layout.last_inst(block);
-            while let Some(inst) = option_inst {
-                // (1) Remove values defined by this instruction from the `live`
-                // set.
-                for val in self.func.dfg.inst_results(inst) {
-                    live.remove(val);
-                }
-
-                // (2) If this instruction is a call, then we need to add a
-                // safepoint to record any values in `live`.
-                let opcode = self.func.dfg.insts[inst].opcode();
-                if opcode.is_call() && !opcode.is_return() {
-                    let mut live: SmallVec<[_; 4]> = live.iter().copied().collect();
-                    for chunk in live_vals_by_size(&self.func.dfg, &mut live) {
-                        let index = log2_size(&self.func.dfg, chunk[0]);
-                        max_vals_in_stack_map_by_log2_size[index] =
-                            core::cmp::max(max_vals_in_stack_map_by_log2_size[index], chunk.len());
-                    }
-
-                    let old_val = safepoints.insert(inst, live);
-                    debug_assert!(old_val.is_none());
-                }
-
-                // (3) Add all needs-stack-map values that are operands to this
-                // instruction to the live set. This includes branch arguments,
-                // as mentioned above.
-                for val in self.func.dfg.inst_values(inst) {
-                    if self.func_ctx.needs_stack_map.contains(val) {
-                        live.insert(val);
-                    }
-                }
-
-                option_inst = self.func.layout.prev_inst(inst);
-            }
-
-            // After we've processed this block's instructions, remove its
-            // parameters from the live set. This is part of step (1).
-            for val in self.func.dfg.block_params(block) {
-                live.remove(val);
-            }
-        }
-
-        // Create a stack slot for each size of needs-stack-map value. These
-        // slots are arrays capable of holding the maximum number of same-sized
-        // values that must appear in the same stack map at the same time.
-        //
-        // This is indexed by the log2 of the type size.
-        let mut stack_slots = [PackedOption::<ir::StackSlot>::default(); LOG2_SIZE_CAPACITY];
-        for (log2_size, capacity) in max_vals_in_stack_map_by_log2_size.into_iter().enumerate() {
-            if capacity == 0 {
-                continue;
-            }
-
-            let size = 1usize << log2_size;
-            let slot = self.func.create_sized_stack_slot(ir::StackSlotData::new(
-                ir::StackSlotKind::ExplicitSlot,
-                u32::try_from(size * capacity).unwrap(),
-                u8::try_from(log2_size).unwrap(),
-            ));
-            stack_slots[log2_size] = Some(slot).into();
-        }
-
-        // Insert spills to our new stack slots before each safepoint
-        // instruction.
-        let mut cursor = FuncCursor::new(self.func);
-        for (inst, live_vals) in safepoints {
-            cursor = cursor.at_inst(inst);
-
-            // The offset within each stack slot for the next spill to that
-            // associated stack slot.
-            let mut stack_slot_offsets = [0; LOG2_SIZE_CAPACITY];
-
-            for val in live_vals {
-                let ty = cursor.func.dfg.value_type(val);
-                let size_of_val = ty.bytes();
-
-                let index = log2_size(&cursor.func.dfg, val);
-                let slot = stack_slots[index].unwrap();
-
-                let offset = stack_slot_offsets[index];
-                stack_slot_offsets[index] += size_of_val;
-
-                cursor
-                    .ins()
-                    .stack_store(val, slot, i32::try_from(offset).unwrap());
-
-                cursor
-                    .func
-                    .dfg
-                    .append_user_stack_map_entry(inst, ir::UserStackMapEntry { ty, slot, offset });
-            }
-        }
-    }
-
     /// Declare that translation of the current function is complete.
     ///
     /// This resets the state of the [`FunctionBuilderContext`] in preparation to
@@ -817,13 +693,11 @@ impl<'a> FunctionBuilder<'a> {
                 if !self.is_pristine(block) {
                     assert!(
                         self.func_ctx.ssa.is_sealed(block),
-                        "FunctionBuilder finalized, but block {} is not sealed",
-                        block,
+                        "FunctionBuilder finalized, but block {block} is not sealed",
                     );
                     assert!(
                         self.is_filled(block),
-                        "FunctionBuilder finalized, but block {} is not filled",
-                        block,
+                        "FunctionBuilder finalized, but block {block} is not filled",
                     );
                 }
             }
@@ -836,41 +710,21 @@ impl<'a> FunctionBuilder<'a> {
             for block in self.func_ctx.status.keys() {
                 if let Err((inst, msg)) = self.func.is_block_basic(block) {
                     let inst_str = self.func.dfg.display_inst(inst);
-                    panic!(
-                        "{} failed basic block invariants on {}: {}",
-                        block, inst_str, msg
-                    );
+                    panic!("{block} failed basic block invariants on {inst_str}: {msg}");
                 }
             }
         }
 
-        if !self.func_ctx.needs_stack_map.is_empty() {
-            self.insert_safepoint_spills();
+        if !self.func_ctx.stack_map_values.is_empty() {
+            self.func_ctx
+                .safepoints
+                .run(&mut self.func, &self.func_ctx.stack_map_values);
         }
 
         // Clear the state (but preserve the allocated buffers) in preparation
         // for translation another function.
         self.func_ctx.clear();
     }
-}
-
-/// Sort `live` by size and return an iterable of subslices grouped by size.
-fn live_vals_by_size<'a, 'b>(
-    dfg: &'a ir::DataFlowGraph,
-    live: &'b mut [ir::Value],
-) -> impl Iterator<Item = &'b [ir::Value]>
-where
-    'a: 'b,
-{
-    live.sort_by_key(|val| dfg.value_type(*val).bytes());
-    live.chunk_by(|a, b| dfg.value_type(*a).bytes() == dfg.value_type(*b).bytes())
-}
-
-/// Get `log2(sizeof(val))` as a `usize`.
-fn log2_size(dfg: &ir::DataFlowGraph, val: ir::Value) -> usize {
-    let size = dfg.value_type(val).bytes();
-    debug_assert!(size.is_power_of_two());
-    usize::try_from(size.ilog2()).unwrap()
 }
 
 /// All the functions documented in the previous block are write-only and help you build a valid
@@ -1259,7 +1113,7 @@ impl<'a> FunctionBuilder<'a> {
             | SignedGreaterThanOrEqual
             | SignedGreaterThan
             | SignedLessThanOrEqual => {
-                panic!("Signed comparison {} not supported by memcmp", int_cc)
+                panic!("Signed comparison {int_cc} not supported by memcmp")
             }
         };
 
@@ -1338,7 +1192,7 @@ mod tests {
     use alloc::string::ToString;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::condcodes::IntCC;
-    use cranelift_codegen::ir::{self, types::*, UserFuncName};
+    use cranelift_codegen::ir::{types::*, UserFuncName};
     use cranelift_codegen::ir::{AbiParam, Function, InstBuilder, MemFlags, Signature, Value};
     use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
     use cranelift_codegen::settings;
@@ -1456,12 +1310,12 @@ mod tests {
 
     #[track_caller]
     fn check(func: &Function, expected_ir: &str) {
+        let expected_ir = expected_ir.trim();
         let actual_ir = func.display().to_string();
+        let actual_ir = actual_ir.trim();
         assert!(
             expected_ir == actual_ir,
-            "Expected:\n{}\nGot:\n{}",
-            expected_ir,
-            actual_ir
+            "Expected:\n{expected_ir}\nGot:\n{actual_ir}"
         );
     }
 
@@ -1976,7 +1830,7 @@ block0:
 
         check(
             &func,
-            &format!("function %sample() -> i8 system_v {{{}\n}}\n", expected),
+            &format!("function %sample() -> i8 system_v {{{expected}\n}}\n"),
         );
     }
 
@@ -2075,793 +1929,32 @@ block0:
     }
 
     #[test]
-    fn needs_stack_map_and_loop() {
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-        sig.params.push(AbiParam::new(ir::types::I32));
-
-        let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-        let signature = builder.func.import_signature(sig);
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        // Here the value `v1` is technically not live but our single-pass liveness
-        // analysis treats every branch argument to a block as live to avoid
-        // needing to do a fixed-point loop.
-        //
-        //     block0(v0, v1):
-        //       call $foo(v0)
-        //       jump block0(v0, v1)
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        let a = builder.func.dfg.block_params(block0)[0];
-        let b = builder.func.dfg.block_params(block0)[1];
-        builder.declare_needs_stack_map(a);
-        builder.declare_needs_stack_map(b);
-        builder.switch_to_block(block0);
-        builder.ins().call(func_ref, &[a]);
-        builder.ins().jump(block0, &[a, b]);
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function %sample(i32, i32) system_v {
-    ss0 = explicit_slot 8, align = 4
-    sig0 = (i32) system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i32, v1: i32):
-    stack_store v0, ss0
-    stack_store v1, ss0+4
-    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4]
-    jump block0(v0, v1)
-}
-            "#
-            .trim()
-        );
-    }
-
-    #[test]
-    fn needs_stack_map_simple() {
+    fn test_builder_with_iconst_and_negative_constant() {
         let sig = Signature::new(CallConv::SystemV);
-
         let mut fn_ctx = FunctionBuilderContext::new();
         let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
+
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-        let signature = builder.func.import_signature(sig);
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        // At each `call` we are losing one more value as no longer live, so
-        // each stack map should be one smaller than the last. `v3` is never
-        // live, so should never appear in a stack map. Note that a value that
-        // is an argument to the call, but is not live after the call, should
-        // not appear in the stack map. This is why `v0` appears in the first
-        // call's stack map, but not the second call's stack map.
-        //
-        //     block0:
-        //       v0 = needs stack map
-        //       v1 = needs stack map
-        //       v2 = needs stack map
-        //       v3 = needs stack map
-        //       call $foo(v0)
-        //       call $foo(v0)
-        //       call $foo(v1)
-        //       call $foo(v2)
-        //       return
         let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
         builder.switch_to_block(block0);
-        let v0 = builder.ins().iconst(ir::types::I32, 0);
-        builder.declare_needs_stack_map(v0);
-        let v1 = builder.ins().iconst(ir::types::I32, 1);
-        builder.declare_needs_stack_map(v1);
-        let v2 = builder.ins().iconst(ir::types::I32, 2);
-        builder.declare_needs_stack_map(v2);
-        let v3 = builder.ins().iconst(ir::types::I32, 3);
-        builder.declare_needs_stack_map(v3);
-        builder.ins().call(func_ref, &[v0]);
-        builder.ins().call(func_ref, &[v0]);
-        builder.ins().call(func_ref, &[v1]);
-        builder.ins().call(func_ref, &[v2]);
+        builder.ins().iconst(I32, -1);
         builder.ins().return_(&[]);
+
         builder.seal_all_blocks();
         builder.finalize();
 
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function %sample() system_v {
-    ss0 = explicit_slot 12, align = 4
-    sig0 = (i32) system_v
-    fn0 = colocated u0:0 sig0
+        let flags = cranelift_codegen::settings::Flags::new(cranelift_codegen::settings::builder());
+        let ctx = cranelift_codegen::Context::for_function(func);
+        ctx.verify(&flags).expect("should be valid");
 
+        check(
+            &ctx.func,
+            "function %sample() system_v {
 block0:
-    v0 = iconst.i32 0
-    v1 = iconst.i32 1
-    v2 = iconst.i32 2
-    v3 = iconst.i32 3
-    stack_store v0, ss0  ; v0 = 0
-    stack_store v1, ss0+4  ; v1 = 1
-    stack_store v2, ss0+8  ; v2 = 2
-    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4, i32 @ ss0+8]  ; v0 = 0
-    stack_store v1, ss0  ; v1 = 1
-    stack_store v2, ss0+4  ; v2 = 2
-    call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss0+4]  ; v0 = 0
-    stack_store v2, ss0  ; v2 = 2
-    call fn0(v1), stack_map=[i32 @ ss0+0]  ; v1 = 1
-    call fn0(v2)  ; v2 = 2
+    v0 = iconst.i32 -1
     return
-}
-            "#
-            .trim()
-        );
-    }
-
-    #[test]
-    fn needs_stack_map_and_post_order_early_return() {
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-
-        let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let signature = builder
-            .func
-            .import_signature(Signature::new(CallConv::SystemV));
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        // Here we rely on the post-order to make sure that we never visit block
-        // 4 and add `v1` to our live set, then visit block 2 and add `v1` to
-        // its stack map even though `v1` is not in scope. Thanksfully, that
-        // sequence is impossible because it would be an invalid post-order
-        // traversal. The only valid post-order traversals are [3, 1, 2, 0] and
-        // [2, 3, 1, 0].
-        //
-        //     block0(v0):
-        //       brif v0, block1, block2
-        //
-        //     block1:
-        //       <stuff>
-        //       v1 = get some gc ref
-        //       jump block3
-        //
-        //     block2:
-        //       call $needs_safepoint_accidentally
-        //       return
-        //
-        //     block3:
-        //       stuff keeping v1 live
-        //       return
-        let block0 = builder.create_block();
-        let block1 = builder.create_block();
-        let block2 = builder.create_block();
-        let block3 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-
-        builder.switch_to_block(block0);
-        let v0 = builder.func.dfg.block_params(block0)[0];
-        builder.ins().brif(v0, block1, &[], block2, &[]);
-
-        builder.switch_to_block(block1);
-        let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
-        builder.ins().jump(block3, &[]);
-
-        builder.switch_to_block(block2);
-        builder.ins().call(func_ref, &[]);
-        builder.ins().return_(&[]);
-
-        builder.switch_to_block(block3);
-        // NB: Our simplistic liveness analysis conservatively treats any use of
-        // a value as keeping it live, regardless if the use has side effects or
-        // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
-        // here.
-        builder.ins().iadd_imm(v1, 0);
-        builder.ins().return_(&[]);
-
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function %sample(i32) system_v {
-    sig0 = () system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i32):
-    brif v0, block1, block2
-
-block1:
-    v1 = iconst.i64 0x1234_5678
-    jump block3
-
-block2:
-    call fn0()
-    return
-
-block3:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
-    return
-}
-            "#
-            .trim()
-        );
-    }
-
-    #[test]
-    fn needs_stack_map_conditional_branches_and_liveness() {
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-
-        let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let signature = builder
-            .func
-            .import_signature(Signature::new(CallConv::SystemV));
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        // Depending on which post-order traversal we take, we might consider
-        // `v1` live inside `block1` and emit unnecessary safepoint
-        // spills. That's not great, but ultimately fine, we are trading away
-        // precision for a single-pass analysis.
-        //
-        //     block0(v0):
-        //       v1 = needs stack map
-        //       brif v0, block1, block2
-        //
-        //     block1:
-        //       call $foo()
-        //       return
-        //
-        //     block2:
-        //       keep v1 alive
-        //       return
-        let block0 = builder.create_block();
-        let block1 = builder.create_block();
-        let block2 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-
-        builder.switch_to_block(block0);
-        let v0 = builder.func.dfg.block_params(block0)[0];
-        let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
-        builder.ins().brif(v0, block1, &[], block2, &[]);
-
-        builder.switch_to_block(block1);
-        builder.ins().call(func_ref, &[]);
-        builder.ins().return_(&[]);
-
-        builder.switch_to_block(block2);
-        // NB: Our simplistic liveness analysis conservatively treats any use of
-        // a value as keeping it live, regardless if the use has side effects or
-        // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
-        // here.
-        builder.ins().iadd_imm(v1, 0);
-        builder.ins().return_(&[]);
-
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function %sample(i32) system_v {
-    sig0 = () system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i32):
-    v1 = iconst.i64 0x1234_5678
-    brif v0, block1, block2
-
-block1:
-    call fn0()
-    return
-
-block2:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
-    return
-}
-            "#
-            .trim()
-        );
-
-        // Now Do the same test but with block 1 and 2 swapped so that we
-        // exercise what we are trying to exercise, regardless of which
-        // post-order traversal we happen to take.
-        func.clear();
-        fn_ctx.clear();
-
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-
-        func.signature = sig;
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let signature = builder
-            .func
-            .import_signature(Signature::new(CallConv::SystemV));
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        let block0 = builder.create_block();
-        let block1 = builder.create_block();
-        let block2 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-
-        builder.switch_to_block(block0);
-        let v0 = builder.func.dfg.block_params(block0)[0];
-        let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
-        builder.ins().brif(v0, block1, &[], block2, &[]);
-
-        builder.switch_to_block(block1);
-        builder.ins().iadd_imm(v1, 0);
-        builder.ins().return_(&[]);
-
-        builder.switch_to_block(block2);
-        builder.ins().call(func_ref, &[]);
-        builder.ins().return_(&[]);
-
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function u0:0(i32) system_v {
-    ss0 = explicit_slot 8, align = 8
-    sig0 = () system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i32):
-    v1 = iconst.i64 0x1234_5678
-    brif v0, block1, block2
-
-block1:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
-    return
-
-block2:
-    stack_store.i64 v1, ss0  ; v1 = 0x1234_5678
-    call fn0(), stack_map=[i64 @ ss0+0]
-    return
-}
-            "#
-            .trim()
-        );
-    }
-
-    #[test]
-    fn needs_stack_map_and_tail_calls() {
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-
-        let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let signature = builder
-            .func
-            .import_signature(Signature::new(CallConv::SystemV));
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        // Depending on which post-order traversal we take, we might consider
-        // `v1` live inside `block1`. But nothing is live after a tail call so
-        // we shouldn't spill `v1` either way here.
-        //
-        //     block0(v0):
-        //       v1 = needs stack map
-        //       brif v0, block1, block2
-        //
-        //     block1:
-        //       return_call $foo()
-        //
-        //     block2:
-        //       keep v1 alive
-        //       return
-        let block0 = builder.create_block();
-        let block1 = builder.create_block();
-        let block2 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-
-        builder.switch_to_block(block0);
-        let v0 = builder.func.dfg.block_params(block0)[0];
-        let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
-        builder.ins().brif(v0, block1, &[], block2, &[]);
-
-        builder.switch_to_block(block1);
-        builder.ins().return_call(func_ref, &[]);
-
-        builder.switch_to_block(block2);
-        // NB: Our simplistic liveness analysis conservatively treats any use of
-        // a value as keeping it live, regardless if the use has side effects or
-        // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
-        // here.
-        builder.ins().iadd_imm(v1, 0);
-        builder.ins().return_(&[]);
-
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function %sample(i32) system_v {
-    sig0 = () system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i32):
-    v1 = iconst.i64 0x1234_5678
-    brif v0, block1, block2
-
-block1:
-    return_call fn0()
-
-block2:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
-    return
-}
-            "#
-            .trim()
-        );
-
-        // Do the same test but with block 1 and 2 swapped so that we exercise
-        // what we are trying to exercise, regardless of which post-order
-        // traversal we happen to take.
-        func.clear();
-        fn_ctx.clear();
-
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-        func.signature = sig;
-
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let signature = builder
-            .func
-            .import_signature(Signature::new(CallConv::SystemV));
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        let block0 = builder.create_block();
-        let block1 = builder.create_block();
-        let block2 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-
-        builder.switch_to_block(block0);
-        let v0 = builder.func.dfg.block_params(block0)[0];
-        let v1 = builder.ins().iconst(ir::types::I64, 0x12345678);
-        builder.declare_needs_stack_map(v1);
-        builder.ins().brif(v0, block1, &[], block2, &[]);
-
-        builder.switch_to_block(block1);
-        builder.ins().iadd_imm(v1, 0);
-        builder.ins().return_(&[]);
-
-        builder.switch_to_block(block2);
-        builder.ins().return_call(func_ref, &[]);
-
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function u0:0(i32) system_v {
-    sig0 = () system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i32):
-    v1 = iconst.i64 0x1234_5678
-    brif v0, block1, block2
-
-block1:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
-    return
-
-block2:
-    return_call fn0()
-}
-            "#
-            .trim()
-        );
-    }
-
-    #[test]
-    fn needs_stack_map_and_cfg_diamond() {
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(ir::types::I32));
-
-        let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let signature = builder
-            .func
-            .import_signature(Signature::new(CallConv::SystemV));
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        // Create an if/else CFG diamond that and check that various things get
-        // spilled as needed.
-        //
-        //     block0(v0):
-        //       brif v0, block1, block2
-        //
-        //     block1:
-        //       v1 = needs stack map
-        //       v2 = needs stack map
-        //       call $foo()
-        //       jump block3(v1, v2)
-        //
-        //     block2:
-        //       v3 = needs stack map
-        //       v4 = needs stack map
-        //       call $foo()
-        //       jump block3(v3, v3)  ;; Note: v4 is not live
-        //
-        //     block3(v5, v6):
-        //       call $foo()
-        //       keep v5 alive, but not v6
-        let block0 = builder.create_block();
-        let block1 = builder.create_block();
-        let block2 = builder.create_block();
-        let block3 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-
-        builder.switch_to_block(block0);
-        let v0 = builder.func.dfg.block_params(block0)[0];
-        builder.ins().brif(v0, block1, &[], block2, &[]);
-
-        builder.switch_to_block(block1);
-        let v1 = builder.ins().iconst(ir::types::I64, 1);
-        builder.declare_needs_stack_map(v1);
-        let v2 = builder.ins().iconst(ir::types::I64, 2);
-        builder.declare_needs_stack_map(v2);
-        builder.ins().call(func_ref, &[]);
-        builder.ins().jump(block3, &[v1, v2]);
-
-        builder.switch_to_block(block2);
-        let v3 = builder.ins().iconst(ir::types::I64, 3);
-        builder.declare_needs_stack_map(v3);
-        let v4 = builder.ins().iconst(ir::types::I64, 4);
-        builder.declare_needs_stack_map(v4);
-        builder.ins().call(func_ref, &[]);
-        builder.ins().jump(block3, &[v3, v3]);
-
-        builder.switch_to_block(block3);
-        builder.ins().call(func_ref, &[]);
-        // NB: Our simplistic liveness analysis conservatively treats any use of
-        // a value as keeping it live, regardless if the use has side effects or
-        // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
-        // here.
-        builder.ins().iadd_imm(v1, 0);
-        builder.ins().return_(&[]);
-
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function %sample(i32) system_v {
-    ss0 = explicit_slot 16, align = 8
-    sig0 = () system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i32):
-    brif v0, block1, block2
-
-block1:
-    v1 = iconst.i64 1
-    v2 = iconst.i64 2
-    stack_store v1, ss0  ; v1 = 1
-    stack_store v2, ss0+8  ; v2 = 2
-    call fn0(), stack_map=[i64 @ ss0+0, i64 @ ss0+8]
-    jump block3(v1, v2)  ; v1 = 1, v2 = 2
-
-block2:
-    v3 = iconst.i64 3
-    v4 = iconst.i64 4
-    stack_store v3, ss0  ; v3 = 3
-    call fn0(), stack_map=[i64 @ ss0+0]
-    jump block3(v3, v3)  ; v3 = 3, v3 = 3
-
-block3:
-    stack_store.i64 v1, ss0  ; v1 = 1
-    call fn0(), stack_map=[i64 @ ss0+0]
-    v5 = iadd_imm.i64 v1, 0  ; v1 = 1
-    return
-}
-            "#
-            .trim()
-        );
-    }
-
-    #[test]
-    fn needs_stack_map_and_heterogeneous_types() {
-        let mut sig = Signature::new(CallConv::SystemV);
-        for ty in [
-            ir::types::I8,
-            ir::types::I16,
-            ir::types::I32,
-            ir::types::I64,
-            ir::types::I128,
-            ir::types::F32,
-            ir::types::F64,
-            ir::types::I8X16,
-            ir::types::I16X8,
-        ] {
-            sig.params.push(AbiParam::new(ty));
-            sig.returns.push(AbiParam::new(ty));
-        }
-
-        let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
-        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
-
-        let name = builder
-            .func
-            .declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: 0,
-            });
-        let signature = builder
-            .func
-            .import_signature(Signature::new(CallConv::SystemV));
-        let func_ref = builder.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(name),
-            signature,
-            colocated: true,
-        });
-
-        // Test that we support stack maps of heterogeneous types and properly
-        // coalesce types into stack slots based on their size.
-        //
-        //     block0(v0, v1, v2, v3, v4, v5, v6, v7, v8):
-        //       call $foo()
-        //       return v0, v1, v2, v3, v4, v5, v6, v7, v8
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-
-        builder.switch_to_block(block0);
-        let params = builder.func.dfg.block_params(block0).to_vec();
-        for val in &params {
-            builder.declare_needs_stack_map(*val);
-        }
-        builder.ins().call(func_ref, &[]);
-        builder.ins().return_(&params);
-
-        builder.seal_all_blocks();
-        builder.finalize();
-
-        eprintln!("Actual = {}", func.display());
-        assert_eq!(
-            func.display().to_string().trim(),
-            r#"
-function %sample(i8, i16, i32, i64, i128, f32, f64, i8x16, i16x8) -> i8, i16, i32, i64, i128, f32, f64, i8x16, i16x8 system_v {
-    ss0 = explicit_slot 1
-    ss1 = explicit_slot 2, align = 2
-    ss2 = explicit_slot 8, align = 4
-    ss3 = explicit_slot 16, align = 8
-    ss4 = explicit_slot 48, align = 16
-    sig0 = () system_v
-    fn0 = colocated u0:0 sig0
-
-block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: i128, v5: f32, v6: f64, v7: i8x16, v8: i16x8):
-    stack_store v0, ss0
-    stack_store v1, ss1
-    stack_store v2, ss2
-    stack_store v5, ss2+4
-    stack_store v3, ss3
-    stack_store v6, ss3+8
-    stack_store v4, ss4
-    stack_store v7, ss4+16
-    stack_store v8, ss4+32
-    call fn0(), stack_map=[i8 @ ss0+0, i16 @ ss1+0, i32 @ ss2+0, f32 @ ss2+4, i64 @ ss3+0, f64 @ ss3+8, i128 @ ss4+0, i8x16 @ ss4+16, i16x8 @ ss4+32]
-    return v0, v1, v2, v3, v4, v5, v6, v7, v8
-}
-            "#
-            .trim()
+}",
         );
     }
 }

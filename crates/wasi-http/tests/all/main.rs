@@ -13,7 +13,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
-    bindings::http::types::ErrorCode,
+    bindings::http::types::{ErrorCode, Scheme},
     body::HyperOutgoingBody,
     io::TokioIo,
     types::{self, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
@@ -87,7 +87,7 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     let mut builder = WasiCtxBuilder::new();
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
-    builder.env("HTTP_SERVER", server.addr().to_string());
+    builder.env("HTTP_SERVER", &server.addr());
     let ctx = Ctx {
         table: ResourceTable::new(),
         wasi: builder.build(),
@@ -166,7 +166,7 @@ async fn run_wasi_http(
         wasmtime_wasi_http::bindings::Proxy::instantiate_async(&mut store, &component, &linker)
             .await?;
 
-    let req = store.data_mut().new_incoming_request(req)?;
+    let req = store.data_mut().new_incoming_request(Scheme::Http, req)?;
 
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let out = store.data_mut().new_response_outparam(sender)?;
@@ -396,7 +396,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
     let body = response.into_body().to_bytes();
     let body = str::from_utf8(&body).unwrap();
     for line in body.lines() {
-        println!("{}", line);
+        println!("{line}");
         if line.contains("forbidden.com") {
             assert!(line.contains("HttpRequestDenied"));
         }

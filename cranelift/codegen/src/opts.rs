@@ -3,7 +3,7 @@
 use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
-pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
+pub use crate::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
 use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
@@ -97,7 +97,7 @@ where
                 ValueDef::Result(inst, _) if ctx.ctx.func.dfg.inst_results(inst).len() == 1 => {
                     let ty = ctx.ctx.func.dfg.value_type(value);
                     trace!(" -> value of type {}", ty);
-                    return Some((ty, ctx.ctx.func.dfg.insts[inst].clone()));
+                    return Some((ty, ctx.ctx.func.dfg.insts[inst]));
                 }
                 _ => {}
             }
@@ -196,9 +196,7 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {
-        let value = self
-            .ctx
-            .insert_pure_enode(NewOrExistingInst::New(op.clone(), ty));
+        let value = self.ctx.insert_pure_enode(NewOrExistingInst::New(*op, ty));
         trace!("make_inst_ctor: {:?} -> {}", op, value);
         value
     }
@@ -291,5 +289,13 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
 
     fn u64_bswap64(&mut self, n: u64) -> u64 {
         n.swap_bytes()
+    }
+
+    fn ieee128_constant_extractor(&mut self, n: Constant) -> Option<Ieee128> {
+        self.ctx.func.dfg.constants.get(n).try_into().ok()
+    }
+
+    fn ieee128_constant(&mut self, n: Ieee128) -> Constant {
+        self.ctx.func.dfg.constants.insert(n.into())
     }
 }

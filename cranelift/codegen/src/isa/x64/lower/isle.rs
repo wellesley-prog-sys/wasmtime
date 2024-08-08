@@ -22,7 +22,7 @@ use crate::{
         inst::{args::*, regs, CallInfo, ReturnCallInfo},
     },
     machinst::{
-        isle::*, valueregs, ArgPair, InsnInput, InstOutput, MachAtomicRmwOp, MachInst,
+        isle::*, ArgPair, InsnInput, InstOutput, IsTailCall, MachAtomicRmwOp, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };
@@ -65,7 +65,7 @@ pub(crate) fn lower_branch(
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
-    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
+    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets)
 }
 
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
@@ -91,7 +91,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            IsTailCall::Yes,
             caller_conv,
             self.backend.flags().clone(),
         );
@@ -118,7 +118,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            IsTailCall::Yes,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -161,7 +161,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         if let Some(c) = inputs.constant {
             let ty = self.lower_ctx.dfg().value_type(val);
             if let Some(imm) = to_simm32(c as i64, ty) {
-                return XmmMemImm::new(imm.to_reg_mem_imm()).unwrap();
+                return XmmMemImm::unwrap_new(imm.to_reg_mem_imm());
             }
         }
 
@@ -170,7 +170,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             RegMem::Mem { addr } => RegMemImm::Mem { addr },
         };
 
-        XmmMemImm::new(res).unwrap()
+        XmmMemImm::unwrap_new(res)
     }
 
     fn put_in_xmm_mem(&mut self, val: Value) -> XmmMem {
@@ -183,11 +183,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             // NOTE: this is where behavior differs from `put_in_reg_mem`, as we always force
             // constants to be 16 bytes when a constant will be used in place of an xmm register.
             let vcode_constant = self.emit_u128_le_const(c as u128);
-            return XmmMem::new(RegMem::mem(SyntheticAmode::ConstantOffset(vcode_constant)))
-                .unwrap();
+            return XmmMem::unwrap_new(RegMem::mem(SyntheticAmode::ConstantOffset(vcode_constant)));
         }
 
-        XmmMem::new(self.put_in_reg_mem(val)).unwrap()
+        XmmMem::unwrap_new(self.put_in_reg_mem(val))
     }
 
     fn put_in_reg_mem(&mut self, val: Value) -> RegMem {
@@ -306,10 +305,9 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Gpr {
         let mask = self.shift_mask(ty) as u64;
-        Imm8Gpr::new(Imm8Reg::Imm8 {
+        Imm8Gpr::unwrap_new(Imm8Reg::Imm8 {
             imm: (c & mask) as u8,
         })
-        .unwrap()
     }
 
     #[inline]
@@ -458,7 +456,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn writable_reg_to_xmm(&mut self, r: WritableReg) -> WritableXmm {
-        Writable::from_reg(Xmm::new(r.to_reg()).unwrap())
+        Writable::from_reg(Xmm::unwrap_new(r.to_reg()))
     }
 
     #[inline]
@@ -488,7 +486,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn xmm_mem_to_xmm_mem_imm(&mut self, r: &XmmMem) -> XmmMemImm {
-        XmmMemImm::new(r.clone().to_reg_mem().into()).unwrap()
+        XmmMemImm::unwrap_new(r.clone().to_reg_mem().into())
     }
 
     #[inline]
@@ -508,17 +506,17 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn reg_mem_to_xmm_mem(&mut self, rm: &RegMem) -> XmmMem {
-        XmmMem::new(rm.clone()).unwrap()
+        XmmMem::unwrap_new(rm.clone())
     }
 
     #[inline]
     fn gpr_mem_imm_new(&mut self, rmi: &RegMemImm) -> GprMemImm {
-        GprMemImm::new(rmi.clone()).unwrap()
+        GprMemImm::unwrap_new(rmi.clone())
     }
 
     #[inline]
     fn xmm_mem_imm_new(&mut self, rmi: &RegMemImm) -> XmmMemImm {
-        XmmMemImm::new(rmi.clone()).unwrap()
+        XmmMemImm::unwrap_new(rmi.clone())
     }
 
     #[inline]
@@ -538,27 +536,27 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn xmm_new(&mut self, r: Reg) -> Xmm {
-        Xmm::new(r).unwrap()
+        Xmm::unwrap_new(r)
     }
 
     #[inline]
     fn gpr_new(&mut self, r: Reg) -> Gpr {
-        Gpr::new(r).unwrap()
+        Gpr::unwrap_new(r)
     }
 
     #[inline]
     fn reg_mem_to_gpr_mem(&mut self, rm: &RegMem) -> GprMem {
-        GprMem::new(rm.clone()).unwrap()
+        GprMem::unwrap_new(rm.clone())
     }
 
     #[inline]
     fn reg_to_gpr_mem(&mut self, r: Reg) -> GprMem {
-        GprMem::new(RegMem::reg(r)).unwrap()
+        GprMem::unwrap_new(RegMem::reg(r))
     }
 
     #[inline]
     fn imm8_reg_to_imm8_gpr(&mut self, ir: &Imm8Reg) -> Imm8Gpr {
-        Imm8Gpr::new(ir.clone()).unwrap()
+        Imm8Gpr::unwrap_new(ir.clone())
     }
 
     #[inline]
@@ -578,12 +576,12 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn imm8_to_imm8_gpr(&mut self, imm: u8) -> Imm8Gpr {
-        Imm8Gpr::new(Imm8Reg::Imm8 { imm }).unwrap()
+        Imm8Gpr::unwrap_new(Imm8Reg::Imm8 { imm })
     }
 
     fn gpr_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<Gpr> {
         match val.as_imm8_reg() {
-            &Imm8Reg::Reg { reg } => Some(Gpr::new(reg).unwrap()),
+            &Imm8Reg::Reg { reg } => Some(Gpr::unwrap_new(reg)),
             Imm8Reg::Imm8 { .. } => None,
         }
     }
@@ -601,7 +599,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             Some(RegisterClass::Gpr {
                 single_register: ty != I128,
             })
-        } else if ty == F32 || ty == F64 || (ty.is_vector() && ty.bits() == 128) {
+        } else if ty.is_float() || (ty.is_vector() && ty.bits() == 128) {
             Some(RegisterClass::Xmm)
         } else {
             None
@@ -689,57 +687,48 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
-        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
-
-        emit_vm_call(
+        let outputs = emit_vm_call(
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
-            libcall.clone(),
+            *libcall,
             &[a],
-            &[output_reg],
         )
         .expect("Failed to emit LibCall");
 
-        output_reg.to_reg()
+        debug_assert_eq!(outputs.len(), 1);
+
+        outputs[0]
     }
 
     fn libcall_2(&mut self, libcall: &LibCall, a: Reg, b: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
-        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
-
-        emit_vm_call(
+        let outputs = emit_vm_call(
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
-            libcall.clone(),
+            *libcall,
             &[a, b],
-            &[output_reg],
         )
         .expect("Failed to emit LibCall");
 
-        output_reg.to_reg()
+        debug_assert_eq!(outputs.len(), 1);
+
+        outputs[0]
     }
 
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
-        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
-
-        emit_vm_call(
+        let outputs = emit_vm_call(
             self.lower_ctx,
             &self.backend.flags,
             &self.backend.triple,
-            libcall.clone(),
+            *libcall,
             &[a, b, c],
-            &[output_reg],
         )
         .expect("Failed to emit LibCall");
 
-        output_reg.to_reg()
+        debug_assert_eq!(outputs.len(), 1);
+
+        outputs[0]
     }
 
     #[inline]
@@ -995,7 +984,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn xmi_imm(&mut self, imm: u32) -> XmmMemImm {
-        XmmMemImm::new(RegMemImm::imm(imm)).unwrap()
+        XmmMemImm::unwrap_new(RegMemImm::imm(imm))
     }
 
     fn insert_i8x16_lane_hole(&mut self, hole_idx: u8) -> VCodeConstant {
@@ -1005,16 +994,14 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
-    isle_prelude_method_helpers!(X64CallSite);
-
     fn load_xmm_unaligned(&mut self, addr: SyntheticAmode) -> Xmm {
         let tmp = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
         self.lower_ctx.emit(MInst::XmmUnaryRmRUnaligned {
             op: SseOpcode::Movdqu,
-            src: XmmMem::new(RegMem::mem(addr)).unwrap(),
-            dst: Writable::from_reg(Xmm::new(tmp.to_reg()).unwrap()),
+            src: XmmMem::unwrap_new(RegMem::mem(addr)),
+            dst: Writable::from_reg(Xmm::unwrap_new(tmp.to_reg())),
         });
-        Xmm::new(tmp.to_reg()).unwrap()
+        Xmm::unwrap_new(tmp.to_reg())
     }
 }
 
@@ -1052,12 +1039,9 @@ const I8X16_USHR_MASKS: [u8; 128] = [
 #[inline]
 fn to_simm32(constant: i64, ty: Type) -> Option<GprMemImm> {
     if ty.bits() <= 32 || constant == ((constant << 32) >> 32) {
-        Some(
-            GprMemImm::new(RegMemImm::Imm {
-                simm32: constant as u32,
-            })
-            .unwrap(),
-        )
+        Some(GprMemImm::unwrap_new(RegMemImm::Imm {
+            simm32: constant as u32,
+        }))
     } else {
         None
     }

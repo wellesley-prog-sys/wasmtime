@@ -900,6 +900,11 @@ impl Func {
     /// Does this function match the given type?
     ///
     /// That is, is this function's type a subtype of the given type?
+    ///
+    /// # Panics
+    ///
+    /// Panics if this function is not associated with the given store or if the
+    /// function type is not associated with the store's engine.
     pub fn matches_ty(&self, store: impl AsContext, func_ty: &FuncType) -> bool {
         self._matches_ty(store.as_context().0, func_ty)
     }
@@ -979,8 +984,8 @@ impl Func {
     /// # Panics
     ///
     /// This function will panic if called on a function belonging to an async
-    /// store. Asynchronous stores must always use `call_async`.
-    /// initiates a panic. Also panics if `store` does not own this function.
+    /// store. Asynchronous stores must always use `call_async`. Also panics if
+    /// `store` does not own this function.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn call(

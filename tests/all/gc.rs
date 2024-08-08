@@ -62,7 +62,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
         let r = ExternRef::new(&mut scope, SetFlagOnDrop(inner_dropped.clone()))?;
         {
-            let args = [Val::I32(5), Val::ExternRef(Some(r.clone()))];
+            let args = [Val::I32(5), Val::ExternRef(Some(r))];
             func.call(&mut scope, &args, &mut [Val::I32(0)])?;
         }
 
@@ -393,7 +393,7 @@ fn global_init_no_leak() -> Result<()> {
     let global = Global::new(
         &mut store,
         GlobalType::new(ValType::EXTERNREF, Mutability::Const),
-        externref.clone().into(),
+        externref.into(),
     )?;
     Instance::new(&mut store, &module, &[global.into()])?;
     drop(store);
@@ -478,11 +478,7 @@ fn no_gc_middle_of_args() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(any(
-    miri,
-    // TODO(6530): s390x doesn't support tail calls yet.
-    target_arch = "s390x"
-), ignore)]
+#[cfg_attr(miri, ignore)]
 fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
     // Test that GC refs in tail-calls' stack arguments get properly accounted
     // for in stack maps.

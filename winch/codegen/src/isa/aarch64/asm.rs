@@ -1,13 +1,14 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::RoundingMode;
+use crate::masm::{FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{masm::OperandSize, reg::Reg};
-use cranelift_codegen::isa::aarch64::inst::FPUOpRI::{UShr32, UShr64};
 use cranelift_codegen::isa::aarch64::inst::{
-    FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
-    ScalarSize,
+    BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
+    FPUOpRI::{self, UShr32, UShr64},
+    FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
+use cranelift_codegen::MachInst;
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
@@ -24,10 +25,41 @@ impl From<OperandSize> for inst::OperandSize {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
-            s => panic!("Invalid operand size {:?}", s),
+            s => panic!("Invalid operand size {s:?}"),
         }
     }
 }
+
+impl From<IntCmpKind> for Cond {
+    fn from(value: IntCmpKind) -> Self {
+        match value {
+            IntCmpKind::Eq => Cond::Eq,
+            IntCmpKind::Ne => Cond::Ne,
+            IntCmpKind::LtS => Cond::Lt,
+            IntCmpKind::LtU => Cond::Lo,
+            IntCmpKind::GtS => Cond::Gt,
+            IntCmpKind::GtU => Cond::Hi,
+            IntCmpKind::LeS => Cond::Le,
+            IntCmpKind::LeU => Cond::Ls,
+            IntCmpKind::GeS => Cond::Ge,
+            IntCmpKind::GeU => Cond::Hs,
+        }
+    }
+}
+
+impl From<FloatCmpKind> for Cond {
+    fn from(value: FloatCmpKind) -> Self {
+        match value {
+            FloatCmpKind::Eq => Cond::Eq,
+            FloatCmpKind::Ne => Cond::Ne,
+            FloatCmpKind::Lt => Cond::Mi,
+            FloatCmpKind::Gt => Cond::Gt,
+            FloatCmpKind::Le => Cond::Ls,
+            FloatCmpKind::Ge => Cond::Ge,
+        }
+    }
+}
+
 impl Into<ScalarSize> for OperandSize {
     fn into(self) -> ScalarSize {
         match self {
@@ -72,6 +104,21 @@ impl Assembler {
     }
 
     fn emit(&mut self, inst: Inst) {
+        self.emit_with_island(inst, Inst::worst_case_size());
+    }
+
+    fn emit_with_island(&mut self, inst: Inst, needed_space: u32) {
+        if self.buffer.island_needed(needed_space) {
+            let label = self.buffer.get_label();
+            let jmp = Inst::Jump {
+                dest: BranchTarget::Label(label),
+            };
+            jmp.emit(&mut self.buffer, &mut self.emit_info, &mut self.emit_state);
+            self.buffer
+                .emit_island(needed_space, self.emit_state.ctrl_plane_mut());
+            self.buffer
+                .bind_label(label, self.emit_state.ctrl_plane_mut());
+        }
         inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
@@ -227,6 +274,23 @@ impl Assembler {
         }
     }
 
+    /// Subtract with three registers, setting flags.
+    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
+        self.emit_alu_rrr_extend(ALUOp::SubS, rm, rn, regs::zero(), size);
+    }
+
+    /// Subtract immediate and register, setting flags.
+    pub fn subs_ir(&mut self, imm: u64, rn: Reg, size: OperandSize) {
+        let alu_op = ALUOp::SubS;
+        if let Some(imm) = Imm12::maybe_from_u64(imm) {
+            self.emit_alu_rri(alu_op, imm, rn, regs::zero(), size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr_extend(alu_op, scratch, rn, regs::zero(), size);
+        }
+    }
+
     /// Multiply with three registers.
     pub fn mul_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
         self.emit_alu_rrrr(ALUOp3::MAdd, rm, rn, rd, regs::zero(), size);
@@ -237,6 +301,89 @@ impl Assembler {
         let scratch = regs::scratch();
         self.load_constant(imm, scratch);
         self.emit_alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
+    }
+
+    /// And with three registers.
+    pub fn and_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::And, rm, rn, rd, size);
+    }
+
+    /// And immediate and register.
+    pub fn and_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let alu_op = ALUOp::And;
+        let cl_size: inst::OperandSize = size.into();
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
+            self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(alu_op, scratch, rn, rd, size);
+        }
+    }
+
+    /// Or with three registers.
+    pub fn or_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::Orr, rm, rn, rd, size);
+    }
+
+    /// Or immediate and register.
+    pub fn or_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let alu_op = ALUOp::Orr;
+        let cl_size: inst::OperandSize = size.into();
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
+            self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(alu_op, scratch, rn, rd, size);
+        }
+    }
+
+    /// Xor with three registers.
+    pub fn xor_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::Eor, rm, rn, rd, size);
+    }
+
+    /// Xor immediate and register.
+    pub fn xor_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let alu_op = ALUOp::Eor;
+        let cl_size: inst::OperandSize = size.into();
+        if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
+            self.emit_alu_rri_logic(alu_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(alu_op, scratch, rn, rd, size);
+        }
+    }
+
+    /// Shift with three registers.
+    pub fn shift_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, kind: ShiftKind, size: OperandSize) {
+        let shift_op = self.shift_kind_to_alu_op(kind, rm, size);
+        self.emit_alu_rrr(shift_op, rm, rn, rd, size);
+    }
+
+    /// Shift immediate and register.
+    pub fn shift_ir(&mut self, imm: u64, rn: Reg, rd: Reg, kind: ShiftKind, size: OperandSize) {
+        let shift_op = self.shift_kind_to_alu_op(kind, rn, size);
+
+        if let Some(imm) = ImmShift::maybe_from_u64(imm) {
+            self.emit_alu_rri_shift(shift_op, imm, rn, rd, size);
+        } else {
+            let scratch = regs::scratch();
+            self.load_constant(imm, scratch);
+            self.emit_alu_rrr(shift_op, scratch, rn, rd, size);
+        }
+    }
+
+    /// Count Leading Zeros.
+    pub fn clz(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_bit_rr(BitOp::Clz, rn, rd, size);
+    }
+
+    /// Reverse Bits reverses the bit order in a register.
+    pub fn rbit(&mut self, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_bit_rr(BitOp::RBit, rn, rd, size);
     }
 
     /// Float add with three registers.
@@ -295,7 +442,7 @@ impl Assembler {
             (RoundingMode::Up, OperandSize::S64) => FpuRoundMode::Plus64,
             (RoundingMode::Down, OperandSize::S64) => FpuRoundMode::Minus64,
             (RoundingMode::Zero, OperandSize::S64) => FpuRoundMode::Zero64,
-            (m, o) => panic!("Invalid rounding mode or operand size {:?}, {:?}", m, o),
+            (m, o) => panic!("Invalid rounding mode or operand size {m:?}, {o:?}"),
         };
         self.emit_fpu_round(fpu_mode, rn, rd)
     }
@@ -329,9 +476,72 @@ impl Assembler {
         self.emit_fpu_rri_mod(sli, ri, rn, rd)
     }
 
+    /// Float compare.
+    pub fn fcmp(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
+        self.emit(Inst::FpuCmp {
+            size: size.into(),
+            rn: rn.into(),
+            rm: rm.into(),
+        })
+    }
+
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {});
+    }
+
+    /// An unconditional branch.
+    pub fn jmp(&mut self, target: MachLabel) {
+        self.emit(Inst::Jump {
+            dest: BranchTarget::Label(target),
+        });
+    }
+
+    /// A conditional branch.
+    pub fn jmp_if(&mut self, kind: Cond, taken: MachLabel) {
+        self.emit(Inst::CondBr {
+            taken: BranchTarget::Label(taken),
+            not_taken: BranchTarget::ResolvedOffset(4),
+            kind: CondBrKind::Cond(kind),
+        });
+    }
+
+    /// Emits a jump table sequence.
+    pub fn jmp_table(
+        &mut self,
+        targets: &[MachLabel],
+        default: MachLabel,
+        index: Reg,
+        tmp1: Reg,
+        tmp2: Reg,
+    ) {
+        self.emit_with_island(
+            Inst::JTSequence {
+                default,
+                targets: Box::new(targets.to_vec()),
+                ridx: index.into(),
+                rtmp1: Writable::from_reg(tmp1.into()),
+                rtmp2: Writable::from_reg(tmp2.into()),
+            },
+            // number of bytes needed for the jumptable sequence:
+            // 4 bytes per instruction, with 8 instructions base + the size of
+            // the jumptable more.
+            (4 * (8 + targets.len())).try_into().unwrap(),
+        );
+    }
+
+    /// Conditional Set sets the destination register to 1 if the condition
+    /// is true, and otherwise sets it to 0.
+    pub fn cset(&mut self, rd: Reg, cond: Cond) {
+        self.emit(Inst::CSet {
+            rd: Writable::from_reg(rd.into()),
+            cond,
+        });
+    }
+
+    /// Bitwise AND (shifted register), setting flags.
+    pub fn ands_rr(&mut self, rn: Reg, rm: Reg, size: OperandSize) {
+        self.emit_alu_rrr(ALUOp::AndS, rm, rn, regs::zero(), size);
     }
 
     // Helpers for ALU operations.
@@ -343,6 +553,50 @@ impl Assembler {
             rd: Writable::from_reg(rd.into()),
             rn: rn.into(),
             imm12: imm,
+        });
+    }
+
+    fn emit_alu_rri_logic(
+        &mut self,
+        op: ALUOp,
+        imm: ImmLogic,
+        rn: Reg,
+        rd: Reg,
+        size: OperandSize,
+    ) {
+        self.emit(Inst::AluRRImmLogic {
+            alu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            imml: imm,
+        });
+    }
+
+    fn emit_alu_rri_shift(
+        &mut self,
+        op: ALUOp,
+        imm: ImmShift,
+        rn: Reg,
+        rd: Reg,
+        size: OperandSize,
+    ) {
+        self.emit(Inst::AluRRImmShift {
+            alu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            immshift: imm,
+        });
+    }
+
+    fn emit_alu_rrr(&mut self, op: ALUOp, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::AluRRR {
+            alu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            rm: rm.into(),
         });
     }
 
@@ -410,6 +664,31 @@ impl Assembler {
             rd: Writable::from_reg(rd.into()),
             rn: rn.into(),
         });
+    }
+
+    fn emit_bit_rr(&mut self, op: BitOp, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit(Inst::BitRR {
+            op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+        });
+    }
+
+    // Convert ShiftKind to ALUOp. If kind == Rotl, then emulate it by emitting
+    // the negation of the given reg r, and returns ALUOp::RotR.
+    fn shift_kind_to_alu_op(&mut self, kind: ShiftKind, r: Reg, size: OperandSize) -> ALUOp {
+        match kind {
+            ShiftKind::Shl => ALUOp::Lsl,
+            ShiftKind::ShrS => ALUOp::Asr,
+            ShiftKind::ShrU => ALUOp::Lsr,
+            ShiftKind::Rotr => ALUOp::RotR,
+            ShiftKind::Rotl => {
+                // neg(r) is sub(zero, r).
+                self.emit_alu_rrr(ALUOp::Sub, regs::zero(), r, r, size);
+                ALUOp::RotR
+            }
+        }
     }
 
     /// Get a label from the underlying machine code buffer.

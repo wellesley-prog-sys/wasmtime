@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     let engine = Engine::new(Config::new().wasm_component_model(true))?;
 
     // NOTE: The wasm32-unknown-unknown target is used here for simplicity, real world use cases
-    // should probably use the wasm32-wasi target, and enable wasi preview2 within the component
+    // should probably use the wasm32-wasip1 target, and enable wasi preview2 within the component
     // model.
     let component = convert_to_component("target/wasm32-unknown-unknown/debug/guest.wasm")?;
 
@@ -57,6 +57,6 @@ fn main() -> Result<()> {
     host::add_to_linker(&mut linker, |state: &mut MyState| &mut state.host)?;
     let convert = Convert::instantiate(&mut store, &component, &linker)?;
     let result = convert.call_convert_celsius_to_fahrenheit(&mut store, 23.4)?;
-    println!("Converted to: {:?}", result);
+    println!("Converted to: {result:?}");
     Ok(())
 }

@@ -193,9 +193,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn i64_sextend_imm64(&mut self, ty: Type, mut x: Imm64) -> i64 {
-            x.sign_extend_from_width(ty.bits());
-            x.bits()
+        fn i64_sextend_imm64(&mut self, ty: Type, x: Imm64) -> i64 {
+            x.sign_extend_from_width(ty.bits()).bits()
         }
 
         #[inline]
@@ -436,18 +435,19 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
-            match ty {
-                F32 | F64 => Some(ty),
-                _ => None,
+            if ty.is_float() {
+                Some(ty)
+            } else {
+                None
             }
         }
 
         #[inline]
         fn ty_float_or_vec(&mut self, ty: Type) -> Option<Type> {
-            match ty {
-                F32 | F64 => Some(ty),
-                ty if ty.is_vector() => Some(ty),
-                _ => None,
+            if ty.is_float() || ty.is_vector() {
+                Some(ty)
+            } else {
+                None
             }
         }
 
@@ -598,6 +598,10 @@ macro_rules! isle_common_prelude_methods {
             } else {
                 None
             }
+        }
+
+        fn u16_from_ieee16(&mut self, val: Ieee16) -> u16 {
+            val.bits()
         }
 
         fn u32_from_ieee32(&mut self, val: Ieee32) -> u32 {
@@ -938,8 +942,72 @@ macro_rules! isle_common_prelude_methods {
             }
         }
 
+        fn f16_min(&mut self, a: Ieee16, b: Ieee16) -> Option<Ieee16> {
+            a.minimum(b).non_nan()
+        }
+
+        fn f16_max(&mut self, a: Ieee16, b: Ieee16) -> Option<Ieee16> {
+            a.maximum(b).non_nan()
+        }
+
+        fn f16_neg(&mut self, n: Ieee16) -> Ieee16 {
+            -n
+        }
+
+        fn f16_abs(&mut self, n: Ieee16) -> Ieee16 {
+            n.abs()
+        }
+
+        fn f16_copysign(&mut self, a: Ieee16, b: Ieee16) -> Ieee16 {
+            a.copysign(b)
+        }
+
+        fn f32_add(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs + rhs).non_nan()
+        }
+
+        fn f32_sub(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs - rhs).non_nan()
+        }
+
+        fn f32_mul(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs * rhs).non_nan()
+        }
+
+        fn f32_div(&mut self, lhs: Ieee32, rhs: Ieee32) -> Option<Ieee32> {
+            (lhs / rhs).non_nan()
+        }
+
+        fn f32_sqrt(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.sqrt().non_nan()
+        }
+
+        fn f32_ceil(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.ceil().non_nan()
+        }
+
+        fn f32_floor(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.floor().non_nan()
+        }
+
+        fn f32_trunc(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.trunc().non_nan()
+        }
+
+        fn f32_nearest(&mut self, n: Ieee32) -> Option<Ieee32> {
+            n.round_ties_even().non_nan()
+        }
+
+        fn f32_min(&mut self, a: Ieee32, b: Ieee32) -> Option<Ieee32> {
+            a.minimum(b).non_nan()
+        }
+
+        fn f32_max(&mut self, a: Ieee32, b: Ieee32) -> Option<Ieee32> {
+            a.maximum(b).non_nan()
+        }
+
         fn f32_neg(&mut self, n: Ieee32) -> Ieee32 {
-            n.neg()
+            -n
         }
 
         fn f32_abs(&mut self, n: Ieee32) -> Ieee32 {
@@ -950,8 +1018,52 @@ macro_rules! isle_common_prelude_methods {
             a.copysign(b)
         }
 
+        fn f64_add(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs + rhs).non_nan()
+        }
+
+        fn f64_sub(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs - rhs).non_nan()
+        }
+
+        fn f64_mul(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs * rhs).non_nan()
+        }
+
+        fn f64_div(&mut self, lhs: Ieee64, rhs: Ieee64) -> Option<Ieee64> {
+            (lhs / rhs).non_nan()
+        }
+
+        fn f64_sqrt(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.sqrt().non_nan()
+        }
+
+        fn f64_ceil(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.ceil().non_nan()
+        }
+
+        fn f64_floor(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.floor().non_nan()
+        }
+
+        fn f64_trunc(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.trunc().non_nan()
+        }
+
+        fn f64_nearest(&mut self, n: Ieee64) -> Option<Ieee64> {
+            n.round_ties_even().non_nan()
+        }
+
+        fn f64_min(&mut self, a: Ieee64, b: Ieee64) -> Option<Ieee64> {
+            a.minimum(b).non_nan()
+        }
+
+        fn f64_max(&mut self, a: Ieee64, b: Ieee64) -> Option<Ieee64> {
+            a.maximum(b).non_nan()
+        }
+
         fn f64_neg(&mut self, n: Ieee64) -> Ieee64 {
-            n.neg()
+            -n
         }
 
         fn f64_abs(&mut self, n: Ieee64) -> Ieee64 {
@@ -959,6 +1071,26 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn f64_copysign(&mut self, a: Ieee64, b: Ieee64) -> Ieee64 {
+            a.copysign(b)
+        }
+
+        fn f128_min(&mut self, a: Ieee128, b: Ieee128) -> Option<Ieee128> {
+            a.minimum(b).non_nan()
+        }
+
+        fn f128_max(&mut self, a: Ieee128, b: Ieee128) -> Option<Ieee128> {
+            a.maximum(b).non_nan()
+        }
+
+        fn f128_neg(&mut self, n: Ieee128) -> Ieee128 {
+            -n
+        }
+
+        fn f128_abs(&mut self, n: Ieee128) -> Ieee128 {
+            n.abs()
+        }
+
+        fn f128_copysign(&mut self, a: Ieee128, b: Ieee128) -> Ieee128 {
             a.copysign(b)
         }
     };

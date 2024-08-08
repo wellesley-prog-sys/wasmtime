@@ -99,14 +99,6 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
             }
         }
 
-        // TODO(#6530): These tests require tail calls, but s390x doesn't
-        // support them yet.
-        if cfg!(target_arch = "s390x") {
-            if part == "function-references" || part == "tail-call" {
-                return true;
-            }
-        }
-
         // Disable spec tests for proposals that Winch does not implement yet.
         if strategy == Strategy::Winch {
             let part = part.to_str().unwrap();
@@ -294,8 +286,10 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
             cfg.static_memory_maximum_size(0);
         }
         cfg.dynamic_memory_reserved_for_growth(0);
-        cfg.static_memory_guard_size(0);
-        cfg.dynamic_memory_guard_size(0);
+
+        let small_guard = 64 * 1024;
+        cfg.static_memory_guard_size(small_guard);
+        cfg.dynamic_memory_guard_size(small_guard);
     }
 
     let _pooling_lock = if pooling {

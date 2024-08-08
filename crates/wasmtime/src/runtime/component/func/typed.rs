@@ -152,7 +152,7 @@ where
     /// # Panics
     ///
     /// Panics if this is called on a function in an asynchronous store. This
-    /// only works with functions defined within a synchonous store. Also
+    /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
     pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
         assert!(
@@ -1765,7 +1765,7 @@ pub fn typecheck_record(
 
             for (field, &(name, check)) in fields.iter().zip(expected) {
                 check(&field.ty, types)
-                    .with_context(|| format!("type mismatch for field {}", name))?;
+                    .with_context(|| format!("type mismatch for field {name}"))?;
 
                 if field.name != name {
                     bail!("expected record field named {}, found {}", name, field.name);

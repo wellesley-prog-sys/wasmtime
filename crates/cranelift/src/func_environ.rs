@@ -247,7 +247,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.builtin_functions.memory_atomic_wait64(func),
                 memory_index.index(),
             ),
-            x => panic!("get_memory_atomic_wait unsupported type: {:?}", x),
+            x => panic!("get_memory_atomic_wait unsupported type: {x:?}"),
         }
     }
 
@@ -2586,7 +2586,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         }
 
         #[cfg(feature = "wmemcheck")]
-        {
+        if self.wmemcheck {
             let func_name = self.current_func_name(builder);
             if func_name == Some("malloc") {
                 self.check_malloc_start(builder);

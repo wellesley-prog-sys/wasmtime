@@ -12,12 +12,17 @@ use std::{
 use wasmtime::component::Linker;
 use wasmtime::{Config, Engine, Memory, MemoryType, Store, StoreLimits};
 use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
+#[cfg(feature = "wasi-keyvalue")]
+use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnCtx;
+#[cfg(feature = "wasi-runtime-config")]
+use wasmtime_wasi_runtime_config::{WasiRuntimeConfig, WasiRuntimeConfigVariables};
 
 struct Host {
     table: wasmtime::component::ResourceTable,
@@ -28,6 +33,12 @@ struct Host {
 
     #[cfg(feature = "wasi-nn")]
     nn: Option<WasiNnCtx>,
+
+    #[cfg(feature = "wasi-runtime-config")]
+    wasi_runtime_config: Option<WasiRuntimeConfigVariables>,
+
+    #[cfg(feature = "wasi-keyvalue")]
+    wasi_keyvalue: Option<WasiKeyValueCtx>,
 }
 
 impl WasiView for Host {
@@ -146,6 +157,10 @@ impl ServeCommand {
 
             #[cfg(feature = "wasi-nn")]
             nn: None,
+            #[cfg(feature = "wasi-runtime-config")]
+            wasi_runtime_config: None,
+            #[cfg(feature = "wasi-keyvalue")]
+            wasi_keyvalue: None,
         };
 
         if self.run.common.wasi.nn == Some(true) {
@@ -161,6 +176,38 @@ impl ServeCommand {
                     .collect::<Vec<_>>();
                 let (backends, registry) = wasmtime_wasi_nn::preload(&graphs)?;
                 host.nn.replace(WasiNnCtx::new(backends, registry));
+            }
+        }
+
+        if self.run.common.wasi.runtime_config == Some(true) {
+            #[cfg(feature = "wasi-runtime-config")]
+            {
+                let vars = WasiRuntimeConfigVariables::from_iter(
+                    self.run
+                        .common
+                        .wasi
+                        .runtime_config_var
+                        .iter()
+                        .map(|v| (v.key.clone(), v.value.clone())),
+                );
+                host.wasi_runtime_config.replace(vars);
+            }
+        }
+
+        if self.run.common.wasi.keyvalue == Some(true) {
+            #[cfg(feature = "wasi-keyvalue")]
+            {
+                let ctx = WasiKeyValueCtxBuilder::new()
+                    .in_memory_data(
+                        self.run
+                            .common
+                            .wasi
+                            .keyvalue_in_memory_data
+                            .iter()
+                            .map(|v| (v.key.clone(), v.value.clone())),
+                    )
+                    .build();
+                host.wasi_keyvalue.replace(ctx);
             }
         }
 
@@ -223,6 +270,32 @@ impl ServeCommand {
                 wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
                     let ctx = h.nn.as_mut().unwrap();
                     wasmtime_wasi_nn::wit::WasiNnView::new(&mut h.table, ctx)
+                })?;
+            }
+        }
+
+        if self.run.common.wasi.runtime_config == Some(true) {
+            #[cfg(not(feature = "wasi-runtime-config"))]
+            {
+                bail!("support for wasi-runtime-config was disabled at compile time");
+            }
+            #[cfg(feature = "wasi-runtime-config")]
+            {
+                wasmtime_wasi_runtime_config::add_to_linker(linker, |h| {
+                    WasiRuntimeConfig::from(h.wasi_runtime_config.as_ref().unwrap())
+                })?;
+            }
+        }
+
+        if self.run.common.wasi.keyvalue == Some(true) {
+            #[cfg(not(feature = "wasi-keyvalue"))]
+            {
+                bail!("support for wasi-keyvalue was disabled at compile time");
+            }
+            #[cfg(feature = "wasi-keyvalue")]
+            {
+                wasmtime_wasi_keyvalue::add_to_linker(linker, |h: &mut Host| {
+                    WasiKeyValue::new(h.wasi_keyvalue.as_ref().unwrap(), &mut h.table)
                 })?;
             }
         }
@@ -400,22 +473,21 @@ async fn handle_request(
 ) -> Result<hyper::Response<HyperOutgoingBody>> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
 
+    let req_id = inner.next_req_id();
+
+    log::info!(
+        "Request {req_id} handling {} to {}",
+        req.method(),
+        req.uri()
+    );
+
+    let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
+
+    let req = store.data_mut().new_incoming_request(Scheme::Http, req)?;
+    let out = store.data_mut().new_response_outparam(sender)?;
+    let proxy = inner.instance_pre.instantiate_async(&mut store).await?;
+
     let task = tokio::task::spawn(async move {
-        let req_id = inner.next_req_id();
-
-        log::info!(
-            "Request {req_id} handling {} to {}",
-            req.method(),
-            req.uri()
-        );
-
-        let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
-
-        let req = store.data_mut().new_incoming_request(req)?;
-        let out = store.data_mut().new_response_outparam(sender)?;
-
-        let proxy = inner.instance_pre.instantiate_async(&mut store).await?;
-
         if let Err(e) = proxy
             .wasi_http_incoming_handler()
             .call_handle(store, req, out)

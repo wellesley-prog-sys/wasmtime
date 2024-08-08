@@ -1,4 +1,4 @@
-use crate::abi::{self, align_to, LocalSlot};
+use crate::abi::{self, align_to, scratch, LocalSlot};
 use crate::codegen::{CodeGenContext, FuncEnv};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{
@@ -137,6 +137,7 @@ pub(crate) enum FloatCmpKind {
 /// Kinds of shifts in WebAssembly.The [`masm`] implementation for each ISA is
 /// responsible for emitting the correct sequence of instructions when
 /// lowering to machine code.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ShiftKind {
     /// Left shift.
     Shl,
@@ -226,7 +227,7 @@ impl OperandSize {
             4 => S32,
             8 => S64,
             16 => S128,
-            _ => panic!("Invalid bytes {} for OperandSize", bytes),
+            _ => panic!("Invalid bytes {bytes} for OperandSize"),
         }
     }
 }
@@ -251,6 +252,8 @@ pub(crate) enum Imm {
     F32(u32),
     /// F64 immediate.
     F64(u64),
+    /// V128 immediate.
+    V128(i128),
 }
 
 impl Imm {
@@ -272,6 +275,11 @@ impl Imm {
     /// Create a new F64 immediate.
     pub fn f64(bits: u64) -> Self {
         Self::F64(bits)
+    }
+
+    /// Create a new V128 immediate.
+    pub fn v128(bits: i128) -> Self {
+        Self::V128(bits)
     }
 
     /// Convert the immediate to i32, if possible.
@@ -417,6 +425,11 @@ impl RegImm {
     pub fn f64(bits: u64) -> Self {
         RegImm::Imm(Imm::f64(bits))
     }
+
+    /// V128 immediate.
+    pub fn v128(bits: i128) -> Self {
+        RegImm::Imm(Imm::v128(bits))
+    }
 }
 
 impl From<Reg> for RegImm {
@@ -536,7 +549,7 @@ pub(crate) trait MacroAssembler {
     fn store_ptr(&mut self, src: Reg, dst: Self::Address);
 
     /// Perform a WebAssembly store.
-    /// A WebAssebly store introduces several additional invariants compared to
+    /// A WebAssembly store introduces several additional invariants compared to
     /// [Self::store], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
@@ -549,7 +562,7 @@ pub(crate) trait MacroAssembler {
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
 
     /// Perform a WebAssembly load.
-    /// A WebAssebly load introduces several additional invariants compared to
+    /// A WebAssembly load introduces several additional invariants compared to
     /// [Self::load], more precisely, it can implicitly trap, in certain
     /// circumstances, even if explicit bounds checks are elided, in that sense,
     /// we consider this type of load as untrusted. It can also differ with
@@ -591,7 +604,7 @@ pub(crate) trait MacroAssembler {
         debug_assert!(bytes % 4 == 0);
         let mut remaining = bytes;
         let word_bytes = <Self::ABI as abi::ABI>::word_bytes();
-        let scratch = <Self::ABI as abi::ABI>::scratch_reg();
+        let scratch = scratch!(Self);
 
         let mut dst_offs = dst.as_u32() - bytes;
         let mut src_offs = src.as_u32() - bytes;
@@ -694,8 +707,11 @@ pub(crate) trait MacroAssembler {
     /// Perform logical exclusive or operation.
     fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
-    /// Perform a shift operation.
-    /// Shift is special in that some architectures have specific expectations
+    /// Perform a shift operation between a register and an immediate.
+    fn shift_ir(&mut self, dst: Reg, imm: u64, lhs: Reg, kind: ShiftKind, size: OperandSize);
+
+    /// Perform a shift operation between two registers.
+    /// This case is special in that some architectures have specific expectations
     /// regarding the location of the instruction arguments. To free the
     /// caller from having to deal with the architecture specific constraints
     /// we give this function access to the code generation context, allowing
@@ -865,7 +881,7 @@ pub(crate) trait MacroAssembler {
             // Add an upper bound to this generation;
             // given a considerably large amount of slots
             // this will be inefficient.
-            let zero = <Self::ABI as abi::ABI>::scratch_reg();
+            let zero = scratch!(Self);
             self.zero(zero);
             let zero = RegImm::reg(zero);
 

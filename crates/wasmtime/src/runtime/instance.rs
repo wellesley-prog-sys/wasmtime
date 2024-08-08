@@ -539,7 +539,7 @@ impl Instance {
             .and_then(|f| f.into_func())
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
         Ok(f.typed::<Params, Results>(store)
-            .with_context(|| format!("failed to convert function `{}` to given type", name))?)
+            .with_context(|| format!("failed to convert function `{name}` to given type"))?)
     }
 
     /// Looks up an exported [`Table`] value by name.
@@ -968,16 +968,17 @@ fn pre_instantiate_raw(
 
 fn typecheck<I>(
     module: &Module,
-    imports: &[I],
+    import_args: &[I],
     check: impl Fn(&matching::MatchCx<'_>, &EntityType, &I) -> Result<()>,
 ) -> Result<()> {
     let env_module = module.compiled_module().module();
-    let expected = env_module.imports().count();
-    if expected != imports.len() {
-        bail!("expected {} imports, found {}", expected, imports.len());
+    let expected_len = env_module.imports().count();
+    let actual_len = import_args.len();
+    if expected_len != actual_len {
+        bail!("expected {expected_len} imports, found {actual_len}");
     }
     let cx = matching::MatchCx::new(module.engine());
-    for ((name, field, mut expected_ty), actual) in env_module.imports().zip(imports) {
+    for ((name, field, mut expected_ty), actual) in env_module.imports().zip(import_args) {
         expected_ty.canonicalize_for_runtime_usage(&mut |module_index| {
             module.signatures().shared_type(module_index).unwrap()
         });

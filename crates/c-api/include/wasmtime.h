@@ -90,7 +90,7 @@
  *   issue](https://github.com/bytecodealliance/wasmtime/issues/new).
  *
  * * [C embedding
- *   examples](https://bytecodealliance.github.io/wasmtime/examples-c-embed.html)
+ *   examples](https://bytecodealliance.github.io/wasmtime/lang-c.html)
  *   are available online and are tested from the Wasmtime repository itself.
  *
  * * [Contribution documentation for
@@ -206,11 +206,11 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "24.0.0"
+#define WASMTIME_VERSION "25.0.0"
 /**
  * \brief Wasmtime major version number.
  */
-#define WASMTIME_VERSION_MAJOR 24
+#define WASMTIME_VERSION_MAJOR 25
 /**
  * \brief Wasmtime minor version number.
  */

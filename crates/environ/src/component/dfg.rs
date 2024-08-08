@@ -87,7 +87,7 @@ pub struct ComponentDfg {
     ///
     /// This map is not filled in on the initial creation of a `ComponentDfg`.
     /// Instead these modules are filled in by the `inline::adapt` phase where
-    /// adapter modules are identifed and filled in here.
+    /// adapter modules are identified and filled in here.
     ///
     /// The payload here is the static module index representing the core wasm
     /// adapter module that was generated as well as the arguments to the
@@ -706,7 +706,7 @@ impl LinearizeDfg<'_> {
         V: EntityRef,
     {
         if let Some(val) = map(self).get(&key) {
-            return val.clone();
+            return *val;
         }
         let tmp = gen(self, key);
         let index = V::new(map(self).len());

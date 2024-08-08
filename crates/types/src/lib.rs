@@ -236,7 +236,7 @@ impl WasmValType {
             | WasmValType::I64
             | WasmValType::F32
             | WasmValType::F64
-            | WasmValType::V128 => self.clone(),
+            | WasmValType::V128 => *self,
         }
     }
 }
@@ -563,6 +563,27 @@ pub struct WasmFuncType {
     non_i31_gc_ref_returns_count: usize,
 }
 
+impl fmt::Display for WasmFuncType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(func")?;
+        if !self.params.is_empty() {
+            write!(f, " (param")?;
+            for p in self.params.iter() {
+                write!(f, " {p}")?;
+            }
+            write!(f, ")")?;
+        }
+        if !self.returns.is_empty() {
+            write!(f, " (result")?;
+            for r in self.returns.iter() {
+                write!(f, " {r}")?;
+            }
+            write!(f, ")")?;
+        }
+        write!(f, ")")
+    }
+}
+
 impl TypeTrace for WasmFuncType {
     fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
     where
@@ -730,6 +751,16 @@ pub struct WasmFieldType {
     pub mutable: bool,
 }
 
+impl fmt::Display for WasmFieldType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.mutable {
+            write!(f, "(mut {})", self.element_type)
+        } else {
+            fmt::Display::fmt(&self.element_type, f)
+        }
+    }
+}
+
 impl TypeTrace for WasmFieldType {
     fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
     where
@@ -749,6 +780,12 @@ impl TypeTrace for WasmFieldType {
 /// A concrete array type.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmArrayType(pub WasmFieldType);
+
+impl fmt::Display for WasmArrayType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(array {})", self.0)
+    }
+}
 
 impl TypeTrace for WasmArrayType {
     fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
@@ -770,6 +807,16 @@ impl TypeTrace for WasmArrayType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmStructType {
     pub fields: Box<[WasmFieldType]>,
+}
+
+impl fmt::Display for WasmStructType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(struct")?;
+        for ty in self.fields.iter() {
+            write!(f, " {ty}")?;
+        }
+        write!(f, ")")
+    }
 }
 
 impl TypeTrace for WasmStructType {
@@ -800,6 +847,16 @@ pub enum WasmCompositeType {
     Array(WasmArrayType),
     Func(WasmFuncType),
     Struct(WasmStructType),
+}
+
+impl fmt::Display for WasmCompositeType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WasmCompositeType::Array(ty) => fmt::Display::fmt(ty, f),
+            WasmCompositeType::Func(ty) => fmt::Display::fmt(ty, f),
+            WasmCompositeType::Struct(ty) => fmt::Display::fmt(ty, f),
+        }
+    }
 }
 
 impl WasmCompositeType {
@@ -894,6 +951,23 @@ pub struct WasmSubType {
 
     /// The array, function, or struct that is defined.
     pub composite_type: WasmCompositeType,
+}
+
+impl fmt::Display for WasmSubType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_final && self.supertype.is_none() {
+            fmt::Display::fmt(&self.composite_type, f)
+        } else {
+            write!(f, "(sub")?;
+            if self.is_final {
+                write!(f, " final")?;
+            }
+            if let Some(sup) = self.supertype {
+                write!(f, " {sup}")?;
+            }
+            write!(f, " {})", self.composite_type)
+        }
+    }
 }
 
 impl WasmSubType {
@@ -1588,8 +1662,7 @@ impl From<wasmparser::MemoryType> for Memory {
         let page_size_log2 = u8::try_from(ty.page_size_log2.unwrap_or(16)).unwrap();
         debug_assert!(
             page_size_log2 == 16 || page_size_log2 == 0,
-            "invalid page_size_log2: {}; must be 16 or 0",
-            page_size_log2
+            "invalid page_size_log2: {page_size_log2}; must be 16 or 0"
         );
         Memory {
             minimum: ty.initial,
@@ -1649,14 +1722,15 @@ pub trait TypeConvert {
     }
 
     fn convert_composite_type(&self, ty: &wasmparser::CompositeType) -> WasmCompositeType {
-        match ty {
-            wasmparser::CompositeType::Func(f) => {
+        assert!(!ty.shared);
+        match &ty.inner {
+            wasmparser::CompositeInnerType::Func(f) => {
                 WasmCompositeType::Func(self.convert_func_type(f))
             }
-            wasmparser::CompositeType::Array(a) => {
+            wasmparser::CompositeInnerType::Array(a) => {
                 WasmCompositeType::Array(self.convert_array_type(a))
             }
-            wasmparser::CompositeType::Struct(s) => {
+            wasmparser::CompositeInnerType::Struct(s) => {
                 WasmCompositeType::Struct(self.convert_struct_type(s))
             }
         }

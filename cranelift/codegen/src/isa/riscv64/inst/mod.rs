@@ -5,7 +5,7 @@ use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 
-pub use crate::ir::{ExternalName, MemFlags, Opcode, Type};
+pub use crate::ir::{ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -58,7 +58,6 @@ pub struct CallInfo {
     pub dest: ExternalName,
     pub uses: CallArgList,
     pub defs: CallRetList,
-    pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub clobbers: PRegSet,
@@ -72,7 +71,6 @@ pub struct CallIndInfo {
     pub rn: Reg,
     pub uses: CallArgList,
     pub defs: CallRetList,
-    pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub clobbers: PRegSet,
@@ -84,7 +82,6 @@ pub struct CallIndInfo {
 #[derive(Clone, Debug)]
 pub struct ReturnCallInfo {
     pub uses: CallArgList,
-    pub opcode: Opcode,
     pub new_stack_arg_size: u32,
 }
 
@@ -742,7 +739,7 @@ impl MachInst for Inst {
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
-            Inst::Mov { rd, rm, .. } => Some((rd.clone(), rm.clone())),
+            Inst::Mov { rd, rm, .. } => Some((*rd, *rm)),
             _ => None,
         }
     }
@@ -833,8 +830,7 @@ impl MachInst for Inst {
                 Ok((&[RegClass::Vector], ty))
             }
             _ => Err(CodegenError::Unsupported(format!(
-                "Unexpected SSA-value type: {}",
-                ty
+                "Unexpected SSA-value type: {ty}"
             ))),
         }
     }
@@ -890,7 +886,7 @@ pub fn reg_name(reg: Reg) -> String {
             RegClass::Vector => format!("v{}", real.hw_enc()),
         },
         None => {
-            format!("{:?}", reg)
+            format!("{reg:?}")
         }
     }
 }
@@ -919,7 +915,7 @@ impl Inst {
                 String::default()
             };
             regs.iter().for_each(|i| {
-                x.push_str(format_reg(i.clone()).as_str());
+                x.push_str(format_reg(*i).as_str());
                 if *i != *regs.last().unwrap() {
                     x.push_str(",");
                 }
@@ -966,24 +962,23 @@ impl Inst {
             } => {
                 let tmp = format_reg(tmp.to_reg());
                 format!(
-                    "inline_stack_probe##guard_size={} probe_count={} tmp={}",
-                    guard_size, probe_count, tmp
+                    "inline_stack_probe##guard_size={guard_size} probe_count={probe_count} tmp={tmp}"
                 )
             }
             &Inst::AtomicStore { src, ty, p } => {
                 let src = format_reg(src);
                 let p = format_reg(p);
-                format!("atomic_store.{} {},({})", ty, src, p)
+                format!("atomic_store.{ty} {src},({p})")
             }
             &Inst::DummyUse { reg } => {
                 let reg = format_reg(reg);
-                format!("dummy_use {}", reg)
+                format!("dummy_use {reg}")
             }
 
             &Inst::AtomicLoad { rd, ty, p } => {
                 let p = format_reg(p);
                 let rd = format_reg(rd.to_reg());
-                format!("atomic_load.{} {},({})", ty, rd, p)
+                format!("atomic_load.{ty} {rd},({p})")
             }
             &Inst::AtomicRmwLoop {
                 offset,
@@ -999,10 +994,7 @@ impl Inst {
                 let x = format_reg(x);
                 let t0 = format_reg(t0.to_reg());
                 let dst = format_reg(dst.to_reg());
-                format!(
-                    "atomic_rmw.{} {} {},{},({})##t0={} offset={}",
-                    ty, op, dst, x, p, t0, offset
-                )
+                format!("atomic_rmw.{ty} {op} {dst},{x},({p})##t0={t0} offset={offset}")
             }
 
             &Inst::RawData { ref data } => match data.len() {
@@ -1021,11 +1013,11 @@ impl Inst {
                     format!(".8byte 0x{:x}", u64::from_le_bytes(bytes))
                 }
                 _ => {
-                    format!(".data {:?}", data)
+                    format!(".data {data:?}")
                 }
             },
             &Inst::Unwind { ref inst } => {
-                format!("unwind {:?}", inst)
+                format!("unwind {inst:?}")
             }
             &Inst::Brev8 {
                 rs,
@@ -1040,10 +1032,7 @@ impl Inst {
                 let tmp = format_reg(tmp.to_reg());
                 let tmp2 = format_reg(tmp2.to_reg());
                 let rd = format_reg(rd.to_reg());
-                format!(
-                    "brev8 {},{}##tmp={} tmp2={} step={} ty={}",
-                    rd, rs, tmp, tmp2, step, ty
-                )
+                format!("brev8 {rd},{rs}##tmp={tmp} tmp2={tmp2} step={step} ty={ty}")
             }
             &Inst::Popcnt {
                 sum,
@@ -1056,7 +1045,7 @@ impl Inst {
                 let tmp = format_reg(tmp.to_reg());
                 let step = format_reg(step.to_reg());
                 let sum = format_reg(sum.to_reg());
-                format!("popcnt {},{}##ty={} tmp={} step={}", sum, rs, ty, tmp, step)
+                format!("popcnt {sum},{rs}##ty={ty} tmp={tmp} step={step}")
             }
             &Inst::Cltz {
                 sum,
@@ -1095,10 +1084,7 @@ impl Inst {
                 let v = format_reg(v);
                 let t0 = format_reg(t0.to_reg());
                 let dst = format_reg(dst.to_reg());
-                format!(
-                    "atomic_cas.{} {},{},{},({})##t0={} offset={}",
-                    ty, dst, e, v, addr, t0, offset,
-                )
+                format!("atomic_cas.{ty} {dst},{e},{v},({addr})##t0={t0} offset={offset}",)
             }
             &Inst::BrTable {
                 index,
@@ -1140,10 +1126,10 @@ impl Inst {
             &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg());
                 let mut buf = String::new();
-                write!(&mut buf, "auipc {},0; ", rd).unwrap();
-                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
+                write!(&mut buf, "auipc {rd},0; ").unwrap();
+                write!(&mut buf, "ld {rd},12({rd}); ").unwrap();
                 write!(&mut buf, "j {}; ", Inst::UNCOMPRESSED_INSTRUCTION_SIZE + 8).unwrap();
-                write!(&mut buf, ".8byte 0x{:x}", imm).unwrap();
+                write!(&mut buf, ".8byte 0x{imm:x}").unwrap();
                 buf
             }
             &Inst::AluRRR {
@@ -1157,7 +1143,7 @@ impl Inst {
                 let rd_s = format_reg(rd.to_reg());
                 match alu_op {
                     AluOPRRR::Adduw if rs2 == zero_reg() => {
-                        format!("zext.w {},{}", rd_s, rs1_s)
+                        format!("zext.w {rd_s},{rs1_s}")
                     }
                     _ => {
                         format!("{} {},{},{}", alu_op.op_name(), rd_s, rs1_s, rs2_s)
@@ -1264,13 +1250,13 @@ impl Inst {
                         return format!("li {},{}", rd, imm12.as_i16());
                     }
                     (AluOPRRI::Addiw, _, imm12) if imm12.as_i16() == 0 => {
-                        return format!("sext.w {},{}", rd, rs_s);
+                        return format!("sext.w {rd},{rs_s}");
                     }
                     (AluOPRRI::Xori, _, imm12) if imm12.as_i16() == -1 => {
-                        return format!("not {},{}", rd, rs_s);
+                        return format!("not {rd},{rs_s}");
                     }
                     (AluOPRRI::SltiU, _, imm12) if imm12.as_i16() == 1 => {
-                        return format!("seqz {},{}", rd, rs_s);
+                        return format!("seqz {rd},{rs_s}");
                     }
                     (alu_op, _, _) if alu_op.option_funct12().is_some() => {
                         format!("{} {},{}", alu_op.op_name(), rd, rs_s)
@@ -1330,7 +1316,7 @@ impl Inst {
                 for arg in args {
                     let preg = format_reg(arg.preg);
                     let def = format_reg(arg.vreg.to_reg());
-                    write!(&mut s, " {}={}", def, preg).unwrap();
+                    write!(&mut s, " {def}={preg}").unwrap();
                 }
                 s
             }
@@ -1365,7 +1351,7 @@ impl Inst {
             &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
             &MInst::CallInd { ref info } => {
                 let rd = format_reg(info.rn);
-                format!("callind {}", rd)
+                format!("callind {rd}")
             }
             &MInst::ReturnCall {
                 ref callee,
@@ -1442,9 +1428,9 @@ impl Inst {
                 let src = format_reg(src);
                 let rd = format_reg(rd.to_reg());
                 if op.is_load() {
-                    format!("{} {},({})", op_name, rd, addr)
+                    format!("{op_name} {rd},({addr})")
                 } else {
-                    format!("{} {},{},({})", op_name, rd, src, addr)
+                    format!("{op_name} {rd},{src},({addr})")
                 }
             }
             &MInst::LoadExtName {
@@ -1462,7 +1448,7 @@ impl Inst {
             &MInst::LoadAddr { ref rd, ref mem } => {
                 let rs = mem.to_string();
                 let rd = format_reg(rd.to_reg());
-                format!("load_addr {},{}", rd, rs)
+                format!("load_addr {rd},{rs}")
             }
             &MInst::Mov { rd, rm, ty } => {
                 let rm = format_reg(rm);
@@ -1481,7 +1467,7 @@ impl Inst {
                 let rd = format_reg(rd.to_reg());
                 debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
                 let rm = reg_name(Reg::from(rm));
-                format!("mv {},{}", rd, rm)
+                format!("mv {rd},{rm}")
             }
             &MInst::Fence { pred, succ } => {
                 format!(
@@ -1512,7 +1498,7 @@ impl Inst {
                     c_rs2
                 )
             }
-            &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
+            &MInst::Udf { trap_code } => format!("udf##trap_code={trap_code}"),
             &MInst::EBreak {} => String::from("ebreak"),
             &Inst::VecAluRRRR {
                 op,
@@ -1530,7 +1516,7 @@ impl Inst {
                 let mask = format_mask(mask);
 
                 let vd_fmt = if vd_s != vd_src_s {
-                    format!("{},{}", vd_s, vd_src_s)
+                    format!("{vd_s},{vd_src_s}")
                 } else {
                     vd_s
                 };
@@ -1557,7 +1543,7 @@ impl Inst {
                 let imm_s = if op.imm_is_unsigned() {
                     format!("{}", imm.bits())
                 } else {
-                    format!("{}", imm)
+                    format!("{imm}")
                 };
 
                 format!("{op} {vd_s},{vs2_s},{imm_s}{mask} {vstate}")
@@ -1610,7 +1596,7 @@ impl Inst {
                 let imm_s = if op.imm_is_unsigned() {
                     format!("{}", imm.bits())
                 } else {
-                    format!("{}", imm)
+                    format!("{imm}")
                 };
 
                 match (op, imm) {
@@ -1764,11 +1750,7 @@ impl MachInstLabelUse for LabelUse {
         // re-check range
         assert!(
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),
-            "{:?} offset '{}' use_offset:'{}' label_offset:'{}'  must not exceed max range.",
-            self,
-            offset,
-            use_offset,
-            label_offset,
+            "{self:?} offset '{offset}' use_offset:'{use_offset}' label_offset:'{label_offset}'  must not exceed max range.",
         );
         self.patch_raw_offset(buffer, offset);
     }

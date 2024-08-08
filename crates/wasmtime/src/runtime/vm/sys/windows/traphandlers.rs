@@ -1,5 +1,6 @@
-use crate::runtime::vm::traphandlers::{tls, TrapTest};
+use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
+use std::ffi::c_void;
 use std::io;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Diagnostics::Debug::*;
@@ -23,15 +24,43 @@ extern "C" {
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler<'a> = dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync + 'a;
 
-pub unsafe fn platform_init(_macos_use_mach_ports: bool) {
-    // our trap handler needs to go first, so that we can recover from
-    // wasm faults and continue execution, so pass `1` as a true value
-    // here.
-    if AddVectoredExceptionHandler(1, Some(exception_handler)).is_null() {
-        panic!(
-            "failed to add exception handler: {}",
-            io::Error::last_os_error()
-        );
+pub struct TrapHandler {
+    handle: *mut c_void,
+}
+
+unsafe impl Send for TrapHandler {}
+unsafe impl Sync for TrapHandler {}
+
+impl TrapHandler {
+    pub unsafe fn new(_macos_use_mach_ports: bool) -> TrapHandler {
+        // our trap handler needs to go first, so that we can recover from
+        // wasm faults and continue execution, so pass `1` as a true value
+        // here.
+        let handle = AddVectoredExceptionHandler(1, Some(exception_handler));
+        if handle.is_null() {
+            panic!(
+                "failed to add exception handler: {}",
+                io::Error::last_os_error()
+            );
+        }
+        TrapHandler { handle }
+    }
+
+    pub fn validate_config(&self, _macos_use_mach_ports: bool) {}
+}
+
+impl Drop for TrapHandler {
+    fn drop(&mut self) {
+        unsafe {
+            let rc = RemoveVectoredExceptionHandler(self.handle);
+            if rc == 0 {
+                eprintln!(
+                    "failed to remove exception handler: {}",
+                    io::Error::last_os_error()
+                );
+                libc::abort();
+            }
+        }
     }
 }
 
@@ -67,13 +96,18 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             Some(info) => info,
             None => return ExceptionContinueSearch,
         };
+        let context = &*(*exception_info).ContextRecord;
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
-                let ip = (*(*exception_info).ContextRecord).Rip as *const u8;
-                let fp = (*(*exception_info).ContextRecord).Rbp as usize;
+                let regs = TrapRegisters {
+                    pc: context.Rip as usize,
+                    fp: context.Rbp as usize,
+                };
             } else if #[cfg(target_arch = "aarch64")] {
-                let ip = (*(*exception_info).ContextRecord).Pc as *const u8;
-                let fp = (*(*exception_info).ContextRecord).Anonymous.Anonymous.Fp as usize;
+                let regs = TrapRegisters {
+                    pc: context.Pc as usize,
+                    fp: context.Anonymous.Anonymous.Fp as usize,
+                };
             } else {
                 compile_error!("unsupported platform");
             }
@@ -88,13 +122,10 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
         } else {
             None
         };
-        match info.test_if_trap(ip, |handler| handler(exception_info)) {
+        match info.test_if_trap(regs, faulting_addr, |handler| handler(exception_info)) {
             TrapTest::NotWasm => ExceptionContinueSearch,
             TrapTest::HandledByEmbedder => ExceptionContinueExecution,
-            TrapTest::Trap { jmp_buf, trap } => {
-                info.set_jit_trap(ip, fp, faulting_addr, trap);
-                wasmtime_longjmp(jmp_buf)
-            }
+            TrapTest::Trap { jmp_buf } => wasmtime_longjmp(jmp_buf),
         }
     })
 }

@@ -221,8 +221,7 @@ fn timeout_in_start() -> Result<()> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("wasm trap: interrupt"),
-        "bad stderr: {}",
-        stderr
+        "bad stderr: {stderr}"
     );
     Ok(())
 }
@@ -244,8 +243,7 @@ fn timeout_in_invoke() -> Result<()> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("wasm trap: interrupt"),
-        "bad stderr: {}",
-        stderr
+        "bad stderr: {stderr}"
     );
     Ok(())
 }
@@ -1347,7 +1345,7 @@ mod test_programs {
         )?;
         println!("{}", String::from_utf8_lossy(&output.stderr));
         let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("{}", stdout);
+        println!("{stdout}");
         assert!(stdout.starts_with("Called _start\n"));
         assert!(stdout.ends_with("Done\n"));
         assert!(output.status.success());
@@ -1812,6 +1810,111 @@ stderr [1] :: after empty
 "
         );
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_authority_and_scheme() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("/")
+                    .header("Host", "localhost")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .method("CONNECT")
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        Ok(())
+    }
+
+    #[test]
+    fn cli_argv0() -> Result<()> {
+        run_wasmtime(&["run", "--argv0=a", CLI_ARGV0, "a"])?;
+        run_wasmtime(&["run", "--argv0=b", CLI_ARGV0_COMPONENT, "b"])?;
+        run_wasmtime(&["run", "--argv0=foo.wasm", CLI_ARGV0, "foo.wasm"])?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_runtime_config() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_RUNTIME_CONFIG_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("-Sruntime-config");
+            cmd.arg("-Sruntime-config-var=hello=world");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "world");
+        Ok(())
+    }
+
+    #[test]
+    fn cli_runtime_config() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Sruntime-config",
+            "-Sruntime-config-var=hello=world",
+            RUNTIME_CONFIG_GET_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_keyvalue() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_KEYVALUE_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("-Skeyvalue");
+            cmd.arg("-Skeyvalue-in-memory-data=hello=world");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "world");
+        Ok(())
+    }
+
+    #[test]
+    fn cli_keyvalue() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Skeyvalue",
+            "-Skeyvalue-in-memory-data=atomics_key=5",
+            KEYVALUE_MAIN_COMPONENT,
+        ])?;
         Ok(())
     }
 }

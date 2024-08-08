@@ -721,8 +721,7 @@ impl<'a> Parser<'a> {
             self.consume();
             text.parse().map_err(|e| {
                 self.error(&format!(
-                    "expected hexadecimal immediate, failed to parse: {}",
-                    e
+                    "expected hexadecimal immediate, failed to parse: {e}"
                 ))
             })
         } else {
@@ -751,8 +750,7 @@ impl<'a> Parser<'a> {
             Ok(constant_data)
         } else {
             Err(self.error(&format!(
-                "expected parsed constant to have {} bytes",
-                expected_size
+                "expected parsed constant to have {expected_size} bytes"
             )))
         }
     }
@@ -788,9 +786,9 @@ impl<'a> Parser<'a> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
-            if text.starts_with("0x") {
+            if let Some(num) = text.strip_prefix("0x") {
                 // Parse it as a u8 in hexadecimal form.
-                u8::from_str_radix(&text[2..], 16)
+                u8::from_str_radix(num, 16)
                     .map_err(|_| self.error("unable to parse u8 as a hexadecimal immediate"))
             } else {
                 // Parse it as a u8 to check for overflow and other issues.
@@ -1039,7 +1037,7 @@ impl<'a> Parser<'a> {
                     .finish(settings::Flags::new(flag_builder.clone()))
                     .map_err(|e| ParseError {
                         location: loc,
-                        message: format!("invalid ISA flags for '{}': {:?}", targ, e),
+                        message: format!("invalid ISA flags for '{targ}': {e:?}"),
                         is_warning: false,
                     })?,
             );
@@ -1131,10 +1129,7 @@ impl<'a> Parser<'a> {
                             .finish(settings::Flags::new(flag_builder.clone()))
                             .map_err(|e| ParseError {
                                 location: loc,
-                                message: format!(
-                                    "invalid ISA flags for '{}': {:?}",
-                                    target_name, e
-                                ),
+                                message: format!("invalid ISA flags for '{target_name}': {e:?}"),
                                 is_warning: false,
                             })?,
                     );
@@ -2837,7 +2832,7 @@ impl<'a> Parser<'a> {
                     return Err(self.error("only 128-bit vectors are currently supported"));
                 }
             }
-            _ => return Err(self.error(&format!("don't know how to parse data values of: {}", ty))),
+            _ => return Err(self.error(&format!("don't know how to parse data values of: {ty}"))),
         };
         Ok(dv)
     }
@@ -2874,6 +2869,10 @@ impl<'a> Parser<'a> {
                     imm: Imm64::new(unsigned),
                 }
             }
+            InstructionFormat::UnaryIeee16 => InstructionData::UnaryIeee16 {
+                opcode,
+                imm: self.match_ieee16("expected immediate 16-bit float operand")?,
+            },
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
                 imm: self.match_ieee32("expected immediate 32-bit float operand")?,
@@ -2888,6 +2887,9 @@ impl<'a> Parser<'a> {
                     let c = self.match_constant()?;
                     ctx.check_constant(c, self.loc)?;
                     c
+                } else if opcode == Opcode::F128const {
+                    let ieee128 = self.match_ieee128("expected immediate 128-bit float operand")?;
+                    ctx.function.dfg.constants.insert(ieee128.into())
                 } else if let Some(controlling_type) = explicit_control_type {
                     // If an explicit control type is present, we expect a sized value and insert
                     // it in the constant pool.
@@ -3271,7 +3273,7 @@ mod tests {
                 let aliased_to = func.dfg.resolve_aliases(v3);
                 assert_eq!(aliased_to.to_string(), "v4");
             }
-            _ => panic!("expected value: {}", v3),
+            _ => panic!("expected value: {v3}"),
         }
     }
 

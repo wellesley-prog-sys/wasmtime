@@ -73,6 +73,8 @@ struct Wasmtime {
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
     used_with_opts: HashSet<String>,
+    // Track the imports that matched the `trappable_imports` spec.
+    used_trappable_imports_opts: HashSet<String>,
 }
 
 struct ImportFunction {
@@ -442,7 +444,7 @@ impl Wasmtime {
                     // If this interface is remapped then that means that it was
                     // provided via the `with` key in the bindgen configuration.
                     // That means that bindings generation is skipped here. To
-                    // accomodate future bindgens depending on this bindgen
+                    // accommodate future bindgens depending on this bindgen
                     // though we still generate a module which reexports the
                     // original module. This helps maintain the same output
                     // structure regardless of whether `with` is used.
@@ -734,7 +736,7 @@ pub fn new(
             self.src,
             "
             /// Auto-generated bindings for a pre-instantiated version of a
-            /// copmonent which implements the world `{world_name}`.
+            /// component which implements the world `{world_name}`.
             ///
             /// This structure is created through [`{camel}Pre::new`] which
             /// takes a [`InstancePre`]({wt}::component::InstancePre) that
@@ -791,7 +793,7 @@ pub fn new(
                 /// Creates a new copy of `{camel}Pre` bindings which can then
                 /// be used to instantiate into a particular store.
                 ///
-                /// This method may fail if the compoennt behind `instance_pre`
+                /// This method may fail if the component behind `instance_pre`
                 /// does not have the required exports.
                 pub fn new(
                     instance_pre: {wt}::component::InstancePre<_T>,
@@ -894,6 +896,18 @@ pub fn new(
 
         if !unused_keys.is_empty() {
             anyhow::bail!("interfaces were specified in the `with` config option but are not referenced in the target world: {unused_keys:?}");
+        }
+
+        if let TrappableImports::Only(only) = &self.opts.trappable_imports {
+            let mut unused_imports = Vec::from_iter(
+                only.difference(&self.used_trappable_imports_opts)
+                    .map(|s| s.as_str()),
+            );
+
+            if !unused_imports.is_empty() {
+                unused_imports.sort();
+                anyhow::bail!("names specified in the `trappable_imports` config option but are not referenced in the target world: {unused_imports:?}");
+            }
         }
 
         if !self.opts.only_interfaces {
@@ -1576,7 +1590,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(")]\n")
             }
 
-            self.push_str(&format!("pub struct {}", name));
+            self.push_str(&format!("pub struct {name}"));
             self.print_generics(lt);
             self.push_str(" {\n");
             for field in record.fields.iter() {
@@ -1599,7 +1613,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(
                 "fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n",
             );
-            self.push_str(&format!("f.debug_struct(\"{}\")", name));
+            self.push_str(&format!("f.debug_struct(\"{name}\")"));
             for field in record.fields.iter() {
                 self.push_str(&format!(
                     ".field(\"{}\", &self.{})",
@@ -1640,7 +1654,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             let lt = self.lifetime_for(&info, mode);
             self.rustdoc(docs);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str(" = (");
             for ty in tuple.types.iter() {
@@ -1694,7 +1708,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
             let lt = self.lifetime_for(&info, mode);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str("= Option<");
             self.print_ty(payload, mode);
@@ -1754,7 +1768,7 @@ impl<'a> InterfaceGenerator<'a> {
                 uwriteln!(self.src, "#[derive({wt}::component::Lift)]");
             }
             uwriteln!(self.src, "#[derive({wt}::component::Lower)]");
-            self.push_str(&format!("#[component({})]\n", derive_component));
+            self.push_str(&format!("#[component({derive_component})]\n"));
             if let Some(path) = &self.gen.opts.wasmtime_crate {
                 uwriteln!(self.src, "#[component(wasmtime_crate = {path})]\n");
             }
@@ -1776,7 +1790,7 @@ impl<'a> InterfaceGenerator<'a> {
             for (case_name, component_name, docs, payload) in cases.clone() {
                 self.rustdoc(docs);
                 if let Some(n) = component_name {
-                    self.push_str(&format!("#[component(name = \"{}\")] ", n));
+                    self.push_str(&format!("#[component(name = \"{n}\")] "));
                 }
                 self.push_str(&case_name);
                 if let Some(ty) = payload {
@@ -1854,7 +1868,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("(e)");
             }
             self.push_str(" => {\n");
-            self.push_str(&format!("f.debug_tuple(\"{}::{}\")", name, case_name));
+            self.push_str(&format!("f.debug_tuple(\"{name}::{case_name}\")"));
             if payload.is_some() {
                 self.push_str(".field(e)");
             }
@@ -1872,7 +1886,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
             let lt = self.lifetime_for(&info, mode);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str("= Result<");
             self.print_optional_ty(result.ok.as_ref(), mode);
@@ -1916,7 +1930,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(&derives.into_iter().collect::<Vec<_>>().join(", "));
         self.push_str(")]\n");
 
-        self.push_str(&format!("pub enum {} {{\n", name));
+        self.push_str(&format!("pub enum {name} {{\n"));
         for case in enum_.cases.iter() {
             self.rustdoc(&case.docs);
             self.push_str(&format!("#[component(name = \"{}\")]", case.name));
@@ -2009,7 +2023,7 @@ impl<'a> InterfaceGenerator<'a> {
         let info = self.info(id);
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             let lt = self.lifetime_for(&info, mode);
             self.print_generics(lt);
             self.push_str(" = ");
@@ -2027,7 +2041,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (name, mode) in self.modes_of(id) {
             let lt = self.lifetime_for(&info, mode);
             self.rustdoc(docs);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str(" = ");
             self.print_list(ty, mode);
@@ -2057,9 +2071,15 @@ impl<'a> InterfaceGenerator<'a> {
     }
 
     fn special_case_trappable_error(
-        &self,
-        results: &Results,
+        &mut self,
+        func: &Function,
     ) -> Option<(&'a Result_, TypeId, String)> {
+        let results = &func.results;
+
+        self.gen
+            .used_trappable_imports_opts
+            .insert(func.name.clone());
+
         // We fillin a special trappable error type in the case when a function has just one
         // result, which is itself a `result<a, e>`, and the `e` is *not* a primitive
         // (i.e. defined in std) type, and matches the typename given by the user.
@@ -2124,18 +2144,21 @@ impl<'a> InterfaceGenerator<'a> {
         // into the representation required by Wasmtime's component API.
         let mut required_conversion_traits = IndexSet::new();
         let mut errors_converted = IndexMap::new();
-        let my_error_types = iface
+        let mut my_error_types = iface
             .types
             .iter()
             .filter(|(_, id)| self.gen.trappable_errors.contains_key(*id))
-            .map(|(_, id)| *id);
-        let used_error_types = iface
-            .functions
-            .iter()
-            .filter_map(|(_, func)| self.special_case_trappable_error(&func.results))
-            .map(|(_, id, _)| id);
+            .map(|(_, id)| *id)
+            .collect::<Vec<_>>();
+        my_error_types.extend(
+            iface
+                .functions
+                .iter()
+                .filter_map(|(_, func)| self.special_case_trappable_error(func))
+                .map(|(_, id, _)| id),
+        );
         let root = self.path_to_root();
-        for err_id in my_error_types.chain(used_error_types).collect::<Vec<_>>() {
+        for err_id in my_error_types {
             let custom_name = &self.gen.trappable_errors[&err_id];
             let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err_id)];
             let err_name = err.name.as_ref().unwrap();
@@ -2412,7 +2435,7 @@ impl<'a> InterfaceGenerator<'a> {
             } else {
                 uwrite!(self.src, "Ok(r)\n");
             }
-        } else if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
+        } else if let Some((_, err, _)) = self.special_case_trappable_error(func) {
             let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
             let err_name = err.name.as_ref().unwrap();
             let owner = match err.owner {
@@ -2467,9 +2490,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         if !self.gen.opts.trappable_imports.can_trap(func) {
             self.print_result_ty(&func.results, TypeMode::Owned);
-        } else if let Some((r, _id, error_typename)) =
-            self.special_case_trappable_error(&func.results)
-        {
+        } else if let Some((r, _id, error_typename)) = self.special_case_trappable_error(func) {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propagate their errors

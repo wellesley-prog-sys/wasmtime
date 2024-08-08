@@ -1091,6 +1091,7 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::Unary => insert_opcode,
         InstructionFormat::UnaryConst => insert_const,
         InstructionFormat::UnaryGlobalValue => todo!(),
+        InstructionFormat::UnaryIeee16 => insert_const,
         InstructionFormat::UnaryIeee32 => insert_const,
         InstructionFormat::UnaryIeee64 => insert_const,
         InstructionFormat::UnaryImm => insert_const,
@@ -1099,10 +1100,7 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         | InstructionFormat::Brif
         | InstructionFormat::Jump
         | InstructionFormat::MultiAry => {
-            panic!(
-                "Control-flow instructions should be handled by 'insert_terminator': {:?}",
-                fmt
-            )
+            panic!("Control-flow instructions should be handled by 'insert_terminator': {fmt:?}")
         }
     }
 }
@@ -1403,8 +1401,13 @@ where
                 let lo = builder.ins().iconst(I64, i as i64);
                 builder.ins().iconcat(lo, hi)
             }
+            DataValue::F16(f) => builder.ins().f16const(f),
             DataValue::F32(f) => builder.ins().f32const(f),
             DataValue::F64(f) => builder.ins().f64const(f),
+            DataValue::F128(f) => {
+                let handle = builder.func.dfg.constants.insert(f.into());
+                builder.ins().f128const(handle)
+            }
             DataValue::V128(bytes) => {
                 let data = bytes.to_vec().into();
                 let handle = builder.func.dfg.constants.insert(data);
@@ -1892,6 +1895,14 @@ where
             let var = Variable::new(id);
             builder.declare_var(var, ty);
             builder.def_var(var, value);
+
+            // Randomly declare variables as needing a stack map.
+            // We limit these to only types that have fewer than 16 bytes
+            // since the stack map mechanism does not support larger types.
+            if ty.bytes() <= 16 && self.u.arbitrary()? {
+                builder.declare_var_needs_stack_map(var);
+            }
+
             self.resources
                 .vars
                 .entry(ty)

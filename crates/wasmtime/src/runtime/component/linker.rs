@@ -234,7 +234,7 @@ impl<T> Linker<T> {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
                 Definition::Resource(t, dtor) => RuntimeImport::Resource {
-                    ty: t.clone(),
+                    ty: *t,
                     _dtor: dtor.clone(),
                     dtor_funcref: component.resource_drop_func_ref(dtor),
                 },
@@ -325,7 +325,7 @@ impl<T> Linker<T> {
             match item_def {
                 TypeDef::ComponentFunc(_) => {
                     let fully_qualified_name = parent_instance
-                        .map(|parent| format!("{}#{}", parent, item_name))
+                        .map(|parent| format!("{parent}#{item_name}"))
                         .unwrap_or_else(|| item_name.to_owned());
                     linker.func_new(&item_name, move |_, _, _| {
                         bail!("unknown import: `{fully_qualified_name}` has not been defined")

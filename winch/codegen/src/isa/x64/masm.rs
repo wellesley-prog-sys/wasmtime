@@ -215,7 +215,7 @@ impl Masm for MacroAssembler {
                 self.asm.pop_r(dst);
                 self.decrement_sp(<Self::ABI as ABI>::word_bytes() as u32);
             }
-            (RegClass::Float, _) => {
+            (RegClass::Float, _) | (RegClass::Vector, _) => {
                 let addr = self.address_from_sp(current_sp);
                 self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 self.free_stack(size.bytes());
@@ -293,6 +293,10 @@ impl Masm for MacroAssembler {
                     self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 }
                 I::F64(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
+                }
+                I::V128(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
                     self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
                 }
@@ -530,39 +534,20 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn shift_ir(&mut self, dst: Reg, imm: u64, lhs: Reg, kind: ShiftKind, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        self.asm.shift_ir(imm as u8, dst, kind, size)
+    }
+
     fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
-        let top = context.stack.peek().expect("value at stack top");
+        // Number of bits to shift must be in the CL register.
+        let src = context.pop_to_reg(self, Some(regs::rcx()));
+        let dst = context.pop_to_reg(self, None);
 
-        if size == OperandSize::S32 && top.is_i32_const() {
-            let val = context
-                .stack
-                .pop_i32_const()
-                .expect("i32 const value at stack top");
-            let typed_reg = context.pop_to_reg(self, None);
+        self.asm.shift_rr(src.into(), dst.into(), kind, size);
 
-            self.asm.shift_ir(val as u8, typed_reg.into(), kind, size);
-
-            context.stack.push(typed_reg.into());
-        } else if size == OperandSize::S64 && top.is_i64_const() {
-            let val = context
-                .stack
-                .pop_i64_const()
-                .expect("i64 const value at stack top");
-            let typed_reg = context.pop_to_reg(self, None);
-
-            self.asm.shift_ir(val as u8, typed_reg.into(), kind, size);
-
-            context.stack.push(typed_reg.into());
-        } else {
-            // Number of bits to shift must be in the CL register.
-            let src = context.pop_to_reg(self, Some(regs::rcx()));
-            let dst = context.pop_to_reg(self, None);
-
-            self.asm.shift_rr(src.into(), dst.into(), kind, size);
-
-            context.free_reg(src);
-            context.stack.push(dst.into());
-        }
+        context.free_reg(src);
+        context.stack.push(dst.into());
     }
 
     fn div(&mut self, context: &mut CodeGenContext, kind: DivKind, size: OperandSize) {
@@ -1060,8 +1045,6 @@ impl MacroAssembler {
 
     /// A common implementation for stack stores.
     fn store_impl(&mut self, src: RegImm, dst: Address, size: OperandSize, flags: MemFlags) {
-        let scratch = <Self as Masm>::ABI::scratch_reg();
-        let float_scratch = <Self as Masm>::ABI::float_scratch_reg();
         match src {
             RegImm::Imm(imm) => match imm {
                 I::I32(v) => self.asm.mov_im(v as i32, &dst, size, flags),
@@ -1070,12 +1053,14 @@ impl MacroAssembler {
                     Err(_) => {
                         // If the immediate doesn't sign extend, use a scratch
                         // register.
+                        let scratch = regs::scratch();
                         self.asm.mov_ir(v, scratch, size);
                         self.asm.mov_rm(scratch, &dst, size, flags);
                     }
                 },
                 I::F32(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    let float_scratch = regs::scratch_xmm();
                     // Always trusted, since we are loading the constant from
                     // the constant pool.
                     self.asm
@@ -1084,11 +1069,21 @@ impl MacroAssembler {
                 }
                 I::F64(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    let float_scratch = regs::scratch_xmm();
                     // Similar to above, always trusted since we are loading the
                     // constant from the constant pool.
                     self.asm
                         .xmm_mov_mr(&addr, float_scratch, size, MemFlags::trusted());
                     self.asm.xmm_mov_rm(float_scratch, &dst, size, flags);
+                }
+                I::V128(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    let vector_scratch = regs::scratch_xmm();
+                    // Always trusted, since we are loading the constant from
+                    // the constant pool.
+                    self.asm
+                        .xmm_mov_mr(&addr, vector_scratch, size, MemFlags::trusted());
+                    self.asm.xmm_mov_rm(vector_scratch, &dst, size, flags);
                 }
             },
             RegImm::Reg(reg) => {
@@ -1112,9 +1107,7 @@ impl MacroAssembler {
     fn ensure_two_argument_form(dst: &Reg, lhs: &Reg) {
         assert!(
             dst == lhs,
-            "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-            dst,
-            lhs
+            "the destination and first source argument must be the same, dst={dst:?}, lhs={lhs:?}"
         );
     }
 }

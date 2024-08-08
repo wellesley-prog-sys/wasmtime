@@ -808,7 +808,7 @@ impl SharedMemory {
         debug_assert!(ty.maximum().is_some());
 
         let tunables = engine.tunables();
-        let plan = MemoryPlan::for_memory(ty.wasmtime_memory().clone(), tunables);
+        let plan = MemoryPlan::for_memory(*ty.wasmtime_memory(), tunables);
         let page_size_log2 = plan.memory.page_size_log2;
         let memory = crate::runtime::vm::SharedMemory::new(plan)?;
 
@@ -1058,7 +1058,7 @@ mod tests {
         assert_eq!(store[mem.0].memory.offset_guard_size, 0);
         match &store[mem.0].memory.style {
             wasmtime_environ::MemoryStyle::Dynamic { .. } => {}
-            other => panic!("unexpected style {:?}", other),
+            other => panic!("unexpected style {other:?}"),
         }
     }
 

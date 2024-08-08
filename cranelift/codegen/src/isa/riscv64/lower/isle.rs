@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, MInst};
+use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
@@ -21,7 +21,7 @@ use crate::{
         MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InstOutput},
+    machinst::{ArgPair, InstOutput, IsTailCall},
 };
 use crate::{isa, isle_common_prelude_methods};
 use regalloc2::PReg;
@@ -34,7 +34,6 @@ type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
 type VecArgPair = Vec<ArgPair>;
-use crate::machinst::valueregs;
 
 pub(crate) struct RV64IsleContext<'a, 'b, I, B>
 where
@@ -49,8 +48,6 @@ where
 }
 
 impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
-    isle_prelude_method_helpers!(Riscv64ABICallSite);
-
     fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
         Self {
             lower_ctx,
@@ -82,7 +79,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            IsTailCall::Yes,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -111,7 +108,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            IsTailCall::Yes,
             caller_conv,
             self.backend.flags().clone(),
         );
@@ -164,6 +161,68 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     fn freg_to_reg(&mut self, arg0: FReg) -> Reg {
         *arg0
+    }
+
+    fn min_vec_reg_size(&mut self) -> u64 {
+        self.min_vec_reg_size
+    }
+
+    #[inline]
+    fn ty_vec_fits_in_register(&mut self, ty: Type) -> Option<Type> {
+        if ty.is_vector() && (ty.bits() as u64) <= self.min_vec_reg_size() {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
+    fn ty_supported(&mut self, ty: Type) -> Option<Type> {
+        let lane_type = ty.lane_type();
+        let supported = match ty {
+            // Scalar integers are always supported
+            ty if ty.is_int() => true,
+            // So are references
+            ty if ty.is_ref() => true,
+            // Floating point types depend on certain extensions
+            F32 => self.backend.isa_flags.has_f(),
+            // F64 depends on the D extension
+            F64 => self.backend.isa_flags.has_d(),
+
+            // The base vector extension supports all integer types, up to 64 bits
+            // as long as they fit in a register
+            ty if self.ty_vec_fits_in_register(ty).is_some()
+                && lane_type.is_int()
+                && lane_type.bits() <= 64 =>
+            {
+                true
+            }
+
+            // If the vector type has floating point lanes, then we only support it for
+            // 32 or 64 bit lanes with the base extension
+            ty if self.ty_vec_fits_in_register(ty).is_some()
+                && lane_type.is_float()
+                && (lane_type.bits() == 32 || lane_type.bits() == 64) =>
+            {
+                true
+            }
+
+            // Otherwise do not match
+            _ => false,
+        };
+
+        if supported {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
+    fn ty_supported_float(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported(ty).filter(|ty| ty.is_float())
+    }
+
+    fn ty_supported_vec(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported(ty).filter(|ty| ty.is_vector())
     }
 
     fn load_ra(&mut self) -> Reg {
@@ -335,7 +394,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         if let Some(res) = Imm12::maybe_from_i64(val as i64) {
             res
         } else {
-            panic!("Unable to make an Imm12 value from {}", val)
+            panic!("Unable to make an Imm12 value from {val}")
         }
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
@@ -533,19 +592,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
-    fn min_vec_reg_size(&mut self) -> u64 {
-        self.min_vec_reg_size
-    }
-
-    #[inline]
-    fn ty_vec_fits_in_register(&mut self, ty: Type) -> Option<Type> {
-        if ty.is_vector() && (ty.bits() as u64) <= self.min_vec_reg_size() {
-            Some(ty)
-        } else {
-            None
-        }
-    }
-
     fn vec_alu_rr_dst_type(&mut self, op: &VecAluOpRR) -> Type {
         MInst::canonical_type_for_rc(op.dst_regclass())
     }
@@ -650,5 +696,5 @@ pub(crate) fn lower_branch(
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
-    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
+    generated_code::constructor_lower_branch(&mut isle_ctx, branch, targets)
 }

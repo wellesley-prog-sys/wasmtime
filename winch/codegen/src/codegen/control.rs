@@ -176,7 +176,7 @@ pub(crate) struct StackState {
     /// The base stack pointer offset.
     /// This offset is set when entering the block, after saving any live
     /// registers and locals.
-    /// It is calcuated by subtracting the size, in bytes, of any block params
+    /// It is calculated by subtracting the size, in bytes, of any block params
     /// to the current stack pointer offset.
     pub base_offset: SPOffset,
     /// The target stack pointer offset.
@@ -867,6 +867,11 @@ impl ControlStackFrame {
                     let addr =
                         masm.address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset));
                     masm.store(RegImm::f64(v.bits()), addr, (*ty).into());
+                }
+                (ABIOperand::Stack { ty, offset, .. }, Val::V128(v)) => {
+                    let addr =
+                        masm.address_at_sp(SPOffset::from_u32(results_offset.as_u32() - *offset));
+                    masm.store(RegImm::v128(*v), addr, (*ty).into())
                 }
                 (_, v) => debug_assert!(v.is_mem()),
             }

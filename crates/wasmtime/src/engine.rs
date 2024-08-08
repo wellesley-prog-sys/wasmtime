@@ -93,20 +93,12 @@ impl Engine {
             // configured. This is the per-program initialization required for
             // handling traps, such as configuring signals, vectored exception
             // handlers, etc.
-            crate::runtime::vm::init_traps(
-                crate::module::get_wasm_trap,
-                config.macos_use_mach_ports,
-            );
+            crate::runtime::vm::init_traps(config.macos_use_mach_ports);
             #[cfg(feature = "debug-builtins")]
             crate::runtime::vm::debug_builtins::ensure_exported();
         }
 
-        let config = {
-            let mut config = config.clone();
-            config.conditionally_enable_defaults();
-            config
-        };
-
+        let config = config.clone();
         let tunables = config.validate()?;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -255,8 +247,7 @@ impl Engine {
             let target = compiler.triple();
             if *target != target_lexicon::Triple::host() {
                 return Err(format!(
-                    "target '{}' specified in the configuration does not match the host",
-                    target
+                    "target '{target}' specified in the configuration does not match the host"
                 ));
             }
 
@@ -358,14 +349,13 @@ impl Engine {
             // Everything else is unknown and needs to be added somewhere to
             // this list if encountered.
             _ => {
-                return Err(format!("unknown shared setting {:?} configured to {:?}", flag, value))
+                return Err(format!("unknown shared setting {flag:?} configured to {value:?}"))
             }
         };
 
         if !ok {
             return Err(format!(
-                "setting {:?} is configured to {:?} which is not supported",
-                flag, value,
+                "setting {flag:?} is configured to {value:?} which is not supported",
             ));
         }
         Ok(())
@@ -392,8 +382,7 @@ impl Engine {
             // need more support here.
             _ => {
                 return Err(format!(
-                    "isa-specific feature {:?} configured to unknown value {:?}",
-                    flag, value
+                    "isa-specific feature {flag:?} configured to unknown value {value:?}"
                 ))
             }
         }
@@ -701,6 +690,60 @@ impl Engine {
         let mut code = crate::CodeMemory::new(mmap)?;
         code.publish()?;
         Ok(Arc::new(code))
+    }
+
+    /// Unload process-related trap/signal handlers and destroy this engine.
+    ///
+    /// This method is not safe and is not widely applicable. It is not required
+    /// to be called and is intended for use cases such as unloading a dynamic
+    /// library from a process. It is difficult to invoke this method correctly
+    /// and it requires careful coordination to do so.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if this `Engine` handle is not the last remaining
+    /// engine handle.
+    ///
+    /// # Aborts
+    ///
+    /// This method will abort the process on some platforms in some situations
+    /// where unloading the handler cannot be performed and an unrecoverable
+    /// state is reached. For example on Unix platforms with signal handling
+    /// the process will be aborted if the current signal handlers are not
+    /// Wasmtime's.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is not generally safe to call and has a number of
+    /// preconditions that must be met to even possibly be safe. Even with these
+    /// known preconditions met there may be other unknown invariants to uphold
+    /// as well.
+    ///
+    /// * There must be no other instances of `Engine` elsewhere in the process.
+    ///   Note that this isn't just copies of this `Engine` but it's any other
+    ///   `Engine` at all. This unloads global state that is used by all
+    ///   `Engine`s so this instance must be the last.
+    ///
+    /// * On Unix platforms no other signal handlers could have been installed
+    ///   for signals that Wasmtime catches. In this situation Wasmtime won't
+    ///   know how to restore signal handlers that Wasmtime possibly overwrote
+    ///   when Wasmtime was initially loaded. If possible initialize other
+    ///   libraries first and then initialize Wasmtime last (e.g. defer creating
+    ///   an `Engine`).
+    ///
+    /// * All existing threads which have used this DLL or copy of Wasmtime may
+    ///   no longer use this copy of Wasmtime. Per-thread state is not iterated
+    ///   and destroyed. Only future threads may use future instances of this
+    ///   Wasmtime itself.
+    ///
+    /// If other crashes are seen from using this method please feel free to
+    /// file an issue to update the documentation here with more preconditions
+    /// that must be met.
+    pub unsafe fn unload_process_handlers(self) {
+        assert_eq!(Arc::weak_count(&self.inner), 0);
+        assert_eq!(Arc::strong_count(&self.inner), 1);
+
+        crate::runtime::vm::deinit_traps();
     }
 }
 

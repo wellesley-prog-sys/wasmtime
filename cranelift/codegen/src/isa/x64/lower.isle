@@ -24,6 +24,11 @@
       (value_regs (imm $I64 x)
                   (imm $I64 0)))
 
+;;;; Rules for `f16const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f16const (u16_from_ieee16 x)))
+      (imm $F16 x))
+
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u32_from_ieee32 x)))
@@ -33,6 +38,14 @@
 
 (rule (lower (f64const (u64_from_ieee64 x)))
       (imm $F64 x))
+
+;;;; Rules for `f128const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (f128const const))
+      ;; TODO use Inst::gen_constant() instead.
+      (x64_xmm_load_const $F128 (const_to_vconst const)))
+
+(rule 1 (lower (f128const (u128_from_constant 0)))
+      (xmm_zero $F128))
 
 ;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1587,7 +1600,7 @@
                            lane1
                            (u8_from_uimm8 1)))
         (if-let $true (use_sse41))
-        (x64_pinsrq (bitcast_gpr_to_xmm $I64 lane0) lane1 1))
+        (x64_pinsrq (bitcast_gpr_to_xmm 64 lane0) lane1 1))
 
 (rule 1 (lower (insertlane vec @ (value_type $F32X4) (sinkable_load val) (u8_from_uimm8 idx)))
   (if-let $true (use_sse41))
@@ -2862,6 +2875,38 @@
 (rule 3 (fnmadd ty (fneg x) y z) (fmadd ty x y z))
 (rule 4 (fnmadd ty x (fneg y) z) (fmadd ty x y z))
 
+
+(rule 2 (lower (has_type ty (fma x y (fneg z))))
+      (if-let $true (use_fma))
+      (fmsub ty x y z))
+
+;; fmsub and fnmsub
+(decl fmsub (Type Value Value Value) Xmm)
+(decl fnmsub (Type Value Value Value) Xmm)
+
+;; Base case, will sink a load of `z` automatically.
+(rule (fmsub ty x y z) (x64_vfmsub213 ty x y z))
+
+;; Allow sinking loads with one of the two values being multiplied in addition
+;; to the value being subtracted. Note that both x and y can be sunk here due to
+;; multiplication being commutative.
+(rule 1 (fmsub ty (sinkable_load x) y z) (x64_vfmsub132 ty y z x))
+(rule 2 (fmsub ty x (sinkable_load y) z) (x64_vfmsub132 ty x z y))
+
+;; If one of the values being multiplied is negated then use a `vfnmsub*`
+;; instruction instead
+(rule 3 (fmsub ty (fneg x) y z) (fnmsub ty x y z))
+(rule 4 (fmsub ty x (fneg y) z) (fnmsub ty x y z))
+
+(rule (fnmsub ty x y z) (x64_vfnmsub213 ty x y z))
+(rule 1 (fnmsub ty (sinkable_load x) y z) (x64_vfnmsub132 ty y z x))
+(rule 2 (fnmsub ty x (sinkable_load y) z) (x64_vfnmsub132 ty x z y))
+
+;; Like `fmsub` if one argument is negated switch which one is being codegen'd
+(rule 3 (fnmsub ty (fneg x) y z) (fmsub ty x y z))
+(rule 4 (fnmsub ty x (fneg y) z) (fmsub ty x y z))
+
+
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; In order to load a value from memory to a GPR register, we may need to extend
@@ -2896,10 +2941,14 @@
 ;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.
 ;; But for the 128-bit types, this is not strictly necessary for performance but
 ;; might help with clarity during disassembly.
+(rule (lower (has_type $F16 (load flags address offset)))
+      (x64_pinsrw (xmm_uninit_value) (to_amode flags address offset) 0))
 (rule (lower (has_type $F32 (load flags address offset)))
       (x64_movss_load (to_amode flags address offset)))
 (rule (lower (has_type $F64 (load flags address offset)))
       (x64_movsd_load (to_amode flags address offset)))
+(rule (lower (has_type $F128 (load flags address offset)))
+      (x64_movdqu_load (to_amode flags address offset)))
 (rule (lower (has_type $F32X4 (load flags address offset)))
       (x64_movups_load (to_amode flags address offset)))
 (rule (lower (has_type $F64X2 (load flags address offset)))
@@ -2977,6 +3026,22 @@
       (side_effect
        (x64_movimm_m ty (to_amode flags address offset) imm)))
 
+;; F16 stores of values in XMM registers.
+(rule 0 (lower (store flags
+                    value @ (value_type $F16)
+                    address
+                    offset))
+      (side_effect
+       (x64_movrm $I16 (to_amode flags address offset) (bitcast_xmm_to_gpr 16 value))))
+
+(rule 1 (lower (store flags
+                    value @ (value_type $F16)
+                    address
+                    offset))
+      (if-let $true (use_sse41))
+      (side_effect
+       (x64_pextrw_store (to_amode flags address offset) value 0)))
+
 ;; F32 stores of values in XMM registers.
 (rule 1 (lower (store flags
                     value @ (value_type $F32)
@@ -2992,6 +3057,14 @@
                     offset))
       (side_effect
        (x64_movsd_store (to_amode flags address offset) value)))
+
+;; F128 stores of values in XMM registers.
+(rule 1 (lower (store flags
+                    value @ (value_type $F128)
+                    address
+                    offset))
+      (side_effect
+       (x64_movdqu_store (to_amode flags address offset) value)))
 
 ;; Stores of F32X4 vectors.
 (rule 1 (lower (store flags
@@ -3983,17 +4056,17 @@
 
 ;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (bitcast _ src @ (value_type $F32))))
-      (bitcast_xmm_to_gpr $F32 src))
+(rule -3 (lower (has_type (is_gpr_type (fits_in_64 ty)) (bitcast _ src @ (value_type (is_xmm_type _)))))
+      (bitcast_xmm_to_gpr (ty_bits ty) src))
 
-(rule (lower (has_type $F32 (bitcast _ src @ (value_type $I32))))
-      (bitcast_gpr_to_xmm $I32 src))
+(rule -2 (lower (has_type (is_xmm_type (fits_in_64 ty)) (bitcast _ src @ (value_type (is_gpr_type _)))))
+      (bitcast_gpr_to_xmm (ty_bits ty) src))
 
-(rule (lower (has_type $I64 (bitcast _ src @ (value_type $F64))))
-      (bitcast_xmm_to_gpr $F64 src))
+(rule -1 (lower (has_type $I128 (bitcast _ src @ (value_type (is_xmm_type _)))))
+      (bitcast_xmm_to_gprs src))
 
-(rule (lower (has_type $F64 (bitcast _ src @ (value_type $I64))))
-      (bitcast_gpr_to_xmm $I64 src))
+(rule 0 (lower (has_type (is_xmm_type _) (bitcast _ src @ (value_type $I128))))
+      (bitcast_gprs_to_xmm src))
 
 ;; Bitcast between types residing in GPR registers is a no-op.
 (rule 1 (lower (has_type (is_gpr_type _)
@@ -4524,7 +4597,7 @@
 ;; Case 2: when moving a scalar value of any other type, use MOVD to zero
 ;; the upper lanes.
 (rule (lower (scalar_to_vector src @ (value_type ty)))
-      (bitcast_gpr_to_xmm ty src))
+      (bitcast_gpr_to_xmm (ty_bits ty) src))
 
 ;; Case 3: when presented with `load + scalar_to_vector`, coalesce into a single
 ;; MOVSS/MOVSD instruction.
@@ -4551,10 +4624,10 @@
           (x64_pshufd (x64_pshuflw (x64_punpcklbw src src) 0) 0)))
 (rule 1 (lower (has_type $I8X16 (splat src)))
         (if-let $true (use_ssse3))
-        (x64_pshufb (bitcast_gpr_to_xmm $I32 src) (xmm_zero $I8X16)))
+        (x64_pshufb (bitcast_gpr_to_xmm 32 src) (xmm_zero $I8X16)))
 (rule 2 (lower (has_type $I8X16 (splat src)))
         (if-let $true (use_avx2))
-        (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
+        (x64_vpbroadcastb (bitcast_gpr_to_xmm 32 src)))
 (rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
         (if-let $true (use_sse41))
         (if-let $true (use_ssse3))
@@ -4569,10 +4642,10 @@
 ;; at that point is two of the 16-bit values we want to broadcast) to all the
 ;; lanes.
 (rule 0 (lower (has_type $I16X8 (splat src)))
-        (x64_pshufd (x64_pshuflw (bitcast_gpr_to_xmm $I32 src) 0) 0))
+        (x64_pshufd (x64_pshuflw (bitcast_gpr_to_xmm 32 src) 0) 0))
 (rule 1 (lower (has_type $I16X8 (splat src)))
         (if-let $true (use_avx2))
-        (x64_vpbroadcastw (bitcast_gpr_to_xmm $I32 src)))
+        (x64_vpbroadcastw (bitcast_gpr_to_xmm 32 src)))
 (rule 2 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
         (x64_pshufd (x64_pshuflw (x64_pinsrw (xmm_uninit_value) addr 0) 0) 0))
 (rule 3 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
@@ -4584,10 +4657,10 @@
 ;;
 ;; Note that sinkable-load cases come later
 (rule 0 (lower (has_type $I32X4 (splat src)))
-        (x64_pshufd (bitcast_gpr_to_xmm $I32 src) 0))
+        (x64_pshufd (bitcast_gpr_to_xmm 32 src) 0))
 (rule 1 (lower (has_type $I32X4 (splat src)))
         (if-let $true (use_avx2))
-        (x64_vpbroadcastd (bitcast_gpr_to_xmm $I32 src)))
+        (x64_vpbroadcastd (bitcast_gpr_to_xmm 32 src)))
 
 ;; f32x4.splat - the source is already in an xmm register so `shufps` is all
 ;; that's necessary to complete the splat. This is specialized to `vbroadcastss`
@@ -4619,7 +4692,7 @@
 ;; lane. A minor specialization for sinkable loads to avoid going through a gpr
 ;; for i64 splats is used as well when `movddup` is available.
 (rule 0 (lower (has_type $I64X2 (splat src)))
-        (x64_pshufd (bitcast_gpr_to_xmm $I64 src) 0b01_00_01_00))
+        (x64_pshufd (bitcast_gpr_to_xmm 64 src) 0b01_00_01_00))
 (rule 0 (lower (has_type $F64X2 (splat src)))
         (x64_pshufd src 0b01_00_01_00))
 (rule 6 (lower (has_type (multi_lane 64 2) (splat (sinkable_load addr))))

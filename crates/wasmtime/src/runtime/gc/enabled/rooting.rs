@@ -102,15 +102,15 @@
 //! can. However, if you really must, consider also using an `AutoAssertNoGc`
 //! across the block of code that is manipulating raw GC references.
 
-use crate::prelude::*;
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
+use crate::{prelude::*, ValRaw};
 use crate::{
     store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use core::any;
 use core::marker;
-use core::mem;
+use core::mem::{self, MaybeUninit};
 use core::num::NonZeroU64;
 use core::{
     fmt::{self, Debug},
@@ -200,7 +200,7 @@ pub struct GcRootIndex {
 const _: () = {
     // NB: these match the C API which should also be updated if this changes
     assert!(mem::size_of::<GcRootIndex>() == 16);
-    assert!(mem::align_of::<GcRootIndex>() == 8);
+    assert!(mem::align_of::<GcRootIndex>() == mem::align_of::<u64>());
 };
 
 impl GcRootIndex {
@@ -209,13 +209,23 @@ impl GcRootIndex {
         self.store_id == store.id()
     }
 
-    /// Same as `RootedGcRefImpl::get_gc_ref` but doesn't check that the raw GC
-    /// ref is only used during the scope of an `AutoAssertNoGc`.
+    /// Same as `RootedGcRefImpl::get_gc_ref` but not associated with any
+    /// particular `T: GcRef`.
     ///
-    /// It is up to callers to avoid triggering a GC while holding onto the
-    /// resulting raw `VMGcRef`. Failure to uphold this invariant is memory safe
-    /// but will lead to general incorrectness such as panics and wrong results.
-    pub(crate) fn unchecked_get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
+    /// We must avoid triggering a GC while holding onto the resulting raw
+    /// `VMGcRef` to avoid use-after-free bugs and similar. The `'a` lifetime
+    /// threaded from the `store` to the result will normally prevent GCs
+    /// statically, at compile time, since performing a GC requires a mutable
+    /// borrow of the store. However, if you call `VMGcRef::unchecked_copy` on
+    /// the resulting GC reference, then all bets are off and this invariant is
+    /// up to you to manually uphold. Failure to uphold this invariant is memory
+    /// safe but will lead to general incorrectness such as panics and wrong
+    /// results.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not associated with the given store.
+    pub(crate) fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
         assert!(
             self.comes_from_same_store(store),
             "object used with wrong store"
@@ -236,27 +246,13 @@ impl GcRootIndex {
         }
     }
 
-    /// Same as `RootedGcRefImpl::get_gc_ref` but not associated with any
-    /// particular `T: GcRef`.
-    pub(crate) fn get_gc_ref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Option<&'a VMGcRef> {
-        self.unchecked_get_gc_ref(store)
-    }
-
-    /// Same as `unchecked_get_gc_ref` but returns an error instead of `None` if
+    /// Same as `get_gc_ref` but returns an error instead of `None` if
     /// the GC reference has been unrooted.
     ///
     /// # Panics
     ///
     /// Panics if `self` is not associated with the given store.
-    pub(crate) fn unchecked_try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
-        self.unchecked_get_gc_ref(store).ok_or_else(|| {
-            anyhow!("attempted to use a garbage-collected object that has been unrooted")
-        })
-    }
-
-    /// Same as `get_gc_ref` but returns an error instead of `None` if the GC
-    /// reference has been unrooted.
-    pub(crate) fn try_gc_ref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcRef> {
+    pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
         self.get_gc_ref(store).ok_or_else(|| {
             anyhow!("attempted to use a garbage-collected object that has been unrooted")
         })
@@ -731,6 +727,24 @@ impl<T: GcRef> Rooted<T> {
         }
     }
 
+    /// Create a new `Rooted<T>` from a `GcRootIndex`.
+    ///
+    /// Note that `Rooted::from_gc_root_index(my_rooted.index)` is not
+    /// necessarily an identity function, as it allows changing the `T` type
+    /// parameter.
+    ///
+    /// The given index should be a LIFO index of a GC reference pointing to an
+    /// instance of the GC type that `T` represents. Failure to uphold this
+    /// invariant is memory safe but will result in general incorrectness such
+    /// as panics and wrong results.
+    pub(crate) fn from_gc_root_index(inner: GcRootIndex) -> Rooted<T> {
+        debug_assert!(inner.index.is_lifo());
+        Rooted {
+            inner,
+            _phantom: marker::PhantomData,
+        }
+    }
+
     #[inline]
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         debug_assert!(self.inner.index.is_lifo());
@@ -924,6 +938,73 @@ impl<T: GcRef> Rooted<T> {
         let gc_ref = self.try_gc_ref(store.as_context().0)?;
         gc_ref.hash(state);
         Ok(())
+    }
+
+    /// Cast `self` to a `Rooted<U>`.
+    ///
+    /// It is the caller's responsibility to ensure that `self` is actually a
+    /// `U`. Failure to uphold this invariant will be memory safe but will
+    /// result in general incorrectness such as panics and wrong results.
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> Rooted<U> {
+        Rooted::from_gc_root_index(self.inner)
+    }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `Rooted<T>`s.
+    pub(super) fn wasm_ty_store(
+        self,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        let gc_ref = self.inner.try_clone_gc_ref(store)?;
+        let raw = gc_ref.as_raw_u32();
+        debug_assert_ne!(raw, 0);
+        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        ptr.write(val_raw(raw));
+        Ok(())
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `Rooted<T>`s.
+    pub(super) fn wasm_ty_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Self,
+    ) -> Self {
+        debug_assert_ne!(raw_gc_ref, 0);
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        from_cloned_gc_ref(store, gc_ref)
+    }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `Option<Rooted<T>>`s.
+    pub(super) fn wasm_ty_option_store(
+        me: Option<Self>,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        match me {
+            Some(me) => me.wasm_ty_store(store, ptr, val_raw),
+            None => {
+                ptr.write(val_raw(0));
+                Ok(())
+            }
+        }
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `Option<Rooted<T>>`s.
+    pub(super) fn wasm_ty_option_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Self,
+    ) -> Option<Self> {
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        Some(from_cloned_gc_ref(store, gc_ref))
     }
 }
 
@@ -1221,9 +1302,9 @@ const _: () = {
 
     // NB: these match the C API which should also be updated if this changes
     assert!(mem::size_of::<ManuallyRooted<AnyRef>>() == 16);
-    assert!(mem::align_of::<ManuallyRooted<AnyRef>>() == 8);
+    assert!(mem::align_of::<ManuallyRooted<AnyRef>>() == mem::align_of::<u64>());
     assert!(mem::size_of::<ManuallyRooted<ExternRef>>() == 16);
-    assert!(mem::align_of::<ManuallyRooted<ExternRef>>() == 8);
+    assert!(mem::align_of::<ManuallyRooted<ExternRef>>() == mem::align_of::<u64>());
 };
 
 impl<T: GcRef> Debug for ManuallyRooted<T> {
@@ -1559,6 +1640,90 @@ where
             },
             _phantom: marker::PhantomData,
         }
+    }
+
+    /// Cast `self` to a `ManuallyRooted<U>`.
+    ///
+    /// It is the caller's responsibility to ensure that `self` is actually a
+    /// `U`. Failure to uphold this invariant will be memory safe but will
+    /// result in general incorrectness such as panics and wrong results.
+    pub(crate) fn unchecked_cast<U: GcRef>(self) -> ManuallyRooted<U> {
+        let u = ManuallyRooted {
+            inner: self.inner,
+            _phantom: core::marker::PhantomData,
+        };
+        core::mem::forget(self);
+        u
+    }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `ManuallyRooted<T>`s.
+    pub(super) fn wasm_ty_store(
+        self,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        let gc_ref = self.try_clone_gc_ref(store)?;
+        let raw = gc_ref.as_raw_u32();
+        debug_assert_ne!(raw, 0);
+        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        ptr.write(val_raw(raw));
+        Ok(())
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `ManuallyRooted<T>`s.
+    pub(super) fn wasm_ty_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Rooted<T>,
+    ) -> Self {
+        debug_assert_ne!(raw_gc_ref, 0);
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        RootSet::with_lifo_scope(store, |store| {
+            let rooted = from_cloned_gc_ref(store, gc_ref);
+            rooted
+                ._to_manually_rooted(store)
+                .expect("rooted is in scope")
+        })
+    }
+
+    /// Common implementation of the `WasmTy::store` trait method for all
+    /// `Option<ManuallyRooted<T>>`s.
+    pub(super) fn wasm_ty_option_store(
+        me: Option<Self>,
+        store: &mut AutoAssertNoGc<'_>,
+        ptr: &mut MaybeUninit<ValRaw>,
+        val_raw: impl Fn(u32) -> ValRaw,
+    ) -> Result<()> {
+        match me {
+            Some(me) => me.wasm_ty_store(store, ptr, val_raw),
+            None => {
+                ptr.write(val_raw(0));
+                Ok(())
+            }
+        }
+    }
+
+    /// Common implementation of the `WasmTy::load` trait method for all
+    /// `Option<ManuallyRooted<T>>`s.
+    pub(super) fn wasm_ty_option_load(
+        store: &mut AutoAssertNoGc<'_>,
+        raw_gc_ref: u32,
+        from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Rooted<T>,
+    ) -> Option<Self> {
+        let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
+        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        RootSet::with_lifo_scope(store, |store| {
+            let rooted = from_cloned_gc_ref(store, gc_ref);
+            Some(
+                rooted
+                    ._to_manually_rooted(store)
+                    .expect("rooted is in scope"),
+            )
+        })
     }
 }
 

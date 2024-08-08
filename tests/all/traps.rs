@@ -55,7 +55,7 @@ fn test_anyhow_error_return() -> Result<()> {
 
     let e = run_func.call(&mut store, ()).unwrap_err();
     assert!(!e.to_string().contains("test 1234"));
-    assert!(format!("{:?}", e).contains("Caused by:\n    test 1234"));
+    assert!(format!("{e:?}").contains("Caused by:\n    test 1234"));
 
     assert!(e.downcast_ref::<Trap>().is_none());
     assert!(e.downcast_ref::<WasmBacktrace>().is_some());
@@ -95,8 +95,8 @@ fn test_trap_return_downcast() -> Result<()> {
         .call(&mut store, ())
         .err()
         .expect("error calling function");
-    let dbg = format!("{:?}", e);
-    println!("{}", dbg);
+    let dbg = format!("{e:?}");
+    println!("{dbg}");
 
     assert!(!e.to_string().contains("my trap"));
     assert!(dbg.contains("Caused by:\n    my trap"));
@@ -107,7 +107,7 @@ fn test_trap_return_downcast() -> Result<()> {
         .downcast_ref::<WasmBacktrace>()
         .expect("error downcasts to WasmBacktrace");
     assert_eq!(bt.frames().len(), 1);
-    println!("{:?}", bt);
+    println!("{bt:?}");
 
     Ok(())
 }
@@ -406,7 +406,7 @@ fn rust_panic_import() -> Result<()> {
     let module = Module::new(store.engine(), &binary)?;
     let sig = FuncType::new(store.engine(), None, None);
     let func = Func::new(&mut store, sig, |_, _, _| panic!("this is a panic"));
-    let func2 = Func::wrap(&mut store, || panic!("this is another panic"));
+    let func2 = Func::wrap(&mut store, || -> () { panic!("this is another panic") });
     let instance = Instance::new(&mut store, &module, &[func.into(), func2.into()])?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     let err =
@@ -501,7 +501,7 @@ fn rust_panic_start_function() -> Result<()> {
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
-    let func = Func::wrap(&mut store, || panic!("this is another panic"));
+    let func = Func::wrap(&mut store, || -> () { panic!("this is another panic") });
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(Instance::new(&mut store, &module, &[func.into()]));
     }))
@@ -624,7 +624,7 @@ fn present_after_module_drop() -> Result<()> {
     return Ok(());
 
     fn assert_trap(t: Error) {
-        println!("{:?}", t);
+        println!("{t:?}");
         let trace = t.downcast_ref::<WasmBacktrace>().unwrap().frames();
         assert_eq!(trace.len(), 1);
         assert_eq!(trace[0].func_index(), 0);
@@ -723,7 +723,7 @@ fn rustc(src: &str) -> Vec<u8> {
         .arg("-o")
         .arg(&output)
         .arg("--target")
-        .arg("wasm32-wasi")
+        .arg("wasm32-wasip1")
         .arg("-g")
         .output()
         .unwrap();
@@ -1007,7 +1007,7 @@ async fn async_then_sync_trap() -> Result<()> {
     let sync_module = Module::new(sync_store.engine(), wat)?;
 
     let mut sync_linker = Linker::new(sync_store.engine());
-    sync_linker.func_wrap("", "b", |_caller: Caller<_>| unreachable!())?;
+    sync_linker.func_wrap("", "b", |_caller: Caller<_>| -> () { unreachable!() })?;
 
     let sync_instance = sync_linker.instantiate(&mut sync_store, &sync_module)?;
 
@@ -1085,7 +1085,7 @@ async fn sync_then_async_trap() -> Result<()> {
     let async_module = Module::new(async_store.engine(), wat)?;
 
     let mut async_linker = Linker::new(async_store.engine());
-    async_linker.func_wrap("", "b", |_caller: Caller<_>| unreachable!())?;
+    async_linker.func_wrap("", "b", |_caller: Caller<_>| -> () { unreachable!() })?;
 
     let async_instance = async_linker
         .instantiate_async(&mut async_store, &async_module)
@@ -1643,7 +1643,7 @@ fn same_module_multiple_stores() -> Result<()> {
     let instance1 = Instance::new(&mut store1, &module, &[f1.into(), call_ref1.into()])?;
 
     instance1
-        .get_typed_func(&mut store1, "a")?
+        .get_typed_func::<(), ()>(&mut store1, "a")?
         .call(&mut store1, ())?;
 
     let expected_stacks = vec![

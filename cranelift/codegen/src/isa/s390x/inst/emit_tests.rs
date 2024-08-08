@@ -6989,7 +6989,7 @@ fn test_s390x_binemit() {
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::Call,
+                callee_pop_size: 0,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
                 tls_symbol: None,
@@ -7007,7 +7007,7 @@ fn test_s390x_binemit() {
                 uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
-                opcode: Opcode::CallIndirect,
+                callee_pop_size: 0,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
             }),
@@ -13359,10 +13359,7 @@ fn test_s390x_binemit() {
 
     let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
-        println!(
-            "S390x: {:?}, {}, {}",
-            insn, expected_encoding, expected_printing
-        );
+        println!("S390x: {insn:?}, {expected_encoding}, {expected_printing}");
 
         // Check the printed text is as expected.
         let actual_printing = insn.print_with_state(&mut EmitState::default());

@@ -49,10 +49,10 @@ pub fn log_wasm(wasm: &[u8]) {
     }
 
     let i = CNT.fetch_add(1, SeqCst);
-    let name = format!("testcase{}.wasm", i);
+    let name = format!("testcase{i}.wasm");
     std::fs::write(&name, wasm).expect("failed to write wasm file");
     log::debug!("wrote wasm file to `{}`", name);
-    let wat = format!("testcase{}.wat", i);
+    let wat = format!("testcase{i}.wat");
     match wasmprinter::print_bytes(wasm) {
         Ok(s) => std::fs::write(&wat, s).expect("failed to write wat file"),
         // If wasmprinter failed remove a `*.wat` file, if any, to avoid
@@ -311,7 +311,7 @@ fn compile_module(
                 }
             }
 
-            panic!("failed to compile module: {:?}", e);
+            panic!("failed to compile module: {e:?}");
         }
     }
 }
@@ -375,7 +375,7 @@ fn unwrap_instance(
     }
 
     // Everything else should be a bug in the fuzzer or a bug in wasmtime
-    panic!("failed to instantiate: {:?}", e);
+    panic!("failed to instantiate: {e:?}");
 }
 
 /// Evaluate the function identified by `name` in two different engine
@@ -570,7 +570,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
                 let funcs = instance
                     .exports(&mut *store)
                     .filter_map(|e| match e.into_extern() {
-                        Extern::Func(f) => Some(f.clone()),
+                        Extern::Func(f) => Some(f),
                         _ => None,
                     })
                     .collect::<Vec<_>>();
@@ -900,6 +900,9 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     };
 
     let mut config = component_test_util::config();
+    if case.results.len() > 1 {
+        config.wasm_component_model_multiple_returns(true);
+    }
     config.debug_adapter_modules(input.arbitrary()?);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, (Vec::new(), None));

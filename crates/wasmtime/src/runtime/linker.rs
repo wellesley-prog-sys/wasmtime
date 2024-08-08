@@ -121,7 +121,7 @@ pub(crate) enum Definition {
 /// This is a sort of slimmed down `ExternType` which notably doesn't have a
 /// `FuncType`, which is an allocation, and additionally retains the current
 /// size of the table/memory.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum DefinitionType {
     Func(wasmtime_environ::VMSharedTypeIndex),
     Global(wasmtime_environ::Global),
@@ -1019,7 +1019,7 @@ impl<T> Linker<T> {
             Entry::Occupied(_) if !self.allow_shadowing => {
                 let module = &self.strings[key.module];
                 let desc = match self.strings.get(key.name) {
-                    Some(name) => format!("{}::{}", module, name),
+                    Some(name) => format!("{module}::{name}"),
                     None => module.to_string(),
                 };
                 bail!("import of `{}` defined twice", desc)
@@ -1310,7 +1310,7 @@ impl<T> Linker<T> {
     ) -> Result<Func> {
         if let Some(external) = self.get(&mut store, module, "") {
             if let Extern::Func(func) = external {
-                return Ok(func.clone());
+                return Ok(func);
             }
             bail!("default export in '{}' is not a function", module);
         }
@@ -1318,7 +1318,7 @@ impl<T> Linker<T> {
         // For compatibility, also recognize "_start".
         if let Some(external) = self.get(&mut store, module, "_start") {
             if let Extern::Func(func) = external {
-                return Ok(func.clone());
+                return Ok(func);
             }
             bail!("`_start` in '{}' is not a function", module);
         }

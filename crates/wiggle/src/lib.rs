@@ -90,7 +90,7 @@ impl<'a> GuestMemory<'a> {
     /// Acquires a slice or owned copy of the memory pointed to by `ptr`.
     ///
     /// This method will attempt to borrow `ptr` directly from linear memory. If
-    /// memory is shared and cannot be borrowed directy then an owned copy is
+    /// memory is shared and cannot be borrowed directly then an owned copy is
     /// returned instead.
     ///
     /// # Errors
@@ -550,7 +550,7 @@ pub trait Pointee: private::Sealed {
 impl<T> Pointee for T {
     type Pointer = u32;
     fn debug(pointer: Self::Pointer, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "*guest {:#x}", pointer)
+        write!(f, "*guest {pointer:#x}")
     }
 }
 

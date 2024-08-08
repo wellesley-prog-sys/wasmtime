@@ -15,7 +15,7 @@ use crate::stack::{TypedReg, Val};
 use cranelift_codegen::ir::TrapCode;
 use regalloc2::RegClass;
 use smallvec::SmallVec;
-use wasmparser::{BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator};
+use wasmparser::{BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, V128};
 use wasmtime_environ::{
     FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType,
     WasmValType, FUNCREF_INIT_BIT,
@@ -36,7 +36,8 @@ macro_rules! def_unsupported {
 
                 fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                     $($(let _ = $arg;)*)?
-                        todo!(stringify!($op))
+
+                    self.found_unsupported_instruction = Some(stringify!($op));
                 }
             );
         )*
@@ -46,6 +47,7 @@ macro_rules! def_unsupported {
     (emit I64Const $($rest:tt)*) => {};
     (emit F32Const $($rest:tt)*) => {};
     (emit F64Const $($rest:tt)*) => {};
+    (emit V128Const $($rest:tt)*) => {};
     (emit F32Add $($rest:tt)*) => {};
     (emit F64Add $($rest:tt)*) => {};
     (emit F32Sub $($rest:tt)*) => {};
@@ -240,7 +242,8 @@ macro_rules! def_unsupported {
     (emit I64TruncSatF32U $($rest:tt)*) => {};
     (emit I64TruncSatF64S $($rest:tt)*) => {};
     (emit I64TruncSatF64U $($rest:tt)*) => {};
-
+    (emit V128Load $($rest:tt)*) => {};
+    (emit V128Store $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -265,6 +268,10 @@ where
 
     fn visit_f64_const(&mut self, val: Ieee64) {
         self.context.stack.push(Val::f64(val));
+    }
+
+    fn visit_v128_const(&mut self, val: V128) {
+        self.context.stack.push(Val::v128(val.i128()))
     }
 
     fn visit_f32_add(&mut self) {
@@ -1070,73 +1077,63 @@ where
     }
 
     fn visit_i32_shl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Shl, S32);
+        self.context.i32_shift(self.masm, Shl);
     }
 
     fn visit_i64_shl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Shl, S64);
+        self.context.i64_shift(self.masm, Shl);
     }
 
     fn visit_i32_shr_s(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrS, S32);
+        self.context.i32_shift(self.masm, ShrS);
     }
 
     fn visit_i64_shr_s(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrS, S64);
+        self.context.i64_shift(self.masm, ShrS);
     }
 
     fn visit_i32_shr_u(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrU, S32);
+        self.context.i32_shift(self.masm, ShrU);
     }
 
     fn visit_i64_shr_u(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, ShrU, S64);
+        self.context.i64_shift(self.masm, ShrU);
     }
 
     fn visit_i32_rotl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotl, S32);
+        self.context.i32_shift(self.masm, Rotl);
     }
 
     fn visit_i64_rotl(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotl, S64);
+        self.context.i64_shift(self.masm, Rotl);
     }
 
     fn visit_i32_rotr(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotr, S32);
+        self.context.i32_shift(self.masm, Rotr);
     }
 
     fn visit_i64_rotr(&mut self) {
-        use OperandSize::*;
         use ShiftKind::*;
 
-        self.masm.shift(&mut self.context, Rotr, S64);
+        self.context.i64_shift(self.masm, Rotr);
     }
 
     fn visit_end(&mut self) {
@@ -1338,12 +1335,11 @@ where
         let context = &mut self.context;
         let slot = context.frame.get_wasm_local(index);
         match slot.ty {
-            I32 | I64 | F32 | F64 => context.stack.push(Val::local(index, slot.ty)),
+            I32 | I64 | F32 | F64 | V128 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => context.stack.push(Val::local(index, slot.ty)),
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
-            t => unimplemented!("Support local type: {t}"),
         }
     }
 
@@ -2022,6 +2018,14 @@ where
         self.emit_wasm_store(&memarg, OperandSize::S64)
     }
 
+    fn visit_v128_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::V128, OperandSize::S128, None)
+    }
+
+    fn visit_v128_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S128)
+    }
+
     fn visit_i32_trunc_sat_f32_s(&mut self) {
         use OperandSize::*;
 
@@ -2138,6 +2142,7 @@ impl From<WasmValType> for OperandSize {
         match ty {
             WasmValType::I32 | WasmValType::F32 => OperandSize::S32,
             WasmValType::I64 | WasmValType::F64 => OperandSize::S64,
+            WasmValType::V128 => OperandSize::S128,
             WasmValType::Ref(rt) => {
                 match rt.heap_type {
                     // TODO: Hardcoded size, assuming 64-bit support only. Once
@@ -2148,7 +2153,6 @@ impl From<WasmValType> for OperandSize {
                     t => unimplemented!("Support for WasmHeapType: {t}"),
                 }
             }
-            ty => unimplemented!("Support for WasmValType {ty}"),
         }
     }
 }

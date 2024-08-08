@@ -256,10 +256,14 @@ wasmtime_option_group! {
         pub component_model: Option<bool>,
         /// Configure support for 33+ flags in the component model.
         pub component_model_more_flags: Option<bool>,
+        /// Component model support for more than one return value.
+        pub component_model_multiple_returns: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
         pub gc: Option<bool>,
+        /// Configure support for the custom-page-sizes proposal.
+        pub custom_page_sizes: Option<bool>,
     }
 
     enum Wasm {
@@ -280,6 +284,10 @@ wasmtime_option_group! {
         pub threads: Option<bool>,
         /// Enable support for WASI HTTP API (experimental)
         pub http: Option<bool>,
+        /// Enable support for WASI runtime config API (experimental)
+        pub runtime_config: Option<bool>,
+        /// Enable support for WASI key-value API (experimental)
+        pub keyvalue: Option<bool>,
         /// Inherit environment variables and file descriptors following the
         /// systemd listen fd specification (UNIX only)
         pub listenfd: Option<bool>,
@@ -317,6 +325,10 @@ wasmtime_option_group! {
         ///
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
+        /// Pass a wasi runtime config variable to the program.
+        pub runtime_config_var: Vec<KeyValuePair>,
+        /// Preset data for the In-Memory provider of WASI key-value API.
+        pub keyvalue_in_memory_data: Vec<KeyValuePair>,
     }
 
     enum Wasi {
@@ -328,6 +340,12 @@ wasmtime_option_group! {
 pub struct WasiNnGraph {
     pub format: String,
     pub dir: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeyValuePair {
+    pub key: String,
+    pub value: String,
 }
 
 /// Common options for commands that translate WebAssembly modules
@@ -660,6 +678,9 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.memory64.or(all) {
             config.wasm_memory64(enable);
         }
+        if let Some(enable) = self.wasm.custom_page_sizes.or(all) {
+            config.wasm_custom_page_sizes(enable);
+        }
 
         macro_rules! handle_conditionally_compiled {
             ($(($feature:tt, $field:tt, $method:tt))*) => ($(
@@ -677,6 +698,7 @@ impl CommonOptions {
         handle_conditionally_compiled! {
             ("component-model", component_model, wasm_component_model)
             ("component-model", component_model_more_flags, wasm_component_model_more_flags)
+            ("component-model", component_model_multiple_returns, wasm_component_model_multiple_returns)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)

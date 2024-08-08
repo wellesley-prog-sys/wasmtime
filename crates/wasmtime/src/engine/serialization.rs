@@ -203,6 +203,7 @@ struct WasmFeatures {
     gc: bool,
     custom_page_sizes: bool,
     component_model_more_flags: bool,
+    component_model_multiple_returns: bool,
 }
 
 impl Metadata<'_> {
@@ -229,6 +230,8 @@ impl Metadata<'_> {
             component_model_values,
             component_model_nested_names,
             component_model_more_flags,
+            component_model_multiple_returns,
+            legacy_exceptions,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -244,6 +247,7 @@ impl Metadata<'_> {
         assert!(!component_model_values);
         assert!(!component_model_nested_names);
         assert!(!shared_everything_threads);
+        assert!(!legacy_exceptions);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -267,6 +271,7 @@ impl Metadata<'_> {
                 gc,
                 custom_page_sizes,
                 component_model_more_flags,
+                component_model_multiple_returns,
             },
         }
     }
@@ -361,7 +366,6 @@ impl Metadata<'_> {
             guard_before_linear_memory,
             table_lazy_init,
             relaxed_simd_deterministic,
-            tail_callable,
             winch_callable,
 
             // This doesn't affect compilation, it's just a runtime setting.
@@ -424,7 +428,6 @@ impl Metadata<'_> {
             other.relaxed_simd_deterministic,
             "relaxed simd deterministic semantics",
         )?;
-        Self::check_bool(tail_callable, other.tail_callable, "WebAssembly tail calls")?;
         Self::check_bool(
             winch_callable,
             other.winch_callable,
@@ -473,6 +476,7 @@ impl Metadata<'_> {
             gc,
             custom_page_sizes,
             component_model_more_flags,
+            component_model_multiple_returns,
         } = self.features;
 
         use wasmparser::WasmFeatures as F;
@@ -559,6 +563,11 @@ impl Metadata<'_> {
             other.contains(F::COMPONENT_MODEL_MORE_FLAGS),
             "WebAssembly component model support for more than 32 flags",
         )?;
+        Self::check_bool(
+            component_model_multiple_returns,
+            other.contains(F::COMPONENT_MODEL_MULTIPLE_RETURNS),
+            "WebAssembly component model support for multiple returns",
+        )?;
 
         Ok(())
     }
@@ -623,7 +632,7 @@ mod test {
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(format!("{:?}", e).starts_with(
+            Err(e) => assert!(format!("{e:?}").starts_with(
                 "\
 compilation settings of module incompatible with native host
 
