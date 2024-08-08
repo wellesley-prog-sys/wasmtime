@@ -1887,14 +1887,21 @@
 (extern constructor is_zero_uimm12 is_zero_uimm12)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
-(spec (imm12_from_value arg)
+; REVIEW(mbm): is imm12_from_value spec correct?
+; NOTE(mbm): compare with https://github.com/avanhatt/wasmtime/blob/94ccb9d4d55a479893cb04bc796ec620ed24cee2/cranelift/codegen/src/isa/aarch64/inst.isle#L1867-L1874
+(spec (imm12_from_value imm12)
       (provide
-            (= result (conv_to (widthof result) (zero_ext 64 arg)))
-            (= arg (conv_to (widthof arg) (zero_ext 64 result))))
+            ; REVIEW(mbm): zero_ext vs conv_to?
+            (= result (zero_ext (widthof result) imm12))
+      )
       (require
-            (or (bvult (zero_ext 64 result) #x0000000000000fff)
-                (and (bvult (zero_ext 64 result) #x0000000000fff000)
-                     (= (extract 2 0 (zero_ext 64 result)) #b000)))))
+            ; REVIEW(mbm): correct formulation of imm12?
+            (or
+                  (= imm12 (bvand imm12 #x000fff))
+                  (= imm12 (bvand imm12 #xfff000))
+            )
+      )
+)
 (decl imm12_from_value (Imm12) Value)
 (extractor
   (imm12_from_value n)
@@ -1902,11 +1909,20 @@
 
 ;; Conceptually the same as `imm12_from_value`, but tries negating the constant
 ;; value (first sign-extending to handle narrow widths).
-(spec (imm12_from_negated_value arg)
-    (provide (or (bvult (bvneg (sign_ext 64 arg)) #x0000000000000fff)
-                    (and (bvult (bvneg (sign_ext 64 arg)) #x0000000000fff000)
-                        (= (extract 2 0 (bvneg (sign_ext 64 arg))) #b000)))
-                (= result (extract 23 0 (bvneg (sign_ext 64 arg))))))
+(spec (imm12_from_value arg)
+      (provide
+            ; REVIEW(mbm): zero_ext vs conv_to?
+            (= (bvneg (sign_ext 64 arg) (zero_ext 64 result)))
+      )
+      (require
+            ; REVIEW(mbm): correct formulation of imm12?
+            (or
+                  (= result (bvand result #x000fff))
+                  (= result (bvand result #xfff000))
+            )
+      )
+)
+
 (instantiate imm12_from_negated_value
     ((args (bv 8)) (ret (bv 24)) (canon (bv 8)))
     ((args (bv 16)) (ret (bv 24)) (canon (bv 16)))
