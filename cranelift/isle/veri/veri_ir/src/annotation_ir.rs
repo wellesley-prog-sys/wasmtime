@@ -11,8 +11,7 @@ pub struct BoundVar {
 }
 
 impl BoundVar {
-    // TODO: special case this for function bound vars?
-    /// Construct a new bound variable, cloning from references
+    /// Construct a new bound variable
     pub fn new_with_ty(name: &str, ty: &Type) -> Self {
         BoundVar {
             name: name.to_string(),

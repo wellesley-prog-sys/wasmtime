@@ -118,13 +118,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn is_spec_switch(&self) -> bool {
-        self.is(|tok| match tok {
-            Token::Symbol(tok_s) if tok_s == "switch" => true,
-            _ => false,
-        })
-    }
-
     fn expect_lparen(&mut self) -> Result<()> {
         self.expect(|tok| *tok == Token::LParen).map(|_| ())
     }
@@ -420,8 +413,7 @@ impl<'a> Parser<'a> {
             return Ok(SpecExpr::Var { var, pos });
         } else if self.is_lparen() {
             self.expect_lparen()?;
-            if self.is_spec_switch() {
-                let _ = self.expect_symbol()?;
+            if self.eat_sym_str("switch")? {
                 let mut args = vec![];
                 args.push(self.parse_spec_expr()?);
                 while !(self.is_rparen()) {

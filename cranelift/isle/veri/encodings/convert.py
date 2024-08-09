@@ -84,7 +84,7 @@ def parse_decl(line):
         named_params = ', '.join([f'{x} = {x}' for x in matches])
         name_rs = f'format!(\"{name}\", {named_params})'
     else:
-        name_rs = name  # TODO Should be surrounded in quotes?
+        name_rs = name  
 
     # Strip off the '_{id}' to get the Rust variable name.
     assert name.endswith('_{id}')

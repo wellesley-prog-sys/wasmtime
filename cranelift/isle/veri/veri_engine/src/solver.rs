@@ -1145,7 +1145,7 @@ impl SolverCtx {
                     .collect();
                 let last = sexprs.remove(sexprs.len() - 1);
 
-                // AVH TODO: better solution for the width case
+                // Width hack for now
                 if self.find_widths {
                     return sexprs[0];
                 }
@@ -1357,7 +1357,6 @@ impl SolverCtx {
             }
             isle::sema::Pattern::ConstInt(_, num) => {
                 let _smt_name_prefix = format!("{}__", num);
-                // TODO: look up BV vs int
                 self.smt.list(vec![self.smt.atom(num.to_string())])
             }
             isle::sema::Pattern::And(_, subpats) => {
@@ -1432,7 +1431,6 @@ impl SolverCtx {
             }
             isle::sema::Expr::ConstInt(_, num) => {
                 let _smt_name_prefix = format!("{}__", num);
-                // TODO: look up BV vs int
                 self.smt.list(vec![self.smt.atom(num.to_string())])
             }
             isle::sema::Expr::Let { bindings, body, .. } => {

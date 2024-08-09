@@ -181,8 +181,6 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
             None => binop(|x, y| Expr::BVSignExtToVarWidth(x, y), args, pos, env),
         },
         SpecOp::ConvTo => binop(|x, y| Expr::BVConvTo(x, y), args, pos, env),
-
-        // AVH TODO
         SpecOp::Concat => {
             let cases: Vec<Expr> = args.iter().map(|a| spec_to_expr(a, env)).collect();
             Expr::BVConcat(cases)

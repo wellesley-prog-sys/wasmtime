@@ -67,12 +67,12 @@ fn main() {
 
         // TODO: clean up path logic
         inputs.push(cur_dir.join("../../../codegen/src").join("inst_specs.isle"));
-        inputs.push(cur_dir.join("../../../codegen/src").join("prelude.isle"));
         inputs.push(
             cur_dir
                 .join("../../../codegen/src")
                 .join("prelude_lower.isle"),
         );
+        inputs.push(cur_dir.join("../../../codegen/src").join("prelude.isle"));
     }
 
     if args.aarch64 {
