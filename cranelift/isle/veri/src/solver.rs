@@ -5,7 +5,8 @@ use easy_smt::{Context, Response, SExpr, SExprData};
 
 use crate::{
     type_inference::Assignment,
-    veri::{Conditions, Const, Expr, ExprId, Model, Type, Width},
+    types::{Const, Type, Width},
+    veri::{Conditions, Expr, ExprId, Model},
 };
 
 #[derive(Debug, PartialEq, Eq)]

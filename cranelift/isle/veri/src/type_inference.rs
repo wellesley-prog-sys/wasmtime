@@ -4,7 +4,10 @@ use std::{
     iter::zip,
 };
 
-use crate::veri::{Call, Conditions, Const, Expr, ExprId, Type, Width};
+use crate::{
+    types::{Const, Type, Width},
+    veri::{Call, Conditions, Expr, ExprId},
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TypeValue {

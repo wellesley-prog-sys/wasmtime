@@ -25,6 +25,7 @@ pub mod solver;
 pub mod spec;
 pub mod trie_again;
 pub mod type_inference;
+pub mod types;
 pub mod veri;
 
 #[cfg(test)]

@@ -5,70 +5,9 @@ use cranelift_isle::{
 };
 use std::collections::HashMap;
 
+use crate::types::{Const, Type};
+
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
-
-/// Higher-level type, not including bitwidths.
-#[derive(Debug, Clone)]
-pub enum Type {
-    /// The expression is a bitvector, currently modeled in the
-    /// logic QF_BV https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
-    BitVector,
-
-    /// Use if the width is known
-    BitVectorWithWidth(usize),
-
-    /// The expression is an integer (currently used for ISLE type,
-    /// representing bitwidth)
-    Int,
-
-    /// The expression is a boolean.
-    Bool,
-}
-
-impl Type {
-    fn from_model(model: &ModelType) -> Self {
-        match model {
-            ModelType::Int => Self::Int,
-            ModelType::Bool => Self::Bool,
-            ModelType::BitVec(None) => Self::BitVector,
-            ModelType::BitVec(Some(size)) => Self::BitVectorWithWidth(*size),
-        }
-    }
-}
-
-impl std::fmt::Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::BitVector => write!(f, "bv _"),
-            Self::BitVectorWithWidth(w) => write!(f, "bv {w}"),
-            Self::Int => write!(f, "int"),
-            Self::Bool => write!(f, "bool"),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Signature {
-    pub args: Vec<Type>,
-    pub ret: Type,
-}
-
-impl Signature {
-    fn from_ast(sig: &ast::Signature) -> Self {
-        Self {
-            args: sig.args.iter().map(Type::from_model).collect(),
-            ret: Type::from_model(&sig.ret),
-        }
-    }
-}
-
-/// Type-specified constants
-#[derive(Debug, Clone)]
-pub struct Const {
-    pub ty: Type,
-    // TODO(mbm): support constants larger than 127 bits
-    pub value: i128,
-}
 
 /// Spec expression.
 #[derive(Debug, Clone)]
@@ -231,18 +170,14 @@ macro_rules! variadic_binary_expr {
 impl Expr {
     fn from_ast(expr: &ast::SpecExpr) -> Self {
         match expr {
-            ast::SpecExpr::ConstInt { val, pos: _ } => Expr::Const(Const {
-                ty: Type::Int,
-                value: *val,
-            }),
-            ast::SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const {
-                ty: Type::Bool,
-                value: if *val { 1 } else { 0 },
-            }),
-            ast::SpecExpr::ConstBitVec { val, width, pos: _ } => Expr::Const(Const {
-                ty: Type::BitVectorWithWidth(*width as usize),
-                value: *val,
-            }),
+            ast::SpecExpr::ConstInt { val, pos: _ } => Expr::Const(Const::Int(*val)),
+            ast::SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const::Bool(*val)),
+            ast::SpecExpr::ConstBitVec { val, width, pos: _ } => Expr::Const(Const::BitVector(
+                (*width)
+                    .try_into()
+                    .expect("width should be representable as usize"),
+                *val,
+            )),
             ast::SpecExpr::Var { var, pos: _ } => Expr::Var(var.clone()),
             ast::SpecExpr::Op { op, args, pos } => match op {
                 // Unary
@@ -420,6 +355,21 @@ impl Spec {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Signature {
+    pub args: Vec<Type>,
+    pub ret: Type,
+}
+
+impl Signature {
+    fn from_ast(sig: &ast::Signature) -> Self {
+        Self {
+            args: sig.args.iter().map(Type::from_ast).collect(),
+            ret: Type::from_ast(&sig.ret),
+        }
+    }
+}
+
 pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
@@ -507,8 +457,7 @@ impl SpecEnv {
         let type_id = tyenv
             .get_type_by_name(name)
             .expect("type name should be defined");
-        self.type_model
-            .insert(type_id, Type::from_model(model_type));
+        self.type_model.insert(type_id, Type::from_ast(model_type));
     }
 
     fn collect_instantiations(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {

@@ -1,8 +1,9 @@
 use crate::{
     expand::Expansion,
     program::Program,
-    spec,
+    spec::{self, Signature},
     trie_again::{binding_type, BindingType},
+    types::{Const, Type, Width},
 };
 use cranelift_isle::{
     ast,
@@ -10,7 +11,6 @@ use cranelift_isle::{
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use std::{
-    cmp::Ordering,
     collections::{HashMap, HashSet},
     iter::zip,
 };
@@ -25,141 +25,6 @@ declare_id!(
     /// The id of a variable within verification Conditions.
     VariableId
 );
-
-/// Width of a bit vector.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Width {
-    Unknown,
-    Bits(usize),
-}
-
-impl PartialOrd for Width {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (Width::Unknown, Width::Unknown) => Some(Ordering::Equal),
-            (Width::Unknown, Width::Bits(_)) => Some(Ordering::Less),
-            (Width::Bits(_), Width::Unknown) => Some(Ordering::Greater),
-            (Width::Bits(l), Width::Bits(r)) if l == r => Some(Ordering::Equal),
-            (Width::Bits(_), Width::Bits(_)) => None,
-        }
-    }
-}
-
-// QUESTION(mbm): do we need yet another type enum?
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Type {
-    Unknown,
-    BitVector(Width),
-    Int,
-    Bool,
-}
-
-impl Type {
-    fn from_spec(spec_type: &spec::Type) -> Self {
-        match spec_type {
-            spec::Type::BitVector => Self::BitVector(Width::Unknown),
-            spec::Type::BitVectorWithWidth(width) => Self::BitVector(Width::Bits(*width)),
-            spec::Type::Int => Self::Int,
-            spec::Type::Bool => Self::Bool,
-        }
-    }
-
-    pub fn is_concrete(&self) -> bool {
-        match self {
-            Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
-            Self::Unknown | Self::BitVector(Width::Unknown) => false,
-        }
-    }
-}
-
-impl std::fmt::Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Unknown => write!(f, "unk"),
-            Self::BitVector(Width::Bits(w)) => write!(f, "bv {w}"),
-            Self::BitVector(Width::Unknown) => write!(f, "bv _"),
-            Self::Int => write!(f, "int"),
-            Self::Bool => write!(f, "bool"),
-        }
-    }
-}
-
-impl PartialOrd for Type {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (Type::Unknown, Type::Unknown) => Some(Ordering::Equal),
-            (Type::Unknown, _) => Some(Ordering::Less),
-            (_, Type::Unknown) => Some(Ordering::Greater),
-            (Type::BitVector(l), Type::BitVector(r)) => l.partial_cmp(r),
-            (Type::Int, Type::Int) => Some(Ordering::Equal),
-            (Type::Bool, Type::Bool) => Some(Ordering::Equal),
-            (_, _) => None,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Signature {
-    pub args: Vec<Type>,
-    pub ret: Type,
-}
-
-impl Signature {
-    fn from_spec(sig: &spec::Signature) -> Self {
-        Self {
-            args: sig.args.iter().map(Type::from_spec).collect(),
-            ret: Type::from_spec(&sig.ret),
-        }
-    }
-}
-
-// QUESTION(mbm): can this be deduped with the corresponding spec constant type?
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Const {
-    Bool(bool),
-    Int(i128),
-    BitVector(usize, i128),
-}
-
-impl Const {
-    pub fn ty(&self) -> Type {
-        match self {
-            Self::Bool(_) => Type::Bool,
-            Self::Int(_) => Type::Int,
-            Self::BitVector(w, _) => Type::BitVector(Width::Bits(*w)),
-        }
-    }
-
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            Const::Bool(b) => Some(*b),
-            _ => None,
-        }
-    }
-
-    pub fn as_int(&self) -> Option<i128> {
-        match self {
-            Const::Int(v) => Some(*v),
-            _ => None,
-        }
-    }
-}
-
-impl std::fmt::Display for Const {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Bool(b) => write!(f, "{b}"),
-            Self::Int(v) => write!(f, "{v}"),
-            Self::BitVector(w, v) => {
-                if w % 4 == 0 {
-                    write!(f, "#x{v:0>nibbles$x}", nibbles = w / 4)
-                } else {
-                    write!(f, "#b{v:0>bits$b}", bits = w)
-                }
-            }
-        }
-    }
-}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Expr {
@@ -802,10 +667,7 @@ impl<'a> ConditionsBuilder<'a> {
             .term_instantiations
             .get(&term)
             .cloned()
-            .unwrap_or_default()
-            .iter()
-            .map(Signature::from_spec)
-            .collect();
+            .unwrap_or_default();
         self.conditions.calls.push(Call {
             term,
             args: args.to_vec(),
@@ -934,7 +796,7 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(*v)
             }
 
-            spec::Expr::Const(c) => self.spec_const(c),
+            spec::Expr::Const(c) => Ok(self.constant(c.clone())),
 
             spec::Expr::Enum(name) => self.spec_enum(name),
 
@@ -1082,20 +944,16 @@ impl<'a> ConditionsBuilder<'a> {
         self.spec_expr(expr, &no_vars)
     }
 
-    fn spec_const(&mut self, c: &spec::Const) -> anyhow::Result<ExprId> {
-        self.spec_typed_value(c.value, &c.ty)
-    }
-
-    fn spec_typed_value(&mut self, val: i128, ty: &spec::Type) -> anyhow::Result<ExprId> {
+    fn spec_typed_value(&mut self, val: i128, ty: &Type) -> anyhow::Result<ExprId> {
         match ty {
-            spec::Type::Bool => Ok(self.boolean(match val {
+            Type::Bool => Ok(self.boolean(match val {
                 0 => false,
                 1 => true,
                 _ => anyhow::bail!("boolean value must be zero or one"),
             })),
-            spec::Type::Int => Ok(self.constant(Const::Int(val))),
-            spec::Type::BitVectorWithWidth(w) => Ok(self.constant(Const::BitVector(*w, val))),
-            spec::Type::BitVector => anyhow::bail!("bitvector constant must have known width"),
+            Type::Int => Ok(self.constant(Const::Int(val))),
+            Type::BitVector(Width::Bits(w)) => Ok(self.constant(Const::BitVector(*w, val))),
+            _ => anyhow::bail!("cannot construct constant of type {ty}"),
         }
     }
 
@@ -1232,11 +1090,10 @@ impl<'a> ConditionsBuilder<'a> {
                     .specenv
                     .type_model
                     .get(type_id)
-                    .map(Type::from_spec)
                     .ok_or(anyhow::format_err!(
                         "unspecified model for type {type_name}"
                     ))?;
-                Ok(Value::Expr(self.alloc_variable(ty, name)))
+                Ok(Value::Expr(self.alloc_variable(ty.clone(), name)))
             }
             BindingType::Option(inner_type) => {
                 let some = self.alloc_variable(Type::Bool, Variable::component_name(&name, "some"));
@@ -1276,41 +1133,5 @@ impl<'a> ConditionsBuilder<'a> {
             self.expr_map.insert(expr, id);
             id
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::testing::assert_partial_order_properties;
-
-    #[test]
-    fn test_width_partial_order_less_than() {
-        assert!(Width::Unknown < Width::Bits(64));
-    }
-
-    #[test]
-    fn test_width_partial_order_properties() {
-        assert_partial_order_properties(&[Width::Unknown, Width::Bits(32), Width::Bits(64)]);
-    }
-
-    #[test]
-    fn test_type_partial_order_less_than() {
-        assert!(Type::Unknown < Type::BitVector(Width::Unknown));
-        assert!(Type::BitVector(Width::Unknown) < Type::BitVector(Width::Bits(64)));
-        assert!(Type::Unknown < Type::Int);
-        assert!(Type::Unknown < Type::Bool);
-    }
-
-    #[test]
-    fn test_type_partial_order_properties() {
-        assert_partial_order_properties(&[
-            Type::Unknown,
-            Type::BitVector(Width::Unknown),
-            Type::BitVector(Width::Bits(32)),
-            Type::BitVector(Width::Bits(64)),
-            Type::Int,
-            Type::Bool,
-        ]);
     }
 }
