@@ -1,10 +1,4 @@
-use cranelift_codegen_meta as meta;
-use cranelift_isle as isle;
 use easy_smt::SExpr;
-use isle::compile::create_envs;
-use isle::sema::{TermEnv, TypeEnv};
-use meta::isa::Isa;
-use std::path::PathBuf;
 
 pub mod annotations;
 pub mod interp;
@@ -44,44 +38,4 @@ impl Config {
             names: Some(vec![name.to_string()]),
         }
     }
-}
-
-/// Given a file, lexes and parses the file to an ISLE term and type environment tuple
-pub fn isle_files_to_terms(files: &Vec<PathBuf>) -> (TypeEnv, TermEnv) {
-    let lexer = isle::lexer::Lexer::from_files(files).unwrap();
-    parse_isle_to_terms(lexer)
-}
-
-/// Produces the two ISLE-defined structs with type and term environments
-pub fn parse_isle_to_terms(lexer: isle::lexer::Lexer) -> (TypeEnv, TermEnv) {
-    // Parses to an AST, as a list of definitions
-    let defs = isle::parser::parse(lexer).expect("should parse");
-
-    // Produces environments including terms, rules, and maps from symbols and
-    // names to types
-    create_envs(&defs).unwrap()
-}
-
-pub fn build_clif_lower_isle() -> PathBuf {
-    // Build the relevant ISLE prelude using the meta crate
-    let out_dir = std::path::Path::new(&"veri-isle-clif-gen");
-    let isle_dir = std::path::Path::new(&out_dir);
-
-    if isle_dir.is_dir() {
-        let clif_lower_isle = isle_dir.join("clif_lower.isle");
-        if clif_lower_isle.is_file() {
-            return clif_lower_isle;
-        }
-    }
-    std::fs::create_dir_all(isle_dir)
-        .expect("Could not create directory for CLIF ISLE meta-generated code");
-
-    // For now, build ISLE files for x86 and aarch64
-    let isas = vec![Isa::X86, Isa::Arm64];
-
-    if let Err(err) = meta::generate(&isas, out_dir, isle_dir) {
-        panic!("Meta generate error: {}", err);
-    }
-
-    isle_dir.join("clif_lower.isle")
 }

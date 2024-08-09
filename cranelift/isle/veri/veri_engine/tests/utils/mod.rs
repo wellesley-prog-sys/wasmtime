@@ -1,11 +1,10 @@
 use cranelift_isle::compile::create_envs;
+use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use std::env;
 use std::path::PathBuf;
-use std::time::Duration;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use veri_engine_lib::annotations::parse_annotations;
-use veri_engine_lib::build_clif_lower_isle;
 use veri_engine_lib::type_inference::type_rules_with_term_and_types;
 use veri_engine_lib::verify::verify_rules_for_term;
 use veri_engine_lib::Config;
@@ -26,6 +25,19 @@ pub enum TestResult {
 }
 
 type TestResultBuilder = dyn Fn(Bitwidth) -> (Bitwidth, VerificationResult);
+
+
+use std::sync::Once;
+
+static INIT: Once = Once::new();
+
+pub fn initialize() {
+    INIT.call_once(|| {
+        let cur_dir = env::current_dir().expect("Can't access current working directory");
+        let gen_dir = cur_dir.join("test_output");
+        generate_isle(gen_dir.as_path()).expect("Can't generate ISLE");
+    });
+}
 
 // Some examples of functions we might need
 #[allow(dead_code)]
@@ -171,27 +183,16 @@ pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: T
     println!("Verifying rule `{}` with termname {} ", rulename, termname);
     // TODO: clean up path logic
     let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
-    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let prelude_lower_isle = cur_dir
-        .join("../../../codegen/src")
-        .join("prelude_lower.isle");
-    let mut inputs = vec![
-        build_clif_lower_isle(),
-        prelude_isle,
-        prelude_lower_isle,
-        clif_isle,
-    ];
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/aarch64")
-            .join("inst.isle"),
-    );
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/aarch64")
-            .join("lower.isle"),
-    );
+    let gen_dir = cur_dir.join("test_output");
+    let codegen_crate_dir = cur_dir.join("../../../codegen/src");
+
+    // Lookup ISLE compilations.
+    let compilations = get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
+
+    // Return inputs from the matching compilation, if any.
+    let inputs = compilations.lookup("aarch64").unwrap().inputs();
+
+
     let config = Config {
         term: termname.to_string(),
         distinct_check: true,

@@ -1,10 +1,12 @@
 //! Prototype verification tool for Cranelift's ISLE lowering rules.
 
 use clap::{ArgAction, Parser};
+use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use std::env;
 use std::path::PathBuf;
 use veri_engine_lib::verify::verify_rules;
-use veri_engine_lib::{build_clif_lower_isle, Config};
+use veri_engine_lib::{Config};
+
 
 #[derive(Parser)]
 #[clap(about, version, author)]
@@ -42,16 +44,41 @@ struct Args {
     nodistinct: bool,
 }
 
-fn main() {
+impl Args {
+    fn isle_input_files(&self) -> anyhow::Result<Vec<std::path::PathBuf>> {
+        // Generate ISLE files.
+        let cur_dir = env::current_dir().expect("Can't access current working directory");
+        let gen_dir = cur_dir.join("output");
+        generate_isle(gen_dir.as_path()).expect("Can't generate ISLE");
+
+        let codegen_crate_dir = cur_dir.join("../../../codegen/src");
+
+        // Lookup ISLE compilations.
+        let compilations = get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
+
+        let name = match (self.aarch64, self.x64) {
+            (true, false) => "aarch64",
+            (false, true) => "x64",
+            _ => panic!("Unsupported backend"),
+        };
+
+        // Return inputs from the matching compilation, if any.
+        Ok(compilations
+            .lookup(name)
+            .ok_or(anyhow::format_err!(
+                "unknown ISLE compilation: {}",
+                name
+            ))?
+            .inputs())
+
+    }
+}
+
+fn main() -> anyhow::Result<()> {
     env_logger::init();
-
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-
     let args = Args::parse();
-    let mut inputs = vec![];
 
     let valid_widths = ["I8", "I16", "I32", "I64"];
-
     if let Some(widths) = &args.widths {
         for w in widths {
             let w_str = w.as_str();
@@ -61,55 +88,11 @@ fn main() {
         }
     }
 
-    if !args.noprelude {
-        // Build the relevant ISLE prelude using the meta crate
-        inputs.push(build_clif_lower_isle());
-
-        // TODO: clean up path logic
-        inputs.push(cur_dir.join("../../../codegen/src").join("inst_specs.isle"));
-        inputs.push(
-            cur_dir
-                .join("../../../codegen/src")
-                .join("prelude_lower.isle"),
-        );
-        inputs.push(cur_dir.join("../../../codegen/src").join("prelude.isle"));
-    }
-
-    if args.aarch64 {
-        inputs.push(
-            cur_dir
-                .join("../../../codegen/src/isa/aarch64")
-                .join("inst.isle"),
-        );
-        inputs.push(
-            cur_dir
-                .join("../../../codegen/src/isa/aarch64")
-                .join("lower.isle"),
-        );
-        if args.input.is_some() {
-            panic!("Cannot specify both input file and aarch64 mode.")
-        }
-    } else if args.x64 {
-        inputs.push(
-            cur_dir
-                .join("../../../codegen/src/isa/x64")
-                .join("inst.isle"),
-        );
-        inputs.push(
-            cur_dir
-                .join("../../../codegen/src/isa/x64")
-                .join("lower.isle"),
-        );
-        if args.input.is_some() {
-            panic!("Cannot specify both input file and x64 mode.")
-        }
+    let inputs = if args.noprelude {
+        vec![PathBuf::from(args.input.expect("Missing input file in noprelude mode"))]
     } else {
-        if let Some(i) = args.input {
-            inputs.push(PathBuf::from(i));
-        } else {
-            panic!("Missing input file in non-aarch64 mode");
-        }
-    }
+        args.isle_input_files()?
+    };
 
     let names = if let Some(names) = args.names {
         let mut names = names;
@@ -128,5 +111,5 @@ fn main() {
         custom_assumptions: None,
     };
 
-    verify_rules(inputs, &config, &args.widths)
+    Ok(verify_rules(inputs, &config, &args.widths))
 }
