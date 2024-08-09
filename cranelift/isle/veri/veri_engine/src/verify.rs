@@ -116,7 +116,6 @@ pub fn verify_rules_for_term(
         }
         let ctx = Context::new(typesols);
         if ctx.typesols.get(&rule.id).is_none() {
-            log::warn!("Aborting: rule not found in the context");
             continue;
         }
         let rule_sem = &ctx.typesols[&rule.id];

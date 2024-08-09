@@ -1513,7 +1513,7 @@ fn add_rule_constraints(
                 .insert((curr.ident.clone(), curr.type_var));
             let a = annotation_env.get_annotation_for_term(term_id);
             if a.is_none() {
-                log::warn!("\nSkipping rule with unannotated term: {}", term_name);
+                log::error!("\nSkipping rule with unannotated term: {}", term_name);
                 return None;
             }
             let annotation = a.unwrap();

@@ -1892,7 +1892,8 @@
 (spec (imm12_from_value imm12)
       (provide
             ; REVIEW(mbm): zero_ext vs conv_to?
-            (= result (zero_ext (widthof result) imm12))
+            (= result (conv_to (widthof result) (zero_ext 64 imm12)))
+            (= imm12 (conv_to (widthof imm12) (zero_ext 64 result)))
       )
       (require
             ; REVIEW(mbm): correct formulation of imm12?
@@ -1906,7 +1907,6 @@
 (extractor
   (imm12_from_value n)
   (iconst (u64_from_imm64 (imm12_from_u64 n))))
-
 ;; Conceptually the same as `imm12_from_value`, but tries negating the constant
 ;; value (first sign-extending to handle narrow widths).
 (spec (imm12_from_negated_value arg)
@@ -2670,9 +2670,10 @@
        (if (<= ty 32)
            (conv_to 64 (bvadd (extract 31 0 a) (zero_ext 32 b)))
            (bvadd a (zero_ext 64 b)))))
-  (require  (or (<= (bv2int b) 4094)
-               (and (<= (bv2int b) 16773119)
-                   (= (extract 2 0 b) #b000)))))
+  (require
+      (or
+            (= b (bvand b #x000fff))
+            (= b (bvand b #xfff000)))))
 (decl add_imm (Type Reg Imm12) Reg)
 (rule (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))
 
@@ -3157,9 +3158,9 @@
          (32 (conv_to 64 (bvor (extract 31 0 x) (extract 31 0 y))))
          (64 (bvor x (zero_ext 64 y))))))
   (require
-    (or (<= (bv2int y) 4094)
-        (and (<= (bv2int y) 16773119)
-            (= (extract 2 0 y) #b000)))))
+      (or
+            (= y (bvand y #x000fff))
+            (= y (bvand y #xfff000)))))
 (decl orr_imm (Type Reg ImmLogic) Reg)
 (rule (orr_imm ty x y) (alu_rr_imm_logic (ALUOp.Orr) ty x y))
 
@@ -3186,10 +3187,10 @@
        (switch ty
          (32 (conv_to 64 (bvand (extract 31 0 x) (extract 31 0 y))))
          (64 (bvand x (zero_ext 64 y))))))
-    (require
-      (or (<= (bv2int y) 4094)
-          (and (<= (bv2int y) 16773119)
-              (= (extract 2 0 y) #b000)))))
+  (require
+      (or
+            (= y (bvand y #x000fff))
+            (= y (bvand y #xfff000)))))
 (decl and_imm (Type Reg ImmLogic) Reg)
 (rule (and_imm ty x y) (alu_rr_imm_logic (ALUOp.And) ty x y))
 

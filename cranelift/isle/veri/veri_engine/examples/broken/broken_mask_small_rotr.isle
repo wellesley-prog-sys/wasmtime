@@ -24,10 +24,10 @@
        (switch ty
          (32 (conv_to 64 (bvand (extract 31 0 x) (extract 31 0 y))))
          (64 (bvand x (zero_ext 64 y))))))
-    (require
-      (or (<= (bv2int y) 4094)
-          (and (<= (bv2int y) 16773119)
-              (= (extract 2 0 y) #b000)))))
+  (require
+      (or
+            (= y (bvand y #x000fff))
+            (= y (bvand y #xfff000)))))
 (decl and_imm (Type Reg ImmLogic) Reg)
 (extern constructor and_imm and_imm)
 
