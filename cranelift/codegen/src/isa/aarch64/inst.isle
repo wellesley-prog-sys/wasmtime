@@ -1909,10 +1909,9 @@
 
 ;; Conceptually the same as `imm12_from_value`, but tries negating the constant
 ;; value (first sign-extending to handle narrow widths).
-(spec (imm12_from_value arg)
+(spec (imm12_from_negated_value arg)
       (provide
-            ; REVIEW(mbm): zero_ext vs conv_to?
-            (= (bvneg (sign_ext 64 arg) (zero_ext 64 result)))
+            (= (bvneg (sign_ext 64 arg)) (zero_ext 64 result))
       )
       (require
             ; REVIEW(mbm): correct formulation of imm12?

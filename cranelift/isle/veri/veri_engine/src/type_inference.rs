@@ -186,7 +186,6 @@ fn type_annotations_using_rule<'a>(
 
     let mut annotation_infos = vec![];
     if !rule.iflets.is_empty() {
-        print!("\n\tif-lets:");
         for iflet in &rule.iflets {
             let iflet_lhs = &mut create_parse_tree_pattern(
                 rule,
@@ -235,7 +234,6 @@ fn type_annotations_using_rule<'a>(
                 Box::new(iflet_rhs_expr.unwrap()),
             ));
         }
-        println!();
     }
     let lhs = &mut create_parse_tree_pattern(
         rule,
@@ -1515,7 +1513,7 @@ fn add_rule_constraints(
                 .insert((curr.ident.clone(), curr.type_var));
             let a = annotation_env.get_annotation_for_term(term_id);
             if a.is_none() {
-                log::error!("\nSkipping rule with unannotated term: {}", term_name);
+                log::warn!("\nSkipping rule with unannotated term: {}", term_name);
                 return None;
             }
             let annotation = a.unwrap();

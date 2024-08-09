@@ -1800,11 +1800,11 @@ fn resolve_dynamic_widths(
         }
         Ok(Response::Unsat) => {
             if attempt == 0 {
-                log::error!(
+                log::warn!(
                     "Rule not applicable as written for rule assumptions, skipping full query"
                 );
                 let unsat = ctx.smt.get_unsat_core().unwrap();
-                log::error!("Unsat core:\n{}", ctx.smt.display(unsat));
+                log::warn!("Unsat core:\n{}", ctx.smt.display(unsat));
                 return VerificationResult::InapplicableRule;
             } else {
                 // If this is not the first attempt, some previous width assignment must
@@ -1830,6 +1830,7 @@ pub fn run_solver_with_static_widths(
     concrete: &Option<ConcreteTest>,
     config: &Config,
 ) -> VerificationResult {
+    let rulename = &typeenv.syms[rule.name.unwrap().index()];
     // Declare variables again, this time with all static widths
     let mut solver = easy_smt::ContextBuilder::new()
         .replay_file(Some(std::fs::File::create("static_widths.smt2").unwrap()))
@@ -1868,7 +1869,7 @@ pub fn run_solver_with_static_widths(
     let feasibility =
         ctx.check_assumptions_feasibility(&assumptions, &rule_sem.term_input_bvs, config);
     if feasibility != VerificationResult::Success {
-        log::error!("Rule not applicable as written for rule assumptions, skipping full query");
+        log::warn!("Rule not applicable as written for rule assumptions, skipping full query");
         return feasibility;
     }
 
@@ -1961,13 +1962,13 @@ pub fn run_solver_with_static_widths(
         }
         (None, None) => (),
         (Some(_), None) => {
-            log::debug!("Verification failed");
-            log::debug!("Left hand side has load statement but right hand side does not.");
+            log::error!("Verification failed for {}", rulename);
+            log::error!("Left hand side has load statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
-            log::debug!("Verification failed");
-            log::debug!("Right hand side has load statement but left hand side does not.");
+            log::error!("Verification failed for {}", rulename);
+            log::error!("Right hand side has load statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
     }
@@ -1988,13 +1989,13 @@ pub fn run_solver_with_static_widths(
         }
         (None, None) => (),
         (Some(_), None) => {
-            log::debug!("Verification failed");
-            log::debug!("Left hand side has store statement but right hand side does not.");
+            log::error!("Verification failed for {}", rulename);
+            log::error!("Left hand side has store statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
-            log::debug!("Verification failed");
-            log::debug!("Right hand side has store statement but left hand side does not.");
+            log::error!("Verification failed for {}", rulename);
+            log::error!("Right hand side has store statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
     }
@@ -2011,7 +2012,7 @@ pub fn run_solver_with_static_widths(
 
     match ctx.smt.check() {
         Ok(Response::Sat) => {
-            log::error!("Verification failed");
+            log::error!("Verification failed for {}", rulename);
             ctx.display_model(termenv, typeenv, rule, lhs, rhs);
             let vals = ctx.smt.get_value(vec![condition]).unwrap();
             for (variable, value) in vals {

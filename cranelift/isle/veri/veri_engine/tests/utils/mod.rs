@@ -87,7 +87,7 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) ->
     let term_signatures = annotation_env
         .get_term_signatures_by_name(&termenv, &typeenv)
         .get(config.term.as_str())
-        .expect(format!("Missing term width for {}", config.term).as_str())
+        .expect(format!("Missing term type instantiation for {}", config.term).as_str())
         .clone();
     let instantiations = match tr {
         TestResult::Simple(s) => {

@@ -2,7 +2,7 @@
 
 use clap::{ArgAction, Parser};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use std::env;
+use std::{env, fs};
 use std::path::PathBuf;
 use veri_engine_lib::verify::verify_rules;
 use veri_engine_lib::{Config};
@@ -49,9 +49,12 @@ impl Args {
         // Generate ISLE files.
         let cur_dir = env::current_dir().expect("Can't access current working directory");
         let gen_dir = cur_dir.join("output");
+        if !std::path::Path::new(gen_dir.as_path()).exists() {
+            fs::create_dir_all(gen_dir.as_path()).unwrap();
+        }
         generate_isle(gen_dir.as_path()).expect("Can't generate ISLE");
 
-        let codegen_crate_dir = cur_dir.join("../../../codegen/src");
+        let codegen_crate_dir = cur_dir.join("../../../codegen");
 
         // Lookup ISLE compilations.
         let compilations = get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
@@ -59,7 +62,7 @@ impl Args {
         let name = match (self.aarch64, self.x64) {
             (true, false) => "aarch64",
             (false, true) => "x64",
-            _ => panic!("Unsupported backend"),
+            _ => panic!("aarch64 of x64 backend must be provided"),
         };
 
         // Return inputs from the matching compilation, if any.

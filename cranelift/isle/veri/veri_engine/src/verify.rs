@@ -28,7 +28,7 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config, widths: &Option<Vec<S
     let types = annotation_env
         .get_term_signatures_by_name(&termenv, &typeenv)
         .get(&config.term as &str)
-        .unwrap_or_else(|| panic!("Missing term width for {}", config.term))
+        .unwrap_or_else(|| panic!("Missing term type instantiation for {}", config.term))
         .clone();
 
     let types_filtered = if let Some(widths) = widths {
@@ -116,7 +116,7 @@ pub fn verify_rules_for_term(
         }
         let ctx = Context::new(typesols);
         if ctx.typesols.get(&rule.id).is_none() {
-            log::error!("Aborting: rule not found in the context");
+            log::warn!("Aborting: rule not found in the context");
             continue;
         }
         let rule_sem = &ctx.typesols[&rule.id];
