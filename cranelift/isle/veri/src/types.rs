@@ -110,11 +110,11 @@ impl std::fmt::Display for Const {
         match self {
             Self::Bool(b) => write!(f, "{b}"),
             Self::Int(v) => write!(f, "{v}"),
-            Self::BitVector(w, v) => {
-                if w % 4 == 0 {
-                    write!(f, "#x{v:0>nibbles$x}", nibbles = w / 4)
+            Self::BitVector(bits, v) => {
+                if bits % 4 == 0 {
+                    write!(f, "#x{v:0>nibbles$x}", nibbles = bits / 4)
                 } else {
-                    write!(f, "#b{v:0>bits$b}", bits = w)
+                    write!(f, "#b{v:0>bits$b}")
                 }
             }
         }

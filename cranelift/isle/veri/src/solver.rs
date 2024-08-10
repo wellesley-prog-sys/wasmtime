@@ -118,7 +118,7 @@ impl<'a> Solver<'a> {
         let values = self.smt.get_value(expr_atoms)?;
         let consts = values
             .iter()
-            .map(|(_, ref v)| self.const_from_sexpr(v))
+            .map(|(_, v)| self.const_from_sexpr(*v))
             .collect::<anyhow::Result<Vec<_>>>()?;
         Ok(zip(xs, consts).collect())
     }
@@ -156,7 +156,8 @@ impl<'a> Solver<'a> {
 
     fn expr_to_smt(&self, expr: &Expr) -> anyhow::Result<SExpr> {
         match *expr {
-            Expr::Const(ref c) => self.constant(c),
+            Expr::Variable(_) => unreachable!("variables have no corresponding expression"),
+            Expr::Const(ref c) => Ok(self.constant(c)),
             Expr::And(x, y) => Ok(self.smt.and(self.expr_atom(x), self.expr_atom(y))),
             Expr::Or(x, y) => Ok(self.smt.or(self.expr_atom(x), self.expr_atom(y))),
             Expr::Imp(x, y) => Ok(self.smt.imp(self.expr_atom(x), self.expr_atom(y))),
@@ -184,16 +185,15 @@ impl<'a> Solver<'a> {
             Expr::BVConcat(x, y) => Ok(self.smt.concat(self.expr_atom(x), self.expr_atom(y))),
             Expr::Int2BV(w, x) => Ok(self.int2bv(w, self.expr_atom(x))),
             Expr::WidthOf(x) => self.width_of(x),
-            _ => todo!("expr to smt: {expr:?}"),
         }
     }
 
-    fn constant(&self, constant: &Const) -> anyhow::Result<SExpr> {
+    fn constant(&self, constant: &Const) -> SExpr {
         match *constant {
-            Const::Bool(true) => Ok(self.smt.true_()),
-            Const::Bool(false) => Ok(self.smt.false_()),
-            Const::Int(v) => Ok(self.smt.numeral(v)),
-            Const::BitVector(w, v) => Ok(self.smt.binary(w, v)),
+            Const::Bool(true) => self.smt.true_(),
+            Const::Bool(false) => self.smt.false_(),
+            Const::Int(v) => self.smt.numeral(v),
+            Const::BitVector(w, v) => self.smt.binary(w, v),
         }
     }
 
@@ -340,8 +340,8 @@ impl<'a> Solver<'a> {
     }
 
     /// Parse a constant SMT literal.
-    fn const_from_sexpr(&self, sexpr: &SExpr) -> anyhow::Result<Const> {
-        let atom = match self.smt.get(*sexpr) {
+    fn const_from_sexpr(&self, sexpr: SExpr) -> anyhow::Result<Const> {
+        let atom = match self.smt.get(sexpr) {
             SExprData::Atom(a) => a,
             SExprData::List(_) => anyhow::bail!("non-atomic smt expression is not a constant"),
         };
@@ -372,9 +372,10 @@ impl<'a> Solver<'a> {
     fn expr_name(&self, x: ExprId) -> String {
         // TODO(mbm): ensure expression name uniqueness
         let expr = &self.conditions.exprs[x.index()];
-        match expr {
-            Expr::Variable(v) => self.conditions.variables[v.index()].name.clone(),
-            _ => format!("e{}", x.index()),
+        if let Expr::Variable(v) = expr {
+            self.conditions.variables[v.index()].name.clone()
+        } else {
+            format!("e{}", x.index())
         }
     }
 }

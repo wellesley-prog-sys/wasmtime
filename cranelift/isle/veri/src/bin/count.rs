@@ -92,8 +92,8 @@ fn main() -> anyhow::Result<()> {
         expansion_counter.disable_expansion(exclude_term_id);
     }
 
-    let n = expansion_counter.term(root_term_id, "".to_string());
-    println!("expansions = {}", n);
+    let n = expansion_counter.term(root_term_id, "");
+    println!("expansions = {n}");
 
     Ok(())
 }
@@ -121,7 +121,7 @@ impl<'a> ExpansionCounter<'a> {
         }
     }
 
-    fn term(&mut self, term_id: TermId, indent: String) -> usize {
+    fn term(&mut self, term_id: TermId, indent: &str) -> usize {
         println!(
             "{indent}> {term_name}",
             term_name = self.prog.term_name(term_id)
@@ -131,7 +131,7 @@ impl<'a> ExpansionCounter<'a> {
             1
         } else {
             let rule_set = &self.term_rule_sets[&term_id];
-            self.rule_set(rule_set, indent.clone())
+            self.rule_set(rule_set, indent)
         };
 
         if n > 1 {
@@ -181,10 +181,10 @@ impl<'a> ExpansionCounter<'a> {
         true
     }
 
-    fn rule_set(&mut self, rule_set: &RuleSet, indent: String) -> usize {
+    fn rule_set(&mut self, rule_set: &RuleSet, indent: &str) -> usize {
         let mut n = 0;
         for rule in &rule_set.rules {
-            let r = self.rule(rule_set, rule, indent.clone());
+            let r = self.rule(rule_set, rule, indent);
             n += r;
             println!(
                 "{indent}n={n} r={r} rule={}",
@@ -194,13 +194,13 @@ impl<'a> ExpansionCounter<'a> {
         n
     }
 
-    fn rule(&mut self, rule_set: &RuleSet, rule: &Rule, indent: String) -> usize {
+    fn rule(&mut self, rule_set: &RuleSet, rule: &Rule, indent: &str) -> usize {
         let binding_ids = rule_bindings(rule_set, rule);
         let mut n = 1;
         for binding_id in binding_ids {
             let binding = &rule_set.bindings[binding_id.index()];
             if let Some(term_id) = reachability::binding_used_term(binding) {
-                n *= self.term(term_id, format!("{indent}.\t"));
+                n *= self.term(term_id, &format!("{indent}.\t"));
             }
         }
         n

@@ -238,8 +238,7 @@ impl Expr {
                     assert_eq!(
                         args.len(),
                         3,
-                        "Unexpected number of args for extract operator at {:?}",
-                        pos
+                        "Unexpected number of args for extract operator at {pos:?}",
                     );
                     Expr::BVExtract(
                         spec_expr_to_usize(&args[0]).unwrap(),
@@ -252,8 +251,7 @@ impl Expr {
                     assert_eq!(
                         args.len(),
                         2,
-                        "Unexpected number of args for int2bv operator at {:?}",
-                        pos
+                        "Unexpected number of args for int2bv operator at {pos:?}",
                     );
                     Expr::Int2BV(
                         spec_expr_to_usize(&args[0]).unwrap(),
@@ -278,8 +276,7 @@ impl Expr {
                 SpecOp::Switch => {
                     assert!(
                         args.len() > 1,
-                        "Unexpected number of args for switch operator {:?}",
-                        pos
+                        "Unexpected number of args for switch operator {pos:?}",
                     );
                     let on = Expr::from_ast(&args[0]);
                     let arms: Vec<(Expr, Expr)> = args[1..]
@@ -351,7 +348,7 @@ impl Spec {
     }
 
     fn result_ident() -> Ident {
-        Ident(RESULT.to_string(), Default::default())
+        Ident(RESULT.to_string(), Pos::default())
     }
 }
 

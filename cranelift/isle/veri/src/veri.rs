@@ -242,7 +242,7 @@ impl Conditions {
                     if !sig.args.is_empty() {
                         println!("\t\t\t\t\targs = [");
                         for arg in &sig.args {
-                            println!("\t\t\t\t\t\t{}", arg);
+                            println!("\t\t\t\t\t\t{arg}");
                         }
                         println!("\t\t\t\t\t]");
                     }
@@ -358,11 +358,13 @@ impl Value {
     }
 }
 
+#[derive(Copy, Clone)]
 enum Invocation {
     Caller,
     Callee,
 }
 
+#[derive(Copy, Clone)]
 enum Domain {
     Total,
     Partial(ExprId),

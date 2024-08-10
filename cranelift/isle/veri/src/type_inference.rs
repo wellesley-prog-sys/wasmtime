@@ -112,7 +112,7 @@ impl std::fmt::Display for Constraint {
                 "clause({})",
                 literals
                     .iter()
-                    .map(|l| l.to_string())
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(" \u{2228} ")
             ),
@@ -335,7 +335,7 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 
     fn boolean_value(&mut self, x: ExprId, b: bool) {
-        self.value(x, Const::Bool(b))
+        self.value(x, Const::Bool(b));
     }
 
     fn value(&mut self, x: ExprId, c: Const) {
@@ -343,7 +343,7 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 
     fn clause(&mut self, literals: Vec<Literal>) {
-        self.constraints.push(Constraint::Clause { literals })
+        self.constraints.push(Constraint::Clause { literals });
     }
 }
 
@@ -721,7 +721,7 @@ mod tests {
             TypeValue::Type(Type::BitVector(Width::Unknown)),
             TypeValue::Type(Type::BitVector(Width::Bits(64))),
             TypeValue::Value(Const::BitVector(64, 42)),
-        ])
+        ]);
     }
 
     #[test]
@@ -730,7 +730,7 @@ mod tests {
             TypeValue::Type(Type::Unknown),
             TypeValue::Type(Type::Int),
             TypeValue::Value(Const::Int(42)),
-        ])
+        ]);
     }
 
     #[test]
@@ -739,7 +739,7 @@ mod tests {
             TypeValue::Type(Type::Unknown),
             TypeValue::Type(Type::Bool),
             TypeValue::Value(Const::Bool(true)),
-        ])
+        ]);
     }
 
     #[test]

@@ -4,7 +4,7 @@ pub fn assert_strictly_increasing<T>(elements: &[T])
 where
     T: PartialOrd + Debug,
 {
-    elements.windows(2).for_each(|p| assert!(p[0] < p[1]))
+    elements.windows(2).for_each(|p| assert!(p[0] < p[1]));
 }
 
 pub fn assert_partial_order_properties<T>(elements: &[T])

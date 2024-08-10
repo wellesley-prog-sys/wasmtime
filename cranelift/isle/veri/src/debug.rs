@@ -189,9 +189,8 @@ pub fn binding_string(
         } => {
             let source_binding = lookup_binding(*source);
             let source_type = binding_type(&source_binding, term_id, prog, lookup_binding);
-            let source_type_id = match source_type {
-                BindingType::Base(type_id) => type_id,
-                _ => unreachable!("source of match variant should be a base type"),
+            let BindingType::Base(source_type_id) = source_type else {
+                unreachable!("source of match variant should be a base type")
             };
 
             // Lookup variant.
@@ -218,10 +217,10 @@ pub fn binding_string(
             fields,
         } => {
             let ty = &prog.tyenv.types[ty.index()];
-            let variant = match ty {
-                Type::Enum { variants, .. } => &variants[variant.index()],
-                _ => unreachable!("source match variant should be an enum"),
+            let Type::Enum { variants, .. } = ty else {
+                unreachable!("source match variant should be an enum")
             };
+            let variant = &variants[variant.index()];
             let variant_name = &prog.tyenv.syms[variant.name.index()];
             format!(
                 "make_variant({ty}::{variant_name}, {fields:?})",
@@ -240,7 +239,7 @@ pub fn binding_string(
             source = source.index(),
             field = field.index()
         ),
-        _ => todo!("binding: {binding:?}"),
+        Binding::Iterator { .. } => unimplemented!("iterator bindings unsupported"),
     }
 }
 
@@ -260,7 +259,7 @@ pub fn constraint_string(constraint: &Constraint, tyenv: &TypeEnv) -> String {
                 }
             }
         }
-        Constraint::ConstInt { val, .. } => format!("const_int({})", val),
+        Constraint::ConstInt { val, .. } => format!("const_int({val})"),
         Constraint::ConstPrim { val } => format!("const_prim({})", tyenv.syms[val.index()]),
         Constraint::Some => "some".to_string(),
     }

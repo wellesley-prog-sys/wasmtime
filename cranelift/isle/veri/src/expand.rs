@@ -135,12 +135,12 @@ impl Expansion {
         // Constraints.
         let mut constraints = BTreeMap::new();
         for (binding_id, constraint) in &self.constraints {
-            constraints.insert(reindex.id(binding_id), constraint.clone());
+            constraints.insert(reindex.id(*binding_id), constraint.clone());
         }
         self.constraints = constraints;
 
         // Result.
-        self.result = reindex.id(&self.result);
+        self.result = reindex.id(self.result);
     }
 }
 
@@ -291,24 +291,21 @@ impl<'a> Expander<'a> {
 
     fn extend(&mut self, expansion: Expansion) {
         // Look for a candidate for inlining. If none, we're done.
-        let inline_binding_id = match self.inline_candidate(&expansion) {
-            Some(binding_id) => binding_id,
-            None => {
-                self.finish(expansion);
-                return;
-            }
+        let Some(inline_binding_id) = self.inline_candidate(&expansion) else {
+            self.finish(expansion);
+            return;
         };
 
         // Inline constructor.
         let binding = &expansion.bindings[inline_binding_id.index()];
-        let (term_id, parameters) = match binding {
-            Some(Binding::Constructor {
-                term, parameters, ..
-            }) => (term, parameters),
-            _ => unreachable!("expect constructor binding"),
+        let Some(Binding::Constructor {
+            term, parameters, ..
+        }) = binding
+        else {
+            unreachable!("expect constructor binding")
         };
 
-        let rule_set = &self.term_rule_sets[term_id];
+        let rule_set = &self.term_rule_sets[term];
         for rule in rule_set.rules.iter().rev() {
             let mut apply = Application::new(expansion.clone());
             let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
@@ -352,14 +349,15 @@ impl Application {
         parameters: &[BindingId],
         call_site: BindingId,
     ) -> Expansion {
-        // Record the application of this rule.
-        self.expansion.rules.push(rule.id);
-
-        //
         struct Substitution {
             target: BindingId,
             replace: BindingId,
         }
+
+        // Record the application of this rule.
+        self.expansion.rules.push(rule.id);
+
+        //
         let mut substitutions = Vec::new();
 
         // Arguments.
@@ -434,8 +432,8 @@ impl Application {
 
     fn add_binding(&mut self, rule_set: &RuleSet, binding_id: BindingId) -> BindingId {
         // Check if it has already been added.
-        if self.import_reindex.is_mapped(&binding_id) {
-            return self.import_reindex.id(&binding_id);
+        if self.import_reindex.is_mapped(binding_id) {
+            return self.import_reindex.id(binding_id);
         }
 
         // Add dependencies first.
@@ -466,22 +464,22 @@ impl Reindex {
         Self { to: HashMap::new() }
     }
 
-    fn is_mapped(&self, binding_id: &BindingId) -> bool {
-        self.to.contains_key(binding_id)
+    fn is_mapped(&self, binding_id: BindingId) -> bool {
+        self.to.contains_key(&binding_id)
     }
 
     fn map(&mut self, from: BindingId, to: BindingId) {
         self.to.insert(from, to);
     }
 
-    fn id(&self, binding_id: &BindingId) -> BindingId {
-        *self.to.get(binding_id).unwrap_or(binding_id)
+    fn id(&self, binding_id: BindingId) -> BindingId {
+        self.to.get(&binding_id).copied().unwrap_or(binding_id)
     }
 
     fn ids(&self, binding_ids: &[BindingId]) -> Box<[BindingId]> {
         binding_ids
             .iter()
-            .map(|binding_id| self.id(binding_id))
+            .map(|binding_id| self.id(*binding_id))
             .collect()
     }
 
@@ -493,7 +491,7 @@ impl Reindex {
 
             Binding::Extractor { term, parameter } => Binding::Extractor {
                 term: *term,
-                parameter: self.id(parameter),
+                parameter: self.id(*parameter),
             },
 
             Binding::Constructor {
@@ -521,21 +519,21 @@ impl Reindex {
                 variant,
                 field,
             } => Binding::MatchVariant {
-                source: self.id(source),
+                source: self.id(*source),
                 variant: *variant,
                 field: *field,
             },
 
             Binding::MakeSome { inner } => Binding::MakeSome {
-                inner: self.id(inner),
+                inner: self.id(*inner),
             },
 
             Binding::MatchSome { source } => Binding::MatchSome {
-                source: self.id(source),
+                source: self.id(*source),
             },
 
             Binding::MatchTuple { source, field } => Binding::MatchTuple {
-                source: self.id(source),
+                source: self.id(*source),
                 field: *field,
             },
 

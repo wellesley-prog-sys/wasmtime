@@ -78,13 +78,13 @@ fn main() -> anyhow::Result<()> {
         if !expansion.rules.contains(&rule.id) {
             continue;
         }
-        expansion_graph(expansion, &prog)?;
+        expansion_graph(expansion, &prog);
     }
 
     Ok(())
 }
 
-fn expansion_graph(expansion: &Expansion, prog: &Program) -> anyhow::Result<()> {
+fn expansion_graph(expansion: &Expansion, prog: &Program) {
     // Header.
     println!("graph {{");
     println!("\tnode [shape=box, fontname=monospace];");
@@ -111,5 +111,4 @@ fn expansion_graph(expansion: &Expansion, prog: &Program) -> anyhow::Result<()> 
     }
 
     println!("}}");
-    Ok(())
 }
