@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-    types::{Const, Type, Width},
-    veri::{Call, Conditions, Expr, ExprId},
+    types::{Compound, Const, Type, Width},
+    veri::{Call, Conditions, Expr, ExprId, Symbolic},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -299,11 +299,22 @@ impl<'a> ConstraintsBuilder<'a> {
         // Arguments.
         assert_eq!(call.args.len(), sig.args.len());
         for (a, ty) in zip(&call.args, &sig.args) {
-            self.ty(*a, ty.clone());
+            self.symbolic(a, ty.clone());
         }
 
         // Return.
-        self.ty(call.ret, sig.ret.clone());
+        self.symbolic(&call.ret, sig.ret.clone());
+    }
+
+    fn symbolic(&mut self, v: &Symbolic, ty: Compound) {
+        match (v, ty) {
+            (Symbolic::Scalar(x), Compound::Primitive(ty)) => self.ty(*x, ty),
+            (Symbolic::Struct(_), Compound::Struct(_)) => todo!("struct type constraints"),
+            // QUESTION(mbm): should Option and Tuple be in a different enum so they don't appear in type inference?
+            (Symbolic::Option(_), _) => unimplemented!("option types unsupported"),
+            (Symbolic::Tuple(_), _) => unimplemented!("tuple types unsupported"),
+            (v, ty) => unreachable!("type mismatch: {v} of type {ty}"),
+        }
     }
 
     fn bit_vector_of_width(&mut self, x: ExprId, width: usize) {

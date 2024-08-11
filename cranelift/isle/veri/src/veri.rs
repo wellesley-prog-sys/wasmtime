@@ -3,10 +3,10 @@ use crate::{
     program::Program,
     spec::{self, Signature},
     trie_again::{binding_type, BindingType},
-    types::{Const, Type, Width},
+    types::{Compound, Const, Type, Width},
 };
 use cranelift_isle::{
-    ast,
+    ast::Ident,
     sema::{Sym, TermId, TypeId, VariantId},
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
@@ -149,6 +149,9 @@ impl std::fmt::Display for Expr {
     }
 }
 
+// QUESTION(mbm): can we merge `Model` and `Assignment` from type inference?
+pub type Model = HashMap<ExprId, Const>;
+
 // QUESTION(mbm): does the distinction between expressions and variables make sense?
 #[derive(Debug)]
 pub struct Variable {
@@ -162,15 +165,195 @@ impl Variable {
     }
 }
 
-// QUESTION(mbm): can we merge `Model` and `Assignment` from type inference?
-pub type Model = HashMap<ExprId, Const>;
+#[derive(Debug, Clone)]
+pub struct SymbolicOption {
+    some: ExprId,
+    inner: Box<Symbolic>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SymbolicField {
+    name: String,
+    value: Symbolic,
+}
+
+impl SymbolicField {
+    fn eval(&self, model: &Model) -> anyhow::Result<FieldValue> {
+        Ok(FieldValue {
+            name: self.name.clone(),
+            value: self.value.eval(model)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Symbolic {
+    Scalar(ExprId),
+    Struct(Vec<SymbolicField>),
+    Option(SymbolicOption),
+    Tuple(Vec<Symbolic>),
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldValue {
+    name: String,
+    value: Value,
+}
+
+#[derive(Clone, Debug)]
+pub enum Value {
+    Const(Const),
+    Struct(Vec<FieldValue>),
+    Option(Option<Box<Value>>),
+    Tuple(Vec<Value>),
+}
+
+impl Symbolic {
+    fn as_scalar(&self) -> Option<ExprId> {
+        match self {
+            Self::Scalar(x) => Some(*x),
+            _ => None,
+        }
+    }
+
+    fn as_struct(&self) -> Option<&Vec<SymbolicField>> {
+        match self {
+            Self::Struct(fields) => Some(fields),
+            _ => None,
+        }
+    }
+
+    fn as_option(&self) -> Option<&SymbolicOption> {
+        match self {
+            Self::Option(opt) => Some(opt),
+            _ => None,
+        }
+    }
+
+    fn as_tuple(&self) -> Option<&Vec<Symbolic>> {
+        match self {
+            Self::Tuple(fields) => Some(fields),
+            _ => None,
+        }
+    }
+
+    fn elements(&self) -> &[Symbolic] {
+        match self {
+            Self::Tuple(fields) => &fields[..],
+            v => std::slice::from_ref(v),
+        }
+    }
+
+    fn eval(&self, model: &Model) -> anyhow::Result<Value> {
+        match self {
+            Symbolic::Scalar(x) => Ok(Value::Const(
+                model
+                    .get(x)
+                    .ok_or(anyhow::format_err!("undefined expression in model"))?
+                    .clone(),
+            )),
+            Symbolic::Struct(fields) => Ok(Value::Struct(
+                fields
+                    .iter()
+                    .map(|f| f.eval(model))
+                    .collect::<anyhow::Result<_>>()?,
+            )),
+            Symbolic::Option(opt) => match model.get(&opt.some) {
+                Some(Const::Bool(true)) => {
+                    Ok(Value::Option(Some(Box::new(opt.inner.eval(model)?))))
+                }
+                Some(Const::Bool(false)) => Ok(Value::Option(None)),
+                Some(_) => anyhow::bail!("model value for option some is not boolean"),
+                None => anyhow::bail!("undefined expression in model"),
+            },
+            Symbolic::Tuple(elements) => Ok(Value::Tuple(
+                elements
+                    .iter()
+                    .map(|s| s.eval(model))
+                    .collect::<anyhow::Result<_>>()?,
+            )),
+        }
+    }
+}
+
+impl From<ExprId> for Symbolic {
+    fn from(x: ExprId) -> Self {
+        Symbolic::Scalar(x)
+    }
+}
+
+impl TryFrom<Symbolic> for ExprId {
+    type Error = anyhow::Error;
+
+    fn try_from(v: Symbolic) -> Result<Self, Self::Error> {
+        v.as_scalar()
+            .ok_or(anyhow::format_err!("should be scalar value"))
+    }
+}
+
+impl std::fmt::Display for Symbolic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Symbolic::Scalar(x) => write!(f, "{}", x.index()),
+            Symbolic::Struct(fields) => write!(
+                f,
+                "{{{fields}}}",
+                fields = fields
+                    .iter()
+                    .map(|f| format!("{}: {}", f.name, f.value))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Symbolic::Option(SymbolicOption { some, inner }) => {
+                write!(f, "Option{{some: {}, inner: {inner}}}", some.index())
+            }
+            Symbolic::Tuple(vs) => write!(
+                f,
+                "({vs})",
+                vs = vs
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Const(c) => c.fmt(f),
+            Value::Struct(fields) => write!(
+                f,
+                "{{{fields}}}",
+                fields = fields
+                    .iter()
+                    .map(|f| format!("{}: {}", f.name, f.value))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Value::Option(Some(v)) => write!(f, "Some({v})"),
+            Value::Option(None) => write!(f, "None"),
+            Value::Tuple(elements) => write!(
+                f,
+                "({})",
+                elements
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
 
 // QUESTION(mbm): is `Call` the right name? consider `Term`, `TermInstance`, ...?
 #[derive(Debug)]
 pub struct Call {
     pub term: TermId,
-    pub args: Vec<ExprId>,
-    pub ret: ExprId,
+    pub args: Vec<Symbolic>,
+    pub ret: Symbolic,
     pub signatures: Vec<Signature>,
 }
 
@@ -230,11 +413,11 @@ impl Conditions {
             if !call.args.is_empty() {
                 println!("\t\t\targs = [");
                 for arg in &call.args {
-                    println!("\t\t\t\t{}", arg.index());
+                    println!("\t\t\t\t{}", arg);
                 }
                 println!("\t\t\t]");
             }
-            println!("\t\t\tret = {}", call.ret.index());
+            println!("\t\t\tret = {}", call.ret);
             if !call.signatures.is_empty() {
                 println!("\t\t\tsignatures = [");
                 for sig in &call.signatures {
@@ -299,62 +482,14 @@ impl Conditions {
                 args = call
                     .args
                     .iter()
-                    .map(|a| Ok(model
-                        .get(a)
-                        .ok_or(anyhow::format_err!("undefined argument in model"))?
-                        .to_string()))
+                    .map(|a| Ok(a.eval(model)?.to_string()))
                     .collect::<anyhow::Result<Vec<_>>>()?
                     .join(", "),
-                ret = model
-                    .get(&call.ret)
-                    .ok_or(anyhow::format_err!("undefined return value in model"))?
+                ret = call.ret.eval(model)?
             );
         }
 
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-struct OptionValue {
-    some: ExprId,
-    inner: Box<Value>,
-}
-
-#[derive(Debug, Clone)]
-enum Value {
-    Expr(ExprId),
-    Option(OptionValue),
-    Tuple(Vec<Value>),
-}
-
-impl Value {
-    fn as_expr(&self) -> Option<ExprId> {
-        match self {
-            Self::Expr(x) => Some(*x),
-            _ => None,
-        }
-    }
-
-    fn as_option(&self) -> Option<&OptionValue> {
-        match self {
-            Self::Option(opt) => Some(opt),
-            _ => None,
-        }
-    }
-
-    fn as_tuple(&self) -> Option<&Vec<Value>> {
-        match self {
-            Self::Tuple(fields) => Some(fields),
-            _ => None,
-        }
-    }
-
-    fn elements(&self) -> &[Value] {
-        match self {
-            Self::Tuple(fields) => &fields[..],
-            v => std::slice::from_ref(v),
-        }
     }
 }
 
@@ -371,10 +506,10 @@ enum Domain {
 }
 
 impl Domain {
-    fn from_return_value(value: &Value) -> (Self, &Value) {
+    fn from_return_value(value: &Symbolic) -> (Self, Symbolic) {
         match value {
-            Value::Option(opt) => (Self::Partial(opt.some), &opt.inner),
-            v => (Self::Total, v),
+            Symbolic::Option(opt) => (Self::Partial(opt.some), (*opt.inner).clone()),
+            v => (Self::Total, v.clone()),
         }
     }
 }
@@ -383,7 +518,7 @@ struct ConditionsBuilder<'a> {
     expansion: &'a Expansion,
     prog: &'a Program,
 
-    binding_value: HashMap<BindingId, Value>,
+    binding_value: HashMap<BindingId, Symbolic>,
     expr_map: HashMap<Expr, ExprId>,
     conditions: Conditions,
 }
@@ -443,7 +578,7 @@ impl<'a> ConditionsBuilder<'a> {
         // Allocate a value.
         let binding_type = self.binding_type(binding);
         let name = format!("b{}", id.index());
-        let value = self.alloc_binding_value(&binding_type, name)?;
+        let value = self.alloc_binding(&binding_type, name)?;
         self.binding_value.insert(id, value);
 
         // Ensure dependencies have been added.
@@ -496,18 +631,15 @@ impl<'a> ConditionsBuilder<'a> {
             .specenv
             .type_model
             .get(&ty)
-            .ok_or(anyhow::format_err!("no model for type {ty_name}"))?;
+            .ok_or(anyhow::format_err!("no model for type {ty_name}"))?
+            .as_basic()
+            .ok_or(anyhow::format_err!("constant must have basic type"))?;
 
         // Construct value of the determined type.
-        let value = self.spec_typed_value(val, ty)?;
+        let value = self.spec_typed_value(val, ty)?.into();
 
-        // Destination binding should be a base expression.
-        let x = self.binding_value[&id]
-            .as_expr()
-            .expect("destination of const_int binding should be an expression");
-
-        // Assumption: expression equals constant value.
-        let eq = self.exprs_equal(x, value);
+        // Assumption: destination binding equals constant value.
+        let eq = self.values_equal(self.binding_value[&id].clone(), value);
         self.conditions.assumptions.push(eq);
 
         Ok(())
@@ -526,13 +658,8 @@ impl<'a> ConditionsBuilder<'a> {
             ))?;
         let value = self.spec_expr_no_vars(spec_value)?;
 
-        // Destination binding should be a base expression.
-        let x = self.binding_value[&id]
-            .as_expr()
-            .expect("destination of const_prim binding should be an expression");
-
-        // Assumption: expression equals constant value.
-        let eq = self.exprs_equal(x, value);
+        // Assumption: destination binding equals constant value.
+        let eq = self.values_equal(self.binding_value[&id].clone(), value);
         self.conditions.assumptions.push(eq);
 
         Ok(())
@@ -547,25 +674,13 @@ impl<'a> ConditionsBuilder<'a> {
         // Arguments are the actually the return values of an
         // extractor, possibly wrapped in an Option<..> type.
         let (domain, ret) = Domain::from_return_value(&self.binding_value[&id]);
-        let rets = ret.elements();
-
-        let mut args = Vec::new();
-        for ret in rets {
-            let x = ret
-                .as_expr()
-                .expect("extractor return should be an expression");
-            args.push(x);
-        }
+        let args = ret.elements();
 
         // Result maps to the parameter of an extractor.
-        let result = self.binding_value[&parameter]
-            .as_expr()
-            .ok_or(anyhow::format_err!(
-                "extractor parameter must be an expression"
-            ))?;
+        let result = self.binding_value[&parameter].clone();
 
         // Call extractor.
-        self.call(term, &args, result, Invocation::Caller, domain)
+        self.call(term, args, result, Invocation::Caller, domain)
     }
 
     fn constructor(
@@ -582,16 +697,12 @@ impl<'a> ConditionsBuilder<'a> {
                 .binding_value
                 .get(parameter_binding_id)
                 .expect("parameter binding should be defined")
-                .as_expr()
-                .expect("constructor parameter should be an expression");
+                .clone();
             args.push(x);
         }
 
         // Return value.
         let (domain, result) = Domain::from_return_value(&self.binding_value[&id]);
-        let result = result
-            .as_expr()
-            .expect("constructor return should be an expression");
 
         // Call constructor.
         self.call(term, &args, result, invocation, domain)
@@ -600,8 +711,8 @@ impl<'a> ConditionsBuilder<'a> {
     fn call(
         &mut self,
         term: TermId,
-        args: &[ExprId],
-        ret: ExprId,
+        args: &[Symbolic],
+        ret: Symbolic,
         invocation: Invocation,
         domain: Domain,
     ) -> anyhow::Result<()> {
@@ -622,23 +733,23 @@ impl<'a> ConditionsBuilder<'a> {
             anyhow::bail!("incorrect number of arguments for term {term_name}");
         }
         for (name, arg) in zip(&term_spec.args, args) {
-            vars.insert(name.0.clone(), *arg);
+            vars.insert(name.0.clone(), arg.clone());
         }
 
         // Return value.
-        vars.insert(term_spec.ret.0.clone(), ret);
+        vars.insert(term_spec.ret.0.clone(), ret.clone());
 
         // Requires.
-        let mut requires = Vec::new();
+        let mut requires: Vec<ExprId> = Vec::new();
         for require in &term_spec.requires {
-            let require = self.spec_expr(require, &vars)?;
+            let require = self.spec_expr(require, &vars)?.try_into()?;
             requires.push(require);
         }
 
         // Provides.
-        let mut provides = Vec::new();
+        let mut provides: Vec<ExprId> = Vec::new();
         for provide in &term_spec.provides {
-            let provide = self.spec_expr(provide, &vars)?;
+            let provide = self.spec_expr(provide, &vars)?.try_into()?;
             provides.push(provide);
         }
 
@@ -713,7 +824,7 @@ impl<'a> ConditionsBuilder<'a> {
         self.conditions.assumptions.push(opt.some);
 
         // Assumption: option value is equal to this binding.
-        let eq = self.values_equal(&inner, &opt.inner);
+        let eq = self.values_equal(inner, (*opt.inner).clone());
         self.conditions.assumptions.push(eq);
 
         Ok(())
@@ -731,7 +842,7 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Assumption: if the option is some, then the inner value
         // equals this binding.
-        let eq = self.values_equal(&v, &opt.inner);
+        let eq = self.values_equal(v, (*opt.inner).clone());
         let constraint = self.dedup_expr(Expr::Imp(opt.some, eq));
         self.conditions.assumptions.push(constraint);
 
@@ -754,7 +865,7 @@ impl<'a> ConditionsBuilder<'a> {
         let v = self.binding_value[&id].clone();
 
         // Assumption: indexed field should equal this binding.
-        let eq = self.values_equal(&v, &fields[field.index()]);
+        let eq = self.values_equal(v, fields[field.index()].clone());
         self.conditions.assumptions.push(eq);
 
         Ok(())
@@ -787,161 +898,166 @@ impl<'a> ConditionsBuilder<'a> {
     fn spec_expr(
         &mut self,
         expr: &spec::Expr,
-        vars: &HashMap<String, ExprId>,
-    ) -> anyhow::Result<ExprId> {
+        vars: &HashMap<String, Symbolic>,
+    ) -> anyhow::Result<Symbolic> {
         match expr {
             spec::Expr::Var(v) => {
                 let var_name = &v.0;
                 let v = vars
                     .get(var_name)
                     .ok_or(anyhow::format_err!("undefined variable {var_name}"))?;
-                Ok(*v)
+                Ok(v.clone())
             }
 
-            spec::Expr::Const(c) => Ok(self.constant(c.clone())),
+            spec::Expr::Const(c) => Ok(self.constant(c.clone()).into()),
 
             spec::Expr::Enum(name) => self.spec_enum(name),
 
+            spec::Expr::Field(name, x) => {
+                let x = self.spec_expr(x, vars)?;
+                self.spec_field(name, x)
+            }
+
             // TODO(mbm): fix boilerplate for common expressions
             spec::Expr::And(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::And(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::And(x, y)))
             }
 
             spec::Expr::Or(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::Or(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Or(x, y)))
             }
 
             spec::Expr::Imp(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::Imp(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Imp(x, y)))
             }
 
             spec::Expr::Eq(x, y) => {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
-                Ok(self.exprs_equal(x, y))
+                Ok(self.values_equal(x, y).into())
             }
 
             spec::Expr::Lte(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::Lte(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Lte(x, y)))
             }
 
             spec::Expr::BVUlt(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVUlt(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUlt(x, y)))
             }
 
             spec::Expr::BVNot(x) => {
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::BVNot(x)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVNot(x)))
             }
 
             spec::Expr::BVNeg(x) => {
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::BVNeg(x)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVNeg(x)))
             }
 
             spec::Expr::BVAdd(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVAdd(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVAdd(x, y)))
             }
 
             spec::Expr::BVSub(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVSub(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSub(x, y)))
             }
 
             spec::Expr::BVMul(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVMul(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVMul(x, y)))
             }
 
             spec::Expr::BVAnd(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVAnd(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVAnd(x, y)))
             }
 
             spec::Expr::BVShl(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVShl(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVShl(x, y)))
             }
 
             spec::Expr::BVLShr(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVLShr(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVLShr(x, y)))
             }
 
             spec::Expr::BVAShr(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVAShr(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVAShr(x, y)))
             }
 
             spec::Expr::Conditional(c, t, e) => {
-                let c = self.spec_expr(c, vars)?;
+                let c = self.spec_expr(c, vars)?.try_into()?;
                 let t = self.spec_expr(t, vars)?;
                 let e = self.spec_expr(e, vars)?;
-                Ok(self.dedup_expr(Expr::Conditional(c, t, e)))
+                self.conditional(c, t, e)
             }
 
             spec::Expr::Switch(on, arms) => self.spec_switch(on, arms, vars),
 
             spec::Expr::BVZeroExt(w, x) => {
-                let w = self.spec_expr(w, vars)?;
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::BVZeroExt(w, x)))
+                let w = self.spec_expr(w, vars)?.try_into()?;
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVZeroExt(w, x)))
             }
 
             spec::Expr::BVSignExt(w, x) => {
-                let w = self.spec_expr(w, vars)?;
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::BVSignExt(w, x)))
+                let w = self.spec_expr(w, vars)?.try_into()?;
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSignExt(w, x)))
             }
 
             spec::Expr::BVConvTo(w, x) => {
-                let w = self.spec_expr(w, vars)?;
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::BVConvTo(w, x)))
+                let w = self.spec_expr(w, vars)?.try_into()?;
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVConvTo(w, x)))
             }
 
             spec::Expr::BVExtract(h, l, x) => {
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::BVExtract(*h, *l, x)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVExtract(*h, *l, x)))
             }
 
             spec::Expr::BVConcat(x, y) => {
-                let x = self.spec_expr(x, vars)?;
-                let y = self.spec_expr(y, vars)?;
-                Ok(self.dedup_expr(Expr::BVConcat(x, y)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVConcat(x, y)))
             }
 
             spec::Expr::Int2BV(w, x) => {
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::Int2BV(*w, x)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Int2BV(*w, x)))
             }
 
             spec::Expr::WidthOf(x) => {
-                let x = self.spec_expr(x, vars)?;
-                Ok(self.dedup_expr(Expr::WidthOf(x)))
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::WidthOf(x)))
             }
         }
     }
 
-    fn spec_expr_no_vars(&mut self, expr: &spec::Expr) -> anyhow::Result<ExprId> {
+    fn spec_expr_no_vars(&mut self, expr: &spec::Expr) -> anyhow::Result<Symbolic> {
         let no_vars = HashMap::new();
         self.spec_expr(expr, &no_vars)
     }
@@ -959,7 +1075,7 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
-    fn spec_enum(&mut self, name: &ast::Ident) -> anyhow::Result<ExprId> {
+    fn spec_enum(&mut self, name: &Ident) -> anyhow::Result<Symbolic> {
         // Lookup variant term.
         // TODO(mbm): move term lookup to the SpecEnv construction stage?
         let variant_name = &name.0;
@@ -981,25 +1097,40 @@ impl<'a> ConditionsBuilder<'a> {
         self.spec_expr_no_vars(spec_value)
     }
 
+    fn spec_field(&mut self, name: &Ident, v: Symbolic) -> anyhow::Result<Symbolic> {
+        log::trace!("access field {name} from {v}", name = name.0);
+
+        let fields = v
+            .as_struct()
+            .ok_or(anyhow::format_err!("field access from non-struct value"))?;
+
+        let field = fields
+            .iter()
+            .find(|f| f.name == name.0)
+            .ok_or(anyhow::format_err!("missing struct field: {}", name.0))?;
+
+        Ok(field.value.clone())
+    }
+
     fn spec_switch(
         &mut self,
         on: &spec::Expr,
         arms: &[(spec::Expr, spec::Expr)],
-        vars: &HashMap<String, ExprId>,
-    ) -> anyhow::Result<ExprId> {
+        vars: &HashMap<String, Symbolic>,
+    ) -> anyhow::Result<Symbolic> {
         // Generate sub-expressions.
         let on = self.spec_expr(on, vars)?;
         let mut arms = arms
             .iter()
             .map(|(value, then)| {
                 let value = self.spec_expr(value, vars)?;
-                let cond = self.exprs_equal(on, value);
+                let cond = self.values_equal(on.clone(), value);
                 Ok((cond, self.spec_expr(then, vars)?))
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         // Exhaustiveness: assert one condition must hold.
-        let conds = arms.iter().map(|(cond, _)| cond).copied().collect();
+        let conds = arms.iter().map(|(cond, _)| cond).cloned().collect();
         let exhaustive = self.any(conds);
         self.conditions.assertions.push(exhaustive);
 
@@ -1012,23 +1143,51 @@ impl<'a> ConditionsBuilder<'a> {
         // condition? Or should it be treated as a requires, which is asserted
         // or assumed depending on which side it appears on?
         let (_, last) = arms.pop().expect("switch must have at least one arm");
-        Ok(arms.iter().rev().fold(last, |acc, (cond, then)| {
-            self.dedup_expr(Expr::Conditional(*cond, *then, acc))
-        }))
+        arms.iter()
+            .rev()
+            .cloned()
+            .try_fold(last, |acc, (cond, then)| self.conditional(cond, then, acc))
+    }
+
+    fn conditional(&mut self, c: ExprId, t: Symbolic, e: Symbolic) -> anyhow::Result<Symbolic> {
+        if std::mem::discriminant(&t) != std::mem::discriminant(&e) {
+            anyhow::bail!("conditional arms have incompatible types");
+        }
+        match (t, e) {
+            (Symbolic::Scalar(t), Symbolic::Scalar(e)) => {
+                Ok(self.scalar(Expr::Conditional(c, t, e)))
+            }
+            case => todo!("conditional arm types: {case:?}"),
+        }
     }
 
     fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {
         // TODO(mbm): can this be done without clones?
         let a = self.binding_value[&a].clone();
         let b = self.binding_value[&b].clone();
-        self.values_equal(&a, &b)
+        self.values_equal(a, b)
     }
 
-    fn values_equal(&mut self, a: &Value, b: &Value) -> ExprId {
+    fn values_equal(&mut self, a: Symbolic, b: Symbolic) -> ExprId {
         match (a, b) {
-            (Value::Expr(u), Value::Expr(v)) => self.exprs_equal(*u, *v),
+            (Symbolic::Scalar(u), Symbolic::Scalar(v)) => self.exprs_equal(u, v),
 
-            (Value::Tuple(us), Value::Tuple(vs)) => {
+            (Symbolic::Struct(us), Symbolic::Struct(vs)) => {
+                // Field-wise equality.
+                // TODO(mbm): can we expect that structs are the same length?
+                assert_eq!(us.len(), vs.len(), "field length mismatch");
+                let fields_eq = zip(us, vs)
+                    .map(|(fu, fv)| {
+                        assert_eq!(fu.name, fv.name, "field name mismatch");
+                        self.values_equal(fu.value, fv.value)
+                    })
+                    .collect();
+
+                // All fields must be equal.
+                self.all(fields_eq)
+            }
+
+            (Symbolic::Tuple(us), Symbolic::Tuple(vs)) => {
                 // Field-wise equality.
                 // TODO(mbm): can we expect that tuples are the same length?
                 assert_eq!(us.len(), vs.len(), "tuple length mismatch");
@@ -1038,7 +1197,7 @@ impl<'a> ConditionsBuilder<'a> {
                 self.all(fields_eq)
             }
 
-            _ => todo!("values equal: {a:?} == {b:?}"),
+            ref c => todo!("values equal: {c:?}"),
         }
     }
 
@@ -1079,11 +1238,11 @@ impl<'a> ConditionsBuilder<'a> {
         )
     }
 
-    fn alloc_binding_value(
+    fn alloc_binding(
         &mut self,
         binding_type: &BindingType,
         name: String,
-    ) -> anyhow::Result<Value> {
+    ) -> anyhow::Result<Symbolic> {
         match binding_type {
             BindingType::Base(type_id) => {
                 let type_name = self.prog.type_name(*type_id);
@@ -1095,28 +1254,46 @@ impl<'a> ConditionsBuilder<'a> {
                     .ok_or(anyhow::format_err!(
                         "unspecified model for type {type_name}"
                     ))?;
-                Ok(Value::Expr(self.alloc_variable(ty.clone(), name)))
+                self.alloc_value(ty, name)
             }
             BindingType::Option(inner_type) => {
                 let some = self.alloc_variable(Type::Bool, Variable::component_name(&name, "some"));
                 let inner = Box::new(
-                    self.alloc_binding_value(inner_type, Variable::component_name(&name, "inner"))?,
+                    self.alloc_binding(inner_type, Variable::component_name(&name, "inner"))?,
                 );
-                Ok(Value::Option(OptionValue { some, inner }))
+                Ok(Symbolic::Option(SymbolicOption { some, inner }))
             }
             BindingType::Tuple(inners) => {
                 let inners = inners
                     .iter()
                     .enumerate()
                     .map(|(i, inner_type)| {
-                        self.alloc_binding_value(
+                        self.alloc_binding(
                             inner_type,
                             Variable::component_name(&name, &i.to_string()),
                         )
                     })
                     .collect::<anyhow::Result<_>>()?;
-                Ok(Value::Tuple(inners))
+                Ok(Symbolic::Tuple(inners))
             }
+        }
+    }
+
+    fn alloc_value(&mut self, ty: &Compound, name: String) -> anyhow::Result<Symbolic> {
+        match ty {
+            Compound::Primitive(ty) => Ok(Symbolic::Scalar(self.alloc_variable(ty.clone(), name))),
+            Compound::Struct(fields) => Ok(Symbolic::Struct(
+                fields
+                    .iter()
+                    .map(|f| {
+                        Ok(SymbolicField {
+                            name: f.name.0.clone(),
+                            value: self
+                                .alloc_value(&f.ty, Variable::component_name(&name, &f.name.0))?,
+                        })
+                    })
+                    .collect::<anyhow::Result<_>>()?,
+            )),
         }
     }
 
@@ -1124,6 +1301,10 @@ impl<'a> ConditionsBuilder<'a> {
         let v = VariableId(self.conditions.variables.len());
         self.conditions.variables.push(Variable { ty, name });
         self.dedup_expr(Expr::Variable(v))
+    }
+
+    fn scalar(&mut self, expr: Expr) -> Symbolic {
+        Symbolic::Scalar(self.dedup_expr(expr))
     }
 
     fn dedup_expr(&mut self, expr: Expr) -> ExprId {

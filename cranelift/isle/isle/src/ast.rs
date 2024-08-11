@@ -116,6 +116,12 @@ pub enum SpecExpr {
         var: Ident,
         pos: Pos,
     },
+    /// Struct field access.
+    Field {
+        field: Ident,
+        x: Box<SpecExpr>,
+        pos: Pos,
+    },
     /// An application of a type variant or term.
     Op {
         op: SpecOp,
@@ -142,6 +148,7 @@ impl SpecExpr {
             | &Self::ConstBitVec { pos, .. }
             | &Self::ConstBool { pos, .. }
             | &Self::Var { pos, .. }
+            | &Self::Field { pos, .. }
             | &Self::Op { pos, .. }
             | &Self::Pair { pos, .. }
             | &Self::Enum { pos, .. } => pos,
@@ -221,8 +228,6 @@ pub enum SpecOp {
     // Control operations
     If,
     Switch,
-
-    Load,
 }
 
 /// A specification of the semantics of a term.
@@ -248,6 +253,14 @@ pub enum ModelType {
     Bool,
     /// SMT-LIB bitvector, but with a potentially-polymorphic width
     BitVec(Option<usize>),
+    /// Structured type.
+    Struct(Vec<ModelField>),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ModelField {
+    pub name: Ident,
+    pub ty: ModelType,
 }
 
 /// A construct's value in SMT-LIB

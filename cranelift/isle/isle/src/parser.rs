@@ -407,9 +407,26 @@ impl<'a> Parser<'a> {
             let var = self.parse_ident()?;
             Ok(SpecExpr::Var { var, pos })
         } else if self.is_lparen() {
-            // TODO AVH:
             self.expect_lparen()?;
-            if self.is_sym() && !self.is_spec_bit_vector() {
+            if self.eat_sym_str("switch")? {
+                let mut args = vec![];
+                args.push(self.parse_spec_expr()?);
+                while !(self.is_rparen()) {
+                    self.expect_lparen()?;
+                    let pos = self.pos();
+                    let l = Box::new(self.parse_spec_expr()?);
+                    let r = Box::new(self.parse_spec_expr()?);
+                    self.expect_rparen()?;
+                    args.push(SpecExpr::Pair { l, r, pos });
+                }
+                self.expect_rparen()?;
+                Ok(SpecExpr::Op {
+                    op: SpecOp::Switch,
+                    args,
+                    pos,
+                })
+            } else if self.is_sym() && !self.is_spec_bit_vector() {
+                let sym_pos = self.pos();
                 let sym = self.expect_symbol()?;
                 if let Ok(op) = self.parse_spec_op(sym.as_str()) {
                     let mut args: Vec<SpecExpr> = vec![];
@@ -417,27 +434,20 @@ impl<'a> Parser<'a> {
                         args.push(self.parse_spec_expr()?);
                     }
                     self.expect_rparen()?;
-                    return Ok(SpecExpr::Op { op, args, pos });
-                };
-                let ident = self.str_to_ident(pos, &sym)?;
-                if self.is_rparen() {
+                    Ok(SpecExpr::Op { op, args, pos })
+                } else if let Some(field) = sym.strip_prefix(':') {
+                    let field = self.str_to_ident(sym_pos, field)?;
+                    let x = Box::new(self.parse_spec_expr()?);
                     self.expect_rparen()?;
-                    return Ok(SpecExpr::Enum { name: ident, pos });
-                };
-                // AVH TODO: see if we can simplify this to not backtrack, maybe
-                // kill pairs
-                let r = Box::new(self.parse_spec_expr()?);
-                self.expect_rparen()?;
-                Ok(SpecExpr::Pair {
-                    l: Box::new(SpecExpr::Var { var: ident, pos }),
-                    r,
-                    pos,
-                })
+                    Ok(SpecExpr::Field { field, x, pos })
+                } else {
+                    let name = self.str_to_ident(pos, &sym)?;
+                    self.expect_rparen()?;
+                    Ok(SpecExpr::Enum { name, pos })
+                }
             } else {
-                let l = Box::new(self.parse_spec_expr()?);
-                let r = Box::new(self.parse_spec_expr()?);
-                self.expect_rparen()?;
-                Ok(SpecExpr::Pair { l, r, pos })
+                // TODO(mbm): support Unit
+                Err(self.error(pos, "Unexpected spec expression".into()))
             }
         } else {
             Err(self.error(pos, "Unexpected spec expression".into()))
@@ -497,7 +507,6 @@ impl<'a> Parser<'a> {
             "rev" => Ok(SpecOp::Rev),
             "cls" => Ok(SpecOp::Cls),
             "clz" => Ok(SpecOp::Clz),
-            "load" => Ok(SpecOp::Load),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
     }
@@ -605,8 +614,8 @@ impl<'a> Parser<'a> {
             Ok(ModelType::Int)
         } else if self.is_lparen() {
             self.expect_lparen()?;
-            let width = if self.eat_sym_str("bv")? {
-                if self.is_rparen() {
+            if self.eat_sym_str("bv")? {
+                let width = if self.is_rparen() {
                     None
                 } else if self.is_int() {
                     Some(usize::try_from(self.expect_int()?).map_err(|err| {
@@ -614,16 +623,27 @@ impl<'a> Parser<'a> {
                     })?)
                 } else {
                     return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
+                };
+                self.expect_rparen()?;
+                Ok(ModelType::BitVec(width))
+            } else if self.eat_sym_str("struct")? {
+                let mut fields = Vec::new();
+                while !self.is_rparen() {
+                    self.expect_lparen()?;
+                    let name = self.parse_ident()?;
+                    let ty = self.parse_model_type()?;
+                    self.expect_rparen()?;
+                    fields.push(ModelField { name, ty });
                 }
+                self.expect_rparen()?;
+                Ok(ModelType::Struct(fields))
             } else {
-                return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
-            };
-            self.expect_rparen()?;
-            Ok(ModelType::BitVec(width))
+                Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()))
+            }
         } else {
             Err(self.error(
                 pos,
-                "Model type be a Bool, Int, or BitVector (bv ...)".to_string(),
+                "Model type be a Bool, Int, BitVector (bv ...) or Struct (struct ...)".to_string(),
             ))
         }
     }

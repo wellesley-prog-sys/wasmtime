@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use cranelift_isle::ast;
+use cranelift_isle::ast::{self, Ident};
 
 /// Width of a bit vector.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -30,19 +30,10 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn from_ast(model: &ast::ModelType) -> Self {
-        match model {
-            ast::ModelType::Int => Self::Int,
-            ast::ModelType::Bool => Self::Bool,
-            ast::ModelType::BitVec(None) => Self::BitVector(Width::Unknown),
-            ast::ModelType::BitVec(Some(bits)) => Self::BitVector(Width::Bits(*bits)),
-        }
-    }
-
     pub fn is_concrete(&self) -> bool {
         match self {
-            Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
             Self::Unknown | Self::BitVector(Width::Unknown) => false,
+            Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
         }
     }
 }
@@ -69,6 +60,64 @@ impl PartialOrd for Type {
             (Type::Int, Type::Int) => Some(Ordering::Equal),
             (Type::Bool, Type::Bool) => Some(Ordering::Equal),
             (_, _) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Compound {
+    Primitive(Type),
+    Struct(Vec<Field>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Field {
+    pub name: Ident,
+    pub ty: Compound,
+}
+
+impl Compound {
+    pub fn from_ast(model: &ast::ModelType) -> Self {
+        match model {
+            ast::ModelType::Int => Self::Primitive(Type::Int),
+            ast::ModelType::Bool => Self::Primitive(Type::Bool),
+            ast::ModelType::BitVec(None) => Self::Primitive(Type::BitVector(Width::Unknown)),
+            ast::ModelType::BitVec(Some(bits)) => {
+                Self::Primitive(Type::BitVector(Width::Bits(*bits)))
+            }
+            ast::ModelType::Struct(fields) => Self::Struct(
+                fields
+                    .iter()
+                    .map(|m| Field {
+                        name: m.name.clone(),
+                        ty: Self::from_ast(&m.ty),
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    pub fn as_basic(&self) -> Option<&Type> {
+        match self {
+            Compound::Primitive(ty) => Some(ty),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Compound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Compound::Primitive(ty) => ty.fmt(f),
+            Compound::Struct(fields) => write!(
+                f,
+                "{{{fields}}}",
+                fields = fields
+                    .iter()
+                    .map(|f| format!("{}: {}", f.name.0, f.ty))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 }

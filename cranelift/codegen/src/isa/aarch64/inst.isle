@@ -1111,10 +1111,10 @@
                               (bvadd
                                     rn
                                     ; TODO(mbm): extract common spec components with let-bindings or macros
-                                    (switch (extract 15 8 shiftop)
-                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                    (switch (:op shiftop)
+                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
                                     )
                               )
                         )
@@ -1125,10 +1125,10 @@
                               rd
                               (bvsub
                                     rn
-                                    (switch (extract 15 8 shiftop)
-                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                    (switch (:op shiftop)
+                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
                                     )
                               )
                         )
@@ -1139,10 +1139,10 @@
                               rd
                               (bvand
                                     rn
-                                    (switch (extract 15 8 shiftop)
-                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                    (switch (:op shiftop)
+                                          ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                          ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                          ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
                                     )
                               )
                         )
@@ -1154,10 +1154,10 @@
                               (bvand
                                     rn
                                     (bvnot
-                                          (switch (extract 15 8 shiftop)
-                                                ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                                ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
-                                                ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (extract 7 0 shiftop)))))
+                                          (switch (:op shiftop)
+                                                ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                                ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                                ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
                                           )
                                     )
                               )
@@ -1266,10 +1266,31 @@
 ; QUESTION(mbm): do we want to support "polymorphic" models: (model ImmLogic (type (poly (bv 32) (bv 64))))
 (model ImmLogic (type (bv)))
 (type ImmShift (primitive ImmShift))
+
 (type ShiftOpAndAmt (primitive ShiftOpAndAmt))
-(model ShiftOpAndAmt (type (bv 16)))
+(model ShiftOpAndAmt
+      (type
+            (struct
+                  (op (bv 8))
+                  (amt (bv 8))
+            )
+      )
+)
+
 (type MoveWideConst (primitive MoveWideConst))
+
 (type NZCV (primitive NZCV))
+(model NZCV
+      (type
+            (struct
+                  (N (bv 1))
+                  (Z (bv 1))
+                  (C (bv 1))
+                  (V (bv 1))
+            )
+      )
+)
+
 (type ASIMDFPModImm (primitive ASIMDFPModImm))
 (type ASIMDMovModImm (primitive ASIMDMovModImm))
 (type SImm7Scaled (primitive SImm7Scaled))
@@ -2030,8 +2051,12 @@
 
 (decl pure partial lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
 (spec (lshl_from_imm64 ty imm)
-    (provide (= result (concat (ALUOp.Lsl) (extract 7 0 imm))))
-    (require (= (extract 63 8 imm) #x00000000000000)))
+      (provide
+            (= (:op result) (ALUOp.Lsl))
+            (= (:amt result) (extract 7 0 imm))
+      )
+      (require (= (extract 63 8 imm) #x00000000000000))
+)
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 
 (decl pure partial lshl_from_u64 (Type u64) ShiftOpAndAmt)
