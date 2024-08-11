@@ -1,5 +1,6 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
+use cranelift_isle::sema::Rule;
 use cranelift_isle_veri::{
     debug::print_expansion,
     expand::{Expansion, ExpansionsBuilder},
@@ -22,6 +23,10 @@ struct Opts {
     /// Working directory.
     #[arg(long, required = true)]
     work_dir: std::path::PathBuf,
+
+    /// Filter to expansions involving this rule.
+    #[arg(long)]
+    rule: Option<String>,
 
     /// Path to SMT2 replay file.
     #[arg(long, required = true)]
@@ -61,6 +66,16 @@ fn main() -> anyhow::Result<()> {
     let expand_internal_extractors = false;
     let prog = Program::from_files(&inputs, expand_internal_extractors)?;
 
+    // Lookup named target rule, if any.
+    let target = if let Some(id) = opts.rule {
+        Some(
+            prog.get_rule_by_identifier(&id)
+                .ok_or(anyhow::format_err!("unknown rule {id}"))?,
+        )
+    } else {
+        None
+    };
+
     // Generate expansions.
     // TODO(mbm): don't hardcode the expansion configuration
     let root_term = "lower";
@@ -74,7 +89,7 @@ fn main() -> anyhow::Result<()> {
     let expansions = expansions_builder.expansions()?;
     println!("expansions = {}", expansions.len());
     for expansion in &expansions {
-        if !should_verify(expansion, &prog) {
+        if !should_verify(expansion, target, &prog) {
             continue;
         }
         print_expansion(&prog, expansion);
@@ -86,7 +101,13 @@ fn main() -> anyhow::Result<()> {
 
 /// Heuristic to select which expansions we attempt verification for.
 /// Specifically, verify all expansions where the first rule is named.
-fn should_verify(expansion: &Expansion, prog: &Program) -> bool {
+fn should_verify(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -> bool {
+    // If an explicit target rule is specified, limit to expansions containing it.
+    if let Some(target) = target {
+        return expansion.rules.contains(&target.id);
+    }
+
+    // Accept if first rule is named.
     let rule_id = expansion
         .rules
         .first()
