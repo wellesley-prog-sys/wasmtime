@@ -1271,7 +1271,7 @@
 (model ShiftOpAndAmt
       (type
             (struct
-                  (op (bv 8))
+                  (op (named ALUOp))
                   (amt (bv 8))
             )
       )

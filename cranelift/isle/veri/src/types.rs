@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use cranelift_isle::ast::{self, Ident};
+use cranelift_isle::ast::{Ident, ModelType};
 
 /// Width of a bit vector.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -68,24 +68,25 @@ impl PartialOrd for Type {
 pub enum Compound {
     Primitive(Type),
     Struct(Vec<Field>),
+    // TODO(mbm): intern name identifier
+    Named(Ident),
 }
 
 #[derive(Debug, Clone)]
 pub struct Field {
+    // TODO(mbm): intern name identifier
     pub name: Ident,
     pub ty: Compound,
 }
 
 impl Compound {
-    pub fn from_ast(model: &ast::ModelType) -> Self {
+    pub fn from_ast(model: &ModelType) -> Self {
         match model {
-            ast::ModelType::Int => Self::Primitive(Type::Int),
-            ast::ModelType::Bool => Self::Primitive(Type::Bool),
-            ast::ModelType::BitVec(None) => Self::Primitive(Type::BitVector(Width::Unknown)),
-            ast::ModelType::BitVec(Some(bits)) => {
-                Self::Primitive(Type::BitVector(Width::Bits(*bits)))
-            }
-            ast::ModelType::Struct(fields) => Self::Struct(
+            ModelType::Int => Self::Primitive(Type::Int),
+            ModelType::Bool => Self::Primitive(Type::Bool),
+            ModelType::BitVec(None) => Self::Primitive(Type::BitVector(Width::Unknown)),
+            ModelType::BitVec(Some(bits)) => Self::Primitive(Type::BitVector(Width::Bits(*bits))),
+            ModelType::Struct(fields) => Self::Struct(
                 fields
                     .iter()
                     .map(|m| Field {
@@ -94,10 +95,11 @@ impl Compound {
                     })
                     .collect(),
             ),
+            ModelType::Named(name) => Self::Named(name.clone()),
         }
     }
 
-    pub fn as_basic(&self) -> Option<&Type> {
+    pub fn as_primitive(&self) -> Option<&Type> {
         match self {
             Compound::Primitive(ty) => Some(ty),
             _ => None,
@@ -118,6 +120,7 @@ impl std::fmt::Display for Compound {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Compound::Named(name) => write!(f, "{}", name.0),
         }
     }
 }

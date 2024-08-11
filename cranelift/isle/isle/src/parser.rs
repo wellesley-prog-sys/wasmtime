@@ -637,6 +637,10 @@ impl<'a> Parser<'a> {
                 }
                 self.expect_rparen()?;
                 Ok(ModelType::Struct(fields))
+            } else if self.eat_sym_str("named")? {
+                let name = self.parse_ident()?;
+                self.expect_rparen()?;
+                Ok(ModelType::Named(name))
             } else {
                 Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()))
             }

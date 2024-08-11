@@ -632,7 +632,7 @@ impl<'a> ConditionsBuilder<'a> {
             .type_model
             .get(&ty)
             .ok_or(anyhow::format_err!("no model for type {ty_name}"))?
-            .as_basic()
+            .as_primitive()
             .ok_or(anyhow::format_err!("constant must have basic type"))?;
 
         // Construct value of the determined type.
@@ -1244,18 +1244,7 @@ impl<'a> ConditionsBuilder<'a> {
         name: String,
     ) -> anyhow::Result<Symbolic> {
         match binding_type {
-            BindingType::Base(type_id) => {
-                let type_name = self.prog.type_name(*type_id);
-                let ty = self
-                    .prog
-                    .specenv
-                    .type_model
-                    .get(type_id)
-                    .ok_or(anyhow::format_err!(
-                        "unspecified model for type {type_name}"
-                    ))?;
-                self.alloc_value(ty, name)
-            }
+            BindingType::Base(type_id) => self.alloc_model(*type_id, name),
             BindingType::Option(inner_type) => {
                 let some = self.alloc_variable(Type::Bool, Variable::component_name(&name, "some"));
                 let inner = Box::new(
@@ -1294,7 +1283,30 @@ impl<'a> ConditionsBuilder<'a> {
                     })
                     .collect::<anyhow::Result<_>>()?,
             )),
+            Compound::Named(type_name) => {
+                // TODO(mbm): named type model cycle detection
+                // TODO(mbm): type ID lookup should happen in SpecEnv
+                let type_id = self
+                    .prog
+                    .tyenv
+                    .get_type_by_name(type_name)
+                    .ok_or(anyhow::format_err!("unknown type {}", type_name.0))?;
+                self.alloc_model(type_id, name)
+            }
         }
+    }
+
+    fn alloc_model(&mut self, type_id: TypeId, name: String) -> anyhow::Result<Symbolic> {
+        let type_name = self.prog.type_name(type_id);
+        let ty = self
+            .prog
+            .specenv
+            .type_model
+            .get(&type_id)
+            .ok_or(anyhow::format_err!(
+                "unspecified model for type {type_name}"
+            ))?;
+        self.alloc_value(ty, name)
     }
 
     fn alloc_variable(&mut self, ty: Type, name: String) -> ExprId {

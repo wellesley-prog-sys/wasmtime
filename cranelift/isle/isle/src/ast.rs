@@ -255,6 +255,8 @@ pub enum ModelType {
     BitVec(Option<usize>),
     /// Structured type.
     Struct(Vec<ModelField>),
+    /// Same model as the named type.
+    Named(Ident),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
