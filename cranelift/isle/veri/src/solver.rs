@@ -47,6 +47,7 @@ pub struct Solver<'a> {
     smt: Context,
     conditions: &'a Conditions,
     assignment: &'a Assignment,
+    fresh_idx: usize,
 }
 
 impl<'a> Solver<'a> {
@@ -55,6 +56,7 @@ impl<'a> Solver<'a> {
             smt,
             conditions,
             assignment,
+            fresh_idx: 0,
         }
     }
 
@@ -148,13 +150,12 @@ impl<'a> Solver<'a> {
     }
 
     fn assign_expr(&mut self, x: ExprId, expr: &Expr) -> anyhow::Result<()> {
-        Ok(self.smt.assert(
-            self.smt
-                .eq(self.smt.atom(self.expr_name(x)), self.expr_to_smt(expr)?),
-        )?)
+        let lhs = self.smt.atom(self.expr_name(x));
+        let rhs = self.expr_to_smt(expr)?;
+        Ok(self.smt.assert(self.smt.eq(lhs, rhs))?)
     }
 
-    fn expr_to_smt(&self, expr: &Expr) -> anyhow::Result<SExpr> {
+    fn expr_to_smt(&mut self, expr: &Expr) -> anyhow::Result<SExpr> {
         match *expr {
             Expr::Variable(_) => unreachable!("variables have no corresponding expression"),
             Expr::Const(ref c) => Ok(self.constant(c)),
@@ -245,7 +246,7 @@ impl<'a> Solver<'a> {
         Ok(self.sign_extend(padding, self.expr_atom(x)))
     }
 
-    fn bv_conv_to(&self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
+    fn bv_conv_to(&mut self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
         // Destination width expression should have known integer value.
         let dst: usize = self
             .assignment
@@ -262,7 +263,10 @@ impl<'a> Solver<'a> {
 
         // Handle depending on source and destination widths.
         match dst.cmp(&src) {
-            Ordering::Greater => todo!("conv_to extend"),
+            Ordering::Greater => {
+                let padding = self.fresh_bits(dst - src)?;
+                Ok(self.smt.concat(padding, self.expr_atom(x)))
+            }
             Ordering::Less => todo!("conv_to extract"),
             Ordering::Equal => Ok(self.expr_atom(x)),
         }
@@ -377,5 +381,13 @@ impl<'a> Solver<'a> {
         } else {
             format!("e{}", x.index())
         }
+    }
+
+    fn fresh_bits(&mut self, n: usize) -> anyhow::Result<SExpr> {
+        let name = format!("fresh{}", self.fresh_idx);
+        self.fresh_idx += 1;
+        let sort = self.smt.bit_vec_sort(self.smt.numeral(n));
+        self.smt.declare_const(&name, sort)?;
+        Ok(self.smt.atom(name))
     }
 }
