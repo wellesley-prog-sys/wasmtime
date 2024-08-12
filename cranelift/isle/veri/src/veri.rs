@@ -1070,7 +1070,9 @@ impl<'a> ConditionsBuilder<'a> {
                 _ => anyhow::bail!("boolean value must be zero or one"),
             })),
             Type::Int => Ok(self.constant(Const::Int(val))),
-            Type::BitVector(Width::Bits(w)) => Ok(self.constant(Const::BitVector(*w, val))),
+            Type::BitVector(Width::Bits(w)) => {
+                Ok(self.constant(Const::BitVector(*w, val.try_into()?)))
+            }
             _ => anyhow::bail!("cannot construct constant of type {ty}"),
         }
     }

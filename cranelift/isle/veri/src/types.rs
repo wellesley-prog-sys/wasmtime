@@ -130,7 +130,7 @@ impl std::fmt::Display for Compound {
 pub enum Const {
     Bool(bool),
     Int(i128),
-    BitVector(usize, i128),
+    BitVector(usize, u128),
 }
 
 impl Const {

@@ -511,17 +511,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_spec_bit_vector(&mut self) -> Result<(i128, i8)> {
+    fn parse_spec_bit_vector(&mut self) -> Result<(u128, usize)> {
         let pos = self.pos();
         let s = self.expect_symbol()?;
         if let Some(s) = s.strip_prefix("#b") {
-            match i128::from_str_radix(s, 2) {
-                Ok(i) => Ok((i, s.len() as i8)),
+            match u128::from_str_radix(s, 2) {
+                Ok(i) => Ok((i, s.len())),
                 Err(_) => Err(self.error(pos, "Not a constant binary bit vector".to_string())),
             }
         } else if let Some(s) = s.strip_prefix("#x") {
-            match i128::from_str_radix(s, 16) {
-                Ok(i) => Ok((i, (s.len() as i8) * 4)),
+            match u128::from_str_radix(s, 16) {
+                Ok(i) => Ok((i, s.len() * 4)),
                 Err(_) => Err(self.error(pos, "Not a constant hex bit vector".to_string())),
             }
         } else {

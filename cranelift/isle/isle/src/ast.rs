@@ -102,8 +102,8 @@ pub enum SpecExpr {
     },
     /// An operator that matches a constant bitvector value.
     ConstBitVec {
-        val: i128,
-        width: i8,
+        val: u128,
+        width: usize,
         pos: Pos,
     },
     /// An operator that matches a constant boolean value.

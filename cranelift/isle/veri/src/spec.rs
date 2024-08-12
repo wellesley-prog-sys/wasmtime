@@ -173,12 +173,9 @@ impl Expr {
         match expr {
             ast::SpecExpr::ConstInt { val, pos: _ } => Expr::Const(Const::Int(*val)),
             ast::SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const::Bool(*val)),
-            ast::SpecExpr::ConstBitVec { val, width, pos: _ } => Expr::Const(Const::BitVector(
-                (*width)
-                    .try_into()
-                    .expect("width should be representable as usize"),
-                *val,
-            )),
+            ast::SpecExpr::ConstBitVec { val, width, pos: _ } => {
+                Expr::Const(Const::BitVector(*width, *val))
+            }
             ast::SpecExpr::Var { var, pos: _ } => Expr::Var(var.clone()),
             ast::SpecExpr::Field { field, x, pos: _ } => {
                 Expr::Field(field.clone(), Box::new(Expr::from_ast(x)))
