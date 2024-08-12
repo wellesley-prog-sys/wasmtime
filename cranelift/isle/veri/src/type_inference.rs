@@ -2,9 +2,13 @@ use std::{
     cmp::Ordering,
     collections::{hash_map::Entry, HashMap},
     iter::zip,
+    vec,
 };
 
+use cranelift_isle::sema::TermId;
+
 use crate::{
+    spec::Signature,
     types::{Compound, Const, Type, Width},
     veri::{Call, Conditions, Expr, ExprId, Symbolic},
 };
@@ -34,12 +38,12 @@ impl TypeValue {
         self >= &Self::Type(ty.clone())
     }
 
-    pub fn merge(left: &Self, right: &Self) -> anyhow::Result<Self> {
-        Ok(match left.partial_cmp(right) {
-            Some(Ordering::Greater) => left.clone(),
-            Some(Ordering::Less | Ordering::Equal) => right.clone(),
-            None => anyhow::bail!("incompatible type values: {left} and {right}"),
-        })
+    pub fn merge(left: &Self, right: &Self) -> Option<Self> {
+        match left.partial_cmp(right) {
+            Some(Ordering::Greater) => Some(left.clone()),
+            Some(Ordering::Less | Ordering::Equal) => Some(right.clone()),
+            None => None,
+        }
     }
 }
 
@@ -65,7 +69,7 @@ impl std::fmt::Display for TypeValue {
 }
 
 /// Boolean expression or its negation.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     Var(ExprId),
     Not(ExprId),
@@ -80,7 +84,7 @@ impl std::fmt::Display for Literal {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Constraint {
     /// Expression x has the given type.
     Type { x: ExprId, ty: Type },
@@ -120,26 +124,118 @@ impl std::fmt::Display for Constraint {
     }
 }
 
-pub fn type_constraints(conditions: &Conditions) -> Vec<Constraint> {
-    let builder = ConstraintsBuilder::new(conditions);
-    builder.build()
+#[derive(Clone)]
+pub enum Choice {
+    TermInstantiation(TermId, Signature),
 }
 
-struct ConstraintsBuilder<'a> {
-    conditions: &'a Conditions,
+impl std::fmt::Display for Choice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Choice::TermInstantiation(term_id, sig) => {
+                write!(f, "term_instantiation({}, {sig})", term_id.index())
+            }
+        }
+    }
+}
 
+#[derive(Clone)]
+pub struct Arm {
+    choice: Choice,
     constraints: Vec<Constraint>,
 }
 
-impl<'a> ConstraintsBuilder<'a> {
+#[derive(Default, Clone)]
+pub struct Branch {
+    arms: Vec<Arm>,
+}
+
+#[derive(Default)]
+pub struct System {
+    choices: Vec<Choice>,
+    constraints: Vec<Constraint>,
+    branches: Vec<Branch>,
+}
+
+impl System {
+    fn fork(&self) -> Vec<System> {
+        let mut branches = self.branches.clone();
+        let branch = branches.pop().expect("should have at least one branch");
+
+        let mut children = Vec::new();
+        for arm in &branch.arms {
+            let mut constraints = self.constraints.clone();
+            constraints.extend(arm.constraints.iter().cloned());
+
+            let mut choices = self.choices.clone();
+            choices.push(arm.choice.clone());
+
+            children.push(System {
+                constraints,
+                choices,
+                branches: branches.clone(),
+            })
+        }
+
+        children
+    }
+
+    pub fn pretty_print(&self) {
+        println!("system {{");
+
+        // Choices
+        println!("\tchoices = [");
+        for choice in &self.choices {
+            println!("\t\t{choice}");
+        }
+        println!("\t]");
+
+        // Constraints
+        println!("\tconstraints = [");
+        for constraint in &self.constraints {
+            println!("\t\t{constraint}");
+        }
+        println!("\t]");
+
+        // Branches
+        for branch in &self.branches {
+            println!("\tbranch {{");
+            for arm in &branch.arms {
+                println!("\t\t{choice} => [", choice = arm.choice);
+                for constraint in &arm.constraints {
+                    println!("\t\t\t{constraint}");
+                }
+                println!("\t\t]");
+            }
+            println!("\t}}");
+        }
+
+        println!("}}");
+    }
+}
+
+pub fn type_constraint_system(conditions: &Conditions) -> System {
+    let builder = SystemBuilder::new(conditions);
+    builder.build()
+}
+
+struct SystemBuilder<'a> {
+    conditions: &'a Conditions,
+
+    system: System,
+    arm: Option<Arm>,
+}
+
+impl<'a> SystemBuilder<'a> {
     fn new(conditions: &'a Conditions) -> Self {
         Self {
             conditions,
-            constraints: Vec::new(),
+            system: System::default(),
+            arm: None,
         }
     }
 
-    fn build(mut self) -> Vec<Constraint> {
+    fn build(mut self) -> System {
         // Expression constraints.
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
             self.veri_expr(ExprId(i), expr);
@@ -160,7 +256,7 @@ impl<'a> ConstraintsBuilder<'a> {
             self.call(call);
         }
 
-        self.constraints
+        self.system
     }
 
     fn veri_expr(&mut self, x: ExprId, expr: &Expr) {
@@ -212,7 +308,7 @@ impl<'a> ConstraintsBuilder<'a> {
             Expr::Eq(y, z) => {
                 self.boolean(x);
                 self.same_type(*y, *z);
-                self.constraints.push(Constraint::Implies {
+                self.constraint(Constraint::Implies {
                     c: x,
                     then: Box::new(Constraint::Identical { x: *y, y: *z }),
                 });
@@ -290,20 +386,28 @@ impl<'a> ConstraintsBuilder<'a> {
             return;
         }
 
-        // TODO(mbm): support multiple term signatures
-        if call.signatures.len() > 1 {
-            todo!("multiple term signatures");
-        }
-        let sig = &call.signatures[0];
+        // Branch for the choice of term signature.
+        //
+        // We do this even for the case of a single signature, since it will
+        // preserve metadata about where the type assignment came from.
+        self.branch();
 
-        // Arguments.
-        assert_eq!(call.args.len(), sig.args.len());
-        for (a, ty) in zip(&call.args, &sig.args) {
-            self.symbolic(a, ty.clone());
-        }
+        for sig in &call.signatures {
+            // Branch arm for
+            self.push_arm(Choice::TermInstantiation(call.term, sig.clone()));
 
-        // Return.
-        self.symbolic(&call.ret, sig.ret.clone());
+            // Arguments.
+            assert_eq!(call.args.len(), sig.args.len());
+            for (a, ty) in zip(&call.args, &sig.args) {
+                self.symbolic(a, ty.clone());
+            }
+
+            // Return.
+            self.symbolic(&call.ret, sig.ret.clone());
+
+            // Pop branch arm.
+            self.pop();
+        }
     }
 
     fn symbolic(&mut self, v: &Symbolic, ty: Compound) {
@@ -334,15 +438,15 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 
     fn ty(&mut self, x: ExprId, ty: Type) {
-        self.constraints.push(Constraint::Type { x, ty });
+        self.constraint(Constraint::Type { x, ty });
     }
 
     fn same_type(&mut self, x: ExprId, y: ExprId) {
-        self.constraints.push(Constraint::SameType { x, y });
+        self.constraint(Constraint::SameType { x, y });
     }
 
     fn width_of(&mut self, x: ExprId, w: ExprId) {
-        self.constraints.push(Constraint::WidthOf { x, w });
+        self.constraint(Constraint::WidthOf { x, w });
     }
 
     fn boolean_value(&mut self, x: ExprId, b: bool) {
@@ -350,15 +454,45 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 
     fn value(&mut self, x: ExprId, c: Const) {
-        self.constraints.push(Constraint::Value { x, c });
+        self.constraint(Constraint::Value { x, c });
     }
 
     fn clause(&mut self, literals: Vec<Literal>) {
-        self.constraints.push(Constraint::Clause { literals });
+        self.constraint(Constraint::Clause { literals })
+    }
+
+    fn constraint(&mut self, constraint: Constraint) {
+        let current = match self.arm.as_mut() {
+            Some(arm) => &mut arm.constraints,
+            None => &mut self.system.constraints,
+        };
+        current.push(constraint)
+    }
+
+    fn branch(&mut self) {
+        self.system.branches.push(Branch::default());
+    }
+
+    fn push_arm(&mut self, choice: Choice) {
+        assert!(self.arm.is_none());
+        self.arm = Some(Arm {
+            choice,
+            constraints: Vec::new(),
+        });
+    }
+
+    fn pop(&mut self) {
+        let arm = self.arm.take().expect("must have arm");
+        self.system
+            .branches
+            .last_mut()
+            .expect("should have branch")
+            .arms
+            .push(arm);
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Assignment {
     pub expr_type_value: HashMap<ExprId, TypeValue>,
 }
@@ -370,19 +504,10 @@ impl Assignment {
         }
     }
 
-    pub fn validate(&self) -> anyhow::Result<()> {
-        // Assigned types should all be concrete.
-        for (x, tv) in &self.expr_type_value {
-            let ty = tv.ty();
-            if !ty.is_concrete() {
-                anyhow::bail!(
-                    "non-concrete type {ty} assigned to expression {x}",
-                    x = x.index()
-                );
-            }
-        }
-
-        Ok(())
+    pub fn is_concrete(&self) -> bool {
+        self.expr_type_value
+            .values()
+            .all(|tv| tv.ty().is_concrete())
     }
 
     pub fn satisfies_constraints(&self, constraints: &[Constraint]) -> anyhow::Result<()> {
@@ -544,7 +669,29 @@ impl Assignment {
     }
 }
 
-#[derive(Default)]
+pub enum Status {
+    Solved,
+    Inapplicable,
+    Underconstrained,
+}
+
+impl std::fmt::Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Status::Solved => write!(f, "solved"),
+            Status::Inapplicable => write!(f, "inapplicable"),
+            Status::Underconstrained => write!(f, "underconstrained"),
+        }
+    }
+}
+
+pub struct Solution {
+    pub status: Status,
+    pub choices: Vec<Choice>,
+    pub assignment: Assignment,
+}
+
+#[derive(Clone)]
 pub struct Solver {
     assignment: Assignment,
 }
@@ -556,18 +703,48 @@ impl Solver {
         }
     }
 
-    pub fn solve(mut self, constraints: &Vec<Constraint>) -> anyhow::Result<Assignment> {
-        // Iterate until no changes.
-        while self.iterate(constraints)? {}
+    pub fn solve(mut self, system: &System) -> Vec<Solution> {
+        // Deduce assignments from constraints.
+        let result = self.propagate(&system.constraints);
+        if let Err(status) = result {
+            return vec![Solution {
+                status,
+                choices: system.choices.clone(),
+                assignment: self.assignment,
+            }];
+        }
 
-        // Check assignment is reasonable.
-        self.assignment.validate()?;
-        self.assignment.satisfies_constraints(constraints)?;
+        // Done?
+        if system.branches.is_empty() {
+            let status = if self.assignment.is_concrete() {
+                Status::Solved
+            } else {
+                Status::Underconstrained
+            };
+            return vec![Solution {
+                status,
+                choices: system.choices.clone(),
+                assignment: self.assignment,
+            }];
+        };
 
-        Ok(self.assignment)
+        // Fork.
+        let mut solutions = Vec::new();
+        for child in system.fork() {
+            let sub = self.clone();
+            solutions.extend(sub.solve(&child));
+        }
+
+        solutions
     }
 
-    fn iterate(&mut self, constraints: &Vec<Constraint>) -> anyhow::Result<bool> {
+    fn propagate(&mut self, constraints: &[Constraint]) -> Result<(), Status> {
+        // Iterate until no changes.
+        while self.iterate(constraints)? {}
+        Ok(())
+    }
+
+    fn iterate(&mut self, constraints: &[Constraint]) -> Result<bool, Status> {
         let mut change = false;
         for constraint in constraints {
             // TODO(mbm): remove satisfied constraints from list
@@ -576,7 +753,7 @@ impl Solver {
         Ok(change)
     }
 
-    fn constraint(&mut self, constraint: &Constraint) -> anyhow::Result<bool> {
+    fn constraint(&mut self, constraint: &Constraint) -> Result<bool, Status> {
         log::trace!("process type constraint: {constraint}");
         match constraint {
             Constraint::Type { x, ty } => self.set_type(*x, ty.clone()),
@@ -589,7 +766,7 @@ impl Solver {
         }
     }
 
-    fn set_type_value(&mut self, x: ExprId, tv: TypeValue) -> anyhow::Result<bool> {
+    fn set_type_value(&mut self, x: ExprId, tv: TypeValue) -> Result<bool, Status> {
         log::trace!("set type value: {x:?} = {tv:?}");
 
         // If we don't have an assignment for the expression, record it.
@@ -600,7 +777,7 @@ impl Solver {
 
         // If we do, merge this type value with the existing one.
         let existing = &self.assignment.expr_type_value[&x];
-        let merged = TypeValue::merge(existing, &tv)?;
+        let merged = TypeValue::merge(existing, &tv).ok_or(Status::Inapplicable)?;
         if merged != *existing {
             self.assignment.expr_type_value.insert(x, merged);
             return Ok(true);
@@ -610,11 +787,11 @@ impl Solver {
         Ok(false)
     }
 
-    fn set_type(&mut self, x: ExprId, ty: Type) -> anyhow::Result<bool> {
+    fn set_type(&mut self, x: ExprId, ty: Type) -> Result<bool, Status> {
         self.set_type_value(x, TypeValue::Type(ty))
     }
 
-    fn same_type(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
+    fn same_type(&mut self, x: ExprId, y: ExprId) -> Result<bool, Status> {
         // TODO(mbm): union find
         // TODO(mbm): simplify by initializing all expression types to unknown
         match (
@@ -628,7 +805,7 @@ impl Solver {
         }
     }
 
-    fn identical(&mut self, x: ExprId, y: ExprId) -> anyhow::Result<bool> {
+    fn identical(&mut self, x: ExprId, y: ExprId) -> Result<bool, Status> {
         match (
             self.assignment.expr_type_value.get(&x).cloned(),
             self.assignment.expr_type_value.get(&y).cloned(),
@@ -642,7 +819,7 @@ impl Solver {
         }
     }
 
-    fn width_of(&mut self, x: ExprId, w: ExprId) -> anyhow::Result<bool> {
+    fn width_of(&mut self, x: ExprId, w: ExprId) -> Result<bool, Status> {
         match (
             self.assignment.expr_type_value.get(&x),
             self.assignment.expr_type_value.get(&w),
@@ -661,7 +838,7 @@ impl Solver {
         }
     }
 
-    fn implies(&mut self, c: ExprId, then: &Constraint) -> anyhow::Result<bool> {
+    fn implies(&mut self, c: ExprId, then: &Constraint) -> Result<bool, Status> {
         if self.assignment.bool_value(c) == Some(true) {
             self.constraint(then)
         } else {
@@ -669,7 +846,7 @@ impl Solver {
         }
     }
 
-    fn clause(&mut self, literals: &[Literal]) -> anyhow::Result<bool> {
+    fn clause(&mut self, literals: &[Literal]) -> Result<bool, Status> {
         // Check if we can propogate the value of a single unknown literal.
         let mut unknown = None;
         for literal in literals {
@@ -700,22 +877,22 @@ impl Solver {
         }
     }
 
-    fn set_literal(&mut self, lit: &Literal, b: bool) -> anyhow::Result<bool> {
+    fn set_literal(&mut self, lit: &Literal, b: bool) -> Result<bool, Status> {
         match *lit {
             Literal::Var(x) => self.set_bool_value(x, b),
             Literal::Not(x) => self.set_bool_value(x, !b),
         }
     }
 
-    fn set_bool_value(&mut self, x: ExprId, b: bool) -> anyhow::Result<bool> {
+    fn set_bool_value(&mut self, x: ExprId, b: bool) -> Result<bool, Status> {
         self.set_value(x, Const::Bool(b))
     }
 
-    fn set_int_value(&mut self, x: ExprId, v: i128) -> anyhow::Result<bool> {
+    fn set_int_value(&mut self, x: ExprId, v: i128) -> Result<bool, Status> {
         self.set_value(x, Const::Int(v))
     }
 
-    fn set_value(&mut self, x: ExprId, c: Const) -> anyhow::Result<bool> {
+    fn set_value(&mut self, x: ExprId, c: Const) -> Result<bool, Status> {
         self.set_type_value(x, TypeValue::Value(c))
     }
 }

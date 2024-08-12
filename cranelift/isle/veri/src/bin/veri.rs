@@ -6,7 +6,7 @@ use cranelift_isle_veri::{
     expand::{Expansion, ExpansionsBuilder},
     program::Program,
     solver::{Applicability, Solver, Verification},
-    type_inference::{self, type_constraints},
+    type_inference::{self, type_constraint_system, Assignment},
     veri::Conditions,
 };
 
@@ -127,18 +127,44 @@ fn verify_expansion(
     conditions.pretty_print(prog);
 
     // Type constraints.
-    let constraints = type_constraints(&conditions);
-    // TOOD(mbm): pretty print method for type constraints
-    println!("type constraints = [");
-    for constraint in &constraints {
-        println!("\t{constraint}");
-    }
-    println!("]");
+    let system = type_constraint_system(&conditions);
+    system.pretty_print();
 
     // Infer types.
-    println!("type assignment:");
     let type_solver = type_inference::Solver::new();
-    let assignment = type_solver.solve(&constraints)?;
+    let solutions = type_solver.solve(&system);
+
+    for solution in &solutions {
+        println!("type solution status = {}", solution.status);
+        match solution.status {
+            type_inference::Status::Solved => (),
+            type_inference::Status::Inapplicable => continue,
+            type_inference::Status::Underconstrained => {
+                anyhow::bail!("underconstrained type inference")
+            }
+        }
+
+        verify_expansion_type_instantiation(
+            prog,
+            &conditions,
+            &solution.assignment,
+            replay_path,
+            timeout_seconds,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn verify_expansion_type_instantiation(
+    prog: &Program,
+    conditions: &Conditions,
+    assignment: &Assignment,
+    replay_path: &std::path::Path,
+    timeout_seconds: u32,
+) -> anyhow::Result<()> {
+    // Show type assignment.
+    println!("type assignment:");
     assignment.pretty_print(&conditions);
 
     // Solve.
@@ -152,7 +178,7 @@ fn verify_expansion(
         .replay_file(Some(replay_file))
         .build()?;
 
-    let mut solver = Solver::new(smt, &conditions, &assignment);
+    let mut solver = Solver::new(smt, &conditions, assignment);
     solver.encode()?;
 
     let applicability = solver.check_assumptions_feasibility()?;
