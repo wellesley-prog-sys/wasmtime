@@ -5,7 +5,7 @@ use cranelift_isle::{
 };
 use std::collections::HashMap;
 
-use crate::types::{Compound, Const};
+use crate::types::{Const, Type};
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
 
@@ -358,15 +358,15 @@ impl Spec {
 
 #[derive(Debug, Clone)]
 pub struct Signature {
-    pub args: Vec<Compound>,
-    pub ret: Compound,
+    pub args: Vec<Type>,
+    pub ret: Type,
 }
 
 impl Signature {
     fn from_ast(sig: &ast::Signature) -> Self {
         Self {
-            args: sig.args.iter().map(Compound::from_ast).collect(),
-            ret: Compound::from_ast(&sig.ret),
+            args: sig.args.iter().map(Type::from_ast).collect(),
+            ret: Type::from_ast(&sig.ret),
         }
     }
 }
@@ -379,7 +379,7 @@ pub struct SpecEnv {
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
 
     /// Model for the given type.
-    pub type_model: HashMap<TypeId, Compound>,
+    pub type_model: HashMap<TypeId, Type>,
 
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
@@ -458,8 +458,7 @@ impl SpecEnv {
         let type_id = tyenv
             .get_type_by_name(name)
             .expect("type name should be defined");
-        self.type_model
-            .insert(type_id, Compound::from_ast(model_type));
+        self.type_model.insert(type_id, Type::from_ast(model_type));
     }
 
     fn collect_instantiations(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {

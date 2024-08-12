@@ -5,18 +5,18 @@ use std::{
 };
 
 use crate::{
-    types::{Compound, Const, Type, Width},
+    types::{BaseType, Const, Type, Width},
     veri::{Call, Conditions, Expr, ExprId, Symbolic},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TypeValue {
-    Type(Type),
+    Type(BaseType),
     Value(Const),
 }
 
 impl TypeValue {
-    pub fn ty(&self) -> Type {
+    pub fn ty(&self) -> BaseType {
         match self {
             TypeValue::Type(ty) => ty.clone(),
             TypeValue::Value(c) => c.ty(),
@@ -30,7 +30,7 @@ impl TypeValue {
         }
     }
 
-    pub fn refines_type(&self, ty: &Type) -> bool {
+    pub fn refines_type(&self, ty: &BaseType) -> bool {
         self >= &Self::Type(ty.clone())
     }
 
@@ -83,7 +83,7 @@ impl std::fmt::Display for Literal {
 #[derive(Debug)]
 pub enum Constraint {
     /// Expression x has the given type.
-    Type { x: ExprId, ty: Type },
+    Type { x: ExprId, ty: BaseType },
     /// Expressions have the same type.
     SameType { x: ExprId, y: ExprId },
     /// Expressions have the same type and value.
@@ -306,10 +306,10 @@ impl<'a> ConstraintsBuilder<'a> {
         self.symbolic(&call.ret, sig.ret.clone());
     }
 
-    fn symbolic(&mut self, v: &Symbolic, ty: Compound) {
+    fn symbolic(&mut self, v: &Symbolic, ty: Type) {
         match (v, ty) {
-            (Symbolic::Scalar(x), Compound::Primitive(ty)) => self.ty(*x, ty),
-            (Symbolic::Struct(_), Compound::Struct(_)) => todo!("struct type constraints"),
+            (Symbolic::Scalar(x), Type::Base(ty)) => self.ty(*x, ty),
+            (Symbolic::Struct(_), Type::Struct(_)) => todo!("struct type constraints"),
             // QUESTION(mbm): should Option and Tuple be in a different enum so they don't appear in type inference?
             (Symbolic::Option(_), _) => unimplemented!("option types unsupported"),
             (Symbolic::Tuple(_), _) => unimplemented!("tuple types unsupported"),
@@ -318,22 +318,22 @@ impl<'a> ConstraintsBuilder<'a> {
     }
 
     fn bit_vector_of_width(&mut self, x: ExprId, width: usize) {
-        self.ty(x, Type::BitVector(Width::Bits(width)));
+        self.ty(x, BaseType::BitVector(Width::Bits(width)));
     }
 
     fn bit_vector(&mut self, x: ExprId) {
-        self.ty(x, Type::BitVector(Width::Unknown));
+        self.ty(x, BaseType::BitVector(Width::Unknown));
     }
 
     fn integer(&mut self, x: ExprId) {
-        self.ty(x, Type::Int);
+        self.ty(x, BaseType::Int);
     }
 
     fn boolean(&mut self, x: ExprId) {
-        self.ty(x, Type::Bool);
+        self.ty(x, BaseType::Bool);
     }
 
-    fn ty(&mut self, x: ExprId, ty: Type) {
+    fn ty(&mut self, x: ExprId, ty: BaseType) {
         self.constraints.push(Constraint::Type { x, ty });
     }
 
@@ -447,7 +447,7 @@ impl Assignment {
         }
     }
 
-    fn expect_expr_type_refinement(&self, x: ExprId, base: &Type) -> anyhow::Result<()> {
+    fn expect_expr_type_refinement(&self, x: ExprId, base: &BaseType) -> anyhow::Result<()> {
         let tv = self.try_assignment(x)?;
         if !tv.refines_type(base) {
             anyhow::bail!("expected type {tv} to be refinement of {base}")
@@ -483,7 +483,7 @@ impl Assignment {
 
     pub fn bit_vector_width(&self, x: ExprId) -> anyhow::Result<usize> {
         let tyx = self.try_assignment(x)?.ty();
-        let Type::BitVector(Width::Bits(width)) = tyx else {
+        let BaseType::BitVector(Width::Bits(width)) = tyx else {
             anyhow::bail!(
                 "expression {x} should be a bit-vector of known width; got {tyx}",
                 x = x.index()
@@ -610,7 +610,7 @@ impl Solver {
         Ok(false)
     }
 
-    fn set_type(&mut self, x: ExprId, ty: Type) -> anyhow::Result<bool> {
+    fn set_type(&mut self, x: ExprId, ty: BaseType) -> anyhow::Result<bool> {
         self.set_type_value(x, TypeValue::Type(ty))
     }
 
@@ -649,13 +649,13 @@ impl Solver {
         ) {
             (
                 Some(
-                    &TypeValue::Type(Type::BitVector(Width::Bits(width)))
+                    &TypeValue::Type(BaseType::BitVector(Width::Bits(width)))
                     | &TypeValue::Value(Const::BitVector(width, _)),
                 ),
                 _,
             ) => self.set_int_value(w, width.try_into().unwrap()),
             (_, Some(&TypeValue::Value(Const::Int(v)))) => {
-                self.set_type(x, Type::BitVector(Width::Bits(v.try_into().unwrap())))
+                self.set_type(x, BaseType::BitVector(Width::Bits(v.try_into().unwrap())))
             }
             _ => Ok(false),
         }
@@ -728,9 +728,9 @@ mod tests {
     #[test]
     fn test_type_value_partial_order_bit_vector() {
         assert_strictly_increasing(&[
-            TypeValue::Type(Type::Unknown),
-            TypeValue::Type(Type::BitVector(Width::Unknown)),
-            TypeValue::Type(Type::BitVector(Width::Bits(64))),
+            TypeValue::Type(BaseType::Unknown),
+            TypeValue::Type(BaseType::BitVector(Width::Unknown)),
+            TypeValue::Type(BaseType::BitVector(Width::Bits(64))),
             TypeValue::Value(Const::BitVector(64, 42)),
         ]);
     }
@@ -738,8 +738,8 @@ mod tests {
     #[test]
     fn test_type_value_partial_order_int() {
         assert_strictly_increasing(&[
-            TypeValue::Type(Type::Unknown),
-            TypeValue::Type(Type::Int),
+            TypeValue::Type(BaseType::Unknown),
+            TypeValue::Type(BaseType::Int),
             TypeValue::Value(Const::Int(42)),
         ]);
     }
@@ -747,8 +747,8 @@ mod tests {
     #[test]
     fn test_type_value_partial_order_bool() {
         assert_strictly_increasing(&[
-            TypeValue::Type(Type::Unknown),
-            TypeValue::Type(Type::Bool),
+            TypeValue::Type(BaseType::Unknown),
+            TypeValue::Type(BaseType::Bool),
             TypeValue::Value(Const::Bool(true)),
         ]);
     }
@@ -757,21 +757,21 @@ mod tests {
     fn test_type_value_partial_order_properties() {
         assert_partial_order_properties(&[
             // Unknown
-            TypeValue::Type(Type::Unknown),
+            TypeValue::Type(BaseType::Unknown),
             // BitVectors
-            TypeValue::Type(Type::BitVector(Width::Unknown)),
-            TypeValue::Type(Type::BitVector(Width::Bits(32))),
+            TypeValue::Type(BaseType::BitVector(Width::Unknown)),
+            TypeValue::Type(BaseType::BitVector(Width::Bits(32))),
             TypeValue::Value(Const::BitVector(32, 42)),
             TypeValue::Value(Const::BitVector(32, 43)),
-            TypeValue::Type(Type::BitVector(Width::Bits(64))),
+            TypeValue::Type(BaseType::BitVector(Width::Bits(64))),
             TypeValue::Value(Const::BitVector(64, 42)),
             TypeValue::Value(Const::BitVector(64, 43)),
             // Int
-            TypeValue::Type(Type::Int),
+            TypeValue::Type(BaseType::Int),
             TypeValue::Value(Const::Int(42)),
             TypeValue::Value(Const::Int(43)),
             // Bool
-            TypeValue::Type(Type::Bool),
+            TypeValue::Type(BaseType::Bool),
             TypeValue::Value(Const::Bool(false)),
             TypeValue::Value(Const::Bool(true)),
         ]);

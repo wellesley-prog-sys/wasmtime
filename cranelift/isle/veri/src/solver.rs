@@ -5,7 +5,7 @@ use easy_smt::{Context, Response, SExpr, SExprData};
 
 use crate::{
     type_inference::Assignment,
-    types::{Const, Type, Width},
+    types::{BaseType, Const, Width},
     veri::{Conditions, Expr, ExprId, Model},
 };
 
@@ -136,13 +136,13 @@ impl<'a> Solver<'a> {
         Ok(())
     }
 
-    fn type_to_sort(&self, ty: &Type) -> anyhow::Result<SExpr> {
+    fn type_to_sort(&self, ty: &BaseType) -> anyhow::Result<SExpr> {
         match *ty {
-            Type::BitVector(Width::Bits(width)) => {
+            BaseType::BitVector(Width::Bits(width)) => {
                 Ok(self.smt.bit_vec_sort(self.smt.numeral(width)))
             }
-            Type::Int => Ok(self.smt.int_sort()),
-            Type::Bool => Ok(self.smt.bool_sort()),
+            BaseType::Int => Ok(self.smt.int_sort()),
+            BaseType::Bool => Ok(self.smt.bool_sort()),
             _ => anyhow::bail!("no smt2 sort for type {ty}"),
         }
     }

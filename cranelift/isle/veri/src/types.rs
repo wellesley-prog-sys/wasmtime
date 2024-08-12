@@ -22,14 +22,14 @@ impl PartialOrd for Width {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Type {
+pub enum BaseType {
     Unknown,
     BitVector(Width),
     Int,
     Bool,
 }
 
-impl Type {
+impl BaseType {
     pub fn is_concrete(&self) -> bool {
         match self {
             Self::Unknown | Self::BitVector(Width::Unknown) => false,
@@ -38,7 +38,7 @@ impl Type {
     }
 }
 
-impl std::fmt::Display for Type {
+impl std::fmt::Display for BaseType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Unknown => write!(f, "unk"),
@@ -50,23 +50,23 @@ impl std::fmt::Display for Type {
     }
 }
 
-impl PartialOrd for Type {
+impl PartialOrd for BaseType {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            (Type::Unknown, Type::Unknown) => Some(Ordering::Equal),
-            (Type::Unknown, _) => Some(Ordering::Less),
-            (_, Type::Unknown) => Some(Ordering::Greater),
-            (Type::BitVector(l), Type::BitVector(r)) => l.partial_cmp(r),
-            (Type::Int, Type::Int) => Some(Ordering::Equal),
-            (Type::Bool, Type::Bool) => Some(Ordering::Equal),
+            (BaseType::Unknown, BaseType::Unknown) => Some(Ordering::Equal),
+            (BaseType::Unknown, _) => Some(Ordering::Less),
+            (_, BaseType::Unknown) => Some(Ordering::Greater),
+            (BaseType::BitVector(l), BaseType::BitVector(r)) => l.partial_cmp(r),
+            (BaseType::Int, BaseType::Int) => Some(Ordering::Equal),
+            (BaseType::Bool, BaseType::Bool) => Some(Ordering::Equal),
             (_, _) => None,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Compound {
-    Primitive(Type),
+pub enum Type {
+    Base(BaseType),
     Struct(Vec<Field>),
     // TODO(mbm): intern name identifier
     Named(Ident),
@@ -76,16 +76,16 @@ pub enum Compound {
 pub struct Field {
     // TODO(mbm): intern name identifier
     pub name: Ident,
-    pub ty: Compound,
+    pub ty: Type,
 }
 
-impl Compound {
+impl Type {
     pub fn from_ast(model: &ModelType) -> Self {
         match model {
-            ModelType::Int => Self::Primitive(Type::Int),
-            ModelType::Bool => Self::Primitive(Type::Bool),
-            ModelType::BitVec(None) => Self::Primitive(Type::BitVector(Width::Unknown)),
-            ModelType::BitVec(Some(bits)) => Self::Primitive(Type::BitVector(Width::Bits(*bits))),
+            ModelType::Int => Self::Base(BaseType::Int),
+            ModelType::Bool => Self::Base(BaseType::Bool),
+            ModelType::BitVec(None) => Self::Base(BaseType::BitVector(Width::Unknown)),
+            ModelType::BitVec(Some(bits)) => Self::Base(BaseType::BitVector(Width::Bits(*bits))),
             ModelType::Struct(fields) => Self::Struct(
                 fields
                     .iter()
@@ -99,19 +99,19 @@ impl Compound {
         }
     }
 
-    pub fn as_primitive(&self) -> Option<&Type> {
+    pub fn as_primitive(&self) -> Option<&BaseType> {
         match self {
-            Compound::Primitive(ty) => Some(ty),
+            Type::Base(ty) => Some(ty),
             _ => None,
         }
     }
 }
 
-impl std::fmt::Display for Compound {
+impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Compound::Primitive(ty) => ty.fmt(f),
-            Compound::Struct(fields) => write!(
+            Type::Base(ty) => ty.fmt(f),
+            Type::Struct(fields) => write!(
                 f,
                 "{{{fields}}}",
                 fields = fields
@@ -120,7 +120,7 @@ impl std::fmt::Display for Compound {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Compound::Named(name) => write!(f, "{}", name.0),
+            Type::Named(name) => write!(f, "{}", name.0),
         }
     }
 }
@@ -134,11 +134,11 @@ pub enum Const {
 }
 
 impl Const {
-    pub fn ty(&self) -> Type {
+    pub fn ty(&self) -> BaseType {
         match self {
-            Self::Bool(_) => Type::Bool,
-            Self::Int(_) => Type::Int,
-            Self::BitVector(w, _) => Type::BitVector(Width::Bits(*w)),
+            Self::Bool(_) => BaseType::Bool,
+            Self::Int(_) => BaseType::Int,
+            Self::BitVector(w, _) => BaseType::BitVector(Width::Bits(*w)),
         }
     }
 
@@ -190,21 +190,21 @@ mod tests {
 
     #[test]
     fn test_type_partial_order_less_than() {
-        assert!(Type::Unknown < Type::BitVector(Width::Unknown));
-        assert!(Type::BitVector(Width::Unknown) < Type::BitVector(Width::Bits(64)));
-        assert!(Type::Unknown < Type::Int);
-        assert!(Type::Unknown < Type::Bool);
+        assert!(BaseType::Unknown < BaseType::BitVector(Width::Unknown));
+        assert!(BaseType::BitVector(Width::Unknown) < BaseType::BitVector(Width::Bits(64)));
+        assert!(BaseType::Unknown < BaseType::Int);
+        assert!(BaseType::Unknown < BaseType::Bool);
     }
 
     #[test]
     fn test_type_partial_order_properties() {
         assert_partial_order_properties(&[
-            Type::Unknown,
-            Type::BitVector(Width::Unknown),
-            Type::BitVector(Width::Bits(32)),
-            Type::BitVector(Width::Bits(64)),
-            Type::Int,
-            Type::Bool,
+            BaseType::Unknown,
+            BaseType::BitVector(Width::Unknown),
+            BaseType::BitVector(Width::Bits(32)),
+            BaseType::BitVector(Width::Bits(64)),
+            BaseType::Int,
+            BaseType::Bool,
         ]);
     }
 }
