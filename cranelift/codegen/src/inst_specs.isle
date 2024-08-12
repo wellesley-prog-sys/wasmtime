@@ -17,6 +17,7 @@
 (spec (imul x y)
     (provide (= result (bvmul x y))))
 (instantiate imul
+    ((args (bv 32) (bv 32)) (ret (bv 32)))
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
 
