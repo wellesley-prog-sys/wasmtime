@@ -182,7 +182,7 @@ impl<'a> Solver<'a> {
             Expr::BVZeroExt(w, x) => self.bv_zero_ext(w, x),
             Expr::BVSignExt(w, x) => self.bv_sign_ext(w, x),
             Expr::BVConvTo(w, x) => self.bv_conv_to(w, x),
-            Expr::BVExtract(h, l, x) => Ok(self.extend(h, l, self.expr_atom(x))),
+            Expr::BVExtract(h, l, x) => Ok(self.extract(h, l, self.expr_atom(x))),
             Expr::BVConcat(x, y) => Ok(self.smt.concat(self.expr_atom(x), self.expr_atom(y))),
             Expr::Int2BV(w, x) => Ok(self.int2bv(w, self.expr_atom(x))),
             Expr::WidthOf(x) => self.width_of(x),
@@ -267,7 +267,11 @@ impl<'a> Solver<'a> {
                 let padding = self.fresh_bits(dst - src)?;
                 Ok(self.smt.concat(padding, self.expr_atom(x)))
             }
-            Ordering::Less => todo!("conv_to extract"),
+            Ordering::Less => {
+                // QUESTION(mbm): conv_to smaller destination: safe to discard high bits?
+                let high_bit = dst.checked_sub(1).unwrap();
+                Ok(self.extract(high_bit, 0, self.expr_atom(x)))
+            }
             Ordering::Equal => Ok(self.expr_atom(x)),
         }
     }
@@ -325,7 +329,7 @@ impl<'a> Solver<'a> {
         ])
     }
 
-    fn extend(&self, high_bit: usize, low_bit: usize, v: SExpr) -> SExpr {
+    fn extract(&self, high_bit: usize, low_bit: usize, v: SExpr) -> SExpr {
         assert!(low_bit <= high_bit);
         self.smt
             .extract(high_bit.try_into().unwrap(), low_bit.try_into().unwrap(), v)
