@@ -11,7 +11,15 @@
 (type VecMask extern (enum))
 
 (type ValueRegs (primitive ValueRegs))
-(model ValueRegs (type (bv)))
+(model ValueRegs
+      (type
+            (struct
+                  (lo (named Reg))
+                  (hi (named Reg))
+            )
+      )
+)
+
 (type WritableValueRegs (primitive WritableValueRegs))
 
 ;; Instruction lowering result: a vector of `ValueRegs`.
@@ -32,8 +40,10 @@
 
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; REVIEW(mbm): can we assume Reg is 64-bit (for aarch64/x64)?
 (type Reg (primitive Reg))
-(model Reg (type (bv)))
+(model Reg (type (bv 64)))
+
 (type WritableReg (primitive WritableReg))
 (model WritableReg (type (bv)))
 (type OptionWritableReg (primitive OptionWritableReg))
@@ -44,7 +54,7 @@
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
 (spec (value_reg arg)
-    (provide (= result arg)))
+    (provide (= (:lo result) arg)))
 (extern constructor value_reg value_reg)
 
 ;; Construct a `WritableValueRegs` of one register.
@@ -70,7 +80,13 @@
 ;; Construct a single-element `InstOutput`.
 (decl output (ValueRegs) InstOutput)
 (spec (output arg)
-      (provide (= arg (conv_to (widthof arg) result))))
+      (provide
+            (=
+                  (concat (:hi arg) (:lo arg))
+                  (conv_to 128 result)
+            )
+      )
+)
 (extern constructor output output)
 
 ;; Construct a two-element `InstOutput`.
@@ -131,7 +147,9 @@
 ;; As a side effect, this marks the value as used.
 (decl put_in_reg (Value) Reg)
 (spec (put_in_reg arg)
-      (provide (= result (conv_to 64 arg))))
+      (provide (= result (conv_to 64 arg)))
+      (require (<= (widthof arg) 64))
+)
 (extern constructor put_in_reg put_in_reg)
 
 ;; Put the given value into one or more registers.
@@ -139,6 +157,12 @@
 ;; As a side effect, this marks the value as used.
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
+(spec (put_in_regs arg)
+      (provide
+            (= (:lo result) (extract  63  0 (conv_to 128 arg)))
+            (= (:hi result) (extract 127 64 (conv_to 128 arg)))
+      )
+)
 
 ;; If the given reg is a real register, cause the value in reg to be in a virtual
 ;; reg, by copying it into a new virtual reg.
@@ -147,6 +171,14 @@
 
 ;; Get the `n`th register inside a `ValueRegs`.
 (decl value_regs_get (ValueRegs usize) Reg)
+(spec (value_regs_get regs index)
+      (provide
+            (= result (switch index
+                  (0 (:lo regs))
+                  (1 (:hi regs))
+            ))
+      )
+)
 (extern constructor value_regs_get value_regs_get)
 
 ;; Get the number of registers in a `ValueRegs`.
@@ -426,6 +458,22 @@
                      (ProducesFlagsReturnsReg (inst MInst) (result Reg))
                      (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))))
 
+(model ProducesFlags
+      (type
+            (struct
+                  (flags  (named NZCV))
+                  (result (named Reg))
+            )
+      )
+)
+
+(spec (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst reg)
+      (provide
+            (= (:flags result) (:flags_out inst))
+            (= (:result result) reg)
+      )
+)
+
 ;; Chain another producer to a `ProducesFlags`.
 (decl produces_flags_concat (ProducesFlags ProducesFlags) ProducesFlags)
 (rule (produces_flags_concat (ProducesFlags.ProducesFlagsSideEffect inst1) (ProducesFlags.ProducesFlagsSideEffect inst2))
@@ -454,7 +502,21 @@
                                                              (inst4 MInst)
                                                              (result ValueRegs))))
 
+(model ConsumesFlags
+      (type
+            (struct
+                  (flags  (named NZCV))
+                  (result (named Reg))
+            )
+      )
+)
 
+(spec (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer inst reg)
+      (provide
+            (= (:flags result) (:flags_in inst))
+            (= (:result result) reg)
+      )
+)
 
 ;; Get the produced register out of a ProducesFlags.
 (decl produces_flags_get_reg (ProducesFlags) Reg)
@@ -495,6 +557,15 @@
 ;;
 ;; See `with_flags_reg` below for a variant that extracts out just the lower Reg.
 (decl with_flags (ProducesFlags ConsumesFlags) ValueRegs)
+(spec (with_flags producer consumer)
+      (provide
+            ; Transfer flags from producer to consumer.
+            (= (:flags producer) (:flags consumer))
+            ; Construct resulting value registers.
+            (= (:lo result) (:result producer))
+            (= (:hi result) (:result consumer))
+      )
+)
 
 (rule (with_flags (ProducesFlags.ProducesFlagsReturnsResultWithConsumer producer_inst producer_result)
                   (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer consumer_inst consumer_result))

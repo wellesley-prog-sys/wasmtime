@@ -185,7 +185,7 @@ fn verify_expansion_type_instantiation(
     println!("applicability = {applicability}");
     match applicability {
         Applicability::Applicable => (),
-        Applicability::Inapplicable => anyhow::bail!("inapplicable rule"),
+        Applicability::Inapplicable => return Ok(()),
         Applicability::Unknown => anyhow::bail!("could not prove applicability"),
     };
 

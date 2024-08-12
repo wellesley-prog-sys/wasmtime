@@ -24,6 +24,7 @@
 (type u64 (primitive u64))
 (model u64 (type (bv 64)))
 (type u128 (primitive u128))
+(model usize (type Int))
 (type usize (primitive usize))
 
 (type i8 (primitive i8))

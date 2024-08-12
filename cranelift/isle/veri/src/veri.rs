@@ -445,6 +445,9 @@ impl Conditions {
         // Ensure there are no dangling expressions.
         let reachable = self.reachable();
         for x in (0..self.exprs.len()).map(ExprId) {
+            if self.exprs[x.index()].is_variable() {
+                continue;
+            }
             if !reachable.contains(&x) {
                 anyhow::bail!("expression {x} is unreachable", x = x.index());
             }
@@ -878,6 +881,7 @@ impl<'a> ConditionsBuilder<'a> {
     ) -> anyhow::Result<()> {
         match constraint {
             Constraint::Some => self.constraint_some(binding_id),
+            Constraint::ConstPrim { val } => self.const_prim(binding_id, *val),
             _ => todo!("constraint: {constraint:?}"),
         }
     }

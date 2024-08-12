@@ -5,6 +5,7 @@
 (instantiate iadd
     ((args (bv 32) (bv 32)) (ret (bv 32)))
     ((args (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (bv 128) (bv 128)) (ret (bv 128)))
 )
 
 (spec (isub x y)

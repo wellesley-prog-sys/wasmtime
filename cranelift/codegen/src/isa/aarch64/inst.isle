@@ -1001,11 +1001,17 @@
                        (end Reg)
                        (step Imm12))))
 
-(model MInst (type (bv 1)))
+(model MInst
+      (type
+            (struct
+                  (flags_in  (named NZCV))
+                  (flags_out (named NZCV))
+            )
+      )
+)
 
 (spec (MInst.AluRRR alu_op size rd rn rm)
       (provide
-            (= result #b1)
             (=>
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                         (= rd (bvadd rn rm))
@@ -1032,24 +1038,66 @@
                   (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
                         (= rd (bvand rn (bvnot rm)))
             )
+            (=>
+                  (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size64)))
+                        (and
+                              (= rd (bvadd rn rm))
+                              (=
+                                    (:C (:flags_out result))
+                                    (extract 64 64 (bvadd (zero_ext 65 rn) (zero_ext 65 rm)))
+                              )
+                        )
+            )
+            (=>
+                  (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size64)))
+                        (=
+                              rd
+                              (bvadd
+                                    (bvadd rn rm)
+                                    (zero_ext 64 (:C (:flags_in result)))
+                              )
+                        )
+            )
       )
       (require
             (or
+                  ; (Add)
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
-
+                  ; (Sub)
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-
+                  ; (Orr)
+                  ; (OrrNot)
+                  ; (And)
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                  ; (AndS)
+                  ; (AndNot)
                   (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+                  ; (Eor)
+                  ; (EorNot)
+                  ; (AddS)
+                  (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size64)))
+                  ; (SubS)
+                  ; (SMulH)
+                  ; (UMulH)
+                  ; (SDiv)
+                  ; (UDiv)
+                  ; (RotR)
+                  ; (Lsr)
+                  ; (Asr)
+                  ; (Lsl)
+                  ; (Adc)
+                  (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size64)))
+                  ; (AdcS)
+                  ; (Sbc)
+                  ; (SbcS)
             )
       )
 )
 
 (spec (MInst.AluRRImm12 alu_op size rd rn imm12)
       (provide
-            (= result #b1)
             (=>
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                         (= rd (bvadd rn (zero_ext 64 imm12)))
@@ -1087,7 +1135,6 @@
 
 (spec (MInst.AluRRImmLogic alu_op size rd rn imml)
       (provide
-            (= result #b1)
             (=>
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                         (= rd (bvand rn imml))
@@ -1109,8 +1156,6 @@
 
 (spec (MInst.AluRRRR alu_op size rd rn rm ra)
       (provide
-            (= result #b1)
-
             (=>
                   (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
                         (= rd (bvadd ra (bvmul rn rm)))
@@ -1142,7 +1187,6 @@
 
 (spec (MInst.AluRRRShift alu_op size rd rn rm shiftop)
       (provide
-            (= result #b1)
             (=>
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                         (=
@@ -1252,22 +1296,27 @@
     (SbcS)
 ))
 
-(model ALUOp (enum (bv 8)
-      (Add #x00) ;; 0
-      (Sub #x01)
-      (Orr #x02)
-      (OrrNot #x03)
-      (And #x04)
-      (AndNot #x05)
-      (Eor #x06)
-      (EorNot #x07)
-      (SubS #x08)
-      (SDiv #x09)
-      (UDiv #x0a)
-      (RotR #x0b)
-      (Lsr #x0c)
-      (Asr #x0d)
-      (Lsl #x0e)))
+(model ALUOp
+      (enum (bv 8)
+            (Add        #x00)
+            (Sub        #x01)
+            (Orr        #x02)
+            (OrrNot     #x03)
+            (And        #x04)
+            (AndNot     #x05)
+            (Eor        #x06)
+            (EorNot     #x07)
+            (AddS       #x08)
+            (SubS       #x09)
+            (SDiv       #x0a)
+            (UDiv       #x0b)
+            (RotR       #x0c)
+            (Lsr        #x0d)
+            (Asr        #x0e)
+            (Lsl        #x0f)
+            (Adc        #x10)
+      )
+)
 
 ;; An ALU operation with three arguments.
 (type ALUOp3
