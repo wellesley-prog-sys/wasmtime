@@ -1014,10 +1014,16 @@
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
                         (= rd (conv_to 64 (bvadd (extract 31 0 rn) (extract 31 0 rm))))
             )
+
             (=>
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
                         (= rd (bvsub rn rm))
             )
+            (=>
+                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
+                        (= rd (conv_to 64 (bvsub (extract 31 0 rn) (extract 31 0 rm))))
+            )
+
             (=>
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                         (= rd (bvand rn rm))
@@ -1031,7 +1037,10 @@
             (or
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
+
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
+
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
             )
@@ -1049,9 +1058,14 @@
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
                         (= rd (conv_to 64 (bvadd (extract 31 0 rn) (zero_ext 32 imm12))))
             )
+
             (=>
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
                         (= rd (bvsub rn (zero_ext 64 imm12)))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
+                        (= rd (conv_to 64 (bvsub (extract 31 0 rn) (zero_ext 32 imm12))))
             )
       )
       (require
@@ -1059,7 +1073,9 @@
             (or
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
+
                   (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
             )
             ; Imm12 immediate is well-formed.
             (or

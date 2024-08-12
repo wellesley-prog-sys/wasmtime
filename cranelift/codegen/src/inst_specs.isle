@@ -10,6 +10,7 @@
 (spec (isub x y)
     (provide (= result (bvsub x y))))
 (instantiate isub
+    ((args (bv 32) (bv 32)) (ret (bv 32)))
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
 
