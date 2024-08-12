@@ -642,7 +642,11 @@ impl<'a> Parser<'a> {
                 self.expect_rparen()?;
                 Ok(ModelType::Named(name))
             } else {
-                Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()))
+                Err(self.error(
+                    pos,
+                    "Badly formed model: should be BitVector (bv ...) or Struct (struct ...)"
+                        .to_string(),
+                ))
             }
         } else {
             Err(self.error(
