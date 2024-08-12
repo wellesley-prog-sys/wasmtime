@@ -45,11 +45,13 @@
 (spec (band x y)
     (provide (= result (bvand x y))))
 (instantiate band
+    ((args (bv 32) (bv 32)) (ret (bv 32)))
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
 
 (spec (bnot x)
     (provide (= result (bvnot x))))
 (instantiate bnot
+    ((args (bv 32)) (ret (bv 32)))
     ((args (bv 64)) (ret (bv 64)))
 )
