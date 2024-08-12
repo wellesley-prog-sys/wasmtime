@@ -3,7 +3,7 @@ use crate::{
     program::Program,
     spec::{self, Signature},
     trie_again::{binding_type, BindingType},
-    types::{BaseType, Const, Type, Width},
+    types::{Compound, Const, Type, Width},
 };
 use cranelift_isle::{
     ast::Ident,
@@ -155,7 +155,7 @@ pub type Model = HashMap<ExprId, Const>;
 // QUESTION(mbm): does the distinction between expressions and variables make sense?
 #[derive(Debug)]
 pub struct Variable {
-    pub ty: BaseType,
+    pub ty: Type,
     pub name: String,
 }
 
@@ -1062,15 +1062,15 @@ impl<'a> ConditionsBuilder<'a> {
         self.spec_expr(expr, &no_vars)
     }
 
-    fn spec_typed_value(&mut self, val: i128, ty: &BaseType) -> anyhow::Result<ExprId> {
+    fn spec_typed_value(&mut self, val: i128, ty: &Type) -> anyhow::Result<ExprId> {
         match ty {
-            BaseType::Bool => Ok(self.boolean(match val {
+            Type::Bool => Ok(self.boolean(match val {
                 0 => false,
                 1 => true,
                 _ => anyhow::bail!("boolean value must be zero or one"),
             })),
-            BaseType::Int => Ok(self.constant(Const::Int(val))),
-            BaseType::BitVector(Width::Bits(w)) => Ok(self.constant(Const::BitVector(*w, val))),
+            Type::Int => Ok(self.constant(Const::Int(val))),
+            Type::BitVector(Width::Bits(w)) => Ok(self.constant(Const::BitVector(*w, val))),
             _ => anyhow::bail!("cannot construct constant of type {ty}"),
         }
     }
@@ -1246,8 +1246,7 @@ impl<'a> ConditionsBuilder<'a> {
         match binding_type {
             BindingType::Base(type_id) => self.alloc_model(*type_id, name),
             BindingType::Option(inner_type) => {
-                let some =
-                    self.alloc_variable(BaseType::Bool, Variable::component_name(&name, "some"));
+                let some = self.alloc_variable(Type::Bool, Variable::component_name(&name, "some"));
                 let inner = Box::new(
                     self.alloc_binding(inner_type, Variable::component_name(&name, "inner"))?,
                 );
@@ -1269,10 +1268,10 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
-    fn alloc_value(&mut self, ty: &Type, name: String) -> anyhow::Result<Symbolic> {
+    fn alloc_value(&mut self, ty: &Compound, name: String) -> anyhow::Result<Symbolic> {
         match ty {
-            Type::Base(ty) => Ok(Symbolic::Scalar(self.alloc_variable(ty.clone(), name))),
-            Type::Struct(fields) => Ok(Symbolic::Struct(
+            Compound::Primitive(ty) => Ok(Symbolic::Scalar(self.alloc_variable(ty.clone(), name))),
+            Compound::Struct(fields) => Ok(Symbolic::Struct(
                 fields
                     .iter()
                     .map(|f| {
@@ -1284,7 +1283,7 @@ impl<'a> ConditionsBuilder<'a> {
                     })
                     .collect::<anyhow::Result<_>>()?,
             )),
-            Type::Named(type_name) => {
+            Compound::Named(type_name) => {
                 // TODO(mbm): named type model cycle detection
                 // TODO(mbm): type ID lookup should happen in SpecEnv
                 let type_id = self
@@ -1310,7 +1309,7 @@ impl<'a> ConditionsBuilder<'a> {
         self.alloc_value(ty, name)
     }
 
-    fn alloc_variable(&mut self, ty: BaseType, name: String) -> ExprId {
+    fn alloc_variable(&mut self, ty: Type, name: String) -> ExprId {
         let v = VariableId(self.conditions.variables.len());
         self.conditions.variables.push(Variable { ty, name });
         self.dedup_expr(Expr::Variable(v))
