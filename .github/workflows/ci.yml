@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - mbm/x-rule-chaining
+  pull_request:
+    branches:
+      - mbm/x-rule-chaining
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p cranelift-isle -p cranelift-isle-veri
+      - name: Test
+        run: cargo test -p cranelift-isle -p cranelift-isle-veri
