@@ -7,29 +7,39 @@ The syntax for these specs is embedded as an optional extension to ISLE itself: 
 
 [^1]: We have work in progress to lower this annotation burden.
 
-## Running on a file
+## Running on an individual rule
+
+The easiest way to run Crocus on an individual ISLE rule is to give that rule a name. 
+
+You can then invoke the rule with:
+
+```
+
+```
+
+## The annotation language
 
 
 ## Testing
 
-To see an examples of our current output, run tests without capturing standard out:
+To see an all of our current output, run tests without capturing standard out:
 ```bash
 cargo test -- --nocapture
 ```
 
-To run a specific rule, you can provide the test name (most rules are tested in `cranelift/isle/veri/veri_engine/tests/veri.rs`):
+To run a specific rule, you can provide the test name (most rules are tested in `cranelift/isle/veri/veri_engine/tests/veri.rs`). Set `RUST_LOG=DEBUG` to see more detailed output on test cases that expect success.
 
 ```bash
-cargo test test_named_band_64 -- --nocapture  
+RUST_LOG=DEBUG cargo test test_named_band_fits_in_64 -- --nocapture  
 ```
 
 To see the x86-64 CVE repro, run:
 
 ```bash
-cargo run -- --noprelude -t amode_add -i examples/x86/amode_add_uextend_shl.isle
+RUST_LOG=debug cargo run -- --noprelude -t amode_add -i examples/x86/amode_add_uextend_shl.isle
 ```
 
 To see the x86-64 CVE variant with a 32-bit address, run:
 ```bash
-cargo run -- --noprelude -t amode_add -i examples/x86/amode_add_shl.isle
+RUST_LOG=debug cargo run -- --noprelude -t amode_add -i examples/x86/amode_add_shl.isle
 ```
