@@ -6478,6 +6478,32 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::FpuRRRR {
+            fpu_op: FPUOp3::NMAdd,
+            size: ScalarSize::Size64,
+            rd: writable_vreg(15),
+            rn: vreg(30),
+            rm: vreg(31),
+            ra: vreg(1),
+        },
+        "CF077F1F",
+        "fnmadd d15, d30, d31, d1",
+    ));
+
+    insns.push((
+        Inst::FpuRRRR {
+            fpu_op: FPUOp3::NMSub,
+            size: ScalarSize::Size64,
+            rd: writable_vreg(15),
+            rn: vreg(30),
+            rm: vreg(31),
+            ra: vreg(1),
+        },
+        "CF877F1F",
+        "fnmsub d15, d30, d31, d1",
+    ));
+
+    insns.push((
         Inst::FpuRRI {
             fpu_op: FPUOpRI::UShr32(FPURightShiftImm::maybe_from_u8(32, 32).unwrap()),
             rd: writable_vreg(2),
@@ -6700,6 +6726,19 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::FpuLoad16 {
+            rd: writable_vreg(16),
+            mem: AMode::RegScaled {
+                rn: xreg(8),
+                rm: xreg(9),
+            },
+            flags: MemFlags::trusted(),
+        },
+        "1079697C",
+        "ldr h16, [x8, x9, LSL #1]",
+    ));
+
+    insns.push((
         Inst::FpuLoad32 {
             rd: writable_vreg(16),
             mem: AMode::RegScaled {
@@ -6772,6 +6811,19 @@ fn test_aarch64_binemit() {
         },
         "5000009C",
         "ldr q16, pc+8",
+    ));
+
+    insns.push((
+        Inst::FpuStore16 {
+            rd: vreg(16),
+            mem: AMode::RegScaled {
+                rn: xreg(8),
+                rm: xreg(9),
+            },
+            flags: MemFlags::trusted(),
+        },
+        "1079297C",
+        "str h16, [x8, x9, LSL #1]",
     ));
 
     insns.push((
@@ -6971,6 +7023,17 @@ fn test_aarch64_binemit() {
         },
         "F2DB89AC",
         "stp q18, q22, [sp], #304",
+    ));
+
+    insns.push((
+        Inst::FpuCSel16 {
+            rd: writable_vreg(1),
+            rn: vreg(2),
+            rm: vreg(3),
+            cond: Cond::Hi,
+        },
+        "418CE31E",
+        "fcsel h1, h2, h3, hi",
     ));
 
     insns.push((

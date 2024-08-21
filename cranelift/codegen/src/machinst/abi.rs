@@ -70,24 +70,24 @@
 //! SP at function entry ----->  | return address            |
 //!                              +---------------------------+
 //! FP after prologue -------->  | FP (pushed by prologue)   |
-//!                              +---------------------------+   -----
-//!                              |          ...              |     |
-//!                              | clobbered callee-saves    |     |
-//! unwind-frame base -------->  | (pushed by prologue)      |     |
-//!                              +---------------------------+     |
-//!                              |          ...              |     |
-//!                              | spill slots               |     |
-//!                              | (accessed via SP)         |   active
-//!                              |          ...              |    size
-//!                              | stack slots               |     |
-//!                              | (accessed via SP)         |     |
-//!                              | (alloc'd by prologue)     |     |
-//!                              +---------------------------+     |
-//!                              | [alignment as needed]     |     |
-//!                              |          ...              |     |
-//!                              | args for largest call     |     |
-//! SP ----------------------->  | (alloc'd by prologue)     |     |
-//!                              +===========================+   -----
+//!                              +---------------------------+           -----
+//!                              |          ...              |             |
+//!                              | clobbered callee-saves    |             |
+//! unwind-frame base -------->  | (pushed by prologue)      |             |
+//!                              +---------------------------+   -----     |
+//!                              |          ...              |     |       |
+//!                              | spill slots               |     |       |
+//!                              | (accessed via SP)         |   fixed   active
+//!                              |          ...              |   frame    size
+//!                              | stack slots               |  storage    |
+//!                              | (accessed via SP)         |    size     |
+//!                              | (alloc'd by prologue)     |     |       |
+//!                              +---------------------------+   -----     |
+//!                              | [alignment as needed]     |             |
+//!                              |          ...              |             |
+//!                              | args for largest call     |             |
+//! SP ----------------------->  | (alloc'd by prologue)     |             |
+//!                              +===========================+           -----
 //!
 //!   (low address)
 //! ```
@@ -986,6 +986,11 @@ impl FrameLayout {
     pub fn active_size(&self) -> u32 {
         self.outgoing_args_size + self.fixed_frame_storage_size + self.clobber_size
     }
+
+    /// Get the offset from the SP to the sized stack slots area.
+    pub fn sp_to_sized_stack_slots(&self) -> u32 {
+        self.outgoing_args_size
+    }
 }
 
 /// ABI object for a function body.
@@ -1659,38 +1664,6 @@ impl<M: ABIMachineSpec> Callee<M> {
 /// These methods of `Callee` may only be called after
 /// regalloc.
 impl<M: ABIMachineSpec> Callee<M> {
-    /// Generate a stack map, given a list of spillslots and the emission state
-    /// at a given program point (prior to emission of the safepointing
-    /// instruction).
-    pub fn spillslots_to_stack_map(
-        &self,
-        slots: &[SpillSlot],
-        state: &<M::I as MachInstEmit>::State,
-    ) -> StackMap {
-        let frame_layout = state.frame_layout();
-        let outgoing_args_size = frame_layout.outgoing_args_size;
-        let clobbers_and_slots = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
-        trace!(
-            "spillslots_to_stackmap: slots = {:?}, state = {:?}",
-            slots,
-            state
-        );
-        let map_size = outgoing_args_size + clobbers_and_slots;
-        let bytes = M::word_bytes();
-        let map_words = (map_size + bytes - 1) / bytes;
-        let mut bits = std::iter::repeat(false)
-            .take(map_words as usize)
-            .collect::<Vec<bool>>();
-
-        let first_spillslot_word = ((self.stackslots_size + outgoing_args_size) / bytes) as usize;
-        for &slot in slots {
-            let slot = slot.index();
-            bits[first_spillslot_word + slot] = true;
-        }
-
-        StackMap::from_slice(&bits[..])
-    }
-
     /// Compute the final frame layout, post-regalloc.
     ///
     /// This must be called before gen_prologue or gen_epilogue.

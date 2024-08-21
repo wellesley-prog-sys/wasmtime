@@ -1,6 +1,7 @@
 use crate::type_inference::type_rules_with_term_and_types;
 use crate::Config;
-use cranelift_isle as isle;
+use cranelift_isle::error::Errors;
+use cranelift_isle::{self as isle};
 use isle::compile::create_envs;
 use isle::sema::{Pattern, RuleId, TermEnv, TypeEnv};
 use std::collections::HashMap;
@@ -12,15 +13,10 @@ use crate::type_inference::RuleSemantics;
 use crate::{interp::Context, termname::pattern_contains_termname};
 use veri_ir::{ConcreteTest, TermSignature, VerificationResult};
 
-pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config, widths: &Option<Vec<String>>) {
-    let lexer = isle::lexer::Lexer::from_files(&inputs).unwrap();
-
-    // Parses to an AST, as a list of definitions
-    let defs = isle::parser::parse(lexer).expect("should parse");
-
+pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config, widths: &Option<Vec<String>>) -> Result<(), Errors> {
     // Produces environments including terms, rules, and maps from symbols and
     // names to types
-    let (typeenv, termenv) = create_envs(&defs).unwrap();
+    let (typeenv, termenv, defs) = create_envs(inputs).unwrap();
 
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
@@ -77,6 +73,7 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config, widths: &Option<Vec<S
             config,
         );
     }
+    Ok(())
 }
 
 pub fn verify_rules_for_term(

@@ -2,7 +2,6 @@
 
 use cranelift_control::ControlPlane;
 
-use crate::binemit::StackMap;
 use crate::ir::{self, types::*};
 use crate::isa::aarch64::inst::*;
 use crate::trace;
@@ -651,10 +650,6 @@ fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// Safepoint stack map for upcoming instruction, as provided to
-    /// `pre_safepoint()`.
-    stack_map: Option<StackMap>,
-
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
@@ -669,19 +664,13 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            stack_map: None,
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(
-        &mut self,
-        stack_map: Option<StackMap>,
-        user_stack_map: Option<ir::UserStackMap>,
-    ) {
-        self.stack_map = stack_map;
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
         self.user_stack_map = user_stack_map;
     }
 
@@ -699,12 +688,12 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl EmitState {
-    fn take_stack_map(&mut self) -> (Option<StackMap>, Option<ir::UserStackMap>) {
-        (self.stack_map.take(), self.user_stack_map.take())
+    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
+        self.user_stack_map.take()
     }
 
     fn clear_post_insn(&mut self) {
-        self.stack_map = None;
+        self.user_stack_map = None;
     }
 }
 
@@ -958,6 +947,7 @@ impl MachInstEmit for Inst {
             | &Inst::ULoad64 {
                 rd, ref mem, flags, ..
             }
+            | &Inst::FpuLoad16 { rd, ref mem, flags }
             | &Inst::FpuLoad32 { rd, ref mem, flags }
             | &Inst::FpuLoad64 { rd, ref mem, flags }
             | &Inst::FpuLoad128 { rd, ref mem, flags } => {
@@ -983,6 +973,7 @@ impl MachInstEmit for Inst {
                     Inst::ULoad32 { .. } => 0b1011100001,
                     Inst::SLoad32 { .. } => 0b1011100010,
                     Inst::ULoad64 { .. } => 0b1111100001,
+                    Inst::FpuLoad16 { .. } => 0b0111110001,
                     Inst::FpuLoad32 { .. } => 0b1011110001,
                     Inst::FpuLoad64 { .. } => 0b1111110001,
                     Inst::FpuLoad128 { .. } => 0b0011110011,
@@ -1098,6 +1089,7 @@ impl MachInstEmit for Inst {
             | &Inst::Store16 { rd, ref mem, flags }
             | &Inst::Store32 { rd, ref mem, flags }
             | &Inst::Store64 { rd, ref mem, flags }
+            | &Inst::FpuStore16 { rd, ref mem, flags }
             | &Inst::FpuStore32 { rd, ref mem, flags }
             | &Inst::FpuStore64 { rd, ref mem, flags }
             | &Inst::FpuStore128 { rd, ref mem, flags } => {
@@ -1114,6 +1106,7 @@ impl MachInstEmit for Inst {
                     Inst::Store16 { .. } => 0b0111100000,
                     Inst::Store32 { .. } => 0b1011100000,
                     Inst::Store64 { .. } => 0b1111100000,
+                    Inst::FpuStore16 { .. } => 0b0111110000,
                     Inst::FpuStore32 { .. } => 0b1011110000,
                     Inst::FpuStore64 { .. } => 0b1111110000,
                     Inst::FpuStore128 { .. } => 0b0011110010,
@@ -1874,6 +1867,8 @@ impl MachInstEmit for Inst {
                 let top17 = match fpu_op {
                     FPUOp3::MAdd => 0b000_11111_00_0_00000_0,
                     FPUOp3::MSub => 0b000_11111_00_0_00000_1,
+                    FPUOp3::NMAdd => 0b000_11111_00_1_00000_0,
+                    FPUOp3::NMSub => 0b000_11111_00_1_00000_1,
                 };
                 let top17 = top17 | size.ftype() << 7;
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
@@ -2213,6 +2208,9 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_inttofpu(top16, rd, rn));
             }
+            &Inst::FpuCSel16 { rd, rn, rm, cond } => {
+                sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size16));
+            }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
                 sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size32));
             }
@@ -2234,6 +2232,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovToFpu { rd, rn, size } => {
                 let template = match size {
+                    ScalarSize::Size16 => 0b000_11110_11_1_00_111_000000_00000_00000,
                     ScalarSize::Size32 => 0b000_11110_00_1_00_111_000000_00000_00000,
                     ScalarSize::Size64 => 0b100_11110_01_1_00_111_000000_00000_00000,
                     _ => unreachable!(),
@@ -2241,14 +2240,9 @@ impl MachInstEmit for Inst {
                 sink.put4(template | (machreg_to_gpr(rn) << 5) | machreg_to_vec(rd.to_reg()));
             }
             &Inst::FpuMoveFPImm { rd, imm, size } => {
-                let size_code = match size {
-                    ScalarSize::Size32 => 0b00,
-                    ScalarSize::Size64 => 0b01,
-                    _ => unimplemented!(),
-                };
                 sink.put4(
                     0b000_11110_00_1_00_000_000100_00000_00000
-                        | size_code << 22
+                        | size.ftype() << 22
                         | ((imm.enc_bits() as u32) << 13)
                         | machreg_to_vec(rd.to_reg()),
                 );
@@ -2930,10 +2924,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::Call { ref info } => {
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
+                let user_stack_map = state.take_stack_map();
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
                 if let Some(s) = user_stack_map {
@@ -2951,10 +2942,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::CallInd { ref info } => {
-                let (stack_map, user_stack_map) = state.take_stack_map();
-                if let Some(s) = stack_map {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
+                let user_stack_map = state.take_stack_map();
                 let rn = info.rn;
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
                 if let Some(s) = user_stack_map {

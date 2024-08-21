@@ -111,5 +111,6 @@ fn main() -> anyhow::Result<()> {
         custom_assumptions: None,
     };
 
-    Ok(verify_rules(inputs, &config, &args.widths))
+    verify_rules(inputs, &config, &args.widths)
+    .map_err(|e| anyhow::anyhow!("failed to compile ISLE: {:?}", e))
 }

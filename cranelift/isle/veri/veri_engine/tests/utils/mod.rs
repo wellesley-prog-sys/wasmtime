@@ -106,9 +106,7 @@ pub fn custom_result(f: &TestResultBuilder) -> Vec<(Bitwidth, VerificationResult
 }
 
 fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) -> () {
-    let lexer = cranelift_isle::lexer::Lexer::from_files(&inputs).unwrap();
-    let defs = cranelift_isle::parser::parse(lexer).expect("should parse");
-    let (typeenv, termenv) = create_envs(&defs).unwrap();
+    let (typeenv, termenv, defs) = create_envs(inputs).unwrap();
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     let term_signatures = annotation_env
@@ -272,10 +270,7 @@ pub fn test_concrete_aarch64_rule_with_lhs_termname(
         rulename, termname
     );
     let inputs = get_isle_files("aarch64");
-
-    let lexer = cranelift_isle::lexer::Lexer::from_files(&inputs).unwrap();
-    let defs = cranelift_isle::parser::parse(lexer).expect("should parse");
-    let (typeenv, termenv) = create_envs(&defs).unwrap();
+    let (typeenv, termenv, defs) = create_envs(inputs).unwrap();
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     let config = Config {
@@ -319,9 +314,7 @@ pub fn test_concrete_input_from_file_with_lhs_termname(
     let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
 
-    let lexer = cranelift_isle::lexer::Lexer::from_files(&inputs).unwrap();
-    let defs = cranelift_isle::parser::parse(lexer).expect("should parse");
-    let (typeenv, termenv) = create_envs(&defs).unwrap();
+    let (typeenv, termenv, defs) = create_envs(inputs).unwrap();
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     let config = Config {

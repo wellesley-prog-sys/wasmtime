@@ -164,9 +164,9 @@ pub(crate) fn emit(
             let mut rex = RexFlags::from(*size);
             let (opcode_r, opcode_m, subopcode_i) = match op {
                 AluRmiROpcode::Add => (0x01, 0x03, 0),
-                AluRmiROpcode::Adc => (0x11, 0x03, 2),
+                AluRmiROpcode::Adc => (0x11, 0x13, 2),
                 AluRmiROpcode::Sub => (0x29, 0x2B, 5),
-                AluRmiROpcode::Sbb => (0x19, 0x2B, 3),
+                AluRmiROpcode::Sbb => (0x19, 0x1B, 3),
                 AluRmiROpcode::And => (0x21, 0x23, 4),
                 AluRmiROpcode::Or => (0x09, 0x0B, 1),
                 AluRmiROpcode::Xor => (0x31, 0x33, 6),
@@ -1598,11 +1598,7 @@ pub(crate) fn emit(
             info: call_info,
             ..
         } => {
-            let (stack_map, user_stack_map) = state.take_stack_map();
-            if let Some(s) = stack_map {
-                sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
-            }
-            if let Some(s) = user_stack_map {
+            if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset() + 5;
                 sink.push_user_stack_map(state, offset, s);
             }
@@ -1670,7 +1666,6 @@ pub(crate) fn emit(
         } => {
             let dest = dest.clone();
 
-            let start_offset = sink.cur_offset();
             match dest {
                 RegMem::Reg { reg } => {
                     let reg_enc = int_reg_enc(reg);
@@ -1700,11 +1695,7 @@ pub(crate) fn emit(
                 }
             }
 
-            let (stack_map, user_stack_map) = state.take_stack_map();
-            if let Some(s) = stack_map {
-                sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
-            }
-            if let Some(s) = user_stack_map {
+            if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
             }

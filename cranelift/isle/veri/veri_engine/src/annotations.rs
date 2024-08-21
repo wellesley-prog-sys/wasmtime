@@ -2,7 +2,7 @@ use cranelift_isle::ast::{self, Signature};
 use std::collections::HashMap;
 use veri_ir::annotation_ir;
 
-use cranelift_isle::ast::{Defs, Ident, Model, ModelType, SpecExpr, SpecOp};
+use cranelift_isle::ast::{Def, Ident, Model, ModelType, SpecExpr, SpecOp};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle::sema::{TermEnv, TermId, TypeEnv, TypeId};
 use veri_ir::annotation_ir::Width;
@@ -344,7 +344,7 @@ fn signature_to_term_type_signature(sig: &Signature) -> TermTypeSignature {
     }
 }
 
-pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> AnnotationEnv {
+pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> AnnotationEnv {
     let mut annotation_map = HashMap::new();
     let mut model_map = HashMap::new();
 
@@ -354,7 +354,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
     };
 
     // Traverse models to process spec annotations for enums
-    for def in &defs.defs {
+    for def in defs {
         match def {
             &ast::Def::Model(Model { ref name, ref val }) => match val {
                 ast::ModelValue::TypeValue(model_type) => {
@@ -405,7 +405,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
     }
 
     // Traverse defs to process spec annotations
-    for def in &defs.defs {
+    for def in defs {
         match def {
             &ast::Def::Spec(ref spec) => {
                 let term_id = termenv.get_term_by_name(typeenv, &spec.term).unwrap();
@@ -449,7 +449,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
 
     // Collect term instantiations.
     let mut forms_map = HashMap::new();
-    for def in &defs.defs {
+    for def in defs {
         match def {
             &ast::Def::Form(ref form) => {
                 let term_type_signatures: Vec<_> = form
@@ -464,7 +464,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
     }
 
     let mut instantiations_map = HashMap::new();
-    for def in &defs.defs {
+    for def in defs {
         match def {
             &ast::Def::Instantiation(ref inst) => {
                 let term_id = termenv.get_term_by_name(typeenv, &inst.term).unwrap();

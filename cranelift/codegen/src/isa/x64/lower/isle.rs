@@ -2,7 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::{ir::types, ir::AtomicRmwOp, isa, isle_common_prelude_methods};
+use crate::{ir::types, ir::AtomicRmwOp, isa};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -331,8 +331,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
-        let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
+        if let Some(inst) = self.is_sinkable_inst(val) {
             if let Some((addr_input, offset)) =
                 is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Min32)
             {
@@ -347,8 +346,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn sinkable_load_exact(&mut self, val: Value) -> Option<SinkableLoad> {
-        let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
+        if let Some(inst) = self.is_sinkable_inst(val) {
             if let Some((addr_input, offset)) =
                 is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Exact)
             {

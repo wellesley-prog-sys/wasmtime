@@ -1,5 +1,4 @@
 FROM almalinux:8
 
-RUN dnf install -y git gcc make cmake
-
-ENV PATH=$PATH:/rust/bin
+RUN dnf install -y git gcc make cmake git
+RUN git config --global --add safe.directory '*'

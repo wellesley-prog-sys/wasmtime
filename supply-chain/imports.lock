@@ -145,6 +145,10 @@ audited_as = "0.110.1"
 version = "0.112.0"
 audited_as = "0.110.1"
 
+[[unpublished.pulley-interpreter]]
+version = "0.1.0"
+audited_as = "0.0.0"
+
 [[unpublished.wasi-common]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -289,6 +293,10 @@ audited_as = "23.0.1"
 version = "25.0.0"
 audited_as = "23.0.1"
 
+[[unpublished.wasmtime-wasi-keyvalue]]
+version = "25.0.0"
+audited_as = "24.0.0"
+
 [[unpublished.wasmtime-wasi-nn]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -296,6 +304,10 @@ audited_as = "23.0.1"
 [[unpublished.wasmtime-wasi-nn]]
 version = "25.0.0"
 audited_as = "23.0.1"
+
+[[unpublished.wasmtime-wasi-runtime-config]]
+version = "25.0.0"
+audited_as = "24.0.0"
 
 [[unpublished.wasmtime-wasi-threads]]
 version = "24.0.0"
@@ -810,6 +822,13 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.pulley-interpreter]]
+version = "0.0.0"
+when = "2024-07-30"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
 [[publisher.quote]]
 version = "1.0.36"
 when = "2024-04-10"
@@ -945,6 +964,13 @@ user-name = "Dan Gohman"
 [[publisher.tar]]
 version = "0.4.40"
 when = "2023-08-07"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.tar]]
+version = "0.4.41"
+when = "2024-06-04"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1210,9 +1236,21 @@ when = "2024-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmtime-wasi-keyvalue]]
+version = "24.0.0"
+when = "2024-08-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmtime-wasi-nn]]
 version = "23.0.1"
 when = "2024-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-runtime-config]]
+version = "24.0.0"
+when = "2024-08-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1316,6 +1354,13 @@ user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
 [[publisher.windows-core]]
+version = "0.52.0"
+when = "2023-11-15"
+user-id = 64539
+user-login = "kennykerr"
+user-name = "Kenny Kerr"
+
+[[publisher.windows-interface]]
 version = "0.52.0"
 when = "2023-11-15"
 user-id = 64539
@@ -1474,6 +1519,12 @@ when = "2024-08-02"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen]]
+version = "0.30.0"
+when = "2024-08-12"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-core]]
 version = "0.28.0"
 when = "2024-07-16"
@@ -1483,6 +1534,12 @@ user-login = "wasmtime-publish"
 [[publisher.wit-bindgen-core]]
 version = "0.29.0"
 when = "2024-08-02"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-bindgen-core]]
+version = "0.30.0"
+when = "2024-08-12"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1498,6 +1555,12 @@ when = "2024-08-02"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen-rt]]
+version = "0.30.0"
+when = "2024-08-12"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-rust]]
 version = "0.28.0"
 when = "2024-07-16"
@@ -1510,6 +1573,12 @@ when = "2024-08-02"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen-rust]]
+version = "0.30.0"
+when = "2024-08-12"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-rust-macro]]
 version = "0.28.0"
 when = "2024-07-16"
@@ -1519,6 +1588,12 @@ user-login = "wasmtime-publish"
 [[publisher.wit-bindgen-rust-macro]]
 version = "0.29.0"
 when = "2024-08-02"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-bindgen-rust-macro]]
+version = "0.30.0"
+when = "2024-08-12"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1675,6 +1750,21 @@ who = "George Burgess IV <gbiv@google.com>"
 criteria = "safe-to-deploy"
 version = "0.9.4"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.isrg.audits.base64]]
+who = "Tim Geoghegan <timg@letsencrypt.org>"
+criteria = "safe-to-deploy"
+delta = "0.21.0 -> 0.21.1"
+
+[[audits.isrg.audits.base64]]
+who = "Brandon Pitman <bran@bran.land>"
+criteria = "safe-to-deploy"
+delta = "0.21.1 -> 0.21.2"
+
+[[audits.isrg.audits.base64]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+delta = "0.21.2 -> 0.21.3"
 
 [[audits.isrg.audits.block-buffer]]
 who = "David Cook <dcook@divviup.org>"
@@ -1884,6 +1974,13 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.9.0 -> 2.0.0"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.flate2]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.28 -> 1.0.30"
+notes = "Some new unsafe code, however it has been verified and there are unit tests as well."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.fnv]]

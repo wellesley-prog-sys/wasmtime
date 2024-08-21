@@ -12,7 +12,6 @@ use crate::isa::s390x::inst::{
     UImm16Shifted, UImm32Shifted, WritableRegPair,
 };
 use crate::isa::s390x::S390xBackend;
-use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
 use crate::machinst::{MachLabel, Reg};
 use crate::{
@@ -1050,11 +1049,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn sinkable_inst(&mut self, val: Value) -> Option<Inst> {
-        let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let Some((inst, 0)) = input.inst.as_inst() {
-            return Some(inst);
-        }
-        None
+        self.is_sinkable_inst(val)
     }
 
     #[inline]
