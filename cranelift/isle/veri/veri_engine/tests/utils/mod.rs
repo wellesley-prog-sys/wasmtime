@@ -39,7 +39,7 @@ pub fn get_isle_files(name: &str) -> Vec<std::path::PathBuf> {
     INIT.call_once(|| {
         // Logger
         env_logger::init();
-        // Test directory 
+        // Test directory
         if !gen_dir.is_dir() {
             std::fs::create_dir(gen_dir.as_path()).unwrap();
         }
@@ -60,7 +60,6 @@ pub fn get_isle_files(name: &str) -> Vec<std::path::PathBuf> {
             // Lookup ISLE shared .
             let compilations =
                 get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
-            
 
             // Return inputs from the matching compilation, if any.
             let mut inputs = compilations.lookup(name).unwrap().inputs();

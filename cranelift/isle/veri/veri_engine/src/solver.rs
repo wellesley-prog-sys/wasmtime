@@ -1831,7 +1831,8 @@ pub fn run_solver_with_static_widths(
     config: &Config,
 ) -> VerificationResult {
     let unnamed_rule = String::from("<unnamed rule>");
-    let rulename = rule.name
+    let rulename = rule
+        .name
         .map(|name| &typeenv.syms[name.index()])
         .unwrap_or(&unnamed_rule);
     // Declare variables again, this time with all static widths

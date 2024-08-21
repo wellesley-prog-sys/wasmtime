@@ -66,9 +66,9 @@ impl Args {
         };
 
         let mut inputs = compilations
-        .lookup(name)
-        .ok_or(anyhow::format_err!("unknown ISLE compilation: {}", name))?
-        .inputs();
+            .lookup(name)
+            .ok_or(anyhow::format_err!("unknown ISLE compilation: {}", name))?
+            .inputs();
         inputs.push(inst_specs_isle);
 
         // Return inputs from the matching compilation, if any.
@@ -116,5 +116,5 @@ fn main() -> anyhow::Result<()> {
     };
 
     verify_rules(inputs, &config, &args.widths)
-    .map_err(|e| anyhow::anyhow!("failed to compile ISLE: {:?}", e))
+        .map_err(|e| anyhow::anyhow!("failed to compile ISLE: {:?}", e))
 }

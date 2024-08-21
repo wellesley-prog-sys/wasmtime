@@ -13,7 +13,11 @@ use crate::type_inference::RuleSemantics;
 use crate::{interp::Context, termname::pattern_contains_termname};
 use veri_ir::{ConcreteTest, TermSignature, VerificationResult};
 
-pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config, widths: &Option<Vec<String>>) -> Result<(), Errors> {
+pub fn verify_rules(
+    inputs: Vec<PathBuf>,
+    config: &Config,
+    widths: &Option<Vec<String>>,
+) -> Result<(), Errors> {
     // Produces environments including terms, rules, and maps from symbols and
     // names to types
     let (typeenv, termenv, defs) = create_envs(inputs).unwrap();

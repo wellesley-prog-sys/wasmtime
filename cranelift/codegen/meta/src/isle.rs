@@ -67,9 +67,6 @@ pub fn get_isle_compilations(
     let prelude_opt_isle = codegen_crate_dir.join("src").join("prelude_opt.isle");
     let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");
 
-    // Shared lower preludes
-    let shared_lower = shared_isle_lower_paths(codegen_crate_dir);
-
     // Directory for mid-end optimizations.
     let src_opts = codegen_crate_dir.join("src").join("opts");
 
