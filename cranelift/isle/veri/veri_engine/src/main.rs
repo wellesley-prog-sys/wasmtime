@@ -2,11 +2,10 @@
 
 use clap::{ArgAction, Parser};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use std::{env, fs};
 use std::path::PathBuf;
+use std::{env, fs};
 use veri_engine_lib::verify::verify_rules;
-use veri_engine_lib::{Config};
-
+use veri_engine_lib::Config;
 
 #[derive(Parser)]
 #[clap(about, version, author)]
@@ -68,12 +67,8 @@ impl Args {
         // Return inputs from the matching compilation, if any.
         Ok(compilations
             .lookup(name)
-            .ok_or(anyhow::format_err!(
-                "unknown ISLE compilation: {}",
-                name
-            ))?
+            .ok_or(anyhow::format_err!("unknown ISLE compilation: {}", name))?
             .inputs())
-
     }
 }
 
@@ -92,7 +87,9 @@ fn main() -> anyhow::Result<()> {
     }
 
     let inputs = if args.noprelude {
-        vec![PathBuf::from(args.input.expect("Missing input file in noprelude mode"))]
+        vec![PathBuf::from(
+            args.input.expect("Missing input file in noprelude mode"),
+        )]
     } else {
         args.isle_input_files()?
     };

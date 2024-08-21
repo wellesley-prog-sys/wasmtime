@@ -1,5 +1,8 @@
+use cranelift_codegen_meta::{
+    generate_isle,
+    isle::{get_isle_compilations, shared_isle_lower_paths},
+};
 use cranelift_isle::compile::create_envs;
-use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use std::env;
 use std::path::PathBuf;
 use strum::IntoEnumIterator;
@@ -26,17 +29,37 @@ pub enum TestResult {
 
 type TestResultBuilder = dyn Fn(Bitwidth) -> (Bitwidth, VerificationResult);
 
-
 use std::sync::Once;
 
 static INIT: Once = Once::new();
 
-pub fn initialize() {
+pub fn get_isle_files(name: &str) -> Vec<std::path::PathBuf> {
+    let cur_dir = env::current_dir().expect("Can't access current working directory");
+    let gen_dir = cur_dir.join("test_output");
     INIT.call_once(|| {
-        let cur_dir = env::current_dir().expect("Can't access current working directory");
-        let gen_dir = cur_dir.join("test_output");
+        // Logger
+        env_logger::init();
+        // Generate ISLE files.
         generate_isle(gen_dir.as_path()).expect("Can't generate ISLE");
     });
+
+    let codegen_crate_dir = cur_dir.join("../../../codegen");
+
+    match name {
+        "shared_lower" => {
+            let mut shared = shared_isle_lower_paths(codegen_crate_dir.as_path());
+            shared.push(gen_dir.join("clif_lower.isle"));
+            return shared;
+        }
+        _ => {
+            // Lookup ISLE shared .
+            let compilations =
+                get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
+
+            // Return inputs from the matching compilation, if any.
+            compilations.lookup(name).unwrap().inputs()
+        }
+    }
 }
 
 // Some examples of functions we might need
@@ -151,15 +174,7 @@ pub fn test_from_file_with_lhs_termname_simple(
 
 pub fn test_from_file_with_lhs_termname(file: &str, termname: String, tr: TestResult) -> () {
     println!("Verifying {} rules in file: {}", termname, file);
-    // TODO: clean up path logic
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
-    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let prelude_lower_isle = cur_dir
-        .join("../../../codegen/src")
-        .join("prelude_lower.isle");
-    let mut inputs = vec![prelude_isle, prelude_lower_isle, clif_isle];
-    inputs.push(build_clif_lower_isle());
+    let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
     let config = Config {
         term: termname,
@@ -181,18 +196,7 @@ pub fn test_aarch64_rule_with_lhs_termname_simple(
 
 pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) -> () {
     println!("Verifying rule `{}` with termname {} ", rulename, termname);
-    // TODO: clean up path logic
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let gen_dir = cur_dir.join("test_output");
-    let codegen_crate_dir = cur_dir.join("../../../codegen/src");
-
-    // Lookup ISLE compilations.
-    let compilations = get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
-
-    // Return inputs from the matching compilation, if any.
-    let inputs = compilations.lookup("aarch64").unwrap().inputs();
-
-
+    let inputs = get_isle_files("aarch64");
     let config = Config {
         term: termname.to_string(),
         distinct_check: true,
@@ -213,30 +217,7 @@ pub fn test_x64_rule_with_lhs_termname_simple(
 
 pub fn test_x64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) -> () {
     println!("Verifying rule `{}` with termname {} ", rulename, termname);
-    // TODO(mbm): dedupe with aarch64
-    // TODO(mbm): share configuration with cranelift/codegen/build.rs (or export it as part of build)
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
-    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let prelude_lower_isle = cur_dir
-        .join("../../../codegen/src")
-        .join("prelude_lower.isle");
-    let mut inputs = vec![
-        build_clif_lower_isle(),
-        prelude_isle,
-        prelude_lower_isle,
-        clif_isle,
-    ];
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/x64")
-            .join("inst.isle"),
-    );
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/x64")
-            .join("lower.isle"),
-    );
+    let inputs = get_isle_files("x64");
     let config = Config {
         term: termname.to_string(),
         distinct_check: true,
@@ -256,19 +237,7 @@ pub fn test_from_file_with_config_simple(
 }
 pub fn test_from_file_with_config(file: &str, config: Config, tr: TestResult) -> () {
     println!("Verifying {} rules in file: {}", config.term, file);
-    // TODO: clean up path logic
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
-    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let prelude_lower_isle = cur_dir
-        .join("../../../codegen/src")
-        .join("prelude_lower.isle");
-    let mut inputs = vec![
-        build_clif_lower_isle(),
-        prelude_isle,
-        prelude_lower_isle,
-        clif_isle,
-    ];
+    let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
     test_rules_with_term(inputs, tr, config);
 }
@@ -285,29 +254,7 @@ pub fn test_aarch64_with_config(config: Config, tr: TestResult) -> () {
         "Verifying rules {:?} with termname {}",
         config.names, config.term
     );
-    // TODO: clean up path logic
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
-    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let prelude_lower_isle = cur_dir
-        .join("../../../codegen/src")
-        .join("prelude_lower.isle");
-    let mut inputs = vec![
-        build_clif_lower_isle(),
-        prelude_isle,
-        prelude_lower_isle,
-        clif_isle,
-    ];
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/aarch64")
-            .join("inst.isle"),
-    );
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/aarch64")
-            .join("lower.isle"),
-    );
+    let inputs = get_isle_files("aarch64");
     test_rules_with_term(inputs, tr, config);
 }
 
@@ -320,29 +267,7 @@ pub fn test_concrete_aarch64_rule_with_lhs_termname(
         "Verifying concrete input rule `{}` with termname {} ",
         rulename, termname
     );
-    // TODO: clean up path logic
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
-    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let prelude_lower_isle = cur_dir
-        .join("../../../codegen/src")
-        .join("prelude_lower.isle");
-    let mut inputs = vec![
-        build_clif_lower_isle(),
-        prelude_isle,
-        prelude_lower_isle,
-        clif_isle,
-    ];
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/aarch64")
-            .join("inst.isle"),
-    );
-    inputs.push(
-        cur_dir
-            .join("../../../codegen/src/isa/aarch64")
-            .join("lower.isle"),
-    );
+    let inputs = get_isle_files("aarch64");
 
     let lexer = cranelift_isle::lexer::Lexer::from_files(&inputs).unwrap();
     let defs = cranelift_isle::parser::parse(lexer).expect("should parse");
@@ -387,19 +312,7 @@ pub fn test_concrete_input_from_file_with_lhs_termname(
         "Verifying concrete input {} rule in file: {}",
         termname, file
     );
-    // TODO: clean up path logic
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
-    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let prelude_lower_isle = cur_dir
-        .join("../../../codegen/src")
-        .join("prelude_lower.isle");
-    let mut inputs = vec![
-        build_clif_lower_isle(),
-        prelude_isle,
-        prelude_lower_isle,
-        clif_isle,
-    ];
+    let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
 
     let lexer = cranelift_isle::lexer::Lexer::from_files(&inputs).unwrap();

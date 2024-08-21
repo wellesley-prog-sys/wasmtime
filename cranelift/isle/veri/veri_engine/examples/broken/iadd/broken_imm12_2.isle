@@ -32,7 +32,6 @@
 (decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
 (extern constructor alu_rr_imm12 alu_rr_imm12)
 
-;; Note that 4095 = 0xfff and 16773120 = 0xfff000
 (spec (imm12_from_value arg)
       (provide
             (= result (conv_to (widthof result) (zero_ext 64 arg)))

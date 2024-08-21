@@ -1830,7 +1830,10 @@ pub fn run_solver_with_static_widths(
     concrete: &Option<ConcreteTest>,
     config: &Config,
 ) -> VerificationResult {
-    let rulename = &typeenv.syms[rule.name.unwrap().index()];
+    let unnamed_rule = String::from("<unnamed rule>");
+    let rulename = rule.name
+        .map(|name| &typeenv.syms[name.index()])
+        .unwrap_or(&unnamed_rule);
     // Declare variables again, this time with all static widths
     let mut solver = easy_smt::ContextBuilder::new()
         .replay_file(Some(std::fs::File::create("static_widths.smt2").unwrap()))
@@ -2012,14 +2015,14 @@ pub fn run_solver_with_static_widths(
 
     match ctx.smt.check() {
         Ok(Response::Sat) => {
-            log::error!("Verification failed for {}", rulename);
+            println!("Verification failed for {}", rulename);
             ctx.display_model(termenv, typeenv, rule, lhs, rhs);
             let vals = ctx.smt.get_value(vec![condition]).unwrap();
             for (variable, value) in vals {
                 if value == ctx.smt.false_() {
-                    log::error!("Failed condition:\n{}", ctx.smt.display(variable));
+                    println!("Failed condition:\n{}", ctx.smt.display(variable));
                 } else if value == ctx.smt.true_() {
-                    log::error!("Condition met, but failed some assertion(s).")
+                    println!("Condition met, but failed some assertion(s).")
                 }
             }
 
@@ -2027,7 +2030,7 @@ pub fn run_solver_with_static_widths(
                 let vals = ctx.smt.get_value(assertions).unwrap();
                 for (variable, value) in vals {
                     if value == ctx.smt.false_() {
-                        log::error!("Failed assertion:\n{}", ctx.smt.display(variable));
+                        println!("Failed assertion:\n{}", ctx.smt.display(variable));
                     }
                 }
             }

@@ -26,8 +26,8 @@
          (64 (bvand x (zero_ext 64 y))))))
   (require
       (or
-            (= y (bvand y #x000fff))
-            (= y (bvand y #xfff000)))))
+            (= y (bvand y #x0000000000000fff))
+            (= y (bvand y #x0000000000fff000)))))
 (decl and_imm (Type Reg ImmLogic) Reg)
 (extern constructor and_imm and_imm)
 
@@ -51,7 +51,6 @@
 (decl rotr_mask (Type) ImmLogic)
 (extern constructor rotr_mask rotr_mask)
 
-;; Note that 4094 = 0xffe and 16773119 = 0xffefff
 (spec (sub_imm ty a b)
   (provide
     (= result
