@@ -200,6 +200,10 @@ pub struct TermEnv {
     /// defined implicit type-converter terms we can try to use to fit
     /// types together.
     pub converters: StableMap<(TypeId, TypeId), TermId>,
+
+    /// Flag for whether to expand internal extractors in the
+    /// translation from the AST to sema.
+    pub expand_internal_extractors: bool,
 }
 
 /// A term.
@@ -484,6 +488,8 @@ pub struct Rule {
     pub prio: i64,
     /// The source position where this rule is defined.
     pub pos: Pos,
+    /// The optional name for this rule.
+    pub name: Option<Sym>,
 }
 
 /// A name bound in a pattern or let-expression.
@@ -1115,7 +1121,8 @@ impl TypeEnv {
         self.sym_map.get(&ident.0).copied()
     }
 
-    fn get_type_by_name(&self, sym: &ast::Ident) -> Option<TypeId> {
+    /// Lookup type by name.
+    pub fn get_type_by_name(&self, sym: &ast::Ident) -> Option<TypeId> {
         self.intern(sym)
             .and_then(|sym| self.type_map.get(&sym))
             .copied()
@@ -1169,12 +1176,17 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv, Errors> {
+    pub fn from_ast(
+        tyenv: &mut TypeEnv,
+        defs: &ast::Defs,
+        expand_internal_extractors: bool,
+    ) -> Result<TermEnv, Errors> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
             rules: vec![],
             converters: StableMap::new(),
+            expand_internal_extractors,
         };
 
         env.collect_pragmas(defs);
@@ -1774,6 +1786,7 @@ impl TermEnv {
                         vars: bindings.seen,
                         prio,
                         pos,
+                        name: rule.name.as_ref().map(|i| tyenv.intern_mut(i)),
                     });
                 }
                 _ => {}
@@ -2028,13 +2041,15 @@ impl TermEnv {
                         extractor_kind: Some(ExtractorKind::InternalExtractor { ref template }),
                         ..
                     } => {
-                        // Expand the extractor macro! We create a map
-                        // from macro args to AST pattern trees and
-                        // then evaluate the template with these
-                        // substitutions.
-                        log!("internal extractor macro args = {:?}", args);
-                        let pat = template.subst_macro_args(&args)?;
-                        return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
+                        if self.expand_internal_extractors {
+                            // Expand the extractor macro! We create a map
+                            // from macro args to AST pattern trees and
+                            // then evaluate the template with these
+                            // substitutions.
+                            log!("internal extractor macro args = {:?}", args);
+                            let pat = template.subst_macro_args(&args)?;
+                            return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
+                        }
                     }
                     TermKind::Decl {
                         extractor_kind: None,
@@ -2389,7 +2404,8 @@ impl TermEnv {
         Some(IfLet { lhs, rhs })
     }
 
-    fn get_term_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<TermId> {
+    /// Lookup term by name.
+    pub fn get_term_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<TermId> {
         tyenv
             .intern(sym)
             .and_then(|sym| self.term_map.get(&sym))
