@@ -48,20 +48,24 @@ pub fn get_isle_files(name: &str) -> Vec<std::path::PathBuf> {
     });
 
     let codegen_crate_dir = cur_dir.join("../../../codegen");
+    let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
 
     match name {
         "shared_lower" => {
             let mut shared = shared_isle_lower_paths(codegen_crate_dir.as_path());
             shared.push(gen_dir.join("clif_lower.isle"));
-            return shared;
+            shared
         }
         _ => {
             // Lookup ISLE shared .
             let compilations =
                 get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
+            
 
             // Return inputs from the matching compilation, if any.
-            compilations.lookup(name).unwrap().inputs()
+            let mut inputs = compilations.lookup(name).unwrap().inputs();
+            inputs.push(inst_specs_isle);
+            inputs
         }
     }
 }

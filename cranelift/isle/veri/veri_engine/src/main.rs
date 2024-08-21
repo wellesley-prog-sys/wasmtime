@@ -54,6 +54,7 @@ impl Args {
         generate_isle(gen_dir.as_path()).expect("Can't generate ISLE");
 
         let codegen_crate_dir = cur_dir.join("../../../codegen");
+        let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
 
         // Lookup ISLE compilations.
         let compilations = get_isle_compilations(codegen_crate_dir.as_path(), gen_dir.as_path());
@@ -64,11 +65,14 @@ impl Args {
             _ => panic!("aarch64 of x64 backend must be provided"),
         };
 
+        let mut inputs = compilations
+        .lookup(name)
+        .ok_or(anyhow::format_err!("unknown ISLE compilation: {}", name))?
+        .inputs();
+        inputs.push(inst_specs_isle);
+
         // Return inputs from the matching compilation, if any.
-        Ok(compilations
-            .lookup(name)
-            .ok_or(anyhow::format_err!("unknown ISLE compilation: {}", name))?
-            .inputs())
+        Ok(inputs)
     }
 }
 

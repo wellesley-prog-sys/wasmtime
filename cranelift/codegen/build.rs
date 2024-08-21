@@ -166,7 +166,7 @@ fn build_isle(
 
     let mut had_error = false;
     for compilation in &isle_compilations.items {
-        for file in &compilation.tracked_inputs {
+        for file in &compilation.inputs {
             println!("cargo:rerun-if-changed={}", file.display());
         }
 
@@ -204,7 +204,7 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
 
     let code = {
         let file_paths = compilation
-            .tracked_inputs
+            .inputs
             .iter()
             .chain(compilation.untracked_inputs.iter());
 
