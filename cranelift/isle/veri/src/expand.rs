@@ -149,8 +149,8 @@ pub struct Expander<'a> {
     term_rule_sets: &'a HashMap<TermId, RuleSet>,
     reach: Reachability<'a>,
 
-    /// Terms which can be considered for inlining.
-    inlineable: HashSet<TermId>,
+    /// Terms which can be considered for chaining.
+    chainable: HashSet<TermId>,
 
     /// Whether to drop expansions as soon as they are deemed to be infeasible.
     prune_infeasible: bool,
@@ -168,7 +168,7 @@ impl<'a> Expander<'a> {
             prog,
             term_rule_sets,
             reach: Reachability::build(term_rule_sets),
-            inlineable: HashSet::new(),
+            chainable: HashSet::new(),
             prune_infeasible: true,
             stack: Vec::new(),
             complete: Vec::new(),
@@ -223,19 +223,19 @@ impl<'a> Expander<'a> {
         self.prune_infeasible = enabled;
     }
 
-    /// Marks term ID as inlinable.
-    pub fn inline(&mut self, term_id: TermId) {
-        // Must be inlineable.
-        assert!(self.may_inline(term_id));
+    /// Marks term ID as chainable.
+    pub fn chain(&mut self, term_id: TermId) {
+        // Must be chainable.
+        assert!(self.may_chain(term_id));
 
-        // Add to inlineable set.
-        self.inlineable.insert(term_id);
+        // Add to chainable set.
+        self.chainable.insert(term_id);
     }
 
-    /// Reports whether the given term can be inlined. Internal acyclic
-    /// constructors can be inlined.
-    pub fn may_inline(&mut self, term_id: TermId) -> bool {
-        // Internal constructors are supported for inlining.
+    /// Reports whether the given term can be chained. Internal acyclic
+    /// constructors can be chained.
+    pub fn may_chain(&mut self, term_id: TermId) -> bool {
+        // Internal constructors are supported for chaining.
         let term = self.prog.term(term_id);
         if !term.has_constructor() {
             return false;
@@ -245,7 +245,7 @@ impl<'a> Expander<'a> {
             return false;
         }
 
-        // Cyclic terms cannot be inlined.
+        // Cyclic terms cannot be chained.
         if self.reach.is_cyclic(term_id) {
             return false;
         }
@@ -253,12 +253,12 @@ impl<'a> Expander<'a> {
         true
     }
 
-    /// Mark all possible terms as candidates for inlining, provided they have
+    /// Mark all possible terms as candidates for chaining, provided they have
     /// at most the given number of rules (0 for no limit) and are not in an
     /// explicit exclusion set.
-    pub fn enable_maximal_inlining(&mut self, max_rules: usize, exclude: &HashSet<TermId>) {
+    pub fn enable_maximal_chaining(&mut self, max_rules: usize, exclude: &HashSet<TermId>) {
         for (term_id, rule_set) in self.term_rule_sets {
-            // HACK(mbm): merge these heuristics with may_inline
+            // HACK(mbm): merge these heuristics with may_chain
             if max_rules > 0 && rule_set.rules.len() > max_rules {
                 continue;
             }
@@ -267,9 +267,9 @@ impl<'a> Expander<'a> {
                 continue;
             }
 
-            // Mark inlinable, provided it meets base requirements.
-            if self.may_inline(*term_id) {
-                self.inline(*term_id);
+            // Mark chainable, provided it meets base requirements.
+            if self.may_chain(*term_id) {
+                self.chain(*term_id);
             }
         }
     }
@@ -290,14 +290,14 @@ impl<'a> Expander<'a> {
     }
 
     fn extend(&mut self, expansion: Expansion) {
-        // Look for a candidate for inlining. If none, we're done.
-        let Some(inline_binding_id) = self.inline_candidate(&expansion) else {
+        // Look for a candidate for chaining. If none, we're done.
+        let Some(chain_binding_id) = self.chain_candidate(&expansion) else {
             self.finish(expansion);
             return;
         };
 
-        // Inline constructor.
-        let binding = &expansion.bindings[inline_binding_id.index()];
+        // Chain constructor.
+        let binding = &expansion.bindings[chain_binding_id.index()];
         let Some(Binding::Constructor {
             term, parameters, ..
         }) = binding
@@ -308,18 +308,18 @@ impl<'a> Expander<'a> {
         let rule_set = &self.term_rule_sets[term];
         for rule in rule_set.rules.iter().rev() {
             let mut apply = Application::new(expansion.clone());
-            let inlined = apply.rule(rule_set, rule, parameters, inline_binding_id);
-            if !self.prune_infeasible || inlined.is_feasible() {
-                self.stack.push(inlined);
+            let chained = apply.rule(rule_set, rule, parameters, chain_binding_id);
+            if !self.prune_infeasible || chained.is_feasible() {
+                self.stack.push(chained);
             }
         }
     }
 
-    // Look for a binding that could be inlined, if any.
-    fn inline_candidate(&self, expansion: &Expansion) -> Option<BindingId> {
+    // Look for a binding that could be chained, if any.
+    fn chain_candidate(&self, expansion: &Expansion) -> Option<BindingId> {
         for (i, binding) in expansion.bindings.iter().enumerate() {
             match binding {
-                Some(Binding::Constructor { term, .. }) if self.inlineable.contains(term) => {
+                Some(Binding::Constructor { term, .. }) if self.chainable.contains(term) => {
                     return Some(i.try_into().unwrap());
                 }
                 _ => continue,
@@ -545,11 +545,11 @@ impl Reindex {
 pub struct ExpansionsBuilder<'a> {
     prog: &'a Program,
     root: TermId,
-    inline: Vec<TermId>,
+    chain: Vec<TermId>,
     prune_infeasible: bool,
-    maximal_inlining: bool,
+    maximal_chaining: bool,
     max_rules: usize,
-    exclude_inline: HashSet<TermId>,
+    exclude_chain: HashSet<TermId>,
 }
 
 impl<'a> ExpansionsBuilder<'a> {
@@ -561,26 +561,26 @@ impl<'a> ExpansionsBuilder<'a> {
         Ok(Self {
             prog,
             root,
-            inline: Vec::new(),
+            chain: Vec::new(),
             prune_infeasible: true,
-            maximal_inlining: false,
+            maximal_chaining: false,
             max_rules: 0,
-            exclude_inline: HashSet::new(),
+            exclude_chain: HashSet::new(),
         })
     }
 
-    pub fn inline_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+    pub fn chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
         let term_id = self
             .prog
             .get_term_by_name(term_name)
             .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
-        self.inline.push(term_id);
+        self.chain.push(term_id);
         Ok(())
     }
 
-    pub fn inline_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+    pub fn chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
         for term_name in term_names {
-            self.inline_term(term_name)?;
+            self.chain_term(term_name)?;
         }
         Ok(())
     }
@@ -589,26 +589,26 @@ impl<'a> ExpansionsBuilder<'a> {
         self.prune_infeasible = enabled;
     }
 
-    pub fn set_maximal_inlining(&mut self, enabled: bool) {
-        self.maximal_inlining = enabled;
+    pub fn set_maximal_chaining(&mut self, enabled: bool) {
+        self.maximal_chaining = enabled;
     }
 
     pub fn set_max_rules(&mut self, max_rules: usize) {
         self.max_rules = max_rules;
     }
 
-    pub fn exclude_inline_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+    pub fn exclude_chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
         let term_id = self
             .prog
             .get_term_by_name(term_name)
             .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
-        self.exclude_inline.insert(term_id);
+        self.exclude_chain.insert(term_id);
         Ok(())
     }
 
-    pub fn exclude_inline_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+    pub fn exclude_chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
         for term_name in term_names {
-            self.exclude_inline_term(term_name)?;
+            self.exclude_chain_term(term_name)?;
         }
         Ok(())
     }
@@ -619,12 +619,12 @@ impl<'a> ExpansionsBuilder<'a> {
         expander.constructor(self.root);
         expander.set_prune_infeasible(self.prune_infeasible);
 
-        for inline_term_id in self.inline {
-            expander.inline(inline_term_id);
+        for chain_term_id in self.chain {
+            expander.chain(chain_term_id);
         }
 
-        if self.maximal_inlining {
-            expander.enable_maximal_inlining(self.max_rules, &self.exclude_inline);
+        if self.maximal_chaining {
+            expander.enable_maximal_chaining(self.max_rules, &self.exclude_chain);
         }
 
         expander.expand();

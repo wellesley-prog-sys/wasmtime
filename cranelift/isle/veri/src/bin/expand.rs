@@ -30,21 +30,21 @@ struct Opts {
     #[arg(long)]
     no_prune_infeasible: bool,
 
-    /// Term names to inline.
+    /// Term names to chain.
     #[arg(long, value_name = "TERM_NAME")]
-    inline: Vec<String>,
+    chain: Vec<String>,
 
-    /// Whether to enable maximal inlining.
+    /// Whether to enable maximal chaining.
     #[arg(long)]
-    maximal_inlining: bool,
+    maximal_chaining: bool,
 
-    /// Maximum rules: only inline terms with at most this many rules.
+    /// Maximum rules: only chain terms with at most this many rules.
     #[arg(long, default_value = "0")]
     max_rules: usize,
 
-    /// Terms to exclude from inlining.
+    /// Terms to exclude from chaining.
     #[arg(long, value_name = "TERM_NAME")]
-    exclude_inline: Vec<String>,
+    exclude_chain: Vec<String>,
 }
 
 impl Opts {
@@ -78,14 +78,14 @@ fn main() -> anyhow::Result<()> {
     let mut expansions_builder = ExpansionsBuilder::new(&prog, &opts.term_name)?;
     expansions_builder.set_prune_infeasible(!opts.no_prune_infeasible);
 
-    // Configure inline terms.
-    expansions_builder.inline_term(&opts.term_name)?;
-    expansions_builder.inline_terms(&opts.inline)?;
+    // Configure chained terms.
+    expansions_builder.chain_term(&opts.term_name)?;
+    expansions_builder.chain_terms(&opts.chain)?;
 
-    // Configure maximal inlining.
-    expansions_builder.set_maximal_inlining(opts.maximal_inlining);
+    // Configure maximal chaining.
+    expansions_builder.set_maximal_chaining(opts.maximal_chaining);
     expansions_builder.set_max_rules(opts.max_rules);
-    expansions_builder.exclude_inline_terms(&opts.exclude_inline)?;
+    expansions_builder.exclude_chain_terms(&opts.exclude_chain)?;
 
     // Report.
     let expansions = expansions_builder.expansions()?;

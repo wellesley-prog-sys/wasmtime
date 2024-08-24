@@ -37,9 +37,9 @@ struct Opts {
     #[arg(long, default_value = "0")]
     max_rules: usize,
 
-    /// Terms to exclude from inlining.
+    /// Terms to exclude from chaining.
     #[arg(long, value_name = "TERM_NAME")]
-    exclude_inline: Vec<String>,
+    exclude_chain: Vec<String>,
 }
 
 impl Opts {
@@ -85,7 +85,7 @@ fn main() -> anyhow::Result<()> {
     if opts.max_rules > 0 {
         expansion_counter.set_max_rules(opts.max_rules);
     }
-    for exclude_term_name in &opts.exclude_inline {
+    for exclude_term_name in &opts.exclude_chain {
         let exclude_term_id = prog
             .get_term_by_name(exclude_term_name)
             .ok_or(anyhow::format_err!("unknown term {exclude_term_name}"))?;

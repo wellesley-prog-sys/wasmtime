@@ -15,5 +15,5 @@ count \
     --name "aarch64" \
     --term-name lower \
     --max-rules 3 \
-    --exclude-inline operand_size \
+    --exclude-chain operand_size \
     > "output/aarch64_lower.count"
