@@ -13,6 +13,7 @@ pub enum Def {
     Rule(Rule),
     Extractor(Extractor),
     Decl(Decl),
+    Attr(Attr),
     Spec(Spec),
     Model(Model),
     Form(Form),
@@ -90,6 +91,25 @@ pub struct Decl {
     /// Whether this term's constructor can fail to match.
     pub partial: bool,
     pub pos: Pos,
+}
+
+/// An attribute applied to a declaration.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Attr {
+    pub term: Ident,
+    pub kinds: Vec<AttrKind>,
+    pub pos: Pos,
+}
+
+/// A kind of attribute that can be applied to a declaration.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum AttrKind {
+    /// In verification, apply rule chaining to this term.
+    ///
+    /// A term marked for chaining may omit a specification. Instead, all
+    /// possible applications of rules to this term will be generated and
+    /// verified.
+    Chain,
 }
 
 /// An expression used to specify term semantics, similar to SMT-LIB syntax.

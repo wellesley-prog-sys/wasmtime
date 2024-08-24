@@ -3443,6 +3443,7 @@
 ;; instruction depending on the input. Note that this requires that the `ALUOp`
 ;; specified is commutative.
 (decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
+(attr alu_rs_imm_logic_commutative chain)
 
 ;; Base case of operating on registers.
 (rule -1 (alu_rs_imm_logic_commutative op ty x y)

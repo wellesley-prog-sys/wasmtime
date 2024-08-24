@@ -163,6 +163,7 @@ impl<'a> Parser<'a> {
             "pragma" => Def::Pragma(self.parse_pragma()?),
             "type" => Def::Type(self.parse_type()?),
             "decl" => Def::Decl(self.parse_decl()?),
+            "attr" => Def::Attr(self.parse_attr()?),
             "spec" => Def::Spec(self.parse_spec()?),
             "model" => Def::Model(self.parse_model()?),
             "form" => Def::Form(self.parse_form()?),
@@ -337,6 +338,25 @@ impl<'a> Parser<'a> {
             partial,
             pos,
         })
+    }
+
+    fn parse_attr(&mut self) -> Result<Attr> {
+        let pos = self.pos();
+        let term = self.parse_ident()?;
+        let mut kinds = Vec::new();
+        while !self.is_rparen() {
+            let sym = self.expect_symbol()?;
+            kinds.push(self.parse_attr_kind(sym.as_str())?);
+        }
+        Ok(Attr { term, kinds, pos })
+    }
+
+    fn parse_attr_kind(&mut self, s: &str) -> Result<AttrKind> {
+        let pos = self.pos();
+        match s {
+            "chain" => Ok(AttrKind::Chain),
+            x => Err(self.error(pos, format!("Not a valid attribute: {x}"))),
+        }
     }
 
     fn parse_spec(&mut self) -> Result<Spec> {
