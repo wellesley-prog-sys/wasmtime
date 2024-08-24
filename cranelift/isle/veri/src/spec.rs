@@ -103,6 +103,8 @@ pub enum Expr {
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
     // Switch
     Switch(Box<Expr>, Vec<(Expr, Expr)>),
+    // Let bindings
+    Let(Vec<(Ident, Expr)>, Box<Expr>),
 }
 
 macro_rules! unary_expr {
@@ -294,6 +296,14 @@ impl Expr {
                 }
                 _ => todo!("ast spec op: {op:?}"),
             },
+            ast::SpecExpr::Let { defs, body, pos: _ } => {
+                let defs = defs
+                    .iter()
+                    .map(|(ident, x)| (ident.clone(), Expr::from_ast(x)))
+                    .collect();
+                let body = Box::new(Expr::from_ast(body));
+                Expr::Let(defs, body)
+            }
             ast::SpecExpr::Pair { l, r, pos: _ } => {
                 // QUESTION(mbm): is there a cleaner way to handle switch statements without the pair type?
                 unreachable!(

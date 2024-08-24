@@ -425,6 +425,20 @@ impl<'a> Parser<'a> {
                     args,
                     pos,
                 })
+            } else if self.eat_sym_str("let")? {
+                let mut defs = Vec::new();
+                self.expect_lparen()?;
+                while !(self.is_rparen()) {
+                    self.expect_lparen()?;
+                    let ident = self.parse_ident()?;
+                    let x = self.parse_spec_expr()?;
+                    self.expect_rparen()?;
+                    defs.push((ident, x));
+                }
+                self.expect_rparen()?;
+                let body = Box::new(self.parse_spec_expr()?);
+                self.expect_rparen()?;
+                Ok(SpecExpr::Let { defs, body, pos })
             } else if self.is_sym() && !self.is_spec_bit_vector() {
                 let sym_pos = self.pos();
                 let sym = self.expect_symbol()?;

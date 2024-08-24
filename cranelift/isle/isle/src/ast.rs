@@ -128,6 +128,12 @@ pub enum SpecExpr {
         args: Vec<SpecExpr>,
         pos: Pos,
     },
+    /// Let bindings.
+    Let {
+        defs: Vec<(Ident, SpecExpr)>,
+        body: Box<SpecExpr>,
+        pos: Pos,
+    },
     /// Pairs, currently used for switch statements.
     Pair {
         l: Box<SpecExpr>,
@@ -150,6 +156,7 @@ impl SpecExpr {
             | &Self::Var { pos, .. }
             | &Self::Field { pos, .. }
             | &Self::Op { pos, .. }
+            | &Self::Let { pos, .. }
             | &Self::Pair { pos, .. }
             | &Self::Enum { pos, .. } => pos,
         }

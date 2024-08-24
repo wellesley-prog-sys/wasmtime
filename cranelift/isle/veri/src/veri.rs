@@ -11,7 +11,7 @@ use cranelift_isle::{
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     iter::zip,
 };
 
@@ -1020,6 +1020,8 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::Switch(on, arms) => self.spec_switch(on, arms, vars),
 
+            spec::Expr::Let(defs, body) => self.spec_let(defs, body, vars),
+
             spec::Expr::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
@@ -1153,6 +1155,30 @@ impl<'a> ConditionsBuilder<'a> {
             .rev()
             .cloned()
             .try_fold(last, |acc, (cond, then)| self.conditional(cond, then, acc))
+    }
+
+    fn spec_let(
+        &mut self,
+        defs: &[(Ident, spec::Expr)],
+        body: &spec::Expr,
+        vars: &HashMap<String, Symbolic>,
+    ) -> anyhow::Result<Symbolic> {
+        // Evaluate let defs.
+        let mut let_vars = vars.clone();
+        for (name, expr) in defs {
+            let expr = self.spec_expr(expr, &let_vars)?;
+            match let_vars.entry(name.0.clone()) {
+                Entry::Occupied(_) => {
+                    anyhow::bail!("let expression shadows variable {name}", name = name.0)
+                }
+                Entry::Vacant(e) => {
+                    e.insert(expr);
+                }
+            }
+        }
+
+        // Evaluate body in let-binding scope.
+        self.spec_expr(body, &let_vars)
     }
 
     fn conditional(&mut self, c: ExprId, t: Symbolic, e: Symbolic) -> anyhow::Result<Symbolic> {
