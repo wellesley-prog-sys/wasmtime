@@ -400,6 +400,17 @@ impl Term {
         )
     }
 
+    /// Is this term's constructor internal?
+    pub fn has_internal_constructor(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::Decl {
+                constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
+                ..
+            }
+        )
+    }
+
     /// Get this term's extractor's external function signature, if any.
     pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {

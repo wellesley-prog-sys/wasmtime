@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle_veri::debug::print_expansion;
-use cranelift_isle_veri::expand::ExpansionsBuilder;
+use cranelift_isle_veri::expand::{Chaining, Expander};
 use cranelift_isle_veri::program::Program;
 
 #[derive(Parser)]
@@ -74,22 +76,24 @@ fn main() -> anyhow::Result<()> {
     let inputs = opts.isle_input_files()?;
     let prog = Program::from_files(&inputs, !opts.no_expand_internal_extractors)?;
 
+    // Configure chaining.
+    let term_rule_sets: HashMap<_, _> = prog.build_trie()?.into_iter().collect();
+    let mut chaining = Chaining::new(&prog, &term_rule_sets)?;
+    chaining.chain_terms(&opts.chain)?;
+    chaining.set_default(opts.maximal_chaining);
+    chaining.set_max_rules(opts.max_rules);
+    chaining.exclude_chain_terms(&opts.exclude_chain)?;
+
     // Build expansions.
-    let mut expansions_builder = ExpansionsBuilder::new(&prog, &opts.term_name)?;
-    expansions_builder.set_prune_infeasible(!opts.no_prune_infeasible);
-
-    // Configure chained terms.
-    expansions_builder.chain_terms(&opts.chain)?;
-
-    // Configure maximal chaining.
-    expansions_builder.set_maximal_chaining(opts.maximal_chaining);
-    expansions_builder.set_max_rules(opts.max_rules);
-    expansions_builder.exclude_chain_terms(&opts.exclude_chain)?;
+    let mut expander = Expander::new(&prog, &term_rule_sets, chaining);
+    expander.add_root_term_name(&opts.term_name)?;
+    expander.set_prune_infeasible(!opts.no_prune_infeasible);
+    expander.expand();
 
     // Report.
-    let expansions = expansions_builder.expansions()?;
+    let expansions = expander.expansions();
     println!("expansions = {}", expansions.len());
-    for expansion in &expansions {
+    for expansion in expansions {
         print_expansion(&prog, expansion);
     }
 

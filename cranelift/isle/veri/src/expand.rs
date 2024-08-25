@@ -1,11 +1,10 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-
 use crate::{program::Program, reachability::Reachability};
 use cranelift_isle::{
     disjointsets::DisjointSets,
     sema::{RuleId, TermId},
     trie_again::{Binding, BindingId, Constraint, Rule, RuleSet},
 };
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub struct Expansion {
@@ -155,6 +154,145 @@ impl Expansion {
     }
 }
 
+/// Chaining configuration.
+pub struct Chaining<'a> {
+    prog: &'a Program,
+    term_rule_sets: &'a HashMap<TermId, RuleSet>,
+    reach: Reachability<'a>,
+    exclude: HashSet<TermId>,
+    include: HashSet<TermId>,
+    max_rules: usize,
+    default: bool,
+}
+
+impl<'a> Chaining<'a> {
+    pub fn new(
+        prog: &'a Program,
+        term_rule_sets: &'a HashMap<TermId, RuleSet>,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            prog,
+            term_rule_sets,
+            reach: Reachability::build(term_rule_sets),
+            include: HashSet::new(),
+            exclude: HashSet::new(),
+            max_rules: 0,
+            default: false,
+        })
+    }
+
+    pub fn chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+        let term_id = self
+            .prog
+            .get_term_by_name(term_name)
+            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+        self.include.insert(term_id);
+        Ok(())
+    }
+
+    pub fn chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+        for term_name in term_names {
+            self.chain_term(term_name)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_max_rules(&mut self, max_rules: usize) {
+        self.max_rules = max_rules;
+    }
+
+    pub fn exclude_chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+        let term_id = self
+            .prog
+            .get_term_by_name(term_name)
+            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+        self.exclude.insert(term_id);
+        Ok(())
+    }
+
+    pub fn exclude_chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+        for term_name in term_names {
+            self.exclude_chain_term(term_name)?;
+        }
+        Ok(())
+    }
+
+    /// Configure whether terms should be considered for chaining by default, if
+    /// no other rules apply.
+    pub fn set_default(&mut self, default: bool) {
+        self.default = default;
+    }
+
+    /// Report whether the term has expansions.
+    ///
+    /// From the point of view of the expansion graph, this means the term is
+    /// not a leaf node.  Therefore, we can either apply chaining or produce
+    /// expansions rooted at this term.
+    pub fn is_expandable(&self, term_id: TermId) -> bool {
+        // Is it an internal constructor?
+        let term = self.prog.term(term_id);
+        if !term.has_internal_constructor() {
+            return false;
+        }
+
+        // Term should have rules.
+        if self.num_rules(term_id) == 0 {
+            return false;
+        }
+
+        true
+    }
+
+    /// Reports whether the given term can be chained.
+    ///
+    /// Terms can be chained if they are expandable and acyclic.
+    pub fn is_chainable(&mut self, term_id: TermId) -> bool {
+        // At minimum, it should be a term that has expansions.
+        if !self.is_expandable(term_id) {
+            return false;
+        }
+
+        // Cyclic terms cannot be chained.
+        if self.reach.is_cyclic(term_id) {
+            return false;
+        }
+
+        true
+    }
+
+    pub fn should_chain(&mut self, term_id: TermId) -> bool {
+        // Check baseline requirements.
+        if !self.is_chainable(term_id) {
+            return false;
+        }
+
+        // Explicit exclusions.
+        if self.exclude.contains(&term_id) {
+            return false;
+        }
+
+        // Explicit inclusions.
+        if self.include.contains(&term_id) {
+            return true;
+        }
+
+        // Max rules threshold, if set.
+        if self.max_rules > 0 && self.num_rules(term_id) > self.max_rules {
+            return false;
+        }
+
+        // Default fallback.
+        self.default
+    }
+
+    fn num_rules(&self, term_id: TermId) -> usize {
+        self.term_rule_sets
+            .get(&term_id)
+            .map(|rule_set| rule_set.rules.len())
+            .unwrap_or_default()
+    }
+}
+
 /// Partially completed expansion.
 struct Partial {
     /// Current state of the expansion.
@@ -167,10 +305,9 @@ struct Partial {
 pub struct Expander<'a> {
     prog: &'a Program,
     term_rule_sets: &'a HashMap<TermId, RuleSet>,
-    reach: Reachability<'a>,
 
-    /// Terms which can be considered for chaining.
-    chainable: HashSet<TermId>,
+    /// Chaining configuration: which terms should be chained.
+    chaining: Chaining<'a>,
 
     /// Whether to drop expansions as soon as they are deemed to be infeasible.
     prune_infeasible: bool,
@@ -186,17 +323,30 @@ pub struct Expander<'a> {
 }
 
 impl<'a> Expander<'a> {
-    pub fn new(prog: &'a Program, term_rule_sets: &'a HashMap<TermId, RuleSet>) -> Self {
+    pub fn new(
+        prog: &'a Program,
+        term_rule_sets: &'a HashMap<TermId, RuleSet>,
+        chaining: Chaining<'a>,
+    ) -> Self {
         Self {
             prog,
             term_rule_sets,
-            reach: Reachability::build(term_rule_sets),
-            chainable: HashSet::new(),
+            chaining,
             prune_infeasible: true,
             stack: Vec::new(),
             roots: HashSet::new(),
             complete: Vec::new(),
         }
+    }
+
+    /// Add the given named term as an expansion root.
+    pub fn add_root_term_name(&mut self, term_name: &str) -> anyhow::Result<()> {
+        let term_id = self
+            .prog
+            .get_term_by_name(term_name)
+            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+        self.add_root(term_id);
+        Ok(())
     }
 
     /// Add the given term as an expansion root. That is, start expanding rules
@@ -268,74 +418,6 @@ impl<'a> Expander<'a> {
         self.prune_infeasible = enabled;
     }
 
-    /// Marks term ID as chainable.
-    pub fn chain(&mut self, term_id: TermId) {
-        // Must be chainable.
-        assert!(self.may_chain(term_id));
-
-        // Add to chainable set.
-        self.chainable.insert(term_id);
-    }
-
-    /// Reports whether the given term can be chained. Internal acyclic
-    /// constructors can be chained.
-    pub fn may_chain(&mut self, term_id: TermId) -> bool {
-        // Internal constructors are supported for chaining.
-        if !self.is_internal_constructor(term_id) {
-            return false;
-        }
-
-        // Cyclic terms cannot be chained.
-        if self.reach.is_cyclic(term_id) {
-            return false;
-        }
-
-        true
-    }
-
-    /// Report whether the term is an internal constructor.
-    ///
-    /// From the point of view of the expansion graph, this means the term is
-    /// not a leaf node.  Therefore, we can either apply chaining or initiate
-    /// another root of expansion.
-    fn is_internal_constructor(&mut self, term_id: TermId) -> bool {
-        // Is it an internal constructor?
-        let term = self.prog.term(term_id);
-        if !term.has_constructor() {
-            return false;
-        }
-
-        if term.has_external_constructor() {
-            return false;
-        }
-
-        // Expect that the term should have rules.
-        assert!(self.term_rule_sets[&term_id].rules.len() > 0);
-
-        return true;
-    }
-
-    /// Mark all possible terms as candidates for chaining, provided they have
-    /// at most the given number of rules (0 for no limit) and are not in an
-    /// explicit exclusion set.
-    pub fn enable_maximal_chaining(&mut self, max_rules: usize, exclude: &HashSet<TermId>) {
-        for (term_id, rule_set) in self.term_rule_sets {
-            // HACK(mbm): merge these heuristics with may_chain
-            if max_rules > 0 && rule_set.rules.len() > max_rules {
-                continue;
-            }
-
-            if exclude.contains(term_id) {
-                continue;
-            }
-
-            // Mark chainable, provided it meets base requirements.
-            if self.may_chain(*term_id) {
-                self.chain(*term_id);
-            }
-        }
-    }
-
     fn finish(&mut self, expansion: Expansion) {
         // Cascade into any remaining constructors.
         //
@@ -343,7 +425,7 @@ impl<'a> Expander<'a> {
         // order to consider rules that apply to these terms, we need to
         // initiate expansion from them as root terms.
         for (_, term_id) in expansion.constructor_bindings() {
-            if self.is_internal_constructor(term_id) {
+            if self.chaining.is_expandable(term_id) {
                 self.add_root(term_id);
             }
         }
@@ -399,7 +481,7 @@ impl<'a> Expander<'a> {
         };
 
         let rule_set = &self.term_rule_sets[term];
-        assert!(rule_set.rules.len() > 0);
+        assert!(!rule_set.rules.is_empty());
         for rule in rule_set.rules.iter().rev() {
             let mut apply = Application::new(expansion.clone());
             let chained = apply.rule(rule_set, rule, parameters, chain_binding_id);
@@ -413,11 +495,17 @@ impl<'a> Expander<'a> {
     }
 
     // Identify bindings that could be chained.
-    fn chain_candidates(&self, expansion: &Expansion) -> Vec<BindingId> {
+    fn chain_candidates(&mut self, expansion: &Expansion) -> Vec<BindingId> {
         expansion
             .constructor_bindings()
             .iter()
-            .filter_map(|(binding_id, term_id)| self.chainable.get(term_id).and(Some(*binding_id)))
+            .filter_map(|(binding_id, term_id)| {
+                if self.chaining.should_chain(*term_id) {
+                    Some(*binding_id)
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 }
@@ -632,96 +720,5 @@ impl Reindex {
 
             Binding::Iterator { .. } => unimplemented!("iterator bindings not supported"),
         }
-    }
-}
-
-pub struct ExpansionsBuilder<'a> {
-    prog: &'a Program,
-    root: TermId,
-    chain: Vec<TermId>,
-    prune_infeasible: bool,
-    maximal_chaining: bool,
-    max_rules: usize,
-    exclude_chain: HashSet<TermId>,
-}
-
-impl<'a> ExpansionsBuilder<'a> {
-    pub fn new(prog: &'a Program, root_name: &str) -> anyhow::Result<Self> {
-        let root = prog
-            .get_term_by_name(root_name)
-            .ok_or(anyhow::format_err!("unknown term {}", root_name))?;
-
-        Ok(Self {
-            prog,
-            root,
-            chain: Vec::new(),
-            prune_infeasible: true,
-            maximal_chaining: false,
-            max_rules: 0,
-            exclude_chain: HashSet::new(),
-        })
-    }
-
-    pub fn chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
-        let term_id = self
-            .prog
-            .get_term_by_name(term_name)
-            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
-        self.chain.push(term_id);
-        Ok(())
-    }
-
-    pub fn chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
-        for term_name in term_names {
-            self.chain_term(term_name)?;
-        }
-        Ok(())
-    }
-
-    pub fn set_prune_infeasible(&mut self, enabled: bool) {
-        self.prune_infeasible = enabled;
-    }
-
-    pub fn set_maximal_chaining(&mut self, enabled: bool) {
-        self.maximal_chaining = enabled;
-    }
-
-    pub fn set_max_rules(&mut self, max_rules: usize) {
-        self.max_rules = max_rules;
-    }
-
-    pub fn exclude_chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
-        let term_id = self
-            .prog
-            .get_term_by_name(term_name)
-            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
-        self.exclude_chain.insert(term_id);
-        Ok(())
-    }
-
-    pub fn exclude_chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
-        for term_name in term_names {
-            self.exclude_chain_term(term_name)?;
-        }
-        Ok(())
-    }
-
-    pub fn expansions(self) -> anyhow::Result<Vec<Expansion>> {
-        let term_rule_sets: HashMap<_, _> = self.prog.build_trie()?.into_iter().collect();
-        let mut expander = Expander::new(self.prog, &term_rule_sets);
-        expander.constructor(self.root);
-        expander.set_prune_infeasible(self.prune_infeasible);
-
-        for chain_term_id in self.chain {
-            expander.chain(chain_term_id);
-        }
-
-        if self.maximal_chaining {
-            expander.enable_maximal_chaining(self.max_rules, &self.exclude_chain);
-        }
-
-        expander.expand();
-
-        Ok(expander.expansions().clone())
     }
 }

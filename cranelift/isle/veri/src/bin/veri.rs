@@ -3,12 +3,13 @@ use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::sema::Rule;
 use cranelift_isle_veri::{
     debug::print_expansion,
-    expand::{Expansion, ExpansionsBuilder},
+    expand::{Chaining, Expander, Expansion},
     program::Program,
     solver::{Applicability, Solver, Verification},
     type_inference::{self, type_constraint_system, Assignment},
     veri::Conditions,
 };
+use std::collections::HashMap;
 
 #[derive(Parser)]
 struct Opts {
@@ -65,6 +66,7 @@ fn main() -> anyhow::Result<()> {
     let inputs = opts.isle_input_files()?;
     let expand_internal_extractors = false;
     let prog = Program::from_files(&inputs, expand_internal_extractors)?;
+    let term_rule_sets: HashMap<_, _> = prog.build_trie()?.into_iter().collect();
 
     // Lookup named target rule, if any.
     let target = if let Some(id) = opts.rule {
@@ -78,16 +80,20 @@ fn main() -> anyhow::Result<()> {
 
     // Generate expansions.
     // TODO(mbm): don't hardcode the expansion configuration
-    let root_term = "lower";
-    let mut expansions_builder = ExpansionsBuilder::new(&prog, root_term)?;
-    expansions_builder.set_maximal_chaining(true);
-    expansions_builder.set_max_rules(6);
-    expansions_builder.exclude_chain_term("operand_size")?;
+    let mut chaining = Chaining::new(&prog, &term_rule_sets)?;
+    chaining.set_default(true);
+    chaining.set_max_rules(6);
+    chaining.exclude_chain_term("operand_size")?;
+
+    let mut expander = Expander::new(&prog, &term_rule_sets, chaining);
+    expander.add_root_term_name("lower")?;
+    expander.set_prune_infeasible(true);
+    expander.expand();
 
     // Process expansions.
-    let expansions = expansions_builder.expansions()?;
+    let expansions = expander.expansions();
     println!("expansions = {}", expansions.len());
-    for expansion in &expansions {
+    for expansion in expansions {
         if !should_verify(expansion, target, &prog) {
             continue;
         }

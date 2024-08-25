@@ -1,6 +1,11 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle_veri::{expand::ExpansionsBuilder, explorer::ExplorerWriter, program::Program};
+use cranelift_isle_veri::{
+    expand::{Chaining, Expander},
+    explorer::ExplorerWriter,
+    program::Program,
+};
+use std::collections::HashMap;
 
 #[derive(Parser)]
 struct Opts {
@@ -53,19 +58,22 @@ fn main() -> anyhow::Result<()> {
     let inputs = opts.isle_input_files()?;
     let expand_internal_extractors = false;
     let prog = Program::from_files(&inputs, expand_internal_extractors)?;
+    let term_rule_sets: HashMap<_, _> = prog.build_trie()?.into_iter().collect();
 
     // Generate expansions.
     // TODO(mbm): don't hardcode the expansion configuration
-    let root_term = "lower";
-    let mut expansions_builder = ExpansionsBuilder::new(&prog, root_term)?;
-    expansions_builder.chain_term(root_term)?;
-    expansions_builder.set_maximal_chaining(true);
-    expansions_builder.set_max_rules(6);
-    expansions_builder.exclude_chain_term("operand_size")?;
-    let expansions = expansions_builder.expansions()?;
+    let mut chaining = Chaining::new(&prog, &term_rule_sets)?;
+    chaining.set_default(true);
+    chaining.set_max_rules(6);
+    chaining.exclude_chain_term("operand_size")?;
+
+    let mut expander = Expander::new(&prog, &term_rule_sets, chaining);
+    expander.add_root_term_name("lower")?;
+    expander.set_prune_infeasible(true);
+    expander.expand();
 
     // Generate explorer.
-    let mut explorer_writer = ExplorerWriter::new(opts.output_dir, &prog, &expansions);
+    let mut explorer_writer = ExplorerWriter::new(opts.output_dir, &prog, expander.expansions());
     if opts.graphs {
         explorer_writer.enable_graphs();
     }
