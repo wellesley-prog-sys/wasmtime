@@ -161,6 +161,7 @@ pub struct Chaining<'a> {
     reach: Reachability,
     exclude: HashSet<TermId>,
     include: HashSet<TermId>,
+    include_macros: bool,
     max_rules: usize,
     default: bool,
 }
@@ -176,6 +177,7 @@ impl<'a> Chaining<'a> {
             reach: Reachability::build(term_rule_sets),
             include: HashSet::new(),
             exclude: HashSet::new(),
+            include_macros: false,
             max_rules: 0,
             default: false,
         })
@@ -195,6 +197,12 @@ impl<'a> Chaining<'a> {
             self.chain_term(term_name)?;
         }
         Ok(())
+    }
+
+    /// Set whether to chain "macro" terms. Macro terms are wrapper terms with
+    /// only one rule that has no constraints.
+    pub fn chain_macros(&mut self, enabled: bool) {
+        self.include_macros = enabled;
     }
 
     pub fn set_max_rules(&mut self, max_rules: usize) {
@@ -287,6 +295,11 @@ impl<'a> Chaining<'a> {
             return true;
         }
 
+        // Chain macros, if configured.
+        if self.include_macros && self.is_macro(term_id) {
+            return true;
+        }
+
         // Max rules threshold, if set.
         if self.max_rules > 0 && self.num_rules(term_id) > self.max_rules {
             return false;
@@ -301,6 +314,17 @@ impl<'a> Chaining<'a> {
             .get(&term_id)
             .map(|rule_set| rule_set.rules.len())
             .unwrap_or_default()
+    }
+
+    fn is_macro(&self, term_id: TermId) -> bool {
+        // "Macro" terms have only one rule.
+        if self.num_rules(term_id) != 1 {
+            return false;
+        }
+
+        // Rule should be "trivial".
+        let rule = &self.term_rule_sets[&term_id].rules[0];
+        rule.total_constraints() == 0
     }
 }
 
