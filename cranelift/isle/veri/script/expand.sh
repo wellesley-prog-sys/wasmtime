@@ -87,9 +87,9 @@ expand \
     --term-name lower \
     --no-expand-internal-extractors \
     --maximal-chaining \
-    --max-rules 8 \
+    --max-rules 6 \
     --exclude-chain operand_size \
-    > output/lower_internal_extractors_maximal_inline_8.out
+    > output/lower_internal_extractors_maximal_inline_6.out
 
 expand \
     --name x64 \
