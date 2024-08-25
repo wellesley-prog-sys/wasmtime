@@ -266,6 +266,11 @@ impl<'a> Chaining<'a> {
             return false;
         }
 
+        // Terms with specs should not be chained.
+        if self.prog.specenv.has_spec(term_id) {
+            return false;
+        }
+
         // Explicit exclusions.
         if self.exclude.contains(&term_id) {
             return false;

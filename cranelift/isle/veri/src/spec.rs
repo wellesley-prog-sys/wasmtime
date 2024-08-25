@@ -551,4 +551,9 @@ impl SpecEnv {
             );
         }
     }
+
+    /// Report whether the given term has a specification.
+    pub fn has_spec(&self, term_id: TermId) -> bool {
+        self.term_spec.contains_key(&term_id)
+    }
 }
