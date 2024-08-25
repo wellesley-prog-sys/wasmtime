@@ -170,7 +170,7 @@ fn verify_expansion_type_instantiation(
 ) -> anyhow::Result<()> {
     // Show type assignment.
     println!("type assignment:");
-    assignment.pretty_print(&conditions);
+    assignment.pretty_print(conditions);
 
     // Solve.
     println!("solve:");
@@ -183,7 +183,7 @@ fn verify_expansion_type_instantiation(
         .replay_file(Some(replay_file))
         .build()?;
 
-    let mut solver = Solver::new(smt, &conditions, assignment);
+    let mut solver = Solver::new(smt, conditions, assignment);
     solver.encode()?;
 
     let applicability = solver.check_assumptions_feasibility()?;

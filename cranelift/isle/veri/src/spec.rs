@@ -546,7 +546,7 @@ impl SpecEnv {
         for term_id in &self.chain {
             // TODO(mbm): error rather than panic
             assert!(
-                !self.term_spec.contains_key(&term_id),
+                !self.term_spec.contains_key(term_id),
                 "chained term should not have spec"
             );
         }
