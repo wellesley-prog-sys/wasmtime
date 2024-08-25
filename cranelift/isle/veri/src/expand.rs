@@ -144,6 +144,15 @@ impl Expansion {
     }
 }
 
+/// Partially completed expansion.
+struct Partial {
+    /// Current state of the expansion.
+    expansion: Expansion,
+
+    /// Stack of bindings to apply chaining to. May be non-exhaustive.
+    chain_candidates: Vec<BindingId>,
+}
+
 pub struct Expander<'a> {
     prog: &'a Program,
     term_rule_sets: &'a HashMap<TermId, RuleSet>,
@@ -156,7 +165,7 @@ pub struct Expander<'a> {
     prune_infeasible: bool,
 
     /// Expansions under construction.
-    stack: Vec<Expansion>,
+    stack: Vec<Partial>,
 
     /// Completed expansions.
     complete: Vec<Expansion>,
@@ -203,6 +212,9 @@ impl<'a> Expander<'a> {
             instance: 0,
         }));
 
+        // Root constructor call should be the first term to be expanded.
+        let chain_candidates = vec![result];
+
         // Store.
         let expansion = Expansion {
             term: term_id,
@@ -214,7 +226,10 @@ impl<'a> Expander<'a> {
             result,
         };
         assert!(expansion.is_feasible());
-        self.stack.push(expansion);
+        self.stack.push(Partial {
+            expansion,
+            chain_candidates,
+        });
     }
 
     /// Set whether to prune infeasible expansions. If enabled, expansions will
@@ -284,14 +299,30 @@ impl<'a> Expander<'a> {
     }
 
     pub fn expand(&mut self) {
-        while let Some(expansion) = self.stack.pop() {
-            self.extend(expansion);
+        while let Some(partial) = self.stack.pop() {
+            self.extend(partial);
         }
     }
 
-    fn extend(&mut self, expansion: Expansion) {
-        // Look for a candidate for chaining. If none, we're done.
-        let Some(chain_binding_id) = self.chain_candidate(&expansion) else {
+    fn extend(&mut self, partial: Partial) {
+        let Partial {
+            expansion,
+            chain_candidates,
+        } = partial;
+
+        // Determine candidates for chaining.
+        //
+        // If we have pre-existing candidates at this stage, we'll process
+        // those. Otherwise, revisit the expansion and see if previous chain
+        // applications have produced more candidates.
+        let mut chain_candidates = if !chain_candidates.is_empty() {
+            chain_candidates
+        } else {
+            self.chain_candidates(&expansion)
+        };
+
+        // Select a candidate to chain. If none, we're done.
+        let Some(chain_binding_id) = chain_candidates.pop() else {
             self.finish(expansion);
             return;
         };
@@ -306,26 +337,33 @@ impl<'a> Expander<'a> {
         };
 
         let rule_set = &self.term_rule_sets[term];
+        assert!(rule_set.rules.len() > 0);
         for rule in rule_set.rules.iter().rev() {
             let mut apply = Application::new(expansion.clone());
             let chained = apply.rule(rule_set, rule, parameters, chain_binding_id);
             if !self.prune_infeasible || chained.is_feasible() {
-                self.stack.push(chained);
+                self.stack.push(Partial {
+                    expansion: chained,
+                    chain_candidates: chain_candidates.clone(),
+                });
             }
         }
     }
 
-    // Look for a binding that could be chained, if any.
-    fn chain_candidate(&self, expansion: &Expansion) -> Option<BindingId> {
-        for (i, binding) in expansion.bindings.iter().enumerate() {
-            match binding {
+    // Identify bindings that could be chained.
+    fn chain_candidates(&self, expansion: &Expansion) -> Vec<BindingId> {
+        expansion
+            .bindings
+            .iter()
+            .enumerate()
+            .flat_map(|(i, binding)| match binding {
                 Some(Binding::Constructor { term, .. }) if self.chainable.contains(term) => {
-                    return Some(i.try_into().unwrap());
+                    Some(i.try_into().unwrap())
                 }
-                _ => continue,
-            }
-        }
-        None
+                _ => None,
+            })
+            .rev()
+            .collect()
     }
 }
 

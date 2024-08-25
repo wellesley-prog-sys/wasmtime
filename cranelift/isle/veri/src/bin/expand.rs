@@ -79,7 +79,6 @@ fn main() -> anyhow::Result<()> {
     expansions_builder.set_prune_infeasible(!opts.no_prune_infeasible);
 
     // Configure chained terms.
-    expansions_builder.chain_term(&opts.term_name)?;
     expansions_builder.chain_terms(&opts.chain)?;
 
     // Configure maximal chaining.
