@@ -158,7 +158,7 @@ impl Expansion {
 pub struct Chaining<'a> {
     prog: &'a Program,
     term_rule_sets: &'a HashMap<TermId, RuleSet>,
-    reach: Reachability<'a>,
+    reach: Reachability,
     exclude: HashSet<TermId>,
     include: HashSet<TermId>,
     max_rules: usize,
@@ -246,7 +246,7 @@ impl<'a> Chaining<'a> {
     /// Reports whether the given term can be chained.
     ///
     /// Terms can be chained if they are expandable and acyclic.
-    pub fn is_chainable(&mut self, term_id: TermId) -> bool {
+    pub fn is_chainable(&self, term_id: TermId) -> bool {
         // At minimum, it should be a term that has expansions.
         if !self.is_expandable(term_id) {
             return false;
@@ -260,7 +260,7 @@ impl<'a> Chaining<'a> {
         true
     }
 
-    pub fn should_chain(&mut self, term_id: TermId) -> bool {
+    pub fn should_chain(&self, term_id: TermId) -> bool {
         // Check baseline requirements.
         if !self.is_chainable(term_id) {
             return false;
@@ -447,6 +447,10 @@ impl<'a> Expander<'a> {
         // result.
         expansion.validate();
         self.complete.push(expansion);
+    }
+
+    pub fn chaining(&self) -> &Chaining {
+        &self.chaining
     }
 
     pub fn expansions(&self) -> &Vec<Expansion> {

@@ -6,7 +6,7 @@ use cranelift_isle::{
 
 use crate::{
     debug::{binding_string, constraint_string},
-    expand::Expansion,
+    expand::{Chaining, Expansion},
     program::Program,
     trie_again::{binding_type, BindingType},
 };
@@ -18,6 +18,7 @@ use std::{
 
 pub struct ExplorerWriter<'a> {
     prog: &'a Program,
+    chaining: &'a Chaining<'a>,
     expansions: &'a Vec<Expansion>,
 
     root: std::path::PathBuf,
@@ -30,10 +31,12 @@ impl<'a> ExplorerWriter<'a> {
     pub fn new(
         root: std::path::PathBuf,
         prog: &'a Program,
+        chaining: &'a Chaining<'a>,
         expansions: &'a Vec<Expansion>,
     ) -> Self {
         Self {
             prog,
+            chaining,
             expansions,
             root,
             base: PathBuf::new(),
@@ -264,6 +267,8 @@ impl<'a> ExplorerWriter<'a> {
             // Spec.
             if let Some(spec) = self.prog.specenv.term_spec.get(&term.id) {
                 writeln!(output, "<td>{pos}</td>", pos = self.pos(spec.pos))?;
+            } else if self.chaining.should_chain(term_id) {
+                writeln!(output, "<td>chained</td>")?;
             } else {
                 writeln!(output, "<td></td>")?;
             }

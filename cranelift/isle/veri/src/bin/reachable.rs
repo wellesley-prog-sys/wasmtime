@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
     println!("#term_rule_sets = {}", term_rule_sets.len());
 
     // Construct reachability.
-    let mut reach = Reachability::build(&term_rule_sets);
+    let reach = Reachability::build(&term_rule_sets);
 
     for (term_id, rule_set) in &term_rule_sets {
         let cyclic = reach.is_cyclic(*term_id);

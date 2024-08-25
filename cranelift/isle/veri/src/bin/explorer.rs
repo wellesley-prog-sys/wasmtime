@@ -73,7 +73,12 @@ fn main() -> anyhow::Result<()> {
     expander.expand();
 
     // Generate explorer.
-    let mut explorer_writer = ExplorerWriter::new(opts.output_dir, &prog, expander.expansions());
+    let mut explorer_writer = ExplorerWriter::new(
+        opts.output_dir,
+        &prog,
+        expander.chaining(),
+        expander.expansions(),
+    );
     if opts.graphs {
         explorer_writer.enable_graphs();
     }

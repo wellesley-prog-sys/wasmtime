@@ -101,7 +101,7 @@ fn main() -> anyhow::Result<()> {
 struct ExpansionCounter<'a> {
     prog: &'a Program,
     term_rule_sets: &'a HashMap<TermId, RuleSet>,
-    reach: Reachability<'a>,
+    reach: Reachability,
 
     enable_expansion: HashSet<TermId>,
     disable_expansion: HashSet<TermId>,

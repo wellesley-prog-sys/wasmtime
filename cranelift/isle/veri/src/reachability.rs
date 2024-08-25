@@ -5,52 +5,51 @@ use cranelift_isle::{
     trie_again::{Binding, RuleSet},
 };
 
-pub struct Reachability<'a> {
-    term_rule_sets: &'a HashMap<TermId, RuleSet>,
+pub struct Reachability {
     reachable: HashMap<TermId, HashSet<TermId>>,
 }
 
-impl<'a> Reachability<'a> {
-    pub fn build(term_rule_sets: &'a HashMap<TermId, RuleSet>) -> Self {
-        Self {
-            term_rule_sets,
-            reachable: HashMap::new(),
+impl Reachability {
+    pub fn build(term_rule_sets: &HashMap<TermId, RuleSet>) -> Self {
+        let mut reachable = HashMap::new();
+        for term_id in term_rule_sets.keys() {
+            reachable.insert(*term_id, search(*term_id, term_rule_sets));
         }
+        Self { reachable }
     }
 
-    pub fn reachable(&mut self, term_id: TermId) -> &HashSet<TermId> {
-        if !self.reachable.contains_key(&term_id) {
-            let reachable = self.search(term_id);
-            self.reachable.insert(term_id, reachable);
-        }
-        self.reachable.get(&term_id).unwrap()
+    /// Set of terms reachable from the the given source.
+    pub fn reachable(&self, source: TermId) -> &HashSet<TermId> {
+        &self.reachable[&source]
     }
 
-    fn search(&mut self, term_id: TermId) -> HashSet<TermId> {
-        let mut reachable = HashSet::new();
-        let mut stack = vec![term_id];
-
-        while let Some(term_id) = stack.pop() {
-            if !self.term_rule_sets.contains_key(&term_id) {
-                continue;
-            }
-
-            let used = used_terms(&self.term_rule_sets[&term_id]);
-            for used_term_id in used {
-                if reachable.contains(&used_term_id) {
-                    continue;
-                }
-                reachable.insert(used_term_id);
-                stack.push(used_term_id);
-            }
-        }
-
-        reachable
-    }
-
-    pub fn is_cyclic(&mut self, term_id: TermId) -> bool {
+    /// Report whether the term is included in a cycle.
+    pub fn is_cyclic(&self, term_id: TermId) -> bool {
         self.reachable(term_id).contains(&term_id)
     }
+}
+
+/// Search for all terms reachable from the source.
+fn search(source: TermId, term_rule_sets: &HashMap<TermId, RuleSet>) -> HashSet<TermId> {
+    let mut reachable = HashSet::new();
+    let mut stack = vec![source];
+
+    while let Some(term_id) = stack.pop() {
+        if !term_rule_sets.contains_key(&term_id) {
+            continue;
+        }
+
+        let used = used_terms(&term_rule_sets[&term_id]);
+        for used_term_id in used {
+            if reachable.contains(&used_term_id) {
+                continue;
+            }
+            reachable.insert(used_term_id);
+            stack.push(used_term_id);
+        }
+    }
+
+    reachable
 }
 
 pub fn used_terms(rule_set: &RuleSet) -> HashSet<TermId> {
