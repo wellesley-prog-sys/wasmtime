@@ -1,9 +1,9 @@
 use cranelift_isle::{
-    ast::{self, Defs, Ident, Model, ModelType, SpecOp},
+    ast::{self, AttrKind, Defs, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
     sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::types::{Compound, Const};
 
@@ -398,6 +398,9 @@ pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
 
+    /// Terms that should be chained.
+    pub chain: HashSet<TermId>,
+
     // Type instantiations for the given term.
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
 
@@ -415,6 +418,7 @@ impl SpecEnv {
     pub fn from_ast(defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) -> Self {
         let mut env = Self {
             term_spec: HashMap::new(),
+            chain: HashSet::new(),
             term_instantiations: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
@@ -424,6 +428,8 @@ impl SpecEnv {
         env.collect_models(defs, termenv, tyenv);
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv);
+        env.collect_attrs(defs, termenv, tyenv);
+        env.check_for_chained_terms_with_spec();
 
         env
     }
@@ -516,6 +522,33 @@ impl SpecEnv {
                     .expect("spec term should exist");
                 self.term_spec.insert(term_id, Spec::from_ast(spec));
             }
+        }
+    }
+
+    fn collect_attrs(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
+        for def in &defs.defs {
+            if let ast::Def::Attr(attr) = def {
+                let term_id = termenv
+                    .get_term_by_name(tyenv, &attr.term)
+                    .expect("attr term should exist");
+                for attr_kind in &attr.kinds {
+                    match attr_kind {
+                        AttrKind::Chain => {
+                            self.chain.insert(term_id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn check_for_chained_terms_with_spec(&self) {
+        for term_id in &self.chain {
+            // TODO(mbm): error rather than panic
+            assert!(
+                !self.term_spec.contains_key(&term_id),
+                "chained term should not have spec"
+            );
         }
     }
 }

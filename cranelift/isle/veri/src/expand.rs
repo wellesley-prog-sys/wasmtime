@@ -276,6 +276,12 @@ impl<'a> Chaining<'a> {
             return true;
         }
 
+        // Marked with chaining attribute.
+        // TODO(mbm): error when chain attribute is applied to unchainable terms
+        if self.prog.specenv.chain.contains(&term_id) {
+            return true;
+        }
+
         // Max rules threshold, if set.
         if self.max_rules > 0 && self.num_rules(term_id) > self.max_rules {
             return false;
