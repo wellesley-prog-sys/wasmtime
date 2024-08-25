@@ -36,6 +36,10 @@ struct Opts {
     /// Per-query timeout, in seconds.
     #[arg(long, default_value = "10")]
     timeout: u32,
+
+    /// Skip solver.
+    #[arg(long, env = "ISLE_VERI_SKIP_SOLVER")]
+    skip_solver: bool,
 }
 
 impl Opts {
@@ -98,7 +102,13 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         print_expansion(&prog, expansion);
-        verify_expansion(expansion, &prog, &opts.smt2_replay_path, opts.timeout)?;
+        verify_expansion(
+            expansion,
+            &prog,
+            &opts.smt2_replay_path,
+            opts.timeout,
+            opts.skip_solver,
+        )?;
     }
 
     Ok(())
@@ -126,6 +136,7 @@ fn verify_expansion(
     prog: &Program,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
+    skip_solver: bool,
 ) -> anyhow::Result<()> {
     // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
@@ -147,6 +158,11 @@ fn verify_expansion(
             type_inference::Status::Underconstrained => {
                 anyhow::bail!("underconstrained type inference")
             }
+        }
+
+        if skip_solver {
+            println!("skip solver");
+            continue;
         }
 
         verify_expansion_type_instantiation(
