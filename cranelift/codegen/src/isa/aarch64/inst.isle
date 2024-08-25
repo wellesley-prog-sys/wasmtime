@@ -2187,6 +2187,7 @@
   (imm12_from_negated_value (has_type ty (iconst n)))
   (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
   imm)
+(attr imm12_from_negated_value chain)
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
@@ -2397,10 +2398,12 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
         src1 src2 shift)))
+(attr cmp_rr_shift chain)
 
 ;; Helper for emitting `cmp` instructions, setting flags, with an arithmetic right-shifted
 ;; second operand register.
 (decl cmp_rr_shift_asr (OperandSize Reg Reg u64) ProducesFlags)
+(attr cmp_rr_shift_asr chain)
 (rule (cmp_rr_shift_asr size src1 src2 shift_amount)
       (if-let shift (ashr_from_u64 $I64 shift_amount))
       (ProducesFlags.ProducesFlagsSideEffect
@@ -3438,6 +3441,7 @@
 (rule (sink_atomic_load x @ (atomic_load _ addr))
       (let ((_ Unit (sink_inst x)))
            (put_in_reg addr)))
+(attr sink_atomic_load chain)
 
 ;; Helper for generating either an `AluRRR`, `AluRRRShift`, or `AluRRImmLogic`
 ;; instruction depending on the input. Note that this requires that the `ALUOp`
@@ -3468,6 +3472,7 @@
 ;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
 ;; that the operation is commutative.
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
+(attr alu_rs_imm_logic chain)
 (rule -1 (alu_rs_imm_logic op ty x y)
       (alu_rrr op ty x y))
 (rule (alu_rs_imm_logic op ty x (iconst k))
@@ -3476,6 +3481,7 @@
 (rule (alu_rs_imm_logic op ty x (ishl y (iconst k)))
       (if-let amt (lshl_from_imm64 ty k))
       (alu_rrr_shift op ty x y amt))
+
 
 ;; Helper for generating i128 bitops which simply do the same operation to the
 ;; hi/lo registers.
@@ -3623,6 +3629,7 @@
 
 
 (decl sink_load_into_addr (Type Inst) Reg)
+(attr sink_load_into_addr chain)
 (rule (sink_load_into_addr ty x @ (load _ addr (offset32 offset)))
       (let ((_ Unit (sink_inst x)))
         (add_imm_to_addr addr (i64_as_u64 offset))))
@@ -4234,15 +4241,18 @@
 
 ;; Materialize a `FlagsAndCC` into a boolean `ValueRegs`.
 (decl flags_and_cc_to_bool (FlagsAndCC) ValueRegs)
+(attr flags_and_cc_to_bool chain)
 (rule (flags_and_cc_to_bool (FlagsAndCC.FlagsAndCC flags cc))
       (with_flags flags (materialize_bool_result (cond_code cc))))
 
 ;; Get the `ProducesFlags` out of a `FlagsAndCC`.
 (decl flags_and_cc_flags (FlagsAndCC) ProducesFlags)
+(attr flags_and_cc_flags chain)
 (rule (flags_and_cc_flags (FlagsAndCC.FlagsAndCC flags _cc)) flags)
 
 ;; Get the `IntCC` out of a `FlagsAndCC`.
 (decl flags_and_cc_cc (FlagsAndCC) IntCC)
+(attr flags_and_cc_cc chain)
 (rule (flags_and_cc_cc (FlagsAndCC.FlagsAndCC _flags cc)) cc)
 
 ;; Helpers for lowering `icmp` sequences.

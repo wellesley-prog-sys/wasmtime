@@ -177,7 +177,7 @@ impl<'a> Chaining<'a> {
             reach: Reachability::build(term_rule_sets),
             include: HashSet::new(),
             exclude: HashSet::new(),
-            include_macros: false,
+            include_macros: true,
             max_rules: 0,
             default: false,
         })

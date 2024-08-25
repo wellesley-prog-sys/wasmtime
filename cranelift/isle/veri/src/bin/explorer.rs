@@ -62,11 +62,7 @@ fn main() -> anyhow::Result<()> {
 
     // Generate expansions.
     // TODO(mbm): don't hardcode the expansion configuration
-    let mut chaining = Chaining::new(&prog, &term_rule_sets)?;
-    chaining.set_default(true);
-    chaining.set_max_rules(6);
-    chaining.exclude_chain_term("operand_size")?;
-
+    let chaining = Chaining::new(&prog, &term_rule_sets)?;
     let mut expander = Expander::new(&prog, &term_rule_sets, chaining);
     expander.add_root_term_name("lower")?;
     expander.set_prune_infeasible(true);
