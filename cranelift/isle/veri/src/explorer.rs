@@ -352,6 +352,7 @@ impl<'a> ExplorerWriter<'a> {
             <thead>
                 <tr>
                     <th>&num;</th>
+                    <th>Root</th>
                     <th>First Rule</th>
                 </tr>
             </thead>
@@ -366,6 +367,13 @@ impl<'a> ExplorerWriter<'a> {
                 output,
                 r#"<td><a href="{link}">&num;{id}</a></td>"#,
                 link = self.link(&self.expansion_path(id))
+            )?;
+
+            // Root
+            writeln!(
+                output,
+                "<td>{term_ref}</td>",
+                term_ref = self.term_ref(expansion.term)
             )?;
 
             // First Rule
