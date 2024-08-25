@@ -121,6 +121,17 @@ impl Expansion {
         terms
     }
 
+    fn constructor_bindings(&self) -> Vec<(BindingId, TermId)> {
+        self.bindings
+            .iter()
+            .enumerate()
+            .flat_map(|(i, binding)| match binding {
+                Some(Binding::Constructor { term, .. }) => Some((i.try_into().unwrap(), *term)),
+                _ => None,
+            })
+            .collect()
+    }
+
     fn substitute(&mut self, target: BindingId, replace: BindingId) {
         // Reindex bindings.
         let mut reindex = Reindex::new();
@@ -167,6 +178,9 @@ pub struct Expander<'a> {
     /// Expansions under construction.
     stack: Vec<Partial>,
 
+    /// Root terms expansion has been initiated for.
+    roots: HashSet<TermId>,
+
     /// Completed expansions.
     complete: Vec<Expansion>,
 }
@@ -180,12 +194,28 @@ impl<'a> Expander<'a> {
             chainable: HashSet::new(),
             prune_infeasible: true,
             stack: Vec::new(),
+            roots: HashSet::new(),
             complete: Vec::new(),
         }
     }
 
+    /// Add the given term as an expansion root. That is, start expanding rules
+    /// from this point.
+    pub fn add_root(&mut self, term_id: TermId) {
+        // Skip if the root has already been added.
+        if self.roots.contains(&term_id) {
+            return;
+        }
+
+        // Initialize an expansion at this root.
+        self.constructor(term_id);
+
+        // Record root.
+        self.roots.insert(term_id);
+    }
+
     // Push an initial expansion for a constructor call of the given term.
-    pub fn constructor(&mut self, term_id: TermId) {
+    fn constructor(&mut self, term_id: TermId) {
         // Lookup term.
         let term = self.prog.term(term_id);
         assert!(term.has_constructor());
@@ -251,12 +281,7 @@ impl<'a> Expander<'a> {
     /// constructors can be chained.
     pub fn may_chain(&mut self, term_id: TermId) -> bool {
         // Internal constructors are supported for chaining.
-        let term = self.prog.term(term_id);
-        if !term.has_constructor() {
-            return false;
-        }
-
-        if term.has_external_constructor() {
+        if !self.is_internal_constructor(term_id) {
             return false;
         }
 
@@ -266,6 +291,28 @@ impl<'a> Expander<'a> {
         }
 
         true
+    }
+
+    /// Report whether the term is an internal constructor.
+    ///
+    /// From the point of view of the expansion graph, this means the term is
+    /// not a leaf node.  Therefore, we can either apply chaining or initiate
+    /// another root of expansion.
+    fn is_internal_constructor(&mut self, term_id: TermId) -> bool {
+        // Is it an internal constructor?
+        let term = self.prog.term(term_id);
+        if !term.has_constructor() {
+            return false;
+        }
+
+        if term.has_external_constructor() {
+            return false;
+        }
+
+        // Expect that the term should have rules.
+        assert!(self.term_rule_sets[&term_id].rules.len() > 0);
+
+        return true;
     }
 
     /// Mark all possible terms as candidates for chaining, provided they have
@@ -290,6 +337,21 @@ impl<'a> Expander<'a> {
     }
 
     fn finish(&mut self, expansion: Expansion) {
+        // Cascade into any remaining constructors.
+        //
+        // Any remaining constructor calls could not be chained. Therefore, in
+        // order to consider rules that apply to these terms, we need to
+        // initiate expansion from them as root terms.
+        for (_, term_id) in expansion.constructor_bindings() {
+            if self.is_internal_constructor(term_id) {
+                self.add_root(term_id);
+            }
+        }
+
+        // Add to completed list.
+        //
+        // As an internal consistency check, ensure we have produced a valid
+        // result.
         expansion.validate();
         self.complete.push(expansion);
     }
@@ -353,16 +415,9 @@ impl<'a> Expander<'a> {
     // Identify bindings that could be chained.
     fn chain_candidates(&self, expansion: &Expansion) -> Vec<BindingId> {
         expansion
-            .bindings
+            .constructor_bindings()
             .iter()
-            .enumerate()
-            .flat_map(|(i, binding)| match binding {
-                Some(Binding::Constructor { term, .. }) if self.chainable.contains(term) => {
-                    Some(i.try_into().unwrap())
-                }
-                _ => None,
-            })
-            .rev()
+            .filter_map(|(binding_id, term_id)| self.chainable.get(term_id).and(Some(*binding_id)))
             .collect()
     }
 }
