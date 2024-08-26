@@ -242,7 +242,7 @@ impl<'a> Solver<'a> {
         // Build zero_extend expression.
         let padding = dst
             .checked_sub(src)
-            .expect("cannot zero extend to smaller width");
+            .expect("cannot sign extend to smaller width");
         Ok(self.sign_extend(padding, self.expr_atom(x)))
     }
 

@@ -2165,7 +2165,7 @@
 (spec (imm12_from_value imm12)
       (provide
             ; REVIEW(mbm): zero_ext vs conv_to?
-            (= result (zero_ext (widthof result) imm12))
+            (= (zero_ext 128 result) (zero_ext 128 imm12))
       )
       (require
             ; REVIEW(mbm): correct formulation of imm12?
