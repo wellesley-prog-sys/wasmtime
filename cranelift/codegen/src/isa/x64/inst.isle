@@ -2553,6 +2553,7 @@
          dst)))
 
 (decl x64_alurmi_with_flags_paired (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(attr x64_alurmi_with_flags_paired chain)
 (rule (x64_alurmi_with_flags_paired opc (fits_in_64 ty) src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
@@ -2564,6 +2565,7 @@
          dst)))
 
 (decl x64_alurmi_flags_side_effect (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(attr x64_alurmi_flags_side_effect chain)
 (rule (x64_alurmi_flags_side_effect opc (fits_in_64 ty) src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.AluRmiR (raw_operand_size_of_type ty)
@@ -2574,6 +2576,7 @@
 
 ;; Should only be used for Adc and Sbb
 (decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
+(attr x64_alurmi_with_flags_chained chain)
 (rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesAndProducesFlags.ReturnsReg
@@ -4843,6 +4846,7 @@
 
 ;; Lower an Icmp result into a boolean value in a register.
 (decl lower_icmp_bool (IcmpCondResult) ValueRegs)
+(attr lower_icmp_bool chain)
 (rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
       (with_flags producer (x64_setcc cc)))
 

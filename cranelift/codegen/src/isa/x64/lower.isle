@@ -1704,6 +1704,7 @@
 ;; `i64` and smaller.
 
 (decl cmp_and_choose (Type CC Value Value) ValueRegs)
+(attr cmp_and_choose chain)
 (rule (cmp_and_choose (fits_in_64 ty) cc x y)
       (let ((size OperandSize (raw_operand_size_of_type ty))
             ;; We need to put x and y in registers explicitly because
@@ -2160,6 +2161,7 @@
         (select_icmp cond_result x y)))
 
 (decl lower_select_icmp (Type IcmpCondResult Value Value) InstOutput)
+(attr lower_select_icmp chain)
 (rule (lower_select_icmp ty (IcmpCondResult.Condition flags cc) x y)
       (with_flags flags (cmove_from_values ty cc x y)))
 
@@ -2469,6 +2471,7 @@
         swap16))
 
 (decl do_bitrev64 (Type Gpr) Gpr)
+(attr do_bitrev64 chain)
 (rule (do_bitrev64 ty @ $I64 src)
       (let ((src_ Gpr (do_bitrev32 ty src))
             (mask32 Gpr (imm ty 0xffffffff))
@@ -3447,6 +3450,7 @@
 ;;   the value were non-zero
 ;; * CC.NZ indicates that both halves of the value were 0
 (decl cmp_zero_i128 (CC ValueRegs) IcmpCondResult)
+(attr cmp_zero_i128 chain)
 (rule (cmp_zero_i128 (cc_nz_or_z cc) val)
       (let ((lo Gpr (value_regs_get_gpr val 0))
             (hi Gpr (value_regs_get_gpr val 1)))
