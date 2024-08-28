@@ -9,6 +9,15 @@ pub enum Width {
     Bits(usize),
 }
 
+impl Width {
+    pub fn as_bits(&self) -> Option<usize> {
+        match self {
+            Width::Unknown => None,
+            Width::Bits(bits) => Some(*bits),
+        }
+    }
+}
+
 impl PartialOrd for Width {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
@@ -34,6 +43,13 @@ impl Type {
         match self {
             Self::Unknown | Self::BitVector(Width::Unknown) => false,
             Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
+        }
+    }
+
+    pub fn as_bit_vector_width(&self) -> Option<&Width> {
+        match self {
+            Type::BitVector(w) => Some(w),
+            _ => None,
         }
     }
 }

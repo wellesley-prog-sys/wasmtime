@@ -212,7 +212,7 @@ impl<'a> Solver<'a> {
         // Expression type should be a bit-vector of known width.
         let src = self
             .assignment
-            .bit_vector_width(x)
+            .try_bit_vector_width(x)
             .context("source of zero_ext expression should be a bit-vector of known width")?;
 
         // Build zero_extend expression.
@@ -236,7 +236,7 @@ impl<'a> Solver<'a> {
         // Expression type should be a bit-vector of known width.
         let src = self
             .assignment
-            .bit_vector_width(x)
+            .try_bit_vector_width(x)
             .context("source of sign_ext expression should be a bit-vector of known width")?;
 
         // Build zero_extend expression.
@@ -258,7 +258,7 @@ impl<'a> Solver<'a> {
         // Expression type should be a bit-vector of known width.
         let src = self
             .assignment
-            .bit_vector_width(x)
+            .try_bit_vector_width(x)
             .context("source of conv_to expression should be a bit-vector of known width")?;
 
         // Handle depending on source and destination widths.
@@ -282,7 +282,7 @@ impl<'a> Solver<'a> {
         // Expression type should be a bit-vector of known width.
         let width = self
             .assignment
-            .bit_vector_width(x)
+            .try_bit_vector_width(x)
             .context("target of width_of expression should be a bit-vector of known width")?;
 
         // Substitute known constant width.

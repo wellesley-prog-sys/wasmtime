@@ -94,6 +94,8 @@ pub enum Constraint {
     Identical { x: ExprId, y: ExprId },
     /// Expression x is a bitvector with width given by the integer expression w.
     WidthOf { x: ExprId, w: ExprId },
+    /// Bitvector x is the concatenation bitvectors l and r.
+    Concat { x: ExprId, l: ExprId, r: ExprId },
     /// Expression x has known constant value v.
     Value { x: ExprId, c: Const },
     /// Constraint conditioned on a boolean.
@@ -109,6 +111,7 @@ impl std::fmt::Display for Constraint {
             Self::SameType { x, y } => write!(f, "type({}) == type({})", x.index(), y.index()),
             Self::Identical { x, y } => write!(f, "{} == {}", x.index(), y.index()),
             Self::WidthOf { x, w } => write!(f, "{} = width_of({})", w.index(), x.index()),
+            Self::Concat { x, l, r } => write!(f, "{} = {}:{}", x.index(), l.index(), r.index()),
             Self::Value { x, c } => write!(f, "{} = value({c})", x.index()),
             Self::Implies { c, then } => write!(f, "{} => {then}", c.index()),
             Self::Clause { literals } => write!(
@@ -367,7 +370,7 @@ impl<'a> SystemBuilder<'a> {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
-                // TODO(mbm): sum constraint for concat expression
+                self.concat(x, *y, *z);
             }
             Expr::Int2BV(w, y) => {
                 self.bit_vector_of_width(x, *w);
@@ -449,6 +452,10 @@ impl<'a> SystemBuilder<'a> {
         self.constraint(Constraint::WidthOf { x, w });
     }
 
+    fn concat(&mut self, x: ExprId, l: ExprId, r: ExprId) {
+        self.constraint(Constraint::Concat { x, l, r });
+    }
+
     fn boolean_value(&mut self, x: ExprId, b: bool) {
         self.value(x, Const::Bool(b));
     }
@@ -522,6 +529,7 @@ impl Assignment {
             Constraint::SameType { x, y } => self.expect_same_type(x, y),
             Constraint::Identical { x, y } => self.expect_identical(x, y),
             Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
+            Constraint::Concat { x, l, r } => self.expect_concat(x, l, r),
             Constraint::Value { x, ref c } => self.expect_value(x, c),
             Constraint::Implies { c, ref then } => self.expect_implies(c, then),
             Constraint::Clause { ref literals } => self.expect_clause(literals),
@@ -606,23 +614,45 @@ impl Assignment {
         Ok(())
     }
 
-    pub fn bit_vector_width(&self, x: ExprId) -> anyhow::Result<usize> {
-        let tyx = self.try_assignment(x)?.ty();
-        let Type::BitVector(Width::Bits(width)) = tyx else {
-            anyhow::bail!(
-                "expression {x} should be a bit-vector of known width; got {tyx}",
-                x = x.index()
-            );
-        };
-        Ok(width)
+    pub fn bit_vector_width(&self, x: ExprId) -> Option<usize> {
+        self.assignment(x)?.ty().as_bit_vector_width()?.as_bits()
+    }
+
+    pub fn try_bit_vector_width(&self, x: ExprId) -> anyhow::Result<usize> {
+        self.bit_vector_width(x).ok_or(anyhow::format_err!(
+            "expression {x} should be a bit-vector of known width",
+            x = x.index()
+        ))
     }
 
     fn expect_width_of(&self, x: ExprId, w: ExprId) -> anyhow::Result<()> {
         // Expression x should be a concrete bitvector.
-        let width = self.bit_vector_width(x)?;
+        let width = self.try_bit_vector_width(x)?;
 
         // Expression w should be an integer equal to the width.
         self.expect_value(w, &Const::Int(width.try_into().unwrap()))?;
+
+        Ok(())
+    }
+
+    fn expect_concat(&self, x: ExprId, l: ExprId, r: ExprId) -> anyhow::Result<()> {
+        // All inputs should be bitvectors of known width.
+        let x_width = self.try_bit_vector_width(x)?;
+        let l_width = self.try_bit_vector_width(l)?;
+        let r_width = self.try_bit_vector_width(r)?;
+
+        // Verify x width is the sum of input widths.
+        let concat_width = l_width
+            .checked_add(r_width)
+            .expect("concat width should not overflow");
+        if x_width != concat_width {
+            anyhow::bail!(
+                "expression {x} should be the concatenation of {l} and {r}",
+                x = x.index(),
+                l = l.index(),
+                r = r.index()
+            );
+        }
 
         Ok(())
     }
@@ -760,6 +790,7 @@ impl Solver {
             Constraint::SameType { x, y } => self.same_type(*x, *y),
             Constraint::Identical { x, y } => self.identical(*x, *y),
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
+            Constraint::Concat { x, l, r } => self.concat(*x, *l, *r),
             Constraint::Value { x, c } => self.set_value(*x, c.clone()),
             Constraint::Implies { c, then } => self.implies(*c, then),
             Constraint::Clause { literals } => self.clause(literals),
@@ -789,6 +820,10 @@ impl Solver {
 
     fn set_type(&mut self, x: ExprId, ty: Type) -> Result<bool, Status> {
         self.set_type_value(x, TypeValue::Type(ty))
+    }
+
+    fn set_bit_vector_width(&mut self, x: ExprId, bits: usize) -> Result<bool, Status> {
+        self.set_type(x, Type::BitVector(Width::Bits(bits)))
     }
 
     fn same_type(&mut self, x: ExprId, y: ExprId) -> Result<bool, Status> {
@@ -832,9 +867,46 @@ impl Solver {
                 _,
             ) => self.set_int_value(w, width.try_into().unwrap()),
             (_, Some(&TypeValue::Value(Const::Int(v)))) => {
-                self.set_type(x, Type::BitVector(Width::Bits(v.try_into().unwrap())))
+                self.set_bit_vector_width(x, v.try_into().unwrap())
             }
             _ => Ok(false),
+        }
+    }
+
+    fn concat(&mut self, x: ExprId, l: ExprId, r: ExprId) -> Result<bool, Status> {
+        match (
+            self.assignment.bit_vector_width(x),
+            self.assignment.bit_vector_width(l),
+            self.assignment.bit_vector_width(r),
+        ) {
+            // Two known: we can infer the third.
+            (None, Some(lw), Some(rw)) => {
+                // Width equation: |x| = |l| + |r|
+                self.set_bit_vector_width(x, lw + rw)
+            }
+            (Some(xw), None, Some(rw)) => {
+                // Width equation: |l| = |x| - |r|
+                self.set_bit_vector_width(l, xw.checked_sub(rw).ok_or(Status::Inapplicable)?)
+            }
+            (Some(xw), Some(lw), None) => {
+                // Width equation: |r| = |x| - |l|
+                self.set_bit_vector_width(r, xw.checked_sub(lw).ok_or(Status::Inapplicable)?)
+            }
+
+            // Zero or one known: cannot deduce anything.
+            (None, None, None)
+            | (None, None, Some(_))
+            | (None, Some(_), None)
+            | (Some(_), None, None) => Ok(false),
+
+            // All known: verify correctness.
+            (Some(x), Some(y), Some(z)) => {
+                if x != y + z {
+                    Err(Status::Inapplicable)
+                } else {
+                    Ok(false)
+                }
+            }
         }
     }
 
