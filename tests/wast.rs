@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use bstr::ByteSlice;
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use once_cell::sync::Lazy;
@@ -57,26 +57,184 @@ fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
                         }
                     },
                 );
-                trials.push(trial.with_ignored_flag(ignore(&path, strategy)));
+                trials.push(trial);
             }
         }
     }
 }
 
-fn ignore(test: &Path, strategy: Strategy) -> bool {
+fn should_fail(test: &Path, strategy: Strategy) -> bool {
     // Winch only supports x86_64 at this time.
     if strategy == Strategy::Winch && !cfg!(target_arch = "x86_64") {
         return true;
     }
 
+    // Disable spec tests for proposals that Winch does not implement yet.
+    if strategy == Strategy::Winch {
+        let unsupported = [
+            // externref/reference-types related
+            "component-model/modules.wast",
+            "extended-const/elem.wast",
+            "extended-const/global.wast",
+            "memory64/threads.wast",
+            "misc_testsuite/externref-id-function.wast",
+            "misc_testsuite/externref-segment.wast",
+            "misc_testsuite/externref-segments.wast",
+            "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
+            "misc_testsuite/linking-errors.wast",
+            "misc_testsuite/many_table_gets_lead_to_gc.wast",
+            "misc_testsuite/mutable_externref_globals.wast",
+            "misc_testsuite/no-mixup-stack-maps.wast",
+            "misc_testsuite/no-panic.wast",
+            "misc_testsuite/simple_ref_is_null.wast",
+            "misc_testsuite/table_grow_with_funcref.wast",
+            "spec_testsuite/br_table.wast",
+            "spec_testsuite/data-invalid.wast",
+            "spec_testsuite/elem.wast",
+            "spec_testsuite/global.wast",
+            "spec_testsuite/linking.wast",
+            "spec_testsuite/ref_func.wast",
+            "spec_testsuite/ref_is_null.wast",
+            "spec_testsuite/ref_null.wast",
+            "spec_testsuite/select.wast",
+            "spec_testsuite/table-sub.wast",
+            "spec_testsuite/table_fill.wast",
+            "spec_testsuite/table_get.wast",
+            "spec_testsuite/table_grow.wast",
+            "spec_testsuite/table_set.wast",
+            "spec_testsuite/table_size.wast",
+            "spec_testsuite/unreached-invalid.wast",
+            // simd-related failures
+            "annotations/simd_lane.wast",
+            "memory64/simd.wast",
+            "misc_testsuite/int-to-float-splat.wast",
+            "misc_testsuite/issue6562.wast",
+            "misc_testsuite/simd/almost-extmul.wast",
+            "misc_testsuite/simd/canonicalize-nan.wast",
+            "misc_testsuite/simd/cvt-from-uint.wast",
+            "misc_testsuite/simd/issue4807.wast",
+            "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
+            "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
+            "misc_testsuite/simd/load_splat_out_of_bounds.wast",
+            "misc_testsuite/simd/replace-lane-preserve.wast",
+            "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
+            "misc_testsuite/simd/unaligned-load.wast",
+            "multi-memory/simd_memory-multi.wast",
+            "spec_testsuite/simd_align.wast",
+            "spec_testsuite/simd_bit_shift.wast",
+            "spec_testsuite/simd_bitwise.wast",
+            "spec_testsuite/simd_boolean.wast",
+            "spec_testsuite/simd_const.wast",
+            "spec_testsuite/simd_conversions.wast",
+            "spec_testsuite/simd_f32x4.wast",
+            "spec_testsuite/simd_f32x4_arith.wast",
+            "spec_testsuite/simd_f32x4_cmp.wast",
+            "spec_testsuite/simd_f32x4_pmin_pmax.wast",
+            "spec_testsuite/simd_f32x4_rounding.wast",
+            "spec_testsuite/simd_f64x2.wast",
+            "spec_testsuite/simd_f64x2_arith.wast",
+            "spec_testsuite/simd_f64x2_cmp.wast",
+            "spec_testsuite/simd_f64x2_pmin_pmax.wast",
+            "spec_testsuite/simd_f64x2_rounding.wast",
+            "spec_testsuite/simd_i16x8_arith.wast",
+            "spec_testsuite/simd_i16x8_arith2.wast",
+            "spec_testsuite/simd_i16x8_cmp.wast",
+            "spec_testsuite/simd_i16x8_extadd_pairwise_i8x16.wast",
+            "spec_testsuite/simd_i16x8_extmul_i8x16.wast",
+            "spec_testsuite/simd_i16x8_q15mulr_sat_s.wast",
+            "spec_testsuite/simd_i16x8_sat_arith.wast",
+            "spec_testsuite/simd_i32x4_arith.wast",
+            "spec_testsuite/simd_i32x4_arith2.wast",
+            "spec_testsuite/simd_i32x4_cmp.wast",
+            "spec_testsuite/simd_i32x4_dot_i16x8.wast",
+            "spec_testsuite/simd_i32x4_extadd_pairwise_i16x8.wast",
+            "spec_testsuite/simd_i32x4_extmul_i16x8.wast",
+            "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
+            "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
+            "spec_testsuite/simd_i64x2_arith.wast",
+            "spec_testsuite/simd_i64x2_arith2.wast",
+            "spec_testsuite/simd_i64x2_cmp.wast",
+            "spec_testsuite/simd_i64x2_extmul_i32x4.wast",
+            "spec_testsuite/simd_i8x16_arith.wast",
+            "spec_testsuite/simd_i8x16_arith2.wast",
+            "spec_testsuite/simd_i8x16_cmp.wast",
+            "spec_testsuite/simd_i8x16_sat_arith.wast",
+            "spec_testsuite/simd_int_to_int_extend.wast",
+            "spec_testsuite/simd_lane.wast",
+            "spec_testsuite/simd_load.wast",
+            "spec_testsuite/simd_load16_lane.wast",
+            "spec_testsuite/simd_load32_lane.wast",
+            "spec_testsuite/simd_load64_lane.wast",
+            "spec_testsuite/simd_load8_lane.wast",
+            "spec_testsuite/simd_load_extend.wast",
+            "spec_testsuite/simd_load_splat.wast",
+            "spec_testsuite/simd_load_zero.wast",
+            "spec_testsuite/simd_splat.wast",
+            "spec_testsuite/simd_store16_lane.wast",
+            "spec_testsuite/simd_store32_lane.wast",
+            "spec_testsuite/simd_store64_lane.wast",
+            "spec_testsuite/simd_store8_lane.wast",
+        ];
+
+        if unsupported.iter().any(|part| test.ends_with(part)) {
+            return true;
+        }
+
+        // A few proposals that winch has no support for.
+        let unsupported_proposals = [
+            "function-references",
+            "gc",
+            "tail-call",
+            "relaxed-simd",
+            "threads",
+            // Winch technically supports memory64 but the upstream tests have
+            // gc/function-references/exceptions/etc all merged in now so Winch
+            // can no longer run those tests without panicking.
+            "memory64",
+        ];
+        if let Some(parent) = test.parent() {
+            if unsupported_proposals
+                .iter()
+                .any(|part| parent.ends_with(part))
+            {
+                return true;
+            }
+        }
+    }
+    let unsupported_gc_tests = [
+        "array_copy.wast",
+        "array_fill.wast",
+        "array_init_data.wast",
+        "array_init_elem.wast",
+        "array.wast",
+        "binary_gc.wast",
+        "br_on_cast_fail.wast",
+        "br_on_cast.wast",
+        "extern.wast",
+        "ref_cast.wast",
+        "ref_eq.wast",
+        "ref_test.wast",
+        "return_call_indirect.wast",
+        "return_call.wast",
+        "struct.wast",
+        "table_sub.wast",
+        "type_canon.wast",
+        "type_equivalence.wast",
+        "type-rec.wast",
+        "type-subtyping.wast",
+        "unreached_valid.wast",
+        "i31.wast",
+    ];
+
     for part in test.iter() {
         // Not implemented in Wasmtime yet
         if part == "exception-handling" {
-            return true;
+            return !test.ends_with("binary.wast");
         }
-        // Wasmtime doesn't implement the table64 extension yet.
+
         if part == "memory64" {
             if [
+                // Wasmtime doesn't implement the table64 extension yet.
                 "call_indirect.wast",
                 "table_copy.wast",
                 "table_get.wast",
@@ -87,52 +245,21 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
                 "table_copy_mixed.wast",
                 "table_grow.wast",
                 "table_size.wast",
+                // wasmtime doesn't implement exceptions yet
+                "imports.wast",
+                "ref_null.wast",
+                "exports.wast",
+                "throw.wast",
+                "throw_ref.wast",
+                "try_table.wast",
+                "tag.wast",
             ]
             .iter()
             .any(|i| test.ends_with(i))
             {
                 return true;
             }
-        }
-
-        // Disable spec tests for proposals that Winch does not implement yet.
-        if strategy == Strategy::Winch {
-            let part = part.to_str().unwrap();
-            let unsupported = [
-                // wasm proposals that Winch doesn't support,
-                "references",
-                "tail-call",
-                "gc",
-                "threads",
-                "multi-memory",
-                "relaxed-simd",
-                "function-references",
-                // tests in misc_testsuite that Winch doesn't support
-                "no-panic.wast",
-                "externref-id-function.wast",
-                "int-to-float-splat.wast",
-                "issue6562.wast",
-                "many_table_gets_lead_to_gc.wast",
-                "mutable_externref_globals.wast",
-                "no-mixup-stack-maps.wast",
-                "simple_ref_is_null.wast",
-                "table_grow_with_funcref.wast",
-                // Tests in the spec test suite Winch doesn't support
-                "threads.wast",
-                "br_table.wast",
-                "global.wast",
-                "table_fill.wast",
-                "table_get.wast",
-                "table_set.wast",
-                "table_grow.wast",
-                "table_size.wast",
-                "elem.wast",
-                "select.wast",
-                "unreached-invalid.wast",
-                "linking.wast",
-            ];
-
-            if unsupported.contains(&part) || part.starts_with("simd") || part.starts_with("ref_") {
+            if unsupported_gc_tests.iter().any(|i| test.ends_with(i)) {
                 return true;
             }
         }
@@ -140,53 +267,7 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
         // Implementation of the GC proposal is a work-in-progress, this is
         // a list of all currently known-to-fail tests.
         if part == "gc" {
-            return [
-                "array_copy.wast",
-                "array_fill.wast",
-                "array_init_data.wast",
-                "array_init_elem.wast",
-                "array.wast",
-                "binary_gc.wast",
-                "binary.wast",
-                "br_on_cast_fail.wast",
-                "br_on_cast.wast",
-                "br_on_non_null.wast",
-                "br_on_null.wast",
-                "br_table.wast",
-                "call_ref.wast",
-                "data.wast",
-                "elem.wast",
-                "extern.wast",
-                "func.wast",
-                "global.wast",
-                "if.wast",
-                "linking.wast",
-                "local_get.wast",
-                "local_init.wast",
-                "ref_as_non_null.wast",
-                "ref_cast.wast",
-                "ref_eq.wast",
-                "ref_is_null.wast",
-                "ref_null.wast",
-                "ref_test.wast",
-                "ref.wast",
-                "return_call_indirect.wast",
-                "return_call_ref.wast",
-                "return_call.wast",
-                "select.wast",
-                "struct.wast",
-                "table_sub.wast",
-                "table.wast",
-                "type_canon.wast",
-                "type_equivalence.wast",
-                "type-rec.wast",
-                "type-subtyping.wast",
-                "unreached-invalid.wast",
-                "unreached_valid.wast",
-                "i31.wast",
-            ]
-            .iter()
-            .any(|i| test.ends_with(i));
+            return unsupported_gc_tests.iter().any(|i| test.ends_with(i));
         }
     }
 
@@ -197,6 +278,7 @@ fn ignore(test: &Path, strategy: Strategy) -> bool {
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
 fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
+    let should_fail = should_fail(wast, strategy);
     let wast_bytes =
         std::fs::read(wast).with_context(|| format!("failed to read `{}`", wast.display()))?;
 
@@ -206,16 +288,17 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
     let custom_page_sizes = feature_found(wast, "custom-page-sizes");
     let multi_memory = feature_found(wast, "multi-memory")
         || feature_found(wast, "component-model")
-        || custom_page_sizes;
+        || custom_page_sizes
+        || memory64;
     let threads = feature_found(wast, "threads");
-    let gc = feature_found(wast, "gc");
-    let function_references = gc || feature_found(wast, "function-references");
+    let gc = feature_found(wast, "gc") || memory64;
+    let function_references = gc || memory64 || feature_found(wast, "function-references");
     let reference_types = !(threads && feature_found(wast, "proposals"));
     let relaxed_simd = feature_found(wast, "relaxed-simd");
     let tail_call = feature_found(wast, "tail-call") || feature_found(wast, "function-references");
     let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
         || feature_found_src(&wast_bytes, "shared)");
-    let extended_const = feature_found(wast, "extended-const");
+    let extended_const = feature_found(wast, "extended-const") || memory64;
 
     if pooling && use_shared_memory {
         log::warn!("skipping pooling test with shared memory");
@@ -340,28 +423,38 @@ fn run_wast(wast: &Path, strategy: Strategy, pooling: bool) -> anyhow::Result<()
         None
     };
 
-    let mut engines = vec![(Engine::new(&cfg)?, "default")];
+    let mut engines = vec![(Engine::new(&cfg), "default")];
 
     // For tests that use relaxed-simd test both the default engine and the
     // guaranteed-deterministic engine to ensure that both the 'native'
     // semantics of the instructions plus the canonical semantics work.
     if relaxed_simd {
         engines.push((
-            Engine::new(cfg.relaxed_simd_deterministic(true))?,
+            Engine::new(cfg.relaxed_simd_deterministic(true)),
             "deterministic",
         ));
     }
 
     for (engine, desc) in engines {
-        let store = Store::new(&engine, ());
-        let mut wast_context = WastContext::new(store);
-        wast_context.register_spectest(&SpectestConfig {
-            use_shared_memory,
-            suppress_prints: true,
-        })?;
-        wast_context
-            .run_buffer(wast.to_str().unwrap(), &wast_bytes)
-            .with_context(|| format!("failed to run spec test with {desc} engine"))?;
+        let result = engine.and_then(|engine| {
+            let store = Store::new(&engine, ());
+            let mut wast_context = WastContext::new(store);
+            wast_context.register_spectest(&SpectestConfig {
+                use_shared_memory,
+                suppress_prints: true,
+            })?;
+            wast_context
+                .run_buffer(wast.to_str().unwrap(), &wast_bytes)
+                .with_context(|| format!("failed to run spec test with {desc} engine"))
+        });
+
+        if should_fail {
+            if result.is_ok() {
+                bail!("this test is flagged as should-fail but it succeeded")
+            }
+        } else {
+            result?;
+        }
     }
 
     Ok(())

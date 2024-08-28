@@ -6,16 +6,13 @@ use std::cell::Cell;
 
 pub use super::MachLabel;
 use super::RetPair;
-pub use crate::ir::{
-    condcodes::CondCode, dynamic_to_fixed, Constant, DynamicStackSlot, ExternalName, FuncRef,
-    GlobalValue, Immediate, SigRef, StackSlot,
-};
+pub use crate::ir::{condcodes::CondCode, *};
 pub use crate::isa::{unwind::UnwindInst, TargetIsa};
 pub use crate::machinst::{
     ABIArg, ABIArgSlot, ABIMachineSpec, CallSite, InputSourceInst, Lower, LowerBackend, RealReg,
     Reg, RelocDistance, Sig, VCodeInst, Writable,
 };
-pub use crate::settings::TlsModel;
+pub use crate::settings::{StackSwitchModel, TlsModel};
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -341,6 +338,11 @@ macro_rules! isle_lower_prelude_methods {
             } else {
                 None
             }
+        }
+
+        #[inline]
+        fn stack_switch_model(&mut self) -> Option<StackSwitchModel> {
+            Some(self.backend.flags().stack_switch_model())
         }
 
         #[inline]
