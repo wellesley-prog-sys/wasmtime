@@ -111,6 +111,8 @@ The following terms exactly match their general SMT-LIB meaning:
 - `not`: boolean negation
 - `=>`: boolean implication
 
+We additionally support variadic uses of the `and` and `or` operations (these desugar to the binary SMT-LIB versions as expected). 
+
 ### Integer operations
 
 The following terms exactly match the  [SMT-LIB theories `Int`](https://smt-lib.org/theories-Ints.shtml).
@@ -155,31 +157,33 @@ There operations are typically used in specs for any operations on ISLE `Value`s
 
 ### Custom bitvector operations
 
-- `int2bv`
-- `bv2int`
-- `extract`
-- `zero_ext`
-- `sign_ext`
-- `rotr`
-- `rotl`
-- `concat`
-- `widthof`
-- `subs`
-- `popcnt`
-- `rev`
-- `cls`
-- `clx`
-- `convto`
+- `int2bv`: equivalent to SMT-LIB `nat2bv`.
+- `bv2int`: equivalent to SMT-LIB `bv2nat`.
+- `extract`: `(extract h l e)` where `h` and `l` are integer literals and `e` is a bitvector is equivalent to SMT-LIB `((_ extract h l) e)`.
+- `zero_ext`: `(zero_ext w e)` where `w : Int` and `e : (bv N)` is equivalent to SMT-LIB `((_ zero_extend M) e))` where `M = w - N`. 
+- `sign_ext`: `(sign_ext w e)` where `w : Int` and `e : (bv N)` is equivalent to SMT-LIB `((_ sign_extend M) e))` where `M = w - N`. 
+- `rotr`: `(rotr e1 e2)` where `e1, e2: (bv N)` resolves to `(bvor (bvlshr e1 e3) (bvshl e1 (bvsub (nat2bv N N) e3)))`, where `e3 = (bvurem e2 (nat2bv N N))`. Bitvector rotate right.
+- `rotl`: `(rotl e1 e2)` where `e1, e2: (bv N)` resolves to `(bvor (bvshl e1 e3) (bvlshr e1 (bvsub (nat2bv N N) e3)))`, where `e3 = (bvurem e2 (nat2bv N N))`. Bitvector rotate left.
+- `concat`: `(concat e_1... e_N)` resolves to `(concat e_1 (concat e_2 (concat ... e_N)))`. That is, this is a variadic version of the SMT-LIB `concat` operation. 
+- `widthof`: `(widthof e)` where `e : (bv N)` resolves to `N`. That is, returns the bitwidth of a supplied bitvector as an integer. 
+- `subs`: `(subs e1 e2)` returns the results of a subtraction with flags. 
+- `popcnt`: `(popcnt e)` where `e : (bv N)` returns the count of non-zero bits in `e`.
+- `rev`: `(rev e)` where `e : (bv N)` reverses the order of bits in `e`.
+- `cls`: `(cls e)` where `e : (bv N)` returns the count of leading sign bits in `e`. 
+- `clz`: `(clz e)` where `e : (bv N)` returns the count of leading zero bits in `e`.
+- `convto`: `(convto w e)` where `w : Int` and `e : (bv N)` converts the bitvector `e` to the width `w`, leaving the upper bits unspecified in the case of a extension. That is, there are 3 cases:
+    1. `w = N`: resolves to `e`.
+    2. `w < N`: resolves to `((_ extract M 0) e)` where `M = N - 1`.
+    3. `w > N`: resolves to `(concat e2 e)` where `e2` is a fresh bitvector with `w - N` unspecified bits. 
 
 ### Custom memory operations
 
 - `load_effect`
 - `store_effect`
 
-
 ### Custom control operation
 
-- `switch`
+- `switch`: 
 
 ## Testing
 
