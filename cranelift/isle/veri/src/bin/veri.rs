@@ -147,7 +147,14 @@ fn verify_expansion(
     let solutions = type_solver.solve(&system);
 
     for solution in &solutions {
+        // Show type assignment.
+        for choice in &solution.choices {
+            println!("choice = {}", choice);
+        }
         println!("type solution status = {}", solution.status);
+        println!("type assignment:");
+        solution.assignment.pretty_print(&conditions);
+
         match solution.status {
             type_inference::Status::Solved => (),
             type_inference::Status::Inapplicable => continue,
@@ -156,6 +163,7 @@ fn verify_expansion(
             }
         }
 
+        // Verify.
         if skip_solver {
             println!("skip solver");
             continue;
@@ -180,10 +188,6 @@ fn verify_expansion_type_instantiation(
     replay_path: &std::path::Path,
     timeout_seconds: u32,
 ) -> anyhow::Result<()> {
-    // Show type assignment.
-    println!("type assignment:");
-    assignment.pretty_print(conditions);
-
     // Solve.
     println!("solve:");
     let replay_file = std::fs::File::create(replay_path)?;
