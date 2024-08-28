@@ -1883,33 +1883,6 @@ pub fn run_solver_with_static_widths(
 
     // Correctness query
     // Verification condition: first rule's LHS and RHS are equal
-    let width = match (
-        ctx.static_width(&rule_sem.lhs),
-        ctx.static_width(&rule_sem.rhs),
-    ) {
-        (Some(w), None) | (None, Some(w)) => w,
-        (Some(w1), Some(w2)) => {
-            assert_eq!(w1, w2);
-            w1
-        }
-        (None, None) => {
-            log::warn!(
-                "Width of relevant bits of LHS and RHS unknown, using full register bitwidth: {}",
-                MAX_WIDTH
-            );
-            MAX_WIDTH
-        }
-    };
-
-    let (lhs_care_bits, rhs_care_bits) = if width == MAX_WIDTH {
-        (lhs, rhs)
-    } else {
-        (
-            ctx.smt.extract((width - 1).try_into().unwrap(), 0, lhs),
-            ctx.smt.extract((width - 1).try_into().unwrap(), 0, rhs),
-        )
-    };
-
     if let Some(concrete) = concrete {
         return test_concrete_with_static_widths(
             rule_sem,
@@ -1919,7 +1892,6 @@ pub fn run_solver_with_static_widths(
             concrete,
             lhs,
             rhs,
-            rhs_care_bits,
             &mut ctx,
             assumptions,
         );
@@ -1935,7 +1907,7 @@ pub fn run_solver_with_static_widths(
         custom_condition
     } else {
         // Note: this is where we ask if the LHS and the RHS are equal
-        let side_equality = ctx.smt.eq(lhs_care_bits, rhs_care_bits);
+        let side_equality = ctx.smt.eq(lhs, rhs);
         log::debug!(
             "LHS and RHS equality condition:{}",
             ctx.smt.display(side_equality)
@@ -2071,7 +2043,6 @@ pub fn test_concrete_with_static_widths(
     concrete: &ConcreteTest,
     lhs: SExpr,
     rhs: SExpr,
-    rhs_care_bits: SExpr,
     ctx: &mut SolverCtx,
     assumptions: Vec<SExpr>,
 ) -> VerificationResult {
@@ -2090,7 +2061,7 @@ pub fn test_concrete_with_static_widths(
     ctx.smt.push().unwrap();
     let eq = ctx
         .smt
-        .eq(rhs_care_bits, ctx.smt.atom(concrete.output.literal.clone()));
+        .eq(rhs, ctx.smt.atom(concrete.output.literal.clone()));
 
     ctx.smt
         .assert(ctx.smt.named(format!("conceq"), eq))
@@ -2110,7 +2081,7 @@ pub fn test_concrete_with_static_widths(
         // Try again
         assert!(matches!(ctx.smt.check(), Ok(Response::Sat)));
         // Get the value for what output is to panic with a useful message
-        let val = ctx.smt.get_value(vec![rhs_care_bits]).unwrap()[0].1;
+        let val = ctx.smt.get_value(vec![rhs]).unwrap()[0].1;
         ctx.display_model(termenv, typeenv, rule, lhs, rhs);
         panic!(
             "Expected {}, got {}",
@@ -2131,13 +2102,13 @@ pub fn test_concrete_with_static_widths(
         .assert(
             ctx.smt.not(
                 ctx.smt
-                    .eq(rhs_care_bits, ctx.smt.atom(concrete.output.literal.clone())),
+                    .eq(rhs, ctx.smt.atom(concrete.output.literal.clone())),
             ),
         )
         .unwrap();
     if !matches!(ctx.smt.check(), Ok(Response::Unsat)) {
         // Get the value for what output is to panic with a useful message
-        let val = ctx.smt.get_value(vec![rhs_care_bits]).unwrap()[0].1;
+        let val = ctx.smt.get_value(vec![rhs]).unwrap()[0].1;
         ctx.display_model(termenv, typeenv, rule, lhs, rhs);
         // AVH TODO: should probably elevate back to an error with custom verification condition
         log::error!(
