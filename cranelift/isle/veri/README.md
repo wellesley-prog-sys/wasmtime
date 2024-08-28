@@ -99,9 +99,9 @@ Models can be `Bool`, `Int`, or `(bv)` with or without a specific bitwidth. If t
 
 - As in the example above, `instantiate` and `form` specify what type instantiations should be considered for a verification. 
 
-- `spec` terms provide specifications for ISLE declarations, which can correspond to ISLE instructions, ISA instructions, external constructors/extractors defined in Rust, or transient, ISLE-only terms.
+- `spec` terms provide specifications for ISLE declarations, which can correspond to ISLE instructions, ISA instructions, external constructors/extractors defined in Rust, or transient, ISLE-only terms. Specs take the form `(spec (term arg1 ... argN) (provide p1 ... pM) (require r1 ... rO))`, providing the `term` termname (must be a defined ISLE decl), fresh variables `arg1 ... argN` to refer to the arguments, and zero or more provide and require expressions `p1, ..., pN, r1, ..., RN` that take the form of expressions with operations as described below. `spec` terms use the keyword `result` to constrain the return value of the term. 
 
-### General SMT-LIB terms
+### General SMT-LIB operations
 
 The following terms exactly match their general SMT-LIB meaning:
 
@@ -178,12 +178,14 @@ There operations are typically used in specs for any operations on ISLE `Value`s
 
 ### Custom memory operations
 
-- `load_effect`
-- `store_effect`
+- `load_effect`: `(load_effect flags size address)` where `flags : (bv 16)`, `size: Int`, and `address : (bv 64)` models a load of `size` bits from address `address` with flags `flags`. Only 1 `load_effect` may be used per left hand and right hand side of a rule. 
+- `store_effect`: `(store_effect flags size val address)` where `flags : (bv 16)`, `size: Int`, and `val : (bv size)`, `address : (bv 64)` models a store of `val` (with `size` bits) to address `address` with flags `flags`. Only 1 `store_effect` may be used per left hand and right hand side of a rule. 
 
 ### Custom control operation
 
-- `switch`: 
+- `if`: equivalent to SMT-LIB `ite`. 
+- `switch`: `(switch c (m1 e1) ... (mN eN))` resolves to a series of nested `ite` expressions, 
+`(ite(= c m1) e1 (ite (= c m2) e2 (ite ...eN)))`. It additionally adds a verification condition that some case must match, that is, `(or (= c m1) (or (= c m2)...(= c mN)))`.
 
 ## Testing
 
