@@ -187,6 +187,81 @@ There operations are typically used in specs for any operations on ISLE `Value`s
 - `switch`: `(switch c (m1 e1) ... (mN eN))` resolves to a series of nested `ite` expressions, 
 `(ite(= c m1) e1 (ite (= c m2) e2 (ite ...eN)))`. It additionally adds a verification condition that some case must match, that is, `(or (= c m1) (or (= c m2)...(= c mN)))`.
 
+## Example
+
+Continuing the `band_fits_in_64` example from before, the full required specifications are places in the relevant ISLE files.
+
+```
+(rule band_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (band x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
+```
+
+In `inst_specs.isle`:
+
+```
+;; The band spec uses the bitvector `bvand` on its arguments.
+(spec (band x y)
+    (provide (= result (bvand x y))))
+(instantiate band bv_binary_8_to_64)
+```
+
+In `prelude_lower.isle`:
+
+```
+;; has_type checks that the integer modeling the type in matches the Inst bitwidth.
+(spec (has_type ty arg)
+      (provide (= result arg))
+      (require (= ty (widthof arg))))
+(decl has_type (Type Inst) Inst)
+
+;; fits_in_64 checks that the integer modeling the width is less than or equal to 64.
+(spec (fits_in_64 arg)
+      (provide (= result arg))
+      (require (<= arg 64)))
+(decl fits_in_64 (Type) Type)
+```
+
+In `aarch64/lower.isle`: 
+
+```
+;; lower is just modeled as an identity function
+(spec (lower arg) (provide (= result arg)))
+(decl partial lower (Inst) InstOutput)
+```
+
+In `aarch64/inst.isle`:
+
+```
+;; Enum models ALUOp as an 8-bit bitvector.
+(model ALUOp (enum
+      (Add #x00) ;; 0
+      (Sub #x01)
+      (Orr #x02)
+      (OrrNot #x03)
+      (And #x04)
+      (AndNot #x05)
+      (Eor #x06)
+      (EorNot #x07)
+      (SubS #x08)
+      (SDiv #x09)
+      (UDiv #x0a)
+      (RotR #x0b)
+      (Lsr #x0c)
+      (Asr #x0d)
+      (Lsl #x0e)))
+
+;; alu_rs_imm_logic_commutative uses a conv_to and switch. 
+(spec (alu_rs_imm_logic_commutative op t a b)
+    (provide
+      (= result
+         (conv_to 64
+           (switch op
+             ((ALUOp.Orr) (bvor a b))
+             ((ALUOp.And) (bvand a b))
+             ((ALUOp.Eor) (bvxor a b)))))))
+(decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
+```
+
 ## Testing
 
 To see an all of our current output, run tests without capturing standard out:
