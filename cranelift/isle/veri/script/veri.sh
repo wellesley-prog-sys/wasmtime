@@ -11,11 +11,13 @@ function usage() {
 arch="aarch64"
 tmp_dir=""
 output_dir="output"
-while getopts "a:t:o:h" opt; do
+profile="dev"
+while getopts "a:t:o:p:h" opt; do
     case "${opt}" in
         a) arch="${OPTARG}" ;;
         t) tmp_dir="${OPTARG}" ;;
         o) output_dir="${OPTARG}" ;;
+        p) profile="${OPTARG}" ;;
         h) usage ;;
         *) usage ;;
     esac
@@ -36,7 +38,7 @@ if [[ ! -d "${tmp_dir}" ]]; then
 fi
 
 # Run.
-cargo run --bin veri -- \
+cargo run --bin veri --profile "${profile}" -- \
     --codegen-crate-dir ../../codegen/ \
     --work-dir "${tmp_dir}" \
     --name "${arch}" \

@@ -34,7 +34,7 @@ jobs:
       - name: Install Tools
         run: sudo apt-get install -y z3
       - name: Build
-        run: cargo build -p cranelift-isle-veri
+        run: cargo build --release -p cranelift-isle-veri
       - name: Verify
         working-directory: cranelift/isle/veri
-        run: ./script/veri.sh -a ${{ matrix.arch }} -t "${RUNNER_TEMP}" -o "${RUNNER_TEMP}"
+        run: ./script/veri.sh -a ${{ matrix.arch }} -p release -t "${RUNNER_TEMP}" -o "${RUNNER_TEMP}"
