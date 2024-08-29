@@ -4,7 +4,7 @@ set -euo pipefail
 
 # Options
 function usage() {
-    echo "Usage: ${0} [-h] [-a <arch>] [-t <tmp_dir>] [-o <output_dir>]"
+    echo "Usage: ${0} [-h] [-a <arch>] [-t <tmp_dir>] [-o <output_dir>] [-p <profile>]"
     exit 2
 }
 
