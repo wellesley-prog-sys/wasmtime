@@ -9,7 +9,7 @@ function usage() {
 }
 
 arch="aarch64"
-tmp_dir="${TMPDIR}"
+tmp_dir=""
 output_dir="output"
 while getopts "a:t:o:h" opt; do
     case "${opt}" in
@@ -24,6 +24,16 @@ shift $((OPTIND-1))
 
 # Setup output.
 mkdir -p "${output_dir}"
+
+# Setup temp directory.
+if [[ -z "${tmp_dir}" ]]; then
+    tmp_dir=$(mktemp -d)
+fi
+
+if [[ ! -d "${tmp_dir}" ]]; then
+    echo "temporary directory does not exist"
+    exit 1
+fi
 
 # Run.
 cargo run --bin veri -- \
