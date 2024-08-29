@@ -487,6 +487,11 @@ impl SpecEnv {
         let type_id = tyenv
             .get_type_by_name(name)
             .expect("type name should be defined");
+        // TODO(mbm): error on duplicate model
+        assert!(
+            !self.type_model.contains_key(&type_id),
+            "duplicate type model"
+        );
         self.type_model
             .insert(type_id, Compound::from_ast(model_type));
     }
