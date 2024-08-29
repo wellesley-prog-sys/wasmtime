@@ -40,9 +40,8 @@
 
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; REVIEW(mbm): can we assume Reg is 64-bit (for aarch64/x64)?
 (type Reg (primitive Reg))
-(model Reg (type (bv 64)))
+(model Reg (type (bv)))
 
 (type WritableReg (primitive WritableReg))
 (model WritableReg (type (bv)))
@@ -81,9 +80,13 @@
 (decl output (ValueRegs) InstOutput)
 (spec (output arg)
       (provide
-            (=
-                  (concat (:hi arg) (:lo arg))
-                  (conv_to 128 result)
+            ; Two input registers are the same width.
+            (= (widthof (:lo arg)) (widthof (:hi arg)))
+
+            ; Output is the concatenation of the two registers.
+            (let
+                  ((cat (concat (:hi arg) (:lo arg))))
+                  (= cat (conv_to (widthof cat) result))
             )
       )
 )
@@ -147,7 +150,7 @@
 ;; As a side effect, this marks the value as used.
 (decl put_in_reg (Value) Reg)
 (spec (put_in_reg arg)
-      (provide (= result (conv_to 64 arg)))
+      (provide (= result (conv_to (widthof result) arg)))
       (require (<= (widthof arg) 64))
 )
 (extern constructor put_in_reg put_in_reg)

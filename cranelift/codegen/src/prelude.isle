@@ -525,6 +525,9 @@
 
 ;; An extractor that only matches types that can fit in 16 bits.
 (decl fits_in_16 (Type) Type)
+(spec (fits_in_16 arg)
+      (provide (= result arg))
+      (require (<= arg 16)))
 (extern extractor fits_in_16 fits_in_16)
 
 ;; An extractor that only matches types that can fit in 32 bits.

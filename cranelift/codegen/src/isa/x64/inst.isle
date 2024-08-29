@@ -732,11 +732,44 @@
        ;; A pseudoinstruction that just keeps a value alive.
        (DummyUse (reg Reg))))
 
+(model MInst (type (bv 1)))
+
+; TODO(mbm): AluRmiR must handle memory and immediate forms of src2 operand
+(spec (MInst.AluRmiR size op src1 src2 dst)
+      (provide
+            ; Execute opcode.
+            (=
+                  dst
+                  (switch size
+                        ; 64-bit forms operate on full register
+                        ((OperandSize.Size64)
+                              (switch op
+                                    ((AluRmiROpcode.Add) (bvadd src1 src2))
+                              )
+                        )
+                        ; 32-bit forms zero-extend to full general purpose register.
+                        ((OperandSize.Size32)
+                              (switch op
+                                    ((AluRmiROpcode.Add) (zero_ext 64 (bvadd (extract 31 0 src1) (extract 31 0 src2))))
+                              )
+                        )
+                  )
+            )
+      )
+)
+
 (type OperandSize extern
       (enum Size8
             Size16
             Size32
             Size64))
+
+(model OperandSize
+      (enum Int
+            (Size8  8)
+            (Size16 16)
+            (Size32 32)
+            (Size64 64)))
 
 (type DivSignedness
       (enum Signed
@@ -752,6 +785,11 @@
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
+(spec (operand_size_of_type_32_64 ty)
+      (provide
+            (= result (if (= ty 64) 64 32))
+      )
+)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
 
 ;; Get the true `OperandSize` for a given `Type`, with no rounding.
@@ -773,6 +811,18 @@
             And
             Or
             Xor))
+
+(model AluRmiROpcode
+      (enum (bv 8)
+            (Add  #x00)
+            (Adc  #x01)
+            (Sub  #x02)
+            (Sbb  #x03)
+            (And  #x04)
+            (Or   #x05)
+            (Xor  #x06)
+      )
+)
 
 (type AluRmROpcode
       (enum Andn
@@ -998,6 +1048,8 @@
        (Mem (addr SyntheticAmode))
        (Imm (simm32 u32))))
 
+(model RegMemImm (type (bv)))
+
 ;; Put the given clif value into a `RegMemImm` operand.
 ;;
 ;; Asserts that the value fits into a single register, and doesn't require
@@ -1005,6 +1057,9 @@
 ;;
 ;; As a side effect, this marks the value as used.
 (decl put_in_reg_mem_imm (Value) RegMemImm)
+(spec (put_in_reg_mem_imm arg)
+      (provide (= result (conv_to (widthof result) arg)))
+)
 (extern constructor put_in_reg_mem_imm put_in_reg_mem_imm)
 
 (type RegMem extern
@@ -1471,10 +1526,13 @@
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Gpr (primitive Gpr))
+(model Gpr (type (bv 64)))
 (type WritableGpr (primitive WritableGpr))
+(model WritableGpr (type (bv)))
 (type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
 (type GprMemImm extern (enum))
+(model GprMemImm (type (bv)))
 (type Imm8Gpr extern (enum))
 
 (type Xmm (primitive Xmm))
@@ -1515,10 +1573,12 @@
 
 ;; Convert a `WritableGpr` to an `Gpr`.
 (decl writable_gpr_to_gpr (WritableGpr) Gpr)
+(spec (writable_gpr_to_gpr arg) (provide (= result arg)))
 (extern constructor writable_gpr_to_gpr writable_gpr_to_gpr)
 
 ;; Convert an `Gpr` to a `Reg`.
 (decl gpr_to_reg (Gpr) Reg)
+(spec (gpr_to_reg arg) (provide (= result arg)))
 (extern constructor gpr_to_reg gpr_to_reg)
 
 ;; Convert an `Gpr` to a `GprMem`.
@@ -1562,6 +1622,7 @@
 
 ;; Allocate a new temporary GPR register.
 (decl temp_writable_gpr () WritableGpr)
+(spec (temp_writable_gpr) (provide true))
 (extern constructor temp_writable_gpr temp_writable_gpr)
 
 ;; Allocate a new temporary XMM register.
@@ -1582,6 +1643,7 @@
 ;;
 ;; Asserts that the `RegMemImm`'s register, if any, is an GPR register.
 (decl gpr_mem_imm_new (RegMemImm) GprMemImm)
+(spec (gpr_mem_imm_new arg) (provide (= result arg)))
 (extern constructor gpr_mem_imm_new gpr_mem_imm_new)
 
 ;; Construct a new `XmmMemImm` from the given `RegMemImm`.
@@ -1612,6 +1674,7 @@
 ;;
 ;; Asserts that the register is a GPR.
 (decl gpr_new (Reg) Gpr)
+(spec (gpr_new arg) (provide (= result arg)))
 (extern constructor gpr_new gpr_new)
 
 ;; Construct a new `GprMem` from a `RegMem`.
