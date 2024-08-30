@@ -2570,8 +2570,6 @@ mod test {
                         pos: Pos {
                             file: 0,
                             offset: 73,
-                            line: 3,
-                            col: 33,
                         },
                     },
                     Variant {
@@ -2586,8 +2584,6 @@ mod test {
                         pos: Pos {
                             file: 0,
                             offset: 95,
-                            line: 3,
-                            col: 55,
                         },
                     },
                 ],
