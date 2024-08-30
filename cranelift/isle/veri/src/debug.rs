@@ -18,7 +18,7 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
     println!("\trules = [");
     for rule_id in &expansion.rules {
         let rule = &prog.termenv.rules[rule_id.index()];
-        println!("\t\t{}", rule.identifier(&prog.tyenv));
+        println!("\t\t{}", rule.identifier(&prog.tyenv, &prog.files));
     }
     println!("\t]");
 
@@ -100,10 +100,7 @@ pub fn print_rule_set(prog: &Program, term_id: &TermId, rule_set: &RuleSet) {
     for rule in &rule_set.rules {
         assert_eq!(rule.iterators.len(), 0);
         println!("\t\t{{");
-        println!(
-            "\t\t\tpos = {}",
-            rule.pos.pretty_print_line(&prog.tyenv.filenames[..])
-        );
+        println!("\t\t\tpos = {}", rule.pos.pretty_print_line(&prog.files));
         println!("\t\t\tconstraints = [");
         for i in 0..rule_set.bindings.len() {
             if let Some(constraint) = rule.get_constraint(i.try_into().unwrap()) {

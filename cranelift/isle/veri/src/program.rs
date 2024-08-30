@@ -1,5 +1,7 @@
+use crate::spec::{self, SpecEnv};
 use cranelift_isle::ast::Ident;
 use cranelift_isle::error::{Errors, ErrorsBuilder};
+use cranelift_isle::files::Files;
 use cranelift_isle::lexer::Pos;
 use cranelift_isle::sema::{
     self, Rule, RuleId, Term, TermEnv, TermId, Type, TypeEnv, TypeId, VariantId,
@@ -7,10 +9,10 @@ use cranelift_isle::sema::{
 use cranelift_isle::trie_again::{self, RuleSet};
 use cranelift_isle::{lexer, parser};
 use std::collections::HashMap;
-
-use crate::spec::{self, SpecEnv};
+use std::sync::Arc;
 
 pub struct Program {
+    pub files: Arc<Files>,
     pub tyenv: TypeEnv,
     pub termenv: TermEnv,
     pub specenv: SpecEnv,
@@ -21,13 +23,45 @@ impl Program {
         paths: &Vec<std::path::PathBuf>,
         expand_internal_extractors: bool,
     ) -> Result<Self, Errors> {
-        let lexer = lexer::Lexer::from_files(paths)?;
-        let defs = parser::parse(lexer)?;
-        let mut tyenv = sema::TypeEnv::from_ast(&defs)?;
-        let termenv = sema::TermEnv::from_ast(&mut tyenv, &defs, expand_internal_extractors)?;
+        let files = match Files::from_paths(paths) {
+            Ok(files) => files,
+            Err((path, err)) => {
+                return Err(Errors::from_io(
+                    err,
+                    format!("cannot read file {}", path.display()),
+                ))
+            }
+        };
+
+        let files = Arc::new(files);
+
+        let mut defs = Vec::new();
+        for (file, src) in files.file_texts.iter().enumerate() {
+            let lexer = match lexer::Lexer::new(file, src) {
+                Ok(lexer) => lexer,
+                Err(err) => return Err(Errors::new(vec![err], files)),
+            };
+
+            match parser::parse(lexer) {
+                Ok(mut ds) => defs.append(&mut ds),
+                Err(err) => return Err(Errors::new(vec![err], files)),
+            }
+        }
+
+        let mut tyenv = match sema::TypeEnv::from_ast(&defs) {
+            Ok(type_env) => type_env,
+            Err(errs) => return Err(Errors::new(errs, files)),
+        };
+
+        let termenv = match sema::TermEnv::from_ast(&mut tyenv, &defs, expand_internal_extractors) {
+            Ok(term_env) => term_env,
+            Err(errs) => return Err(Errors::new(errs, files)),
+        };
+
         let specenv = spec::SpecEnv::from_ast(&defs, &termenv, &tyenv);
 
         Ok(Self {
+            files,
             tyenv,
             termenv,
             specenv,
@@ -80,7 +114,7 @@ impl Program {
         self.termenv
             .rules
             .iter()
-            .find(|r| r.identifier(&self.tyenv) == id)
+            .find(|r| r.identifier(&self.tyenv, &self.files) == id)
     }
 
     pub fn get_term_by_name(&self, name: &str) -> Option<TermId> {
@@ -95,7 +129,7 @@ impl Program {
         } else {
             Err(ErrorsBuilder::new()
                 .errors(errors)
-                .file_info_from_tyenv(&self.tyenv)
+                .files(self.files.clone())
                 .build())
         }
     }

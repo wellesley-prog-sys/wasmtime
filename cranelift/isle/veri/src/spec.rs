@@ -1,5 +1,5 @@
 use cranelift_isle::{
-    ast::{self, AttrKind, Defs, Ident, Model, ModelType, SpecOp},
+    ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
     sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
 };
@@ -415,7 +415,7 @@ pub struct SpecEnv {
 }
 
 impl SpecEnv {
-    pub fn from_ast(defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) -> Self {
+    pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Self {
         let mut env = Self {
             term_spec: HashMap::new(),
             chain: HashSet::new(),
@@ -434,8 +434,8 @@ impl SpecEnv {
         env
     }
 
-    fn collect_models(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
-        for def in &defs.defs {
+    fn collect_models(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+        for def in defs {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
                     ast::ModelValue::TypeValue(model_type) => {
@@ -497,10 +497,10 @@ impl SpecEnv {
             .insert(type_id, Compound::from_ast(model_type));
     }
 
-    fn collect_instantiations(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_instantiations(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
         // Collect form signatures first, as they may be referenced by instantiations.
         let mut form_signature = HashMap::new();
-        for def in &defs.defs {
+        for def in defs {
             if let ast::Def::Form(form) = def {
                 let signatures: Vec<_> = form.signatures.iter().map(Signature::from_ast).collect();
                 form_signature.insert(form.name.0.clone(), signatures);
@@ -508,7 +508,7 @@ impl SpecEnv {
         }
 
         // Collect instantiations.
-        for def in &defs.defs {
+        for def in defs {
             if let ast::Def::Instantiation(inst) = def {
                 let term_id = termenv.get_term_by_name(tyenv, &inst.term).unwrap();
                 let sigs = match &inst.form {
@@ -520,8 +520,8 @@ impl SpecEnv {
         }
     }
 
-    fn collect_specs(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
-        for def in &defs.defs {
+    fn collect_specs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+        for def in defs {
             if let ast::Def::Spec(spec) = def {
                 let term_id = termenv
                     .get_term_by_name(tyenv, &spec.term)
@@ -531,8 +531,8 @@ impl SpecEnv {
         }
     }
 
-    fn collect_attrs(&mut self, defs: &Defs, termenv: &TermEnv, tyenv: &TypeEnv) {
-        for def in &defs.defs {
+    fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+        for def in defs {
             if let ast::Def::Attr(attr) = def {
                 let term_id = termenv
                     .get_term_by_name(tyenv, &attr.term)

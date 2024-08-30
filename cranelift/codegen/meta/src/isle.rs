@@ -161,8 +161,9 @@ pub fn get_isle_compilations(
             },
             // The Pulley instruction selector.
             IsleCompilation {
+                name: "pulley".to_string(),
                 output: gen_dir.join("isle_pulley_shared.rs"),
-                inputs: vec![
+                tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
                     src_isa_pulley_shared.join("inst.isle"),

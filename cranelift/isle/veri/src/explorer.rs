@@ -111,7 +111,7 @@ impl<'a> ExplorerWriter<'a> {
 
     fn write_files(&mut self) -> anyhow::Result<()> {
         self.write_files_index()?;
-        for id in 0..self.prog.tyenv.filenames.len() {
+        for id in 0..self.prog.files.file_names.len() {
             self.write_file(id)?;
         }
         Ok(())
@@ -123,7 +123,7 @@ impl<'a> ExplorerWriter<'a> {
 
         // Files.
         writeln!(output, "<ul>")?;
-        for (id, filename) in self.prog.tyenv.filenames.iter().enumerate() {
+        for (id, filename) in self.prog.files.file_names.iter().enumerate() {
             writeln!(
                 output,
                 r#"<li><a href="{link}">{filename}</a></li>"#,
@@ -140,12 +140,12 @@ impl<'a> ExplorerWriter<'a> {
         let mut output = self.create(&self.file_path(id))?;
 
         // Header.
-        let filename = &self.prog.tyenv.filenames[id];
+        let filename = &self.prog.files.file_names[id];
         let title = format!("File: {filename}");
         self.header(&mut output, &title)?;
 
         // Source code.
-        let file_text = &self.prog.tyenv.file_texts[id];
+        let file_text = &self.prog.files.file_texts[id];
 
         writeln!(&mut output, "<pre>")?;
         for (i, line) in file_text.lines().enumerate() {
@@ -667,7 +667,7 @@ impl<'a> ExplorerWriter<'a> {
         format!(
             r#"<a href="{href}">{identifier}</a>"#,
             href = self.pos_href(rule.pos),
-            identifier = rule.identifier(&self.prog.tyenv)
+            identifier = rule.identifier(&self.prog.tyenv, &self.prog.files)
         )
     }
 
@@ -684,11 +684,11 @@ impl<'a> ExplorerWriter<'a> {
     }
 
     fn loc(&self, pos: Pos) -> String {
-        let path = PathBuf::from(self.prog.tyenv.filenames[pos.file].as_ref());
+        let path = PathBuf::from(&self.prog.files.file_names[pos.file]);
         format!(
             "{}:{}",
             path.file_name().unwrap().to_string_lossy(),
-            pos.line
+            self.line(pos)
         )
     }
 
@@ -696,12 +696,20 @@ impl<'a> ExplorerWriter<'a> {
         format!(
             "{}#{}",
             self.link(&self.file_path(pos.file)),
-            self.line_url_fragment(pos.line)
+            self.line_url_fragment(self.line(pos))
         )
     }
 
     fn line_url_fragment(&self, n: usize) -> String {
         format!("L{n}")
+    }
+
+    fn line(&self, pos: Pos) -> usize {
+        self.prog
+            .files
+            .file_line_map(pos.file)
+            .unwrap()
+            .line(pos.offset)
     }
 
     fn types_dir(&self) -> PathBuf {

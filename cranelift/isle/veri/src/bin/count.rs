@@ -188,7 +188,7 @@ impl<'a> ExpansionCounter<'a> {
             n += r;
             println!(
                 "{indent}n={n} r={r} rule={}",
-                rule.pos.pretty_print_line(&self.prog.tyenv.filenames)
+                rule.pos.pretty_print_line(&self.prog.files)
             );
         }
         n
