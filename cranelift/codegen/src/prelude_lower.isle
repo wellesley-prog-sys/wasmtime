@@ -342,7 +342,25 @@
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
 (decl i32_from_iconst (i32) Value)
+(spec (i32_from_iconst arg)
+      (provide (= arg (extract 31 0 (sign_ext 64 result))))
+      (require
+            ; result <= i32::MAX
+            (bvsle (sign_ext 64 result) #x000000007fffffff)
+            ; i32::MIN <= result
+            (bvsle (bvneg #x0000000080000000) (sign_ext 64 result))
+      )
+)
 (extern extractor i32_from_iconst i32_from_iconst)
+
+; Rust code for i32_from_iconst does not allow for constant values larger than 64 bits.
+; REVIEW(mbm): is an instantiation for i32_from_iconst appropriate?
+(instantiate i32_from_iconst
+    ((args (bv 32)) (ret (bv 8)))
+    ((args (bv 32)) (ret (bv 16)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 32)) (ret (bv 64)))
+)
 
 ;; Extract a constant `i64` from a value defined by an `iconst`.
 ;; The value is sign extended to 64 bits.
@@ -364,6 +382,13 @@
 
 ;; Get an unsigned 8-bit immediate in a u8 from an Imm64, if possible.
 (decl uimm8 (u8) Imm64)
+(spec (uimm8 arg)
+      (provide (= result (zero_ext 64 arg)))
+      (require
+            (bvsge result #x0000000000000000) ; >= 0
+            (bvslt result #x0000000000000100) ; < 256
+      )
+)
 (extern extractor uimm8 uimm8)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

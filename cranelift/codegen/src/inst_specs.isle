@@ -1,5 +1,15 @@
 (model Imm64 (type (bv 64)))
 
+; REVIEW(mbm): do we need to model MemFlags?
+(model MemFlags (type
+    (struct
+        (aligned Bool)
+        (trapcode (bv 4))
+    )
+))
+
+(model Offset32 (type (bv 32)))
+
 (spec (iadd x y)
     (provide (= result (bvadd x y))))
 (instantiate iadd

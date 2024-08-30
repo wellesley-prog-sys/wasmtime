@@ -28,7 +28,7 @@ pub enum Expr {
 
     // Boolean operations
     // QUESTION(mbm): would it be preferable to use the Binary(Opcode, Box<Expr>, Box<Expr>) form instead?
-    //Not(Box<Expr>),
+    Not(Box<Expr>),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
     Imp(Box<Expr>, Box<Expr>),
@@ -37,15 +37,15 @@ pub enum Expr {
     //Lt(Box<Expr>, Box<Expr>),
 
     //BVSgt(Box<Expr>, Box<Expr>),
-    //BVSgte(Box<Expr>, Box<Expr>),
-    //BVSlt(Box<Expr>, Box<Expr>),
-    //BVSlte(Box<Expr>, Box<Expr>),
+    BVSge(Box<Expr>, Box<Expr>),
+    BVSlt(Box<Expr>, Box<Expr>),
+    BVSle(Box<Expr>, Box<Expr>),
     //BVUgt(Box<Expr>, Box<Expr>),
     //BVUgte(Box<Expr>, Box<Expr>),
     BVUlt(Box<Expr>, Box<Expr>),
-    //BVUlte(Box<Expr>, Box<Expr>),
+    BVUle(Box<Expr>, Box<Expr>),
 
-    //BVSaddo(Box<Expr>, Box<Expr>),
+    BVSaddo(Box<Expr>, Box<Expr>),
 
     //// Bitvector operations
     ////      Note: these follow the naming conventions of the SMT theory of bitvectors:
@@ -184,7 +184,7 @@ impl Expr {
             }
             ast::SpecExpr::Op { op, args, pos } => match op {
                 // Unary
-                //SpecOp::Not => unop(|x| Expr::Not(x), args, pos, env),
+                SpecOp::Not => unary_expr!(Expr::Not, args, pos),
                 SpecOp::BVNot => unary_expr!(Expr::BVNot, args, pos),
                 SpecOp::BVNeg => unary_expr!(Expr::BVNeg, args, pos),
                 //SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
@@ -220,16 +220,16 @@ impl Expr {
                 SpecOp::BVShl => binary_expr!(Expr::BVShl, args, pos),
                 SpecOp::BVLshr => binary_expr!(Expr::BVLShr, args, pos),
                 SpecOp::BVAshr => binary_expr!(Expr::BVAShr, args, pos),
-                //SpecOp::BVSaddo => binop(|x, y| Expr::BVSaddo(x, y), args, pos, env),
-                //SpecOp::BVUle => binop(|x, y| Expr::BVUlte(x, y), args, pos, env),
+                SpecOp::BVUle => binary_expr!(Expr::BVUle, args, pos),
                 //SpecOp::BVUlt => binop(|x, y| Expr::BVUlt(x, y), args, pos, env),
                 SpecOp::BVUlt => binary_expr!(Expr::BVUlt, args, pos),
                 //SpecOp::BVUgt => binop(|x, y| Expr::BVUgt(x, y), args, pos, env),
                 //SpecOp::BVUge => binop(|x, y| Expr::BVUgte(x, y), args, pos, env),
-                //SpecOp::BVSlt => binop(|x, y| Expr::BVSlt(x, y), args, pos, env),
-                //SpecOp::BVSle => binop(|x, y| Expr::BVSlte(x, y), args, pos, env),
+                SpecOp::BVSlt => binary_expr!(Expr::BVSlt, args, pos),
+                SpecOp::BVSle => binary_expr!(Expr::BVSle, args, pos),
                 //SpecOp::BVSgt => binop(|x, y| Expr::BVSgt(x, y), args, pos, env),
-                //SpecOp::BVSge => binop(|x, y| Expr::BVSgte(x, y), args, pos, env),
+                SpecOp::BVSge => binary_expr!(Expr::BVSge, args, pos),
+                SpecOp::BVSaddo => binary_expr!(Expr::BVSaddo, args, pos),
                 //SpecOp::Rotr => binop(|x, y| Expr::BVRotr(x, y), args, pos, env),
                 //SpecOp::Rotl => binop(|x, y| Expr::BVRotl(x, y), args, pos, env),
                 SpecOp::ZeroExt => binary_expr!(Expr::BVZeroExt, args, pos),
@@ -490,7 +490,8 @@ impl SpecEnv {
         // TODO(mbm): error on duplicate model
         assert!(
             !self.type_model.contains_key(&type_id),
-            "duplicate type model"
+            "duplicate type model: {name}",
+            name = name.0
         );
         self.type_model
             .insert(type_id, Compound::from_ast(model_type));

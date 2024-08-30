@@ -63,7 +63,7 @@
 ;; but the actual instruction emitted might be an `add` if it's equivalent.
 ;; For more details on this see the `emit.rs` logic to emit
 ;; `LoadEffectiveAddress`.
-(rule -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
+(rule iadd_base_case_32_or_64_lea -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
       (x64_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
 
 ;; Higher-priority cases than the previous two where a load can be sunk into

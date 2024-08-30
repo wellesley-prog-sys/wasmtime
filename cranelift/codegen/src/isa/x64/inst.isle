@@ -758,6 +758,23 @@
       )
 )
 
+(spec
+      (MInst.LoadEffectiveAddress
+            addr ; SyntheticAmode
+            dst  ; WritableGpr
+            size ; OperandSize
+      )
+      (provide
+            (=
+                  dst
+                  (switch size
+                        ((OperandSize.Size64) addr)
+                        ((OperandSize.Size32) (zero_ext 64 (extract 31 0 addr)))
+                  )
+            )
+      )
+)
+
 (type OperandSize extern
       (enum Size8
             Size16
@@ -1086,11 +1103,13 @@
 ;; Addressing modes.
 
 (type SyntheticAmode extern (enum))
+(model SyntheticAmode (type (bv 64)))
 
 (decl synthetic_amode_to_reg_mem (SyntheticAmode) RegMem)
 (extern constructor synthetic_amode_to_reg_mem synthetic_amode_to_reg_mem)
 
 (decl amode_to_synthetic_amode (Amode) SyntheticAmode)
+(spec (amode_to_synthetic_amode amode) (provide (= result (:addr amode))))
 (extern constructor amode_to_synthetic_amode amode_to_synthetic_amode)
 
 ;; An `Amode` represents a possible addressing mode that can be used
@@ -1113,6 +1132,42 @@
              ;; that the resulting immediate makes this Amode refer to
              ;; the given MachLabel.
              (RipRelative (target MachLabel))))
+
+; Model `Amode` as a computed address with flags.
+(model Amode (type
+      (struct
+            (addr  (bv 64))
+            (flags (named MemFlags))
+      )
+))
+
+; ImmReg addressing mode.
+(spec (Amode.ImmReg simm32 base flags)
+      (provide
+            ; Address calculation.
+            (= (:addr result) (bvadd base (sign_ext 64 simm32)))
+
+            ; Flags passthrough.
+            (= (:flags result) flags)
+      )
+)
+
+; ImmRegRegShift addressing mode.
+(spec (Amode.ImmRegRegShift simm32 base index shift flags)
+      (provide
+            ; Address calculation.
+            (=
+                  (:addr result)
+                  (bvadd
+                        (bvadd base (sign_ext 64 simm32))
+                        (bvshl index (zero_ext 64 shift))
+                  )
+            )
+
+            ; Flags passthrough.
+            (= (:flags result) flags)
+      )
+)
 
 ;; A helper to both check that the `Imm64` and `Offset32` values sum to less
 ;; than 32-bits AND return this summed `u32` value. Also, the `Imm64` will be
@@ -1172,7 +1227,7 @@
 ;; In other words this function's job is to find constants and then defer to
 ;; `amode_imm_reg*`.
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
-
+(attr to_amode_add chain)
 (rule 0 (to_amode_add flags x y offset)
         (amode_imm_reg_reg_shift flags x y offset))
 (rule 1 (to_amode_add flags x (i32_from_iconst c) offset)
@@ -1198,12 +1253,14 @@
 ;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
 ;; otherwise falls back on `ImmReg`.
 (decl amode_imm_reg (MemFlags Value Offset32) Amode)
+(attr amode_imm_reg chain)
 (rule 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
 (rule 1 (amode_imm_reg flags (iadd x y) offset)
         (amode_imm_reg_reg_shift flags x y offset))
 
 (decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) Amode)
+(attr amode_imm_reg_reg_shift chain)
 (rule 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
 (rule 1 (amode_imm_reg_reg_shift flags x (ishl y (iconst (uimm8 shift))) offset)
@@ -1220,6 +1277,7 @@
 
 ;; Return a zero offset as an `Offset32`.
 (decl zero_offset () Offset32)
+(spec (zero_offset) (provide (= result #x00000000)))
 (extern constructor zero_offset zero_offset)
 
 ;; Shift kinds.

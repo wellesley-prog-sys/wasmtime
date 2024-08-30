@@ -159,12 +159,22 @@ impl<'a> Solver<'a> {
         match *expr {
             Expr::Variable(_) => unreachable!("variables have no corresponding expression"),
             Expr::Const(ref c) => Ok(self.constant(c)),
+            Expr::Not(x) => Ok(self.smt.not(self.expr_atom(x))),
             Expr::And(x, y) => Ok(self.smt.and(self.expr_atom(x), self.expr_atom(y))),
             Expr::Or(x, y) => Ok(self.smt.or(self.expr_atom(x), self.expr_atom(y))),
             Expr::Imp(x, y) => Ok(self.smt.imp(self.expr_atom(x), self.expr_atom(y))),
             Expr::Eq(x, y) => Ok(self.smt.eq(self.expr_atom(x), self.expr_atom(y))),
             Expr::Lte(x, y) => Ok(self.smt.lte(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVUlt(x, y) => Ok(self.smt.bvult(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVUle(x, y) => Ok(self.smt.bvule(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSge(x, y) => Ok(self.smt.bvsge(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSlt(x, y) => Ok(self.smt.bvslt(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSle(x, y) => Ok(self.smt.bvsle(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSaddo(x, y) => Ok(self.smt.list(vec![
+                self.smt.atom("bvsaddo"),
+                self.expr_atom(x),
+                self.expr_atom(y),
+            ])),
             Expr::BVNot(x) => Ok(self.smt.bvnot(self.expr_atom(x))),
             Expr::BVNeg(x) => Ok(self.smt.bvneg(self.expr_atom(x))),
             Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
@@ -239,7 +249,7 @@ impl<'a> Solver<'a> {
             .try_bit_vector_width(x)
             .context("source of sign_ext expression should be a bit-vector of known width")?;
 
-        // Build zero_extend expression.
+        // Build sign_extend expression.
         let padding = dst
             .checked_sub(src)
             .expect("cannot sign extend to smaller width");

@@ -33,6 +33,7 @@ pub enum Expr {
     Variable(VariableId),
 
     // Boolean.
+    Not(ExprId),
     And(ExprId, ExprId),
     Or(ExprId, ExprId),
     Imp(ExprId, ExprId),
@@ -40,6 +41,12 @@ pub enum Expr {
     Lte(ExprId, ExprId),
 
     BVUlt(ExprId, ExprId),
+    BVUle(ExprId, ExprId),
+    BVSge(ExprId, ExprId),
+    BVSlt(ExprId, ExprId),
+    BVSle(ExprId, ExprId),
+
+    BVSaddo(ExprId, ExprId),
 
     // Unary.
     BVNot(ExprId),
@@ -84,7 +91,8 @@ impl Expr {
         match self {
             Self::Const(_) | Self::Variable(_) => Vec::new(),
             // Unary
-            &Self::BVNot(x)
+            &Self::Not(x)
+            | &Self::BVNot(x)
             | &Self::BVNeg(x)
             | &Self::BVExtract(_, _, x)
             | &Self::Int2BV(_, x)
@@ -97,6 +105,11 @@ impl Expr {
             | &Self::Eq(x, y)
             | &Self::Lte(x, y)
             | &Self::BVUlt(x, y)
+            | &Self::BVUle(x, y)
+            | &Self::BVSge(x, y)
+            | &Self::BVSlt(x, y)
+            | &Self::BVSle(x, y)
+            | &Self::BVSaddo(x, y)
             | &Self::BVAdd(x, y)
             | &Self::BVSub(x, y)
             | &Self::BVMul(x, y)
@@ -120,12 +133,18 @@ impl std::fmt::Display for Expr {
         match self {
             Self::Const(c) => write!(f, "const({c})"),
             Self::Variable(v) => write!(f, "var({})", v.index()),
+            Self::Not(x) => write!(f, "!{}", x.index()),
             Self::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
             Self::Or(x, y) => write!(f, "{} || {}", x.index(), y.index()),
             Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
             Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
             Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
             Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
+            Self::BVUle(x, y) => write!(f, "bvule({}, {})", x.index(), y.index()),
+            Self::BVSge(x, y) => write!(f, "bvsge({}, {})", x.index(), y.index()),
+            Self::BVSlt(x, y) => write!(f, "bvslt({}, {})", x.index(), y.index()),
+            Self::BVSle(x, y) => write!(f, "bvsle({}, {})", x.index(), y.index()),
+            Self::BVSaddo(x, y) => write!(f, "bvsaddo({}, {})", x.index(), y.index()),
             Self::BVNot(x) => write!(f, "bvnot({})", x.index()),
             Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
@@ -923,6 +942,11 @@ impl<'a> ConditionsBuilder<'a> {
             }
 
             // TODO(mbm): fix boilerplate for common expressions
+            spec::Expr::Not(x) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Not(x)))
+            }
+
             spec::Expr::And(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
@@ -957,6 +981,36 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUlt(x, y)))
+            }
+
+            spec::Expr::BVUle(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUle(x, y)))
+            }
+
+            spec::Expr::BVSge(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSge(x, y)))
+            }
+
+            spec::Expr::BVSlt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSlt(x, y)))
+            }
+
+            spec::Expr::BVSle(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSle(x, y)))
+            }
+
+            spec::Expr::BVSaddo(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSaddo(x, y)))
             }
 
             spec::Expr::BVNot(x) => {

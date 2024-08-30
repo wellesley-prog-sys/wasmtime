@@ -271,6 +271,15 @@ impl<'a> SystemBuilder<'a> {
                 let ty = self.conditions.variables[v.index()].ty.clone();
                 self.ty(x, ty);
             }
+            Expr::Not(y) => {
+                self.boolean(x);
+                self.boolean(*y);
+
+                // ((NOT X) OR (NOT Y))
+                self.clause(vec![Literal::Not(x), Literal::Not(*y)]);
+                // (X OR Y)
+                self.clause(vec![Literal::Var(x), Literal::Var(*y)]);
+            }
             Expr::And(y, z) => {
                 // TODO(mbm): clause implies boolean
                 self.boolean(x);
@@ -321,7 +330,12 @@ impl<'a> SystemBuilder<'a> {
                 self.integer(*y);
                 self.integer(*z);
             }
-            Expr::BVUlt(y, z) => {
+            Expr::BVUlt(y, z)
+            | Expr::BVUle(y, z)
+            | Expr::BVSge(y, z)
+            | Expr::BVSlt(y, z)
+            | Expr::BVSle(y, z)
+            | Expr::BVSaddo(y, z) => {
                 self.boolean(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
