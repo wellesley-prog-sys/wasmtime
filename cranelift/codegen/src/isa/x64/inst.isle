@@ -1760,6 +1760,10 @@
 ;; XMM register.
 (decl put_in_gpr (Value) Gpr)
 
+; REVIEW(mbm): should apply chaining to put_in_gpr, but rules require enum modeling
+; TODO(mbm): modeling extractor matches on non-trivial enum like RegisterClass
+(spec (put_in_gpr arg) (provide (= result (conv_to 64 arg))))
+
 ;; Case for when the value naturally lives in a GPR.
 (rule (put_in_gpr val)
       (if-let (value_type ty) val)
