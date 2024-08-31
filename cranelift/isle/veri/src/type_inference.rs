@@ -352,6 +352,7 @@ impl<'a> SystemBuilder<'a> {
             | Expr::BVSub(y, z)
             | Expr::BVMul(y, z)
             | Expr::BVAnd(y, z)
+            | Expr::BVOr(y, z)
             | Expr::BVShl(y, z)
             | Expr::BVLShr(y, z)
             | Expr::BVAShr(y, z) => {
