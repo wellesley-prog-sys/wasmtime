@@ -1234,47 +1234,67 @@
 
 (spec (MInst.AluRRRShift alu_op size rd rn rm shiftop)
       (provide
-            (let
-                  (
-                        (s
-                              (switch (:op shiftop)
-                                    ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                    ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                    ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+            (switch size
+                  ; 64-bit
+                  ((OperandSize.Size64)
+                        (let
+                              (
+                                    (s
+                                          (switch (:op shiftop)
+                                                ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                                ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                                ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
+                                          )
+                                    )
                               )
+                              (= rd (switch alu_op
+                                    ((ALUOp.Add) (bvadd rn s))
+                                    ((ALUOp.Sub) (bvsub rn s))
+                                    ((ALUOp.Orr) (bvor rn s))
+                                    ((ALUOp.And) (bvand rn s))
+                                    ((ALUOp.AndNot) (bvand rn (bvnot s)))
+                              ))
                         )
                   )
-                  (and
-                        (=>
-                              (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-                                    (= rd (bvadd rn s))
-                        )
-                        (=>
-                              (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-                                    (= rd (bvsub rn s))
-                        )
-                        (=>
-                              (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
-                                    (= rd (bvor rn s))
-                        )
-                        (=>
-                              (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
-                                    (= rd (bvand rn s))
-                        )
-                        (=>
-                              (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
-                                    (= rd (bvand rn (bvnot s)))
+                  ; 32-bit
+                  ((OperandSize.Size32)
+                        (let
+                              (
+                                    (rm32 (extract 31 0 rm))
+                                    (rn32 (extract 31 0 rn))
+                                    (s
+                                          (switch (:op shiftop)
+                                                ((ALUOp.Lsl) (bvshl  rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
+                                                ((ALUOp.Lsr) (bvlshr rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
+                                                ((ALUOp.Asr) (bvashr rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
+                                          )
+                                    )
+                              )
+                              (= rd (zero_ext 64 (switch alu_op
+                                    ((ALUOp.Add)      (bvadd rn32 s))
+                                    ((ALUOp.Sub)      (bvsub rn32 s))
+                                    ((ALUOp.Orr)      (bvor  rn32 s))
+                                    ((ALUOp.And)      (bvand rn32 s))
+                                    ((ALUOp.AndNot)   (bvand rn32 (bvnot s)))
+                              )))
                         )
                   )
             )
       )
       (require
+            ; Supported operand size.
             (or
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+                  (= size (OperandSize.Size64))
+                  (= size (OperandSize.Size32))
+            )
+
+            ; Supported ops.
+            (or
+                  (= alu_op (ALUOp.Add))
+                  (= alu_op (ALUOp.Sub))
+                  (= alu_op (ALUOp.Orr))
+                  (= alu_op (ALUOp.And))
+                  (= alu_op (ALUOp.AndNot))
             )
       )
 )
