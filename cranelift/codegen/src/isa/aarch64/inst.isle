@@ -1040,6 +1040,15 @@
             )
 
             (=>
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvor rn (bvnot rm)))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
+                        (= rd (conv_to 64 (bvor (extract 31 0 rn) (bvnot (extract 31 0 rm)))))
+            )
+
+            (=>
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                         (= rd (bvand rn rm))
             )
@@ -1090,6 +1099,8 @@
                   (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
                   ; (OrrNot)
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
                   ; (And)
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
@@ -1168,6 +1179,15 @@
             )
 
             (=>
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvor rn (bvnot imml)))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
+                        (= rd (conv_to 64 (bvor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
+            )
+
+            (=>
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                         (= rd (bvand rn imml))
             )
@@ -1190,6 +1210,9 @@
             (or
                   (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
 
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
@@ -1248,11 +1271,12 @@
                                     )
                               )
                               (= rd (switch alu_op
-                                    ((ALUOp.Add) (bvadd rn s))
-                                    ((ALUOp.Sub) (bvsub rn s))
-                                    ((ALUOp.Orr) (bvor rn s))
-                                    ((ALUOp.And) (bvand rn s))
-                                    ((ALUOp.AndNot) (bvand rn (bvnot s)))
+                                    ((ALUOp.Add)      (bvadd rn s))
+                                    ((ALUOp.Sub)      (bvsub rn s))
+                                    ((ALUOp.Orr)      (bvor rn s))
+                                    ((ALUOp.OrrNot)   (bvor rn (bvnot s)))
+                                    ((ALUOp.And)      (bvand rn s))
+                                    ((ALUOp.AndNot)   (bvand rn (bvnot s)))
                               ))
                         )
                   )
@@ -1274,6 +1298,7 @@
                                     ((ALUOp.Add)      (bvadd rn32 s))
                                     ((ALUOp.Sub)      (bvsub rn32 s))
                                     ((ALUOp.Orr)      (bvor  rn32 s))
+                                    ((ALUOp.OrrNot)   (bvor  rn32 (bvnot s)))
                                     ((ALUOp.And)      (bvand rn32 s))
                                     ((ALUOp.AndNot)   (bvand rn32 (bvnot s)))
                               )))
@@ -1293,6 +1318,7 @@
                   (= alu_op (ALUOp.Add))
                   (= alu_op (ALUOp.Sub))
                   (= alu_op (ALUOp.Orr))
+                  (= alu_op (ALUOp.OrrNot))
                   (= alu_op (ALUOp.And))
                   (= alu_op (ALUOp.AndNot))
             )

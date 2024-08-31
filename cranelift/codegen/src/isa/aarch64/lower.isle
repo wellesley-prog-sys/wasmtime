@@ -1321,9 +1321,9 @@
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 1 (lower (has_type (fits_in_64 ty) (bor x (bnot y))))
+(rule bor_not_right 1 (lower (has_type (fits_in_64 ty) (bor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
-(rule 2 (lower (has_type (fits_in_64 ty) (bor (bnot y) x)))
+(rule bor_not_left 2 (lower (has_type (fits_in_64 ty) (bor (bnot y) x)))
       (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
 
 (rule 3 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
