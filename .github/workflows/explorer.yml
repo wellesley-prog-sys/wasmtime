@@ -3,7 +3,7 @@ name: explorer
 on:
   push:
     branches:
-      - mbm/x-rule-chaining
+      - veriisle
   workflow_dispatch:
 
 # Sets permissions to allow deployment to Github Pages.

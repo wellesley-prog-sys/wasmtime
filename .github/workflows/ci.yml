@@ -3,10 +3,10 @@ name: ci
 on:
   push:
     branches:
-      - mbm/x-rule-chaining
+      - veriisle
   pull_request:
     branches:
-      - mbm/x-rule-chaining
+      - veriisle
 
 jobs:
   test:
