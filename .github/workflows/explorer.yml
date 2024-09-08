@@ -27,14 +27,14 @@ jobs:
       - name: Install Tools
         run: sudo apt-get install -y graphviz
       - name: Build Explorer
-        working-directory: cranelift/isle/veri
+        working-directory: cranelift/isle/veri/veri
         run: ./script/explorer.sh
         env:
           ISLE_EXPLORER_GRAPHS: 'true'
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v2
         with:
-          path: cranelift/isle/veri/tmp/explorer
+          path: cranelift/isle/veri/veri/tmp/explorer
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v2

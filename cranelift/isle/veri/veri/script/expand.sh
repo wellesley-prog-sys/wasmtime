@@ -4,7 +4,7 @@ set -exuo pipefail
 
 function expand() {
     cargo run --bin expand -- \
-        --codegen-crate-dir ../../codegen/ \
+        --codegen-crate-dir ../../../codegen/ \
         --work-dir /tmp \
         "$@"
 }

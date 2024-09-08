@@ -4,7 +4,7 @@ set -exuo pipefail
 
 function count() {
     cargo run --bin count -- \
-        --codegen-crate-dir ../../codegen/ \
+        --codegen-crate-dir ../../../codegen/ \
         --work-dir /tmp \
         "$@"
 }

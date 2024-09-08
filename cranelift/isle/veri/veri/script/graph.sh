@@ -20,7 +20,7 @@ for rule in "${rules[@]}"; do
     # Generate dot.
     dot_path="output/${name}.dot"
     cargo run --bin graph -- \
-        --codegen-crate-dir ../../codegen/ \
+        --codegen-crate-dir ../../../codegen/ \
         --work-dir /tmp \
         --name "${arch}" \
         --rule "${rule}" \

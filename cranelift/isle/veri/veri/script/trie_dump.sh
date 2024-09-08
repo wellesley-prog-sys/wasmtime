@@ -5,7 +5,7 @@ set -exuo pipefail
 function trie_dump() {
     local arch=$1
     cargo run --bin trie_dump -- \
-        --codegen-crate-dir ../../codegen/ \
+        --codegen-crate-dir ../../../codegen/ \
         --work-dir /tmp \
         --name "${arch}" \
         > "output/${arch}.trie"

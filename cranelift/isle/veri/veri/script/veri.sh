@@ -39,7 +39,7 @@ fi
 
 # Run.
 cargo run --bin veri --profile "${profile}" -- \
-    --codegen-crate-dir ../../codegen/ \
+    --codegen-crate-dir ../../../codegen/ \
     --work-dir "${tmp_dir}" \
     --name "${arch}" \
     --smt2-replay-path /dev/null \

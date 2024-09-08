@@ -36,12 +36,12 @@ jobs:
           mkdir -p "${{ runner.workspace }}/bin"
           echo "${{ runner.workspace }}/bin" >> $GITHUB_PATH
       - name: Install Z3
-        working-directory: cranelift/isle/veri
+        working-directory: cranelift/isle/veri/veri
         run: ./script/install/z3.sh -b "${{ runner.workspace }}/bin" -t "${RUNNER_TEMP}"
       - name: Show Z3 Version
         run: z3 --version
       - name: Build
         run: cargo build --release -p cranelift-isle-veri
       - name: Verify
-        working-directory: cranelift/isle/veri
+        working-directory: cranelift/isle/veri/veri
         run: ./script/veri.sh -a ${{ matrix.arch }} -p release -t "${RUNNER_TEMP}" -o "${RUNNER_TEMP}"

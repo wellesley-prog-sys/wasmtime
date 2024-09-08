@@ -9,7 +9,7 @@ rm -rf "${output_dir}"
 
 for arch in aarch64 x64; do
     cargo run --bin explorer -- \
-        --codegen-crate-dir ../../codegen/ \
+        --codegen-crate-dir ../../../codegen/ \
         --work-dir /tmp \
         --name "${arch}" \
         --output-dir "${output_dir}/${arch}"
