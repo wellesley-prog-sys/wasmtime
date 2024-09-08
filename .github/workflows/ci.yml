@@ -17,9 +17,9 @@ jobs:
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build -p cranelift-isle -p cranelift-isle-veri
+        run: cargo build --features cranelift-isle/printer -p cranelift-isle -p cranelift-isle-veri
       - name: Test
-        run: cargo test -p cranelift-isle -p cranelift-isle-veri
+        run: cargo test --features cranelift-isle/printer -p cranelift-isle -p cranelift-isle-veri
 
   veri:
     strategy:
