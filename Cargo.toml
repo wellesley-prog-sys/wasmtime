@@ -135,6 +135,8 @@ members = [
   "cranelift",
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
+  "cranelift/isle/veri/aslp",
+  "cranelift/isle/veri/test-macros",
   "cranelift/isle/veri/veri",
   "cranelift/serde",
   "crates/bench-api",
@@ -322,6 +324,7 @@ hyper = "1.0.1"
 http = "1.0.0"
 http-body = "1.0.0"
 http-body-util = "0.1.0"
+reqwest = "0.11"
 bytes = "1.4"
 futures = { version = "0.3.27", default-features = false }
 indexmap = { version = "2.0.0", default-features = false }
