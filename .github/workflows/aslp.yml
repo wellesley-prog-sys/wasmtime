@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: UQ-PAC/aslp
-          ref: 630277b2bc5fa1e0f7b6e962f3dfbc4d69d0b723
+          ref: 5eaf73c35093333a5dc49070b802038ac3b75127
           path: aslp
       - name: Install LLVM
         env:
