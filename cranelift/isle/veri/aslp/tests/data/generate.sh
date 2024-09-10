@@ -7,7 +7,7 @@ function assemble() {
     local asm="$1"
 
     echo "${asm}" \
-        | clang -x assembler -target aarch64 -arch v9.4a - -c -o /dev/stdout \
+        | clang -x assembler --target=aarch64 -march=armv8-a+sha2 - -c -o /dev/stdout \
         | llvm-objdump - -d --section=.text \
         | tail -n1 \
         | awk '/0:/ { print $2 }'
@@ -21,7 +21,7 @@ function aslt() {
         echo ':set impdef "Has SHA1 Crypto instructions" = TRUE'
         echo ":ast A64 0x${opcode}"
     } \
-    | dune exec --root="${ASLP_DIR}" -- asli
+    | opam exec -- dune exec --root="${ASLP_DIR}" -- asli
 }
 
 # Generate named testcase for a given assembly instruction.

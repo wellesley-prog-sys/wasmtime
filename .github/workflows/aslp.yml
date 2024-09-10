@@ -1,0 +1,50 @@
+name: aslp
+
+on:
+  push:
+    branches:
+      - veriisle
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      ASLP_DIR: ${{ github.workspace }}/aslp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: main
+      - name: Checkout ASLp
+        uses: actions/checkout@v3
+        with:
+          repository: UQ-PAC/aslp
+          ref: 630277b2bc5fa1e0f7b6e962f3dfbc4d69d0b723
+          path: aslp
+      - name: Install LLVM
+        env:
+          LLVM_VERSION: 18
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "${LLVM_VERSION}"
+          echo "/usr/lib/llvm-${LLVM_VERSION}/bin" >> "${GITHUB_PATH}"
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 4.14.2
+          dune-cache: true
+      - name: Install ASLp Dependencies
+        working-directory: aslp
+        run: opam install . --deps-only --with-test
+      - name: Build ASLp
+        working-directory: aslp
+        run: opam exec -- dune build
+      - name: Generate ASLp Test Data
+        working-directory: main/cranelift/isle/veri/aslp/tests/data
+        run: ./generate.sh
+      - name: Git Status
+        working-directory: main
+        run: |
+          git diff
+          test -z "$(git status --porcelain)"
