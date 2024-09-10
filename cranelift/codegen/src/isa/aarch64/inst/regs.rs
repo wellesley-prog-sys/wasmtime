@@ -47,7 +47,6 @@ pub(crate) const fn vreg_preg(num: u8) -> PReg {
 }
 
 /// Get a writable reference to a V-register.
-#[cfg(test)] // Used only in test code.
 pub fn writable_vreg(num: u8) -> Writable<Reg> {
     Writable::from_reg(vreg(num))
 }

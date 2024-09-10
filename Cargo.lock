@@ -774,6 +774,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-isle-veri-isaspec"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cranelift-codegen",
+ "cranelift-isle",
+ "cranelift-isle-veri-aslp",
+ "itertools 0.10.5",
+ "reqwest",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "cranelift-isle-veri-test-macros"
 version = "0.1.0"
 dependencies = [
