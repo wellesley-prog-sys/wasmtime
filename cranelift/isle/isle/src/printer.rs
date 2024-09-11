@@ -198,6 +198,7 @@ impl Printable for ModelValue {
 impl Printable for ModelType {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
+            ModelType::Auto => RcDoc::text("_"),
             ModelType::Int => RcDoc::text("Int"),
             ModelType::Bool => RcDoc::text("Bool"),
             ModelType::BitVec(Some(size)) => sexp(vec![RcDoc::text("bv"), RcDoc::as_string(size)]),

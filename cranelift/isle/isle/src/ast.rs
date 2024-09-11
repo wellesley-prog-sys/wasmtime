@@ -281,6 +281,8 @@ pub struct Spec {
 /// A model of an SMT-LIB type.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ModelType {
+    /// Unspecified primitive type, left to type-inference to determine
+    Auto,
     /// SMT-LIB Int
     Int,
     /// SMT-LIB Int

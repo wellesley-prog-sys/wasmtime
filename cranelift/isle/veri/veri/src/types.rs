@@ -98,6 +98,7 @@ pub struct Field {
 impl Compound {
     pub fn from_ast(model: &ModelType) -> Self {
         match model {
+            ModelType::Auto => Self::Primitive(Type::Unknown),
             ModelType::Int => Self::Primitive(Type::Int),
             ModelType::Bool => Self::Primitive(Type::Bool),
             ModelType::BitVec(None) => Self::Primitive(Type::BitVector(Width::Unknown)),
