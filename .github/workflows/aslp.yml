@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - veriisle
+    paths:
+      - '.github/workflows/aslp.yml'
+      - '**/aslp/**'
+  pull_request:
+    branches:
+      - veriisle
+    paths:
+      - '.github/workflows/aslp.yml'
+      - '**/aslp/**'
+  workflow_dispatch:
 
 jobs:
   test:
