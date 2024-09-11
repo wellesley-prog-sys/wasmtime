@@ -53,7 +53,7 @@
 
 ;; Base case, simply adding things in registers.
 (rule iadd_base_case -1 (lower (has_type (fits_in_64 ty) (iadd x y)))
-      (add ty  x y))
+      (add ty  x x))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule iadd_imm12_right 4 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))

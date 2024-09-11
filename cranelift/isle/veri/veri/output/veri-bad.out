@@ -1,0 +1,1490 @@
+expansions = 770
+expansion {
+	term = lower
+	rules = [
+		iadd_base_case
+		output_reg
+		add_to_alu_rrr
+		alu_rrr_to_emit
+	]
+	bindings = [
+		0: Inst	argument(0)
+		3: Option((Type, Inst))	extractor(has_type, 0)
+		4: (Type, Inst)	match_some(3)
+		5: Type	match_tuple(4, 0)
+		6: Option(Type)	extractor(fits_in_64, 5)
+		7: Inst	match_tuple(4, 1)
+		8: Option((Value, Value))	extractor(iadd, 7)
+		9: (Value, Value)	match_some(8)
+		10: Value	match_tuple(9, 0)
+		11: Reg	constructor(put_in_reg, [10], 1)
+		12: Reg	constructor(put_in_reg, [10], 2)
+		13: Type	match_some(6)
+		16: Option(InstOutput)	some(19)
+		18: ValueRegs	constructor(value_reg, [34], 1)
+		19: InstOutput	constructor(output, [18], 2)
+		23: ALUOp	make_variant(ALUOp::Add, [])
+		29: Type	const_prim(I64)
+		30: WritableReg	constructor(temp_writable_reg, [29], 1)
+		31: OperandSize	constructor(operand_size, [13], 2)
+		32: MInst	make_variant(MInst::AluRRR, [23, 31, 30, 11, 12])
+		33: Unit	constructor(emit, [32], 3)
+		34: Reg	constructor(writable_reg_to_reg, [30], 0)
+	]
+	constraints = [
+		3:	some
+		6:	some
+		8:	some
+	]
+	parameters = [
+		0
+	]
+	result = 16
+	feasible = true
+}
+conditions {
+	exprs = [
+		0:	var(0)
+		1:	var(1)
+		2:	var(2)
+		3:	var(3)
+		4:	width_of(3)
+		5:	2 == 4
+		6:	0 == 3
+		7:	1 == 5
+		8:	var(4)
+		9:	var(5)
+		10:	8 == 2
+		11:	9 == 3
+		12:	10 && 11
+		13:	1 => 12
+		14:	var(6)
+		15:	14 == 8
+		16:	var(7)
+		17:	var(8)
+		18:	const(64)
+		19:	17 <= 18
+		20:	14 == 17
+		21:	16 == 19
+		22:	var(9)
+		23:	22 == 9
+		24:	var(10)
+		25:	var(11)
+		26:	var(12)
+		27:	bvadd(25, 26)
+		28:	22 == 27
+		29:	const(true)
+		30:	24 == 29
+		31:	var(13)
+		32:	var(14)
+		33:	31 == 25
+		34:	32 == 26
+		35:	33 && 34
+		36:	24 => 35
+		37:	var(15)
+		38:	37 == 31
+		39:	var(16)
+		40:	width_of(37)
+		41:	40 <= 18
+		42:	width_of(39)
+		43:	bv_conv_to(42, 37)
+		44:	39 == 43
+		45:	var(17)
+		46:	width_of(45)
+		47:	bv_conv_to(46, 37)
+		48:	45 == 47
+		49:	var(18)
+		50:	49 == 17
+		51:	16 => 50
+		52:	var(19)
+		53:	var(20)
+		54:	var(21)
+		55:	var(22)
+		56:	var(23)
+		57:	var(24)
+		58:	var(25)
+		59:	var(26)
+		60:	59 == 18
+		61:	width_of(58)
+		62:	59 == 61
+		63:	57 == 58
+		64:	55 == 57
+		65:	width_of(55)
+		66:	width_of(56)
+		67:	65 == 66
+		68:	bv_concat(56, 55)
+		69:	width_of(68)
+		70:	bv_conv_to(69, 54)
+		71:	68 == 70
+		72:	54 == 53
+		73:	var(27)
+		74:	const(#x00)
+		75:	73 == 74
+		76:	var(28)
+		77:	const(8)
+		78:	49 == 77
+		79:	const(16)
+		80:	49 == 79
+		81:	const(32)
+		82:	49 == 81
+		83:	49 == 18
+		84:	82 || 83
+		85:	80 || 84
+		86:	78 || 85
+		87:	49 <= 81
+		88:	87 ? 81 : 18
+		89:	76 == 88
+		90:	var(29)
+		91:	var(30)
+		92:	var(31)
+		93:	var(32)
+		94:	var(33)
+		95:	var(34)
+		96:	var(35)
+		97:	var(36)
+		98:	76 == 18
+		99:	75 && 98
+		100:	76 == 81
+		101:	75 && 100
+		102:	const(#x01)
+		103:	73 == 102
+		104:	103 && 98
+		105:	103 && 100
+		106:	const(#x02)
+		107:	73 == 106
+		108:	107 && 98
+		109:	107 && 100
+		110:	const(#x03)
+		111:	73 == 110
+		112:	111 && 98
+		113:	111 && 100
+		114:	const(#x04)
+		115:	73 == 114
+		116:	115 && 98
+		117:	115 && 100
+		118:	const(#x05)
+		119:	73 == 118
+		120:	119 && 98
+		121:	119 && 100
+		122:	const(#x08)
+		123:	73 == 122
+		124:	123 && 98
+		125:	const(#x10)
+		126:	73 == 125
+		127:	126 && 98
+		128:	124 || 127
+		129:	121 || 128
+		130:	120 || 129
+		131:	117 || 130
+		132:	116 || 131
+		133:	113 || 132
+		134:	112 || 133
+		135:	109 || 134
+		136:	108 || 135
+		137:	105 || 136
+		138:	104 || 137
+		139:	101 || 138
+		140:	99 || 139
+		141:	bvadd(39, 45)
+		142:	58 == 141
+		143:	99 => 142
+		144:	bv_extract(31, 0, 39)
+		145:	bv_extract(31, 0, 45)
+		146:	bvadd(144, 145)
+		147:	bv_conv_to(18, 146)
+		148:	58 == 147
+		149:	101 => 148
+		150:	bvsub(39, 45)
+		151:	58 == 150
+		152:	104 => 151
+		153:	bvsub(144, 145)
+		154:	bv_conv_to(18, 153)
+		155:	58 == 154
+		156:	105 => 155
+		157:	bvor(39, 45)
+		158:	58 == 157
+		159:	108 => 158
+		160:	bvor(144, 145)
+		161:	bv_conv_to(18, 160)
+		162:	58 == 161
+		163:	109 => 162
+		164:	bvnot(45)
+		165:	bvor(39, 164)
+		166:	58 == 165
+		167:	112 => 166
+		168:	bvnot(145)
+		169:	bvor(144, 168)
+		170:	bv_conv_to(18, 169)
+		171:	58 == 170
+		172:	113 => 171
+		173:	bvand(39, 45)
+		174:	58 == 173
+		175:	116 => 174
+		176:	bvand(144, 145)
+		177:	bv_conv_to(18, 176)
+		178:	58 == 177
+		179:	117 => 178
+		180:	bvand(39, 164)
+		181:	58 == 180
+		182:	120 => 181
+		183:	bvand(144, 168)
+		184:	bv_conv_to(18, 183)
+		185:	58 == 184
+		186:	121 => 185
+		187:	const(65)
+		188:	bv_zero_ext(187, 39)
+		189:	bv_zero_ext(187, 45)
+		190:	bvadd(188, 189)
+		191:	bv_extract(64, 64, 190)
+		192:	96 == 191
+		193:	142 && 192
+		194:	124 => 193
+		195:	bv_zero_ext(18, 92)
+		196:	bvadd(141, 195)
+		197:	58 == 196
+		198:	127 => 197
+		199:	var(37)
+		200:	const(#b1)
+		201:	199 == 200
+		202:	53 == 0
+		203:	52 == 29
+	]
+	assumptions = [
+		7
+		6
+		13
+		15
+		21
+		20
+		23
+		30
+		28
+		36
+		38
+		44
+		48
+		51
+		60
+		62
+		63
+		64
+		67
+		71
+		52
+		72
+		75
+		89
+		143
+		149
+		152
+		156
+		159
+		163
+		167
+		172
+		175
+		179
+		182
+		186
+		194
+		198
+		201
+		203
+		1
+		16
+		24
+	]
+	assertions = [
+		5
+		19
+		41
+		41
+		86
+		140
+		202
+	]
+	variables = [
+		0:	bv _	b0
+		1:	bool	b3_some
+		2:	int	b3_inner_0
+		3:	bv _	b3_inner_1
+		4:	int	b4_0
+		5:	bv _	b4_1
+		6:	int	b5
+		7:	bool	b6_some
+		8:	int	b6_inner
+		9:	bv _	b7
+		10:	bool	b8_some
+		11:	bv _	b8_inner_0
+		12:	bv _	b8_inner_1
+		13:	bv _	b9_0
+		14:	bv _	b9_1
+		15:	bv _	b10
+		16:	bv _	b11
+		17:	bv _	b12
+		18:	int	b13
+		19:	bool	b16_some
+		20:	bv _	b16_inner
+		21:	bv _	b19
+		22:	bv _	b18_lo
+		23:	bv _	b18_hi
+		24:	bv _	b34
+		25:	bv _	b30
+		26:	int	b29
+		27:	bv 8	b23
+		28:	int	b31
+		29:	bv 1	b32_flags_in_N
+		30:	bv 1	b32_flags_in_Z
+		31:	bv 1	b32_flags_in_C
+		32:	bv 1	b32_flags_in_V
+		33:	bv 1	b32_flags_out_N
+		34:	bv 1	b32_flags_out_Z
+		35:	bv 1	b32_flags_out_C
+		36:	bv 1	b32_flags_out_V
+		37:	bv 1	b33
+	]
+	calls = [
+		call {
+			term = has_type
+			args = [
+				2
+				3
+			]
+			ret = 0
+		}
+		call {
+			term = fits_in_64
+			args = [
+				17
+			]
+			ret = 14
+		}
+		call {
+			term = iadd
+			args = [
+				25
+				26
+			]
+			ret = 22
+			signatures = [
+				signature {
+					args = [
+						bv 8
+						bv 8
+					]
+					ret = bv 8
+				}
+				signature {
+					args = [
+						bv 16
+						bv 16
+					]
+					ret = bv 16
+				}
+				signature {
+					args = [
+						bv 32
+						bv 32
+					]
+					ret = bv 32
+				}
+				signature {
+					args = [
+						bv 64
+						bv 64
+					]
+					ret = bv 64
+				}
+				signature {
+					args = [
+						bv 128
+						bv 128
+					]
+					ret = bv 128
+				}
+			]
+		}
+		call {
+			term = put_in_reg
+			args = [
+				37
+			]
+			ret = 39
+		}
+		call {
+			term = put_in_reg
+			args = [
+				37
+			]
+			ret = 45
+		}
+		call {
+			term = temp_writable_reg
+			args = [
+				59
+			]
+			ret = 58
+		}
+		call {
+			term = writable_reg_to_reg
+			args = [
+				58
+			]
+			ret = 57
+		}
+		call {
+			term = value_reg
+			args = [
+				57
+			]
+			ret = {lo: 55, hi: 56}
+		}
+		call {
+			term = output
+			args = [
+				{lo: 55, hi: 56}
+			]
+			ret = 54
+		}
+		call {
+			term = ALUOp.Add
+			ret = 73
+		}
+		call {
+			term = operand_size
+			args = [
+				49
+			]
+			ret = 76
+		}
+		call {
+			term = MInst.AluRRR
+			args = [
+				73
+				76
+				58
+				39
+				45
+			]
+			ret = {flags_in: {N: 90, Z: 91, C: 92, V: 93}, flags_out: {N: 94, Z: 95, C: 96, V: 97}}
+		}
+		call {
+			term = emit
+			args = [
+				{flags_in: {N: 90, Z: 91, C: 92, V: 93}, flags_out: {N: 94, Z: 95, C: 96, V: 97}}
+			]
+			ret = 199
+		}
+		call {
+			term = lower
+			args = [
+				0
+			]
+			ret = 53
+		}
+	]
+}
+system {
+	choices = [
+	]
+	constraints = [
+		type(0) = bv _
+		type(1) = bool
+		type(2) = int
+		type(3) = bv _
+		type(4) = int
+		type(3) = bv _
+		4 = width_of(3)
+		type(5) = bool
+		type(2) == type(4)
+		5 => 2 == 4
+		type(6) = bool
+		type(0) == type(3)
+		6 => 0 == 3
+		type(7) = bool
+		type(1) == type(5)
+		7 => 1 == 5
+		type(8) = int
+		type(9) = bv _
+		type(10) = bool
+		type(8) == type(2)
+		10 => 8 == 2
+		type(11) = bool
+		type(9) == type(3)
+		11 => 9 == 3
+		type(12) = bool
+		type(10) = bool
+		type(11) = bool
+		clause(¬12 ∨ 10)
+		clause(¬12 ∨ 11)
+		clause(12 ∨ ¬10 ∨ ¬11)
+		type(13) = bool
+		type(1) = bool
+		type(12) = bool
+		clause(¬13 ∨ ¬1 ∨ 12)
+		clause(13 ∨ 1)
+		clause(13 ∨ ¬1)
+		type(14) = int
+		type(15) = bool
+		type(14) == type(8)
+		15 => 14 == 8
+		type(16) = bool
+		type(17) = int
+		18 = value(64)
+		type(19) = bool
+		type(17) = int
+		type(18) = int
+		type(20) = bool
+		type(14) == type(17)
+		20 => 14 == 17
+		type(21) = bool
+		type(16) == type(19)
+		21 => 16 == 19
+		type(22) = bv _
+		type(23) = bool
+		type(22) == type(9)
+		23 => 22 == 9
+		type(24) = bool
+		type(25) = bv _
+		type(26) = bv _
+		type(27) = bv _
+		type(25) = bv _
+		type(26) = bv _
+		type(27) == type(25)
+		type(27) == type(26)
+		type(28) = bool
+		type(22) == type(27)
+		28 => 22 == 27
+		29 = value(true)
+		type(30) = bool
+		type(24) == type(29)
+		30 => 24 == 29
+		type(31) = bv _
+		type(32) = bv _
+		type(33) = bool
+		type(31) == type(25)
+		33 => 31 == 25
+		type(34) = bool
+		type(32) == type(26)
+		34 => 32 == 26
+		type(35) = bool
+		type(33) = bool
+		type(34) = bool
+		clause(¬35 ∨ 33)
+		clause(¬35 ∨ 34)
+		clause(35 ∨ ¬33 ∨ ¬34)
+		type(36) = bool
+		type(24) = bool
+		type(35) = bool
+		clause(¬36 ∨ ¬24 ∨ 35)
+		clause(36 ∨ 24)
+		clause(36 ∨ ¬24)
+		type(37) = bv _
+		type(38) = bool
+		type(37) == type(31)
+		38 => 37 == 31
+		type(39) = bv _
+		type(40) = int
+		type(37) = bv _
+		40 = width_of(37)
+		type(41) = bool
+		type(40) = int
+		type(18) = int
+		type(42) = int
+		type(39) = bv _
+		42 = width_of(39)
+		type(43) = bv _
+		type(42) = int
+		type(37) = bv _
+		42 = width_of(43)
+		type(44) = bool
+		type(39) == type(43)
+		44 => 39 == 43
+		type(45) = bv _
+		type(46) = int
+		type(45) = bv _
+		46 = width_of(45)
+		type(47) = bv _
+		type(46) = int
+		type(37) = bv _
+		46 = width_of(47)
+		type(48) = bool
+		type(45) == type(47)
+		48 => 45 == 47
+		type(49) = int
+		type(50) = bool
+		type(49) == type(17)
+		50 => 49 == 17
+		type(51) = bool
+		type(16) = bool
+		type(50) = bool
+		clause(¬51 ∨ ¬16 ∨ 50)
+		clause(51 ∨ 16)
+		clause(51 ∨ ¬16)
+		type(52) = bool
+		type(53) = bv _
+		type(54) = bv _
+		type(55) = bv _
+		type(56) = bv _
+		type(57) = bv _
+		type(58) = bv _
+		type(59) = int
+		type(60) = bool
+		type(59) == type(18)
+		60 => 59 == 18
+		type(61) = int
+		type(58) = bv _
+		61 = width_of(58)
+		type(62) = bool
+		type(59) == type(61)
+		62 => 59 == 61
+		type(63) = bool
+		type(57) == type(58)
+		63 => 57 == 58
+		type(64) = bool
+		type(55) == type(57)
+		64 => 55 == 57
+		type(65) = int
+		type(55) = bv _
+		65 = width_of(55)
+		type(66) = int
+		type(56) = bv _
+		66 = width_of(56)
+		type(67) = bool
+		type(65) == type(66)
+		67 => 65 == 66
+		type(68) = bv _
+		type(56) = bv _
+		type(55) = bv _
+		68 = 56:55
+		type(69) = int
+		type(68) = bv _
+		69 = width_of(68)
+		type(70) = bv _
+		type(69) = int
+		type(54) = bv _
+		69 = width_of(70)
+		type(71) = bool
+		type(68) == type(70)
+		71 => 68 == 70
+		type(72) = bool
+		type(54) == type(53)
+		72 => 54 == 53
+		type(73) = bv 8
+		74 = value(#x00)
+		type(75) = bool
+		type(73) == type(74)
+		75 => 73 == 74
+		type(76) = int
+		77 = value(8)
+		type(78) = bool
+		type(49) == type(77)
+		78 => 49 == 77
+		79 = value(16)
+		type(80) = bool
+		type(49) == type(79)
+		80 => 49 == 79
+		81 = value(32)
+		type(82) = bool
+		type(49) == type(81)
+		82 => 49 == 81
+		type(83) = bool
+		type(49) == type(18)
+		83 => 49 == 18
+		type(84) = bool
+		type(82) = bool
+		type(83) = bool
+		clause(¬84 ∨ 82 ∨ 83)
+		clause(84 ∨ ¬82)
+		clause(84 ∨ ¬83)
+		type(85) = bool
+		type(80) = bool
+		type(84) = bool
+		clause(¬85 ∨ 80 ∨ 84)
+		clause(85 ∨ ¬80)
+		clause(85 ∨ ¬84)
+		type(86) = bool
+		type(78) = bool
+		type(85) = bool
+		clause(¬86 ∨ 78 ∨ 85)
+		clause(86 ∨ ¬78)
+		clause(86 ∨ ¬85)
+		type(87) = bool
+		type(49) = int
+		type(81) = int
+		type(87) = bool
+		type(88) == type(81)
+		type(88) == type(18)
+		type(89) = bool
+		type(76) == type(88)
+		89 => 76 == 88
+		type(90) = bv 1
+		type(91) = bv 1
+		type(92) = bv 1
+		type(93) = bv 1
+		type(94) = bv 1
+		type(95) = bv 1
+		type(96) = bv 1
+		type(97) = bv 1
+		type(98) = bool
+		type(76) == type(18)
+		98 => 76 == 18
+		type(99) = bool
+		type(75) = bool
+		type(98) = bool
+		clause(¬99 ∨ 75)
+		clause(¬99 ∨ 98)
+		clause(99 ∨ ¬75 ∨ ¬98)
+		type(100) = bool
+		type(76) == type(81)
+		100 => 76 == 81
+		type(101) = bool
+		type(75) = bool
+		type(100) = bool
+		clause(¬101 ∨ 75)
+		clause(¬101 ∨ 100)
+		clause(101 ∨ ¬75 ∨ ¬100)
+		102 = value(#x01)
+		type(103) = bool
+		type(73) == type(102)
+		103 => 73 == 102
+		type(104) = bool
+		type(103) = bool
+		type(98) = bool
+		clause(¬104 ∨ 103)
+		clause(¬104 ∨ 98)
+		clause(104 ∨ ¬103 ∨ ¬98)
+		type(105) = bool
+		type(103) = bool
+		type(100) = bool
+		clause(¬105 ∨ 103)
+		clause(¬105 ∨ 100)
+		clause(105 ∨ ¬103 ∨ ¬100)
+		106 = value(#x02)
+		type(107) = bool
+		type(73) == type(106)
+		107 => 73 == 106
+		type(108) = bool
+		type(107) = bool
+		type(98) = bool
+		clause(¬108 ∨ 107)
+		clause(¬108 ∨ 98)
+		clause(108 ∨ ¬107 ∨ ¬98)
+		type(109) = bool
+		type(107) = bool
+		type(100) = bool
+		clause(¬109 ∨ 107)
+		clause(¬109 ∨ 100)
+		clause(109 ∨ ¬107 ∨ ¬100)
+		110 = value(#x03)
+		type(111) = bool
+		type(73) == type(110)
+		111 => 73 == 110
+		type(112) = bool
+		type(111) = bool
+		type(98) = bool
+		clause(¬112 ∨ 111)
+		clause(¬112 ∨ 98)
+		clause(112 ∨ ¬111 ∨ ¬98)
+		type(113) = bool
+		type(111) = bool
+		type(100) = bool
+		clause(¬113 ∨ 111)
+		clause(¬113 ∨ 100)
+		clause(113 ∨ ¬111 ∨ ¬100)
+		114 = value(#x04)
+		type(115) = bool
+		type(73) == type(114)
+		115 => 73 == 114
+		type(116) = bool
+		type(115) = bool
+		type(98) = bool
+		clause(¬116 ∨ 115)
+		clause(¬116 ∨ 98)
+		clause(116 ∨ ¬115 ∨ ¬98)
+		type(117) = bool
+		type(115) = bool
+		type(100) = bool
+		clause(¬117 ∨ 115)
+		clause(¬117 ∨ 100)
+		clause(117 ∨ ¬115 ∨ ¬100)
+		118 = value(#x05)
+		type(119) = bool
+		type(73) == type(118)
+		119 => 73 == 118
+		type(120) = bool
+		type(119) = bool
+		type(98) = bool
+		clause(¬120 ∨ 119)
+		clause(¬120 ∨ 98)
+		clause(120 ∨ ¬119 ∨ ¬98)
+		type(121) = bool
+		type(119) = bool
+		type(100) = bool
+		clause(¬121 ∨ 119)
+		clause(¬121 ∨ 100)
+		clause(121 ∨ ¬119 ∨ ¬100)
+		122 = value(#x08)
+		type(123) = bool
+		type(73) == type(122)
+		123 => 73 == 122
+		type(124) = bool
+		type(123) = bool
+		type(98) = bool
+		clause(¬124 ∨ 123)
+		clause(¬124 ∨ 98)
+		clause(124 ∨ ¬123 ∨ ¬98)
+		125 = value(#x10)
+		type(126) = bool
+		type(73) == type(125)
+		126 => 73 == 125
+		type(127) = bool
+		type(126) = bool
+		type(98) = bool
+		clause(¬127 ∨ 126)
+		clause(¬127 ∨ 98)
+		clause(127 ∨ ¬126 ∨ ¬98)
+		type(128) = bool
+		type(124) = bool
+		type(127) = bool
+		clause(¬128 ∨ 124 ∨ 127)
+		clause(128 ∨ ¬124)
+		clause(128 ∨ ¬127)
+		type(129) = bool
+		type(121) = bool
+		type(128) = bool
+		clause(¬129 ∨ 121 ∨ 128)
+		clause(129 ∨ ¬121)
+		clause(129 ∨ ¬128)
+		type(130) = bool
+		type(120) = bool
+		type(129) = bool
+		clause(¬130 ∨ 120 ∨ 129)
+		clause(130 ∨ ¬120)
+		clause(130 ∨ ¬129)
+		type(131) = bool
+		type(117) = bool
+		type(130) = bool
+		clause(¬131 ∨ 117 ∨ 130)
+		clause(131 ∨ ¬117)
+		clause(131 ∨ ¬130)
+		type(132) = bool
+		type(116) = bool
+		type(131) = bool
+		clause(¬132 ∨ 116 ∨ 131)
+		clause(132 ∨ ¬116)
+		clause(132 ∨ ¬131)
+		type(133) = bool
+		type(113) = bool
+		type(132) = bool
+		clause(¬133 ∨ 113 ∨ 132)
+		clause(133 ∨ ¬113)
+		clause(133 ∨ ¬132)
+		type(134) = bool
+		type(112) = bool
+		type(133) = bool
+		clause(¬134 ∨ 112 ∨ 133)
+		clause(134 ∨ ¬112)
+		clause(134 ∨ ¬133)
+		type(135) = bool
+		type(109) = bool
+		type(134) = bool
+		clause(¬135 ∨ 109 ∨ 134)
+		clause(135 ∨ ¬109)
+		clause(135 ∨ ¬134)
+		type(136) = bool
+		type(108) = bool
+		type(135) = bool
+		clause(¬136 ∨ 108 ∨ 135)
+		clause(136 ∨ ¬108)
+		clause(136 ∨ ¬135)
+		type(137) = bool
+		type(105) = bool
+		type(136) = bool
+		clause(¬137 ∨ 105 ∨ 136)
+		clause(137 ∨ ¬105)
+		clause(137 ∨ ¬136)
+		type(138) = bool
+		type(104) = bool
+		type(137) = bool
+		clause(¬138 ∨ 104 ∨ 137)
+		clause(138 ∨ ¬104)
+		clause(138 ∨ ¬137)
+		type(139) = bool
+		type(101) = bool
+		type(138) = bool
+		clause(¬139 ∨ 101 ∨ 138)
+		clause(139 ∨ ¬101)
+		clause(139 ∨ ¬138)
+		type(140) = bool
+		type(99) = bool
+		type(139) = bool
+		clause(¬140 ∨ 99 ∨ 139)
+		clause(140 ∨ ¬99)
+		clause(140 ∨ ¬139)
+		type(141) = bv _
+		type(39) = bv _
+		type(45) = bv _
+		type(141) == type(39)
+		type(141) == type(45)
+		type(142) = bool
+		type(58) == type(141)
+		142 => 58 == 141
+		type(143) = bool
+		type(99) = bool
+		type(142) = bool
+		clause(¬143 ∨ ¬99 ∨ 142)
+		clause(143 ∨ 99)
+		clause(143 ∨ ¬99)
+		type(144) = bv 32
+		type(39) = bv _
+		type(145) = bv 32
+		type(45) = bv _
+		type(146) = bv _
+		type(144) = bv _
+		type(145) = bv _
+		type(146) == type(144)
+		type(146) == type(145)
+		type(147) = bv _
+		type(18) = int
+		type(146) = bv _
+		18 = width_of(147)
+		type(148) = bool
+		type(58) == type(147)
+		148 => 58 == 147
+		type(149) = bool
+		type(101) = bool
+		type(148) = bool
+		clause(¬149 ∨ ¬101 ∨ 148)
+		clause(149 ∨ 101)
+		clause(149 ∨ ¬101)
+		type(150) = bv _
+		type(39) = bv _
+		type(45) = bv _
+		type(150) == type(39)
+		type(150) == type(45)
+		type(151) = bool
+		type(58) == type(150)
+		151 => 58 == 150
+		type(152) = bool
+		type(104) = bool
+		type(151) = bool
+		clause(¬152 ∨ ¬104 ∨ 151)
+		clause(152 ∨ 104)
+		clause(152 ∨ ¬104)
+		type(153) = bv _
+		type(144) = bv _
+		type(145) = bv _
+		type(153) == type(144)
+		type(153) == type(145)
+		type(154) = bv _
+		type(18) = int
+		type(153) = bv _
+		18 = width_of(154)
+		type(155) = bool
+		type(58) == type(154)
+		155 => 58 == 154
+		type(156) = bool
+		type(105) = bool
+		type(155) = bool
+		clause(¬156 ∨ ¬105 ∨ 155)
+		clause(156 ∨ 105)
+		clause(156 ∨ ¬105)
+		type(157) = bv _
+		type(39) = bv _
+		type(45) = bv _
+		type(157) == type(39)
+		type(157) == type(45)
+		type(158) = bool
+		type(58) == type(157)
+		158 => 58 == 157
+		type(159) = bool
+		type(108) = bool
+		type(158) = bool
+		clause(¬159 ∨ ¬108 ∨ 158)
+		clause(159 ∨ 108)
+		clause(159 ∨ ¬108)
+		type(160) = bv _
+		type(144) = bv _
+		type(145) = bv _
+		type(160) == type(144)
+		type(160) == type(145)
+		type(161) = bv _
+		type(18) = int
+		type(160) = bv _
+		18 = width_of(161)
+		type(162) = bool
+		type(58) == type(161)
+		162 => 58 == 161
+		type(163) = bool
+		type(109) = bool
+		type(162) = bool
+		clause(¬163 ∨ ¬109 ∨ 162)
+		clause(163 ∨ 109)
+		clause(163 ∨ ¬109)
+		type(164) = bv _
+		type(45) = bv _
+		type(164) == type(45)
+		type(165) = bv _
+		type(39) = bv _
+		type(164) = bv _
+		type(165) == type(39)
+		type(165) == type(164)
+		type(166) = bool
+		type(58) == type(165)
+		166 => 58 == 165
+		type(167) = bool
+		type(112) = bool
+		type(166) = bool
+		clause(¬167 ∨ ¬112 ∨ 166)
+		clause(167 ∨ 112)
+		clause(167 ∨ ¬112)
+		type(168) = bv _
+		type(145) = bv _
+		type(168) == type(145)
+		type(169) = bv _
+		type(144) = bv _
+		type(168) = bv _
+		type(169) == type(144)
+		type(169) == type(168)
+		type(170) = bv _
+		type(18) = int
+		type(169) = bv _
+		18 = width_of(170)
+		type(171) = bool
+		type(58) == type(170)
+		171 => 58 == 170
+		type(172) = bool
+		type(113) = bool
+		type(171) = bool
+		clause(¬172 ∨ ¬113 ∨ 171)
+		clause(172 ∨ 113)
+		clause(172 ∨ ¬113)
+		type(173) = bv _
+		type(39) = bv _
+		type(45) = bv _
+		type(173) == type(39)
+		type(173) == type(45)
+		type(174) = bool
+		type(58) == type(173)
+		174 => 58 == 173
+		type(175) = bool
+		type(116) = bool
+		type(174) = bool
+		clause(¬175 ∨ ¬116 ∨ 174)
+		clause(175 ∨ 116)
+		clause(175 ∨ ¬116)
+		type(176) = bv _
+		type(144) = bv _
+		type(145) = bv _
+		type(176) == type(144)
+		type(176) == type(145)
+		type(177) = bv _
+		type(18) = int
+		type(176) = bv _
+		18 = width_of(177)
+		type(178) = bool
+		type(58) == type(177)
+		178 => 58 == 177
+		type(179) = bool
+		type(117) = bool
+		type(178) = bool
+		clause(¬179 ∨ ¬117 ∨ 178)
+		clause(179 ∨ 117)
+		clause(179 ∨ ¬117)
+		type(180) = bv _
+		type(39) = bv _
+		type(164) = bv _
+		type(180) == type(39)
+		type(180) == type(164)
+		type(181) = bool
+		type(58) == type(180)
+		181 => 58 == 180
+		type(182) = bool
+		type(120) = bool
+		type(181) = bool
+		clause(¬182 ∨ ¬120 ∨ 181)
+		clause(182 ∨ 120)
+		clause(182 ∨ ¬120)
+		type(183) = bv _
+		type(144) = bv _
+		type(168) = bv _
+		type(183) == type(144)
+		type(183) == type(168)
+		type(184) = bv _
+		type(18) = int
+		type(183) = bv _
+		18 = width_of(184)
+		type(185) = bool
+		type(58) == type(184)
+		185 => 58 == 184
+		type(186) = bool
+		type(121) = bool
+		type(185) = bool
+		clause(¬186 ∨ ¬121 ∨ 185)
+		clause(186 ∨ 121)
+		clause(186 ∨ ¬121)
+		187 = value(65)
+		type(188) = bv _
+		type(187) = int
+		type(39) = bv _
+		187 = width_of(188)
+		type(189) = bv _
+		type(187) = int
+		type(45) = bv _
+		187 = width_of(189)
+		type(190) = bv _
+		type(188) = bv _
+		type(189) = bv _
+		type(190) == type(188)
+		type(190) == type(189)
+		type(191) = bv 1
+		type(190) = bv _
+		type(192) = bool
+		type(96) == type(191)
+		192 => 96 == 191
+		type(193) = bool
+		type(142) = bool
+		type(192) = bool
+		clause(¬193 ∨ 142)
+		clause(¬193 ∨ 192)
+		clause(193 ∨ ¬142 ∨ ¬192)
+		type(194) = bool
+		type(124) = bool
+		type(193) = bool
+		clause(¬194 ∨ ¬124 ∨ 193)
+		clause(194 ∨ 124)
+		clause(194 ∨ ¬124)
+		type(195) = bv _
+		type(18) = int
+		type(92) = bv _
+		18 = width_of(195)
+		type(196) = bv _
+		type(141) = bv _
+		type(195) = bv _
+		type(196) == type(141)
+		type(196) == type(195)
+		type(197) = bool
+		type(58) == type(196)
+		197 => 58 == 196
+		type(198) = bool
+		type(127) = bool
+		type(197) = bool
+		clause(¬198 ∨ ¬127 ∨ 197)
+		clause(198 ∨ 127)
+		clause(198 ∨ ¬127)
+		type(199) = bv 1
+		200 = value(#b1)
+		type(201) = bool
+		type(199) == type(200)
+		201 => 199 == 200
+		type(202) = bool
+		type(53) == type(0)
+		202 => 53 == 0
+		type(203) = bool
+		type(52) == type(29)
+		203 => 52 == 29
+		7 = value(true)
+		6 = value(true)
+		13 = value(true)
+		15 = value(true)
+		21 = value(true)
+		20 = value(true)
+		23 = value(true)
+		30 = value(true)
+		28 = value(true)
+		36 = value(true)
+		38 = value(true)
+		44 = value(true)
+		48 = value(true)
+		51 = value(true)
+		60 = value(true)
+		62 = value(true)
+		63 = value(true)
+		64 = value(true)
+		67 = value(true)
+		71 = value(true)
+		52 = value(true)
+		72 = value(true)
+		75 = value(true)
+		89 = value(true)
+		143 = value(true)
+		149 = value(true)
+		152 = value(true)
+		156 = value(true)
+		159 = value(true)
+		163 = value(true)
+		167 = value(true)
+		172 = value(true)
+		175 = value(true)
+		179 = value(true)
+		182 = value(true)
+		186 = value(true)
+		194 = value(true)
+		198 = value(true)
+		201 = value(true)
+		203 = value(true)
+		1 = value(true)
+		16 = value(true)
+		24 = value(true)
+		type(5) = bool
+		type(19) = bool
+		type(41) = bool
+		type(41) = bool
+		type(86) = bool
+		type(140) = bool
+		type(202) = bool
+	]
+	branch {
+		term_instantiation(781, (bv 8, bv 8) -> bv 8) => [
+			type(25) = bv 8
+			type(26) = bv 8
+			type(22) = bv 8
+		]
+		term_instantiation(781, (bv 16, bv 16) -> bv 16) => [
+			type(25) = bv 16
+			type(26) = bv 16
+			type(22) = bv 16
+		]
+		term_instantiation(781, (bv 32, bv 32) -> bv 32) => [
+			type(25) = bv 32
+			type(26) = bv 32
+			type(22) = bv 32
+		]
+		term_instantiation(781, (bv 64, bv 64) -> bv 64) => [
+			type(25) = bv 64
+			type(26) = bv 64
+			type(22) = bv 64
+		]
+		term_instantiation(781, (bv 128, bv 128) -> bv 128) => [
+			type(25) = bv 128
+			type(26) = bv 128
+			type(22) = bv 128
+		]
+	}
+}
+choice = term_instantiation(781, (bv 8, bv 8) -> bv 8)
+type solution status = solved
+type assignment:
+0:	true	bv 8	var(0)
+1:	true	true	var(1)
+2:	true	8	var(2)
+3:	true	bv 8	var(3)
+4:	true	8	width_of(3)
+5:	true	true	2 == 4
+6:	true	true	0 == 3
+7:	true	true	1 == 5
+8:	true	8	var(4)
+9:	true	bv 8	var(5)
+10:	true	true	8 == 2
+11:	true	true	9 == 3
+12:	true	true	10 && 11
+13:	true	true	1 => 12
+14:	true	8	var(6)
+15:	true	true	14 == 8
+16:	true	true	var(7)
+17:	true	8	var(8)
+18:	true	64	const(64)
+19:	true	true	17 <= 18
+20:	true	true	14 == 17
+21:	true	true	16 == 19
+22:	true	bv 8	var(9)
+23:	true	true	22 == 9
+24:	true	true	var(10)
+25:	true	bv 8	var(11)
+26:	true	bv 8	var(12)
+27:	true	bv 8	bvadd(25, 26)
+28:	true	true	22 == 27
+29:	true	true	const(true)
+30:	true	true	24 == 29
+31:	true	bv 8	var(13)
+32:	true	bv 8	var(14)
+33:	true	true	31 == 25
+34:	true	true	32 == 26
+35:	true	true	33 && 34
+36:	true	true	24 => 35
+37:	true	bv 8	var(15)
+38:	true	true	37 == 31
+39:	true	bv 64	var(16)
+40:	true	8	width_of(37)
+41:	true	bool	40 <= 18
+42:	true	64	width_of(39)
+43:	true	bv 64	bv_conv_to(42, 37)
+44:	true	true	39 == 43
+45:	true	bv 64	var(17)
+46:	true	64	width_of(45)
+47:	true	bv 64	bv_conv_to(46, 37)
+48:	true	true	45 == 47
+49:	true	8	var(18)
+50:	true	true	49 == 17
+51:	true	true	16 => 50
+52:	true	true	var(19)
+53:	true	bv 8	var(20)
+54:	true	bv 8	var(21)
+55:	true	bv 64	var(22)
+56:	true	bv 64	var(23)
+57:	true	bv 64	var(24)
+58:	true	bv 64	var(25)
+59:	true	64	var(26)
+60:	true	true	59 == 18
+61:	true	64	width_of(58)
+62:	true	true	59 == 61
+63:	true	true	57 == 58
+64:	true	true	55 == 57
+65:	true	64	width_of(55)
+66:	true	64	width_of(56)
+67:	true	true	65 == 66
+68:	true	bv 128	bv_concat(56, 55)
+69:	true	128	width_of(68)
+70:	true	bv 128	bv_conv_to(69, 54)
+71:	true	true	68 == 70
+72:	true	true	54 == 53
+73:	true	#x00	var(27)
+74:	true	#x00	const(#x00)
+75:	true	true	73 == 74
+76:	true	int	var(28)
+77:	true	8	const(8)
+78:	true	bool	49 == 77
+79:	true	16	const(16)
+80:	true	bool	49 == 79
+81:	true	32	const(32)
+82:	true	bool	49 == 81
+83:	true	bool	49 == 18
+84:	true	bool	82 || 83
+85:	true	bool	80 || 84
+86:	true	bool	78 || 85
+87:	true	bool	49 <= 81
+88:	true	int	87 ? 81 : 18
+89:	true	true	76 == 88
+90:	true	bv 1	var(29)
+91:	true	bv 1	var(30)
+92:	true	bv 1	var(31)
+93:	true	bv 1	var(32)
+94:	true	bv 1	var(33)
+95:	true	bv 1	var(34)
+96:	true	bv 1	var(35)
+97:	true	bv 1	var(36)
+98:	true	bool	76 == 18
+99:	true	bool	75 && 98
+100:	true	bool	76 == 81
+101:	true	bool	75 && 100
+102:	true	#x01	const(#x01)
+103:	true	bool	73 == 102
+104:	true	bool	103 && 98
+105:	true	bool	103 && 100
+106:	true	#x02	const(#x02)
+107:	true	bool	73 == 106
+108:	true	bool	107 && 98
+109:	true	bool	107 && 100
+110:	true	#x03	const(#x03)
+111:	true	bool	73 == 110
+112:	true	bool	111 && 98
+113:	true	bool	111 && 100
+114:	true	#x04	const(#x04)
+115:	true	bool	73 == 114
+116:	true	bool	115 && 98
+117:	true	bool	115 && 100
+118:	true	#x05	const(#x05)
+119:	true	bool	73 == 118
+120:	true	bool	119 && 98
+121:	true	bool	119 && 100
+122:	true	#x08	const(#x08)
+123:	true	bool	73 == 122
+124:	true	bool	123 && 98
+125:	true	#x10	const(#x10)
+126:	true	bool	73 == 125
+127:	true	bool	126 && 98
+128:	true	bool	124 || 127
+129:	true	bool	121 || 128
+130:	true	bool	120 || 129
+131:	true	bool	117 || 130
+132:	true	bool	116 || 131
+133:	true	bool	113 || 132
+134:	true	bool	112 || 133
+135:	true	bool	109 || 134
+136:	true	bool	108 || 135
+137:	true	bool	105 || 136
+138:	true	bool	104 || 137
+139:	true	bool	101 || 138
+140:	true	bool	99 || 139
+141:	true	bv 64	bvadd(39, 45)
+142:	true	bool	58 == 141
+143:	true	true	99 => 142
+144:	true	bv 32	bv_extract(31, 0, 39)
+145:	true	bv 32	bv_extract(31, 0, 45)
+146:	true	bv 32	bvadd(144, 145)
+147:	true	bv 64	bv_conv_to(18, 146)
+148:	true	bool	58 == 147
+149:	true	true	101 => 148
+150:	true	bv 64	bvsub(39, 45)
+151:	true	bool	58 == 150
+152:	true	true	104 => 151
+153:	true	bv 32	bvsub(144, 145)
+154:	true	bv 64	bv_conv_to(18, 153)
+155:	true	bool	58 == 154
+156:	true	true	105 => 155
+157:	true	bv 64	bvor(39, 45)
+158:	true	bool	58 == 157
+159:	true	true	108 => 158
+160:	true	bv 32	bvor(144, 145)
+161:	true	bv 64	bv_conv_to(18, 160)
+162:	true	bool	58 == 161
+163:	true	true	109 => 162
+164:	true	bv 64	bvnot(45)
+165:	true	bv 64	bvor(39, 164)
+166:	true	bool	58 == 165
+167:	true	true	112 => 166
+168:	true	bv 32	bvnot(145)
+169:	true	bv 32	bvor(144, 168)
+170:	true	bv 64	bv_conv_to(18, 169)
+171:	true	bool	58 == 170
+172:	true	true	113 => 171
+173:	true	bv 64	bvand(39, 45)
+174:	true	bool	58 == 173
+175:	true	true	116 => 174
+176:	true	bv 32	bvand(144, 145)
+177:	true	bv 64	bv_conv_to(18, 176)
+178:	true	bool	58 == 177
+179:	true	true	117 => 178
+180:	true	bv 64	bvand(39, 164)
+181:	true	bool	58 == 180
+182:	true	true	120 => 181
+183:	true	bv 32	bvand(144, 168)
+184:	true	bv 64	bv_conv_to(18, 183)
+185:	true	bool	58 == 184
+186:	true	true	121 => 185
+187:	true	65	const(65)
+188:	true	bv 65	bv_zero_ext(187, 39)
+189:	true	bv 65	bv_zero_ext(187, 45)
+190:	true	bv 65	bvadd(188, 189)
+191:	true	bv 1	bv_extract(64, 64, 190)
+192:	true	bool	96 == 191
+193:	true	bool	142 && 192
+194:	true	true	124 => 193
+195:	true	bv 64	bv_zero_ext(18, 92)
+196:	true	bv 64	bvadd(141, 195)
+197:	true	bool	58 == 196
+198:	true	true	127 => 197
+199:	true	#b1	var(37)
+200:	true	#b1	const(#b1)
+201:	true	true	199 == 200
+202:	true	bool	53 == 0
+203:	true	true	52 == 29
+solve:
+applicability = applicable
+verification = failure
+model:
+has_type(8, #x08) -> #x08
+fits_in_64(8) -> 8
+iadd(#x00, #x08) -> #x08
+put_in_reg(#x00) -> #x8000000000000000
+put_in_reg(#x00) -> #x8000000000000000
+temp_writable_reg(64) -> #x0000000100000000
+writable_reg_to_reg(#x0000000100000000) -> #x0000000100000000
+value_reg(#x0000000100000000) -> {lo: #x0000000100000000, hi: #x0000000000000000}
+output({lo: #x0000000100000000, hi: #x0000000000000000}) -> #x00
+ALUOp.Add() -> #x00
+operand_size(8) -> 32
+MInst.AluRRR(#x00, 32, #x0000000100000000, #x8000000000000000, #x8000000000000000) -> {flags_in: {N: #b0, Z: #b0, C: #b1, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}
+emit({flags_in: {N: #b0, Z: #b0, C: #b1, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}) -> #b1
+lower(#x08) -> #x00
