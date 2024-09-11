@@ -389,10 +389,13 @@ impl<'a> Solver<'a> {
     }
 
     fn expr_name(&self, x: ExprId) -> String {
-        // TODO(mbm): ensure expression name uniqueness
         let expr = &self.conditions.exprs[x.index()];
         if let Expr::Variable(v) = expr {
-            self.conditions.variables[v.index()].name.clone()
+            format!(
+                "{}_{}",
+                self.conditions.variables[v.index()].name,
+                x.index()
+            )
         } else {
             format!("e{}", x.index())
         }

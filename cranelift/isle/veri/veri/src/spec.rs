@@ -105,6 +105,8 @@ pub enum Expr {
     Switch(Box<Expr>, Vec<(Expr, Expr)>),
     // Let bindings
     Let(Vec<(Ident, Expr)>, Box<Expr>),
+    // With scope.
+    With(Vec<Ident>, Box<Expr>),
 }
 
 macro_rules! unary_expr {
@@ -303,6 +305,15 @@ impl Expr {
                     .collect();
                 let body = Box::new(Expr::from_ast(body));
                 Expr::Let(defs, body)
+            }
+            ast::SpecExpr::With {
+                decls,
+                body,
+                pos: _,
+            } => {
+                let decls = decls.clone();
+                let body = Box::new(Expr::from_ast(body));
+                Expr::With(decls, body)
             }
             ast::SpecExpr::Pair { l, r, pos: _ } => {
                 // QUESTION(mbm): is there a cleaner way to handle switch statements without the pair type?

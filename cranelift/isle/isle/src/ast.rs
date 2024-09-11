@@ -154,6 +154,12 @@ pub enum SpecExpr {
         body: Box<SpecExpr>,
         pos: Pos,
     },
+    /// Introduce new uninitialized variables.
+    With {
+        decls: Vec<Ident>,
+        body: Box<SpecExpr>,
+        pos: Pos,
+    },
     /// Pairs, currently used for switch statements.
     Pair {
         l: Box<SpecExpr>,
@@ -177,6 +183,7 @@ impl SpecExpr {
             | &Self::Field { pos, .. }
             | &Self::Op { pos, .. }
             | &Self::Let { pos, .. }
+            | &Self::With { pos, .. }
             | &Self::Pair { pos, .. }
             | &Self::Enum { pos, .. } => pos,
         }

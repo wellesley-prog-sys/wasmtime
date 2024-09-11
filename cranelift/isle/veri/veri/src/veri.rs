@@ -1085,6 +1085,8 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::Let(defs, body) => self.spec_let(defs, body, vars),
 
+            spec::Expr::With(decls, body) => self.spec_with(decls, body, vars),
+
             spec::Expr::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
@@ -1242,6 +1244,31 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Evaluate body in let-binding scope.
         self.spec_expr(body, &let_vars)
+    }
+
+    fn spec_with(
+        &mut self,
+        decls: &[Ident],
+        body: &spec::Expr,
+        vars: &HashMap<String, Symbolic>,
+    ) -> anyhow::Result<Symbolic> {
+        // Declare new variables.
+        let mut with_vars = vars.clone();
+        for name in decls {
+            // QUESTION(mbm): allow with scopes to optionally specify types?
+            let expr = Symbolic::Scalar(self.alloc_variable(Type::Unknown, name.0.clone()));
+            match with_vars.entry(name.0.clone()) {
+                Entry::Occupied(_) => {
+                    anyhow::bail!("with expression shadows variable {name}", name = name.0)
+                }
+                Entry::Vacant(e) => {
+                    e.insert(expr);
+                }
+            }
+        }
+
+        // Evaluate body in new scope.
+        self.spec_expr(body, &with_vars)
     }
 
     fn conditional(&mut self, c: ExprId, t: Symbolic, e: Symbolic) -> anyhow::Result<Symbolic> {

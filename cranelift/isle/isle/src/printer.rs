@@ -257,6 +257,15 @@ impl Printable for SpecExpr {
                 sexp(defs.iter().map(|(n, e)| sexp(vec![n.to_doc(), e.to_doc()]))),
                 body.to_doc(),
             ]),
+            SpecExpr::With {
+                decls,
+                body,
+                pos: _,
+            } => sexp(vec![
+                RcDoc::text("with"),
+                sexp(decls.iter().map(Printable::to_doc)),
+                body.to_doc(),
+            ]),
         }
     }
 }
