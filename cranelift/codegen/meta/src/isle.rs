@@ -127,6 +127,7 @@ pub fn get_isle_compilations(
                     inst_specs_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("inst_neon.isle"),
+                    src_isa_aarch64.join("inst_specs.isle"),
                     src_isa_aarch64.join("lower.isle"),
                     src_isa_aarch64.join("lower_dynamic_neon.isle"),
                 ],

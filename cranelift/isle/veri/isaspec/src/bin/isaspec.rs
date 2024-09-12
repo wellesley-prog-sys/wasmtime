@@ -60,26 +60,30 @@ fn define() -> SpecConfig {
         ALUOp::OrrNot,
         ALUOp::And,
         ALUOp::AndNot,
+        ALUOp::AddS,
+        ALUOp::Adc,
+        // --------------
+        // Not supported yet:
         // ALUOp::Eor,
         // ALUOp::EorNot,
         // ALUOp::SMulH,
         // ALUOp::UMulH,
+        //
+        // Generates unimplemented function:
         // ALUOp::SDiv,
         // ALUOp::UDiv,
-        // --------------
+        //
         // Shift variable is 6-bits:
         // ALUOp::Lsr,
         // ALUOp::Asr,
         // ALUOp::Lsl,
         // ALUOp::RotR,
         //
-        // Flags:
-        ALUOp::AddS,
-        ALUOp::SubS,
-        ALUOp::Adc,
-        ALUOp::Sbc,
-        ALUOp::AdcS,
-        ALUOp::SbcS,
+        // Flag ops not required yet:
+        // ALUOp::SubS,
+        // ALUOp::Sbc,
+        // ALUOp::AdcS,
+        // ALUOp::SbcS,
     ];
 
     // OperandSize

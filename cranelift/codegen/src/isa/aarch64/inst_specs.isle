@@ -1,0 +1,288 @@
+(spec
+    (MInst.AluRRR alu_op size rd rn rm)
+    (provide
+        (=>
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
+            (with
+                (v0_0 v0_1 v0_2)
+                (and
+                    (= rn v0_0)
+                    (= rm v0_1)
+                    (= rd v0_2)
+                    (=
+                        v0_2
+                        (zero_ext
+                            64
+                            (bvadd
+                                (extract 31 0 v0_0)
+                                (extract 31 0 v0_1)))))))
+        (=>
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+            (with
+                (v1_0 v1_1 v1_2)
+                (and
+                    (= rn v1_0)
+                    (= rm v1_1)
+                    (= rd v1_2)
+                    (= v1_2 (bvadd v1_0 v1_1)))))
+        (=>
+            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
+            (with
+                (v2_0 v2_1 v2_2)
+                (and
+                    (= rm v2_1)
+                    (= rn v2_0)
+                    (= rd v2_2)
+                    (=
+                        v2_2
+                        (zero_ext
+                            64
+                            (bvadd
+                                (bvadd
+                                    (extract 31 0 v2_0)
+                                    (bvnot (extract 31 0 v2_1)))
+                                #x00000001))))))
+        (=>
+            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+            (with
+                (v3_0 v3_1 v3_2)
+                (and
+                    (= rm v3_1)
+                    (= rn v3_0)
+                    (= rd v3_2)
+                    (=
+                        v3_2
+                        (bvadd
+                            (bvadd v3_0 (bvnot v3_1))
+                            #x0000000000000001)))))
+        (=>
+            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
+            (with
+                (v4_0 v4_1 v4_2)
+                (and
+                    (= rm v4_1)
+                    (= rn v4_0)
+                    (= rd v4_2)
+                    (=
+                        v4_2
+                        (zero_ext
+                            64
+                            (bvor
+                                (extract 31 0 v4_0)
+                                (extract 31 0 v4_1)))))))
+        (=>
+            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
+            (with
+                (v5_0 v5_1 v5_2)
+                (and
+                    (= rm v5_1)
+                    (= rn v5_0)
+                    (= rd v5_2)
+                    (= v5_2 (bvor v5_0 v5_1)))))
+        (=>
+            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
+            (with
+                (v6_0 v6_1 v6_2)
+                (and
+                    (= rn v6_0)
+                    (= rm v6_1)
+                    (= rd v6_2)
+                    (=
+                        v6_2
+                        (zero_ext
+                            64
+                            (bvor
+                                (extract 31 0 v6_0)
+                                (bvnot (extract 31 0 v6_1))))))))
+        (=>
+            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+            (with
+                (v7_0 v7_1 v7_2)
+                (and
+                    (= rn v7_0)
+                    (= rm v7_1)
+                    (= rd v7_2)
+                    (= v7_2 (bvor v7_0 (bvnot v7_1))))))
+        (=>
+            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
+            (with
+                (v8_0 v8_1 v8_2)
+                (and
+                    (= rm v8_1)
+                    (= rn v8_0)
+                    (= rd v8_2)
+                    (=
+                        v8_2
+                        (zero_ext
+                            64
+                            (bvand
+                                (extract 31 0 v8_0)
+                                (extract 31 0 v8_1)))))))
+        (=>
+            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+            (with
+                (v9_0 v9_1 v9_2)
+                (and
+                    (= rm v9_1)
+                    (= rn v9_0)
+                    (= rd v9_2)
+                    (= v9_2 (bvand v9_0 v9_1)))))
+        (=>
+            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
+            (with
+                (v10_0 v10_1 v10_2)
+                (and
+                    (= rm v10_1)
+                    (= rn v10_0)
+                    (= rd v10_2)
+                    (=
+                        v10_2
+                        (zero_ext
+                            64
+                            (bvand
+                                (extract 31 0 v10_0)
+                                (bvnot (extract 31 0 v10_1))))))))
+        (=>
+            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+            (with
+                (v11_0 v11_1 v11_2)
+                (and
+                    (= rm v11_1)
+                    (= rn v11_0)
+                    (= rd v11_2)
+                    (= v11_2 (bvand v11_0 (bvnot v11_1))))))
+        (=>
+            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size32)))
+            (with
+                (v12_0 v12_1 v12_2 v12_3 v12_4 v12_5 v12_6 v12_7 v12_8)
+                (and
+                    (= rm v12_1)
+                    (= rn v12_0)
+                    (= rd v12_8)
+                    (= (:N (:flags_out result)) v12_7)
+                    (= (:Z (:flags_out result)) v12_6)
+                    (= (:C (:flags_out result)) v12_5)
+                    (= (:V (:flags_out result)) v12_4)
+                    (=
+                        v12_2
+                        (bvadd (extract 31 0 v12_0) (extract 31 0 v12_1)))
+                    (=
+                        v12_3
+                        (zero_ext
+                            64
+                            (bvadd
+                                (extract 31 0 v12_0)
+                                (extract 31 0 v12_1))))
+                    (=
+                        v12_4
+                        (bvnot
+                            (if
+                                (=
+                                    (sign_ext 64 v12_2)
+                                    (bvadd
+                                        (sign_ext 64 (extract 31 0 v12_0))
+                                        (sign_ext 64 (extract 31 0 v12_1))))
+                                #b1
+                                #b0)))
+                    (=
+                        v12_5
+                        (bvnot
+                            (if
+                                (=
+                                    v12_3
+                                    (bvadd
+                                        (zero_ext 64 (extract 31 0 v12_0))
+                                        (zero_ext 64 (extract 31 0 v12_1))))
+                                #b1
+                                #b0)))
+                    (= v12_6 (if (= v12_2 #x00000000) #b1 #b0))
+                    (= v12_7 (extract 31 31 v12_2))
+                    (= v12_8 v12_3))))
+        (=>
+            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size64)))
+            (with
+                (v13_0 v13_1 v13_2 v13_3 v13_4 v13_5 v13_6 v13_7)
+                (and
+                    (= rn v13_0)
+                    (= rm v13_1)
+                    (= (:V (:flags_out result)) v13_3)
+                    (= (:C (:flags_out result)) v13_4)
+                    (= (:Z (:flags_out result)) v13_5)
+                    (= (:N (:flags_out result)) v13_6)
+                    (= rd v13_7)
+                    (= v13_2 (bvadd v13_0 v13_1))
+                    (=
+                        v13_3
+                        (bvnot
+                            (if
+                                (=
+                                    (sign_ext 128 v13_2)
+                                    (bvadd
+                                        (sign_ext 128 v13_0)
+                                        (sign_ext 128 v13_1)))
+                                #b1
+                                #b0)))
+                    (=
+                        v13_4
+                        (bvnot
+                            (if
+                                (=
+                                    (zero_ext 128 v13_2)
+                                    (bvadd
+                                        (zero_ext 128 v13_0)
+                                        (zero_ext 128 v13_1)))
+                                #b1
+                                #b0)))
+                    (= v13_5 (if (= v13_2 #x0000000000000000) #b1 #b0))
+                    (= v13_6 (extract 63 63 v13_2))
+                    (= v13_7 v13_2))))
+        (=>
+            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size32)))
+            (with
+                (v14_0 v14_1 v14_2 v14_3)
+                (and
+                    (= rm v14_1)
+                    (= (:C (:flags_in result)) v14_2)
+                    (= rn v14_0)
+                    (= rd v14_3)
+                    (=
+                        v14_3
+                        (zero_ext
+                            64
+                            (bvadd
+                                (bvadd
+                                    (extract 31 0 v14_0)
+                                    (extract 31 0 v14_1))
+                                (zero_ext 32 (extract 0 0 v14_2))))))))
+        (=>
+            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size64)))
+            (with
+                (v15_0 v15_1 v15_2 v15_3)
+                (and
+                    (= (:C (:flags_in result)) v15_2)
+                    (= rn v15_0)
+                    (= rm v15_1)
+                    (= rd v15_3)
+                    (=
+                        v15_3
+                        (bvadd
+                            (bvadd v15_0 v15_1)
+                            (zero_ext 64 (extract 0 0 v15_2))))))))
+    (require
+        (or
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size64))))))

@@ -121,6 +121,10 @@ impl Scope {
         self.constraints.push(constraint);
     }
 
+    pub fn vars(&self) -> &HashSet<String> {
+        &self.vars
+    }
+
     pub fn reads(&self) -> &HashSet<Target> {
         &self.reads
     }

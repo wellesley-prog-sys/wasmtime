@@ -94,6 +94,18 @@ pub fn spec_var(id: String) -> SpecExpr {
     }
 }
 
+pub fn spec_with(decls: Vec<Ident>, body: SpecExpr) -> SpecExpr {
+    SpecExpr::With {
+        decls,
+        body: Box::new(body),
+        pos: Pos::default(),
+    }
+}
+
+pub fn spec_idents(ids: &[String]) -> Vec<Ident> {
+    ids.iter().cloned().map(spec_ident).collect()
+}
+
 pub fn spec_ident(id: String) -> Ident {
     Ident(id, Pos::default())
 }
@@ -118,15 +130,15 @@ impl Conditions {
             1 => cs[0].clone(),
             _ => Self {
                 requires: vec![spec_or(
-                    cs.iter().map(|c| spec_and(c.requires.clone())).collect(),
+                    cs.iter().map(|c| spec_all(c.requires.clone())).collect(),
                 )],
                 provides: cs
                     .iter()
                     .map(|c| {
                         spec_binary(
                             SpecOp::Imp,
-                            spec_and(c.requires.clone()),
-                            spec_and(c.provides.clone()),
+                            spec_all(c.requires.clone()),
+                            spec_all(c.provides.clone()),
                         )
                     })
                     .collect(),

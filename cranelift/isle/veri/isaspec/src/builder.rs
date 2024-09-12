@@ -6,6 +6,7 @@ use cranelift_codegen::isa::aarch64::inst::Inst;
 use cranelift_isle::ast::{Def, Spec, SpecExpr};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle_veri_aslp::client::Client;
+use itertools::Itertools;
 
 use crate::constraints::{Binding, Target, Translator};
 use crate::semantics::inst_semantics;
@@ -100,18 +101,10 @@ impl Builder {
             .enumerate()
             .map(|(i, c)| self.case(i, c))
             .collect::<Result<_, _>>()?;
-        let mut cond = Conditions::merge(conds);
-
-        // Assert the result is fixed 1-bit vector.
-        // TODO(mbm): decide on verification model for MInst, or explicitly model as void or Unit
-        cond.provides.insert(
-            0,
-            spec_eq(spec_var("result".to_string()), spec_const_bit_vector(1, 1)),
-        );
-
+        let cond = Conditions::merge(conds);
         let spec = Spec {
             term: spec_ident(cfg.term.clone()),
-            args: cfg.args.iter().cloned().map(spec_ident).collect(),
+            args: spec_idents(&cfg.args),
             requires: cond.requires,
             provides: cond.provides,
             pos: Pos::default(),
@@ -121,10 +114,7 @@ impl Builder {
     }
 
     fn case(&self, i: usize, case: &InstConfig) -> anyhow::Result<Conditions> {
-        let mut conds = Conditions {
-            requires: case.require.clone(),
-            provides: Vec::new(),
-        };
+        let mut provides = Vec::new();
 
         // Semantics.
         let block = inst_semantics(&case.inst, &self.client)?;
@@ -149,9 +139,7 @@ impl Builder {
             let v = &init[target];
 
             // Bind to mapped expression.
-            conds
-                .provides
-                .push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
+            provides.push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
         }
 
         if let Some(target) = case.mappings.required_reads().difference(reads).next() {
@@ -173,18 +161,25 @@ impl Builder {
             };
 
             // Bind to mapped expression.
-            conds
-                .provides
-                .push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
+            provides.push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
         }
 
         if let Some(target) = case.mappings.required_writes().difference(writes).next() {
             anyhow::bail!("{target} should have been written");
         }
 
-        // Conditions.
-        conds.provides.extend(global.constraints().iter().cloned());
+        // Finalize provided constraints.
+        //
+        // Wrap in a scope to declare and encapsulate temporary variables.
+        provides.extend(global.constraints().iter().cloned());
 
-        Ok(conds)
+        let decls: Vec<_> = global.vars().iter().sorted().cloned().collect();
+        let with_scope = spec_with(spec_idents(&decls), spec_all(provides));
+
+        // Conditions.
+        Ok(Conditions {
+            requires: case.require.clone(),
+            provides: vec![with_scope],
+        })
     }
 }
