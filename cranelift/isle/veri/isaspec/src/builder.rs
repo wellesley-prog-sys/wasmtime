@@ -1,6 +1,6 @@
 //! Construction of VeriISLE specifications from ASLp semantics.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cranelift_codegen::isa::aarch64::inst::Inst;
 use cranelift_isle::ast::{Def, Spec, SpecExpr};
@@ -17,37 +17,62 @@ pub struct SpecConfig {
     pub cases: Vec<InstConfig>,
 }
 
-pub enum Action {
-    Read,
-    Write,
+#[derive(Clone)]
+pub enum Expectation {
+    Require,
+    Allow,
 }
 
+#[derive(Clone)]
 pub struct Mapping {
-    pub expected_action: Action,
-    pub variable: String,
+    expr: SpecExpr,
+    expect: Expectation,
 }
 
 impl Mapping {
-    pub fn new(expected_action: Action, variable: String) -> Self {
-        Self {
-            expected_action,
-            variable,
-        }
+    pub fn new(expr: SpecExpr, expect: Expectation) -> Self {
+        Self { expr, expect }
     }
 
-    pub fn read(variable: String) -> Self {
-        Self::new(Action::Read, variable)
+    pub fn require(expr: SpecExpr) -> Self {
+        Self::new(expr, Expectation::Require)
     }
 
-    pub fn write(variable: String) -> Self {
-        Self::new(Action::Write, variable)
+    pub fn allow(expr: SpecExpr) -> Self {
+        Self::new(expr, Expectation::Allow)
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct Mappings {
+    pub reads: HashMap<Target, Mapping>,
+    pub writes: HashMap<Target, Mapping>,
+}
+
+impl Mappings {
+    fn required_reads(&self) -> HashSet<Target> {
+        Self::required_targets(&self.reads)
+    }
+
+    fn required_writes(&self) -> HashSet<Target> {
+        Self::required_targets(&self.writes)
+    }
+
+    fn required_targets(target_mapping: &HashMap<Target, Mapping>) -> HashSet<Target> {
+        target_mapping
+            .iter()
+            .filter_map(|(target, mapping)| match mapping.expect {
+                Expectation::Require => Some(target.clone()),
+                Expectation::Allow => None,
+            })
+            .collect()
     }
 }
 
 pub struct InstConfig {
     pub inst: Inst,
     pub require: Vec<SpecExpr>,
-    pub mappings: HashMap<Target, Mapping>,
+    pub mappings: Mappings,
 }
 
 pub struct Builder {
@@ -111,33 +136,50 @@ impl Builder {
 
         let global = translator.global();
 
-        // Binding mapping.
-        let bindings = global.bindings();
+        // Reads mapping.
         let reads = global.reads();
-        let writes = global.writes();
-        for (target, mapping) in &case.mappings {
-            // Confirm expected action.
-            match mapping.expected_action {
-                Action::Read => assert!(reads.contains(target)),
-                Action::Write => assert!(writes.contains(target)),
-            }
-
-            // Confirm target is bound to a variable in the constraints.
-            let v = match bindings.get(target) {
-                Some(Binding::Var(v)) => v,
-                _ => anyhow::bail!("{target} not bound to variable"),
+        let init = global.init();
+        for target in reads {
+            // Expect mapping for the read.
+            let Some(mapping) = case.mappings.reads.get(target) else {
+                anyhow::bail!("read of {target} is unmapped");
             };
 
-            // Bind to mapped variable.
-            conds.provides.push(spec_eq(
-                spec_var(mapping.variable.clone()),
-                spec_var(v.clone()),
-            ));
+            // Lookup variable holding the initial read value.
+            let v = &init[target];
+
+            // Bind to mapped expression.
+            conds
+                .provides
+                .push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
         }
 
-        // Confirm all actions are mapped.
-        if reads.len() + writes.len() != case.mappings.len() {
-            anyhow::bail!("unmapped bindings");
+        if let Some(target) = case.mappings.required_reads().difference(reads).next() {
+            anyhow::bail!("{target} should have been read");
+        }
+
+        // Writes mapping.
+        let writes = global.writes();
+        let bindings = global.bindings();
+        for target in writes {
+            // Expect mapping for the write.
+            let Some(mapping) = case.mappings.writes.get(target) else {
+                anyhow::bail!("write to {target} is unmapped");
+            };
+
+            // Lookup bound variable.
+            let Some(Binding::Var(v)) = bindings.get(target) else {
+                anyhow::bail!("{target} not bound to variable");
+            };
+
+            // Bind to mapped expression.
+            conds
+                .provides
+                .push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
+        }
+
+        if let Some(target) = case.mappings.required_writes().difference(writes).next() {
+            anyhow::bail!("{target} should have been written");
         }
 
         // Conditions.

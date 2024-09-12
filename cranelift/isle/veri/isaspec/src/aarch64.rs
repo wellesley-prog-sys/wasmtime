@@ -18,6 +18,14 @@ pub fn vreg(i: usize) -> Target {
     Target::Index(Box::new(z), i)
 }
 
+pub fn pstate() -> Target {
+    Target::Var("PSTATE".to_string())
+}
+
+pub fn pstate_field(name: &str) -> Target {
+    Target::Field(Box::new(pstate()), name.to_string())
+}
+
 pub fn state() -> Scope {
     let mut scope = Scope::new();
 
@@ -31,10 +39,9 @@ pub fn state() -> Scope {
         scope.global(vreg(i));
     }
 
-    // PSTATE
-    let pstate = Target::Var("PSTATE".to_string());
+    // NZCV
     for field in &["N", "Z", "C", "V"] {
-        scope.global(Target::Field(Box::new(pstate.clone()), field.to_string()));
+        scope.global(pstate_field(field));
     }
 
     scope

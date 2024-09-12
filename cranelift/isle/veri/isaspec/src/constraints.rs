@@ -81,7 +81,7 @@ pub enum Binding {
 }
 
 impl Binding {
-    fn as_var(&self) -> Option<&String> {
+    pub fn as_var(&self) -> Option<&String> {
         match self {
             Binding::Var(v) => Some(v),
             _ => None,
@@ -95,6 +95,7 @@ pub struct Scope {
     vars: HashSet<String>,
     decls: HashSet<Target>,
     bindings: HashMap<Target, Binding>,
+    init: HashMap<Target, String>,
     reads: HashSet<Target>,
     writes: HashSet<Target>,
 }
@@ -106,6 +107,7 @@ impl Scope {
             vars: HashSet::new(),
             decls: HashSet::new(),
             bindings: HashMap::new(),
+            init: HashMap::new(),
             reads: HashSet::new(),
             writes: HashSet::new(),
         }
@@ -125,6 +127,10 @@ impl Scope {
 
     pub fn writes(&self) -> &HashSet<Target> {
         &self.writes
+    }
+
+    pub fn init(&self) -> &HashMap<Target, String> {
+        &self.init
     }
 
     pub fn bindings(&self) -> &HashMap<Target, Binding> {
@@ -148,6 +154,12 @@ impl Scope {
     fn bind_var(&mut self, target: Target, v: String) {
         self.vars.insert(v.clone());
         self.bind(target, Binding::Var(v));
+    }
+
+    fn init_var(&mut self, target: Target, v: String) {
+        assert!(!self.init.contains_key(&target));
+        self.init.insert(target.clone(), v.clone());
+        self.bind_var(target, v);
     }
 
     fn write(&mut self, target: Target, v: String) {
@@ -246,7 +258,7 @@ impl Translator {
                 Some(Binding::Uninitialized) => anyhow::bail!("uninitialized read: {target}"),
                 Some(Binding::Global) => {
                     let v = self.vars.alloc();
-                    scope.bind_var(target.clone(), v.clone());
+                    scope.init_var(target.clone(), v.clone());
                     return Ok(v);
                 }
             };

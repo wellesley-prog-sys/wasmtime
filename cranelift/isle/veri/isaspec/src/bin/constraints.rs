@@ -239,14 +239,18 @@ fn convert_block(block: &Block) -> anyhow::Result<()> {
     let global = translator.global();
     debug!("scope: {global:#?}");
 
+    let init = global.init();
     let bindings = global.bindings();
 
     for r in global.reads() {
-        println!("read:\t{r}\t{:?}", bindings[r]);
+        println!("read:\t{r}\t{}", init[r]);
     }
 
     for w in global.writes() {
-        println!("write:\t{w}\t{:?}", bindings[w]);
+        println!(
+            "write:\t{w}\t{}",
+            bindings[w].as_var().expect("binding should be variable")
+        );
     }
 
     println!();

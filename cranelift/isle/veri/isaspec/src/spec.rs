@@ -79,6 +79,14 @@ pub fn spec_enum(name: String, variant: String) -> SpecExpr {
     }
 }
 
+pub fn spec_field(field: String, x: SpecExpr) -> SpecExpr {
+    SpecExpr::Field {
+        field: spec_ident(field),
+        x: Box::new(x),
+        pos: Pos::default(),
+    }
+}
+
 pub fn spec_var(id: String) -> SpecExpr {
     SpecExpr::Var {
         var: spec_ident(id),

@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-
 use clap::Parser as ClapParser;
 use cranelift_codegen::isa::aarch64::inst::{writable_xreg, xreg, ALUOp, Inst, OperandSize};
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
+use cranelift_isle_veri_isaspec::aarch64::pstate_field;
 use itertools::Itertools;
 
-use cranelift_isle_veri_isaspec::builder::{Builder, InstConfig, Mapping, SpecConfig};
+use cranelift_isle_veri_isaspec::builder::{Builder, InstConfig, Mapping, Mappings, SpecConfig};
 use cranelift_isle_veri_isaspec::{aarch64, spec::*};
 
 #[derive(ClapParser)]
@@ -61,12 +60,12 @@ fn define() -> SpecConfig {
         ALUOp::OrrNot,
         ALUOp::And,
         ALUOp::AndNot,
-        ALUOp::Eor,
-        ALUOp::EorNot,
-        ALUOp::SMulH,
-        ALUOp::UMulH,
-        ALUOp::SDiv,
-        ALUOp::UDiv,
+        // ALUOp::Eor,
+        // ALUOp::EorNot,
+        // ALUOp::SMulH,
+        // ALUOp::UMulH,
+        // ALUOp::SDiv,
+        // ALUOp::UDiv,
         // --------------
         // Shift variable is 6-bits:
         // ALUOp::Lsr,
@@ -75,18 +74,32 @@ fn define() -> SpecConfig {
         // ALUOp::RotR,
         //
         // Flags:
-        // ALUOp::AddS,
-        // ALUOp::SubS,
-        // ALUOp::Adc,
-        // ALUOp::Sbc,
-        // ALUOp::AdcS,
-        // ALUOp::SbcS,
+        ALUOp::AddS,
+        ALUOp::SubS,
+        ALUOp::Adc,
+        ALUOp::Sbc,
+        ALUOp::AdcS,
+        ALUOp::SbcS,
     ];
 
     // OperandSize
     let sizes = vec![OperandSize::Size32, OperandSize::Size64];
 
     // AluRRR
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+
     let alu_rrr = SpecConfig {
         // Spec signature.
         term: "MInst.AluRRR".to_string(),
@@ -121,12 +134,8 @@ fn define() -> SpecConfig {
                     ),
                 ],
 
-                // Mappings from concrete registers to specification parameters.
-                mappings: HashMap::from([
-                    (aarch64::gpreg(4), Mapping::write("rd".to_string())),
-                    (aarch64::gpreg(5), Mapping::read("rn".to_string())),
-                    (aarch64::gpreg(6), Mapping::read("rm".to_string())),
-                ]),
+                // Mappings from state to specification parameters.
+                mappings: mappings.clone(),
             })
             .collect(),
     };
@@ -139,4 +148,31 @@ fn is_alu_op_size_supported(alu_op: ALUOp, size: OperandSize) -> bool {
         ALUOp::SMulH | ALUOp::UMulH | ALUOp::SDiv | ALUOp::UDiv => size == OperandSize::Size64,
         _ => true,
     }
+}
+
+fn flags_mappings() -> Mappings {
+    // Instruction model is the MInst value itself, which is considered the result of the variant term.
+    let inst = spec_var("result".to_string());
+
+    // Input and output flags of the instruction are fields of the MInst model.
+    let flags_in = spec_field("flags_in".to_string(), inst.clone());
+    let flags_out = spec_field("flags_out".to_string(), inst.clone());
+
+    // Construct read and write mappings for each NZCV field.
+    let mut mappings = Mappings::default();
+    for field in &["N", "Z", "C", "V"] {
+        // Read
+        mappings.reads.insert(
+            pstate_field(field),
+            Mapping::allow(spec_field(field.to_string(), flags_in.clone())),
+        );
+
+        // Write
+        mappings.writes.insert(
+            pstate_field(field),
+            Mapping::allow(spec_field(field.to_string(), flags_out.clone())),
+        );
+    }
+
+    mappings
 }
