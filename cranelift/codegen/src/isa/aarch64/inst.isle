@@ -4362,7 +4362,45 @@
 (decl lower_icmp (IntCC Value Value Type) FlagsAndCC)
 (decl lower_icmp_into_reg (IntCC Value Value Type Type) ValueRegs)
 (decl lower_icmp_into_flags (IntCC Value Value Type) FlagsAndCC)
+
+
 (decl lower_icmp_const (IntCC Value u64 Type) FlagsAndCC)
+(provide
+            (= (:flags result) (extract 67 64 flags))
+            (= (:cc result) (cc)))
+
+(spec (lower_icmp_const c x y in_ty)
+      (provide 
+            (= (:flags result) (extract 67 64
+                              (if (or (= c (IntCC.SignedGreaterThanOrEqual))
+                                      (= c (IntCC.SignedGreaterThan))
+                                      (= c (IntCC.SignedLessThanOrEqual))
+                                      (= c (IntCC.SignedLessThan)))
+                                    (if (<= in_ty 32)
+                                          (subs 32 (sign_ext 64 x) y)
+                                          (subs 64 (sign_ext 64 x) y))
+                                    (if (<= in_ty 32)
+                                          (subs 32 (zero_ext 64 x) y)
+                                          (subs 64 (zero_ext 64 x) y)))))
+            (= (:cc result) (c))
+      )
+      (require
+            (or
+                (= c (IntCC.Equal))
+                (= c (IntCC.NotEqual))
+                (= c (IntCC.UnsignedGreaterThanOrEqual))
+                (= c (IntCC.UnsignedGreaterThan))
+                (= c (IntCC.UnsignedLessThanOrEqual))
+                (= c (IntCC.UnsignedLessThan))
+                (= c (IntCC.SignedGreaterThanOrEqual))
+                (= c (IntCC.SignedGreaterThan))
+                (= c (IntCC.SignedLessThanOrEqual))
+                (= c (IntCC.SignedLessThan)))
+            (or (= in_ty 32) (= in_ty 64))
+            (= in_ty (widthof x))
+      )
+)
+
 ;; For most cases, `lower_icmp_into_flags` is the same as `lower_icmp`,
 ;; except for some I128 cases (see below).
 (rule -1 (lower_icmp_into_flags cond x y ty) (lower_icmp cond x y ty))
