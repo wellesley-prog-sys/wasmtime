@@ -40,6 +40,10 @@ struct Opts {
     /// Skip solver.
     #[arg(long, env = "ISLE_VERI_SKIP_SOLVER")]
     skip_solver: bool,
+
+    /// Dump debug output.
+    #[arg(long)]
+    debug: bool,
 }
 
 impl Opts {
@@ -92,18 +96,24 @@ fn main() -> anyhow::Result<()> {
 
     // Process expansions.
     let expansions = expander.expansions();
-    println!("expansions = {}", expansions.len());
-    for expansion in expansions {
+    for (i, expansion) in expansions.iter().enumerate() {
         if !should_verify(expansion, target, &prog) {
             continue;
         }
-        print_expansion(&prog, expansion);
+
+        // Report.
+        println!("#{i}\t{}", expansion_description(expansion, &prog));
+        if opts.debug {
+            print_expansion(&prog, expansion);
+        }
+
         verify_expansion(
             expansion,
             &prog,
             &opts.smt2_replay_path,
             opts.timeout,
             opts.skip_solver,
+            opts.debug,
         )?;
     }
 
@@ -127,20 +137,34 @@ fn should_verify(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -
     rule.name.is_some()
 }
 
+fn expansion_description(expansion: &Expansion, prog: &Program) -> String {
+    let rule_id = expansion
+        .rules
+        .first()
+        .expect("expansion should have at least one rule");
+    let rule = prog.rule(*rule_id);
+    rule.identifier(&prog.tyenv, &prog.files)
+}
+
 fn verify_expansion(
     expansion: &Expansion,
     prog: &Program,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
     skip_solver: bool,
+    debug: bool,
 ) -> anyhow::Result<()> {
     // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
-    conditions.pretty_print(prog);
+    if debug {
+        conditions.pretty_print(prog);
+    }
 
     // Type constraints.
     let system = type_constraint_system(&conditions);
-    system.pretty_print();
+    if debug {
+        system.pretty_print();
+    }
 
     // Infer types.
     let type_solver = type_inference::Solver::new();
@@ -149,11 +173,13 @@ fn verify_expansion(
     for solution in &solutions {
         // Show type assignment.
         for choice in &solution.choices {
-            println!("choice = {}", choice);
+            println!("\tchoice = {}", choice);
         }
-        println!("type solution status = {}", solution.status);
-        println!("type assignment:");
-        solution.assignment.pretty_print(&conditions);
+        println!("\t\ttype solution status = {}", solution.status);
+        if debug {
+            println!("type assignment:");
+            solution.assignment.pretty_print(&conditions);
+        }
 
         match solution.status {
             type_inference::Status::Solved => (),
@@ -189,7 +215,6 @@ fn verify_expansion_type_instantiation(
     timeout_seconds: u32,
 ) -> anyhow::Result<()> {
     // Solve.
-    println!("solve:");
     let replay_file = std::fs::File::create(replay_path)?;
     let smt = easy_smt::ContextBuilder::new()
         .solver(
@@ -203,7 +228,7 @@ fn verify_expansion_type_instantiation(
     solver.encode()?;
 
     let applicability = solver.check_assumptions_feasibility()?;
-    println!("applicability = {applicability}");
+    println!("\t\tapplicability = {applicability}");
     match applicability {
         Applicability::Applicable => (),
         Applicability::Inapplicable => return Ok(()),
@@ -211,7 +236,7 @@ fn verify_expansion_type_instantiation(
     };
 
     let verification = solver.check_verification_condition()?;
-    println!("verification = {verification}");
+    println!("\t\tverification = {verification}");
     match verification {
         Verification::Failure(model) => {
             println!("model:");
