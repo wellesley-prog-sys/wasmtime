@@ -155,8 +155,12 @@ impl Scope {
         self.bind(target, Binding::Global);
     }
 
+    fn add_var(&mut self, v: String) {
+        self.vars.insert(v);
+    }
+
     fn bind_var(&mut self, target: Target, v: String) {
-        self.vars.insert(v.clone());
+        self.add_var(v.clone());
         self.bind(target, Binding::Var(v));
     }
 
@@ -400,6 +404,7 @@ impl Translator {
     // Bind expression to a variable and return it.
     fn bind(&mut self, expr: SpecExpr) -> anyhow::Result<String> {
         let v = self.vars.alloc();
+        self.scope_mut().add_var(v.clone());
         let lhs = spec_var(v.clone());
         self.constrain(spec_eq(lhs, expr));
         Ok(v)
@@ -467,6 +472,10 @@ impl Translator {
                     spec_const_bit_vector(1, 1),
                     spec_const_bit_vector(0, 1),
                 ))
+            }
+            "ite" => {
+                let (c, t, e) = expect_ternary(args)?;
+                Ok(spec_if(self.expr(c)?, self.expr(t)?, self.expr(e)?))
             }
             "and_bool" => {
                 // TODO(mbm): binary op helper
@@ -612,6 +621,13 @@ fn expect_binary<T>(xs: &[T]) -> anyhow::Result<(&T, &T)> {
         anyhow::bail!("expected binary");
     }
     Ok((&xs[0], &xs[1]))
+}
+
+fn expect_ternary<T>(xs: &[T]) -> anyhow::Result<(&T, &T, &T)> {
+    if xs.len() != 3 {
+        anyhow::bail!("expected ternary");
+    }
+    Ok((&xs[0], &xs[1], &xs[2]))
 }
 
 fn expect_size(expr: &Expr) -> anyhow::Result<usize> {

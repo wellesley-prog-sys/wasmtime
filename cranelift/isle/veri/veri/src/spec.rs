@@ -63,7 +63,7 @@ pub enum Expr {
 
     //// Binary operators
     //BVUDiv(Box<Expr>, Box<Expr>),
-    //BVSDiv(Box<Expr>, Box<Expr>),
+    BVSDiv(Box<Expr>, Box<Expr>),
     BVAdd(Box<Expr>, Box<Expr>),
     BVSub(Box<Expr>, Box<Expr>),
     BVMul(Box<Expr>, Box<Expr>),
@@ -214,10 +214,9 @@ impl Expr {
                 SpecOp::BVSub => binary_expr!(Expr::BVSub, args, pos),
                 //SpecOp::BVSub => binop(|x, y| Expr::BVSub(x, y), args, pos, env),
                 SpecOp::BVMul => binary_expr!(Expr::BVMul, args, pos),
-                //SpecOp::BVMul => binop(|x, y| Expr::BVMul(x, y), args, pos, env),
+                SpecOp::BVSdiv => binary_expr!(Expr::BVSDiv, args, pos),
                 //SpecOp::BVUdiv => binop(|x, y| Expr::BVUDiv(x, y), args, pos, env),
                 //SpecOp::BVUrem => binop(|x, y| Expr::BVUrem(x, y), args, pos, env),
-                //SpecOp::BVSdiv => binop(|x, y| Expr::BVSDiv(x, y), args, pos, env),
                 //SpecOp::BVSrem => binop(|x, y| Expr::BVSrem(x, y), args, pos, env),
                 SpecOp::BVShl => binary_expr!(Expr::BVShl, args, pos),
                 SpecOp::BVLshr => binary_expr!(Expr::BVLShr, args, pos),

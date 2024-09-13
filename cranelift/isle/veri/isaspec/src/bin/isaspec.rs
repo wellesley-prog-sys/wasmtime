@@ -1,3 +1,5 @@
+use std::io;
+
 use clap::Parser as ClapParser;
 use cranelift_codegen::isa::aarch64::inst::{writable_xreg, xreg, ALUOp, Inst, OperandSize};
 use cranelift_isle::printer;
@@ -25,6 +27,7 @@ fn main() -> anyhow::Result<()> {
 
     // Setup tracing output.
     tracing_subscriber::fmt()
+        .with_writer(io::stderr)
         .with_timer(tracing_subscriber::fmt::time::uptime())
         .with_level(true)
         .with_target(false)
@@ -63,16 +66,12 @@ fn define() -> SpecConfig {
         ALUOp::Eor,
         ALUOp::EorNot,
         ALUOp::AddS,
+        ALUOp::SMulH,
+        ALUOp::UMulH,
+        ALUOp::SDiv,
+        ALUOp::UDiv,
         ALUOp::Adc,
         // --------------
-        // Not supported yet:
-        // ALUOp::SMulH,
-        // ALUOp::UMulH,
-        //
-        // Generates unimplemented function:
-        // ALUOp::SDiv,
-        // ALUOp::UDiv,
-        //
         // Shift variable is 6-bits:
         // ALUOp::Lsr,
         // ALUOp::Asr,

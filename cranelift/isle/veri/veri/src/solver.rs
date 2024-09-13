@@ -182,6 +182,11 @@ impl<'a> Solver<'a> {
             Expr::BVXor(x, y) => Ok(self.smt.bvxor(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVSub(x, y) => Ok(self.smt.bvsub(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVMul(x, y) => Ok(self.smt.bvmul(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSDiv(x, y) => Ok(self.smt.list(vec![
+                self.smt.atom("bvsdiv"),
+                self.expr_atom(x),
+                self.expr_atom(y),
+            ])),
             Expr::BVAnd(x, y) => Ok(self.smt.bvand(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVShl(x, y) => Ok(self.smt.bvshl(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVLShr(x, y) => Ok(self.smt.bvlshr(self.expr_atom(x), self.expr_atom(y))),
