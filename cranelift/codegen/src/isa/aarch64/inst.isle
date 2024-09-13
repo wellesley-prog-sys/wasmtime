@@ -4309,6 +4309,31 @@
 (type FlagsAndCC (enum (FlagsAndCC (flags ProducesFlags)
                                    (cc IntCC))))
 
+(spec (flags_and_cc flags cc)
+      (provide
+            (= (:flags result) (concat (extract 67 64 flags) cc)))
+      (require
+            (or
+                  (= cc (IntCC.Equal))
+                  (= cc (IntCC.NotEqual))
+                  (= cc (IntCC.UnsignedGreaterThanOrEqual))
+                  (= cc (IntCC.UnsignedGreaterThan))
+                  (= cc (IntCC.UnsignedLessThanOrEqual))
+                  (= cc (IntCC.UnsignedLessThan))
+                  (= cc (IntCC.SignedGreaterThanOrEqual))
+                  (= cc (IntCC.SignedGreaterThan))
+                  (= cc (IntCC.SignedLessThanOrEqual))
+                  (= cc (IntCC.SignedLessThan)))))
+
+(model FlagsAndCC
+      (type
+            (struct
+                  (flags (named ProducesFlags))
+                  (cc (named IntCC))
+            )
+      )
+)
+
 ;; Helper constructor for `FlagsAndCC`.
 (decl flags_and_cc (ProducesFlags IntCC) FlagsAndCC)
 (rule (flags_and_cc flags cc) (FlagsAndCC.FlagsAndCC flags cc))
