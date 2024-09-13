@@ -58,6 +58,7 @@ pub enum Expr {
     BVMul(ExprId, ExprId),
     BVAnd(ExprId, ExprId),
     BVOr(ExprId, ExprId),
+    BVXor(ExprId, ExprId),
     BVShl(ExprId, ExprId),
     BVLShr(ExprId, ExprId),
     BVAShr(ExprId, ExprId),
@@ -116,6 +117,7 @@ impl Expr {
             | &Self::BVMul(x, y)
             | &Self::BVAnd(x, y)
             | &Self::BVOr(x, y)
+            | &Self::BVXor(x, y)
             | &Self::BVShl(x, y)
             | &Self::BVLShr(x, y)
             | &Self::BVAShr(x, y)
@@ -154,6 +156,7 @@ impl std::fmt::Display for Expr {
             Self::BVMul(x, y) => write!(f, "bvmul({}, {})", x.index(), y.index()),
             Self::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
             Self::BVOr(x, y) => write!(f, "bvor({}, {})", x.index(), y.index()),
+            Self::BVXor(x, y) => write!(f, "bvxor({}, {})", x.index(), y.index()),
             Self::BVShl(x, y) => write!(f, "bvshl({}, {})", x.index(), y.index()),
             Self::BVLShr(x, y) => write!(f, "bvlshr({}, {})", x.index(), y.index()),
             Self::BVAShr(x, y) => write!(f, "bvashr({}, {})", x.index(), y.index()),
@@ -1054,6 +1057,12 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVOr(x, y)))
+            }
+
+            spec::Expr::BVXor(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVXor(x, y)))
             }
 
             spec::Expr::BVShl(x, y) => {

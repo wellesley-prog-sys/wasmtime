@@ -60,12 +60,12 @@ fn define() -> SpecConfig {
         ALUOp::OrrNot,
         ALUOp::And,
         ALUOp::AndNot,
+        ALUOp::Eor,
+        ALUOp::EorNot,
         ALUOp::AddS,
         ALUOp::Adc,
         // --------------
         // Not supported yet:
-        // ALUOp::Eor,
-        // ALUOp::EorNot,
         // ALUOp::SMulH,
         // ALUOp::UMulH,
         //
