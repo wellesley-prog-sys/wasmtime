@@ -4365,9 +4365,6 @@
 
 
 (decl lower_icmp_const (IntCC Value u64 Type) FlagsAndCC)
-(provide
-            (= (:flags result) (extract 67 64 flags))
-            (= (:cc result) (cc)))
 
 (spec (lower_icmp_const c x y in_ty)
       (provide 
