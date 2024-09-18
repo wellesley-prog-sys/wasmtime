@@ -1123,6 +1123,11 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::WidthOf(x)))
             }
+
+            spec::Expr::BVSubs(x, y, z) => {
+                todo!()
+                // create a new Expr::BVSubs case
+            } 
         }
     }
 

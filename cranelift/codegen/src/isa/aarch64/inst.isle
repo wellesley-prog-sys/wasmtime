@@ -4379,7 +4379,7 @@
                                     (if (<= in_ty 32)
                                           (subs 32 (zero_ext 64 x) y)
                                           (subs 64 (zero_ext 64 x) y)))))
-            (= (:cc result) (c))
+            (= (:cc result) c)
       )
       (require
             (or

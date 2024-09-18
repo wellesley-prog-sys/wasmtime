@@ -79,7 +79,7 @@ pub enum Expr {
     BVAShr(Box<Expr>, Box<Expr>),
 
     //// Includes type
-    //BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
+    BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
 
     // Conversions
     BVZeroExt(Box<Expr>, Box<Expr>),
@@ -261,19 +261,19 @@ impl Expr {
                         Box::new(Expr::from_ast(&args[1])),
                     )
                 }
-                //SpecOp::Subs => {
-                //    assert_eq!(
-                //        args.len(),
-                //        3,
-                //        "Unexpected number of args for subs operator {:?}",
-                //        pos
-                //    );
-                //    Expr::BVSubs(
-                //        Box::new(spec_to_expr(&args[0], env)),
-                //        Box::new(spec_to_expr(&args[1], env)),
-                //        Box::new(spec_to_expr(&args[2], env)),
-                //    )
-                //}
+                SpecOp::Subs => {
+                   assert_eq!(
+                       args.len(),
+                       3,
+                       "Unexpected number of args for subs operator {:?}",
+                       pos
+                   );
+                   Expr::BVSubs(
+                       Box::new(Expr::from_ast(&args[0])),
+                       Box::new(Expr::from_ast(&args[1])),
+                       Box::new(Expr::from_ast(&args[2])),
+                   )
+                }
                 SpecOp::WidthOf => unary_expr!(Expr::WidthOf, args, pos),
                 SpecOp::If => ternary_expr!(Expr::Conditional, args, pos),
                 SpecOp::Switch => {

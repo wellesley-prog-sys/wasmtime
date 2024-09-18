@@ -197,6 +197,7 @@ impl<'a> Solver<'a> {
             Expr::BVConcat(x, y) => Ok(self.smt.concat(self.expr_atom(x), self.expr_atom(y))),
             Expr::Int2BV(w, x) => Ok(self.int2bv(w, self.expr_atom(x))),
             Expr::WidthOf(x) => self.width_of(x),
+            // Vaishu TODO: add a case for subs, call pub fn subs(s: &mut SolverCtx, ty: usize, x: SExpr, y: SExpr, id: u32) -> SExpr {
         }
     }
 
