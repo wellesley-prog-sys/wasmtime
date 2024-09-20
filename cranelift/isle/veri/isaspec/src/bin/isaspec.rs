@@ -66,6 +66,7 @@ fn define() -> SpecConfig {
         ALUOp::Eor,
         ALUOp::EorNot,
         ALUOp::AddS,
+        ALUOp::SubS,
         ALUOp::SMulH,
         ALUOp::UMulH,
         ALUOp::SDiv,
@@ -79,7 +80,6 @@ fn define() -> SpecConfig {
         // ALUOp::RotR,
         //
         // Flag ops not required yet:
-        // ALUOp::SubS,
         // ALUOp::Sbc,
         // ALUOp::AdcS,
         // ALUOp::SbcS,
