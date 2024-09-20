@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::sema::Rule;
 use cranelift_isle_veri::{
@@ -33,6 +33,10 @@ struct Opts {
     #[arg(long, required = true)]
     smt2_replay_path: std::path::PathBuf,
 
+    /// Solver backend to use.
+    #[arg(long = "solver", default_value = "cvc5")]
+    solver_backend: SolverBackend,
+
     /// Per-query timeout, in seconds.
     #[arg(long, default_value = "10")]
     timeout: u32,
@@ -63,6 +67,37 @@ impl Opts {
                 self.name
             ))?
             .inputs())
+    }
+}
+
+#[derive(ValueEnum, Clone)]
+enum SolverBackend {
+    Z3,
+    CVC5,
+}
+
+impl SolverBackend {
+    fn prog(&self) -> &str {
+        match self {
+            SolverBackend::Z3 => "z3",
+            SolverBackend::CVC5 => "cvc5",
+        }
+    }
+
+    fn args(&self, timeout_seconds: u32) -> Vec<String> {
+        match self {
+            SolverBackend::Z3 => vec![
+                "-smt2".to_string(),
+                "-in".to_string(),
+                format!("-t:{}", timeout_seconds * 1000),
+            ],
+            SolverBackend::CVC5 => vec![
+                "--incremental".to_string(),
+                "--print-success".to_string(),
+                format!("--tlimit-per={ms}", ms = timeout_seconds * 1000),
+                "-".to_string(),
+            ],
+        }
     }
 }
 
@@ -110,6 +145,7 @@ fn main() -> anyhow::Result<()> {
         verify_expansion(
             expansion,
             &prog,
+            &opts.solver_backend,
             &opts.smt2_replay_path,
             opts.timeout,
             opts.skip_solver,
@@ -149,6 +185,7 @@ fn expansion_description(expansion: &Expansion, prog: &Program) -> String {
 fn verify_expansion(
     expansion: &Expansion,
     prog: &Program,
+    solver_backend: &SolverBackend,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
     skip_solver: bool,
@@ -199,6 +236,7 @@ fn verify_expansion(
             prog,
             &conditions,
             &solution.assignment,
+            solver_backend,
             replay_path,
             timeout_seconds,
         )?;
@@ -211,20 +249,20 @@ fn verify_expansion_type_instantiation(
     prog: &Program,
     conditions: &Conditions,
     assignment: &Assignment,
+    solver_backend: &SolverBackend,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
 ) -> anyhow::Result<()> {
     // Solve.
     let replay_file = std::fs::File::create(replay_path)?;
+    let binary = solver_backend.prog();
+    let args = solver_backend.args(timeout_seconds);
     let smt = easy_smt::ContextBuilder::new()
-        .solver(
-            "z3",
-            ["-smt2", "-in", &format!("-t:{}", timeout_seconds * 1000)],
-        )
+        .solver(binary, &args)
         .replay_file(Some(replay_file))
         .build()?;
 
-    let mut solver = Solver::new(smt, conditions, assignment);
+    let mut solver = Solver::new(smt, conditions, assignment)?;
     solver.encode()?;
 
     let applicability = solver.check_assumptions_feasibility()?;

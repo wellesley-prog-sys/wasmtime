@@ -31,15 +31,14 @@ jobs:
         uses: actions/checkout@v3
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
-      - name: Setup Tools Directory
-        run: |
-          mkdir -p "${{ runner.workspace }}/bin"
-          echo "${{ runner.workspace }}/bin" >> $GITHUB_PATH
-      - name: Install Z3
+      - name: Install CVC5
         working-directory: cranelift/isle/veri/veri
-        run: ./script/install/z3.sh -b "${{ runner.workspace }}/bin" -t "${RUNNER_TEMP}"
-      - name: Show Z3 Version
-        run: z3 --version
+        run: |
+          mkdir -p "${{ runner.workspace }}/tools/cvc5"
+          ./script/install/cvc5.sh -i "${{ runner.workspace }}/tools/cvc5" -t "${RUNNER_TEMP}"
+          echo "${{ runner.workspace }}/tools/cvc5/bin" >> $GITHUB_PATH
+      - name: Show CVC5 Version
+        run: cvc5 --version
       - name: Build
         run: cargo build --release -p cranelift-isle-veri
       - name: Verify

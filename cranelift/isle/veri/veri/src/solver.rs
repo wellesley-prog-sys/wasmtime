@@ -51,13 +51,19 @@ pub struct Solver<'a> {
 }
 
 impl<'a> Solver<'a> {
-    pub fn new(smt: Context, conditions: &'a Conditions, assignment: &'a Assignment) -> Self {
-        Self {
+    pub fn new(
+        smt: Context,
+        conditions: &'a Conditions,
+        assignment: &'a Assignment,
+    ) -> anyhow::Result<Self> {
+        let mut solver = Self {
             smt,
             conditions,
             assignment,
             fresh_idx: 0,
-        }
+        };
+        solver.smt.set_logic("ALL")?;
+        Ok(solver)
     }
 
     pub fn encode(&mut self) -> anyhow::Result<()> {
