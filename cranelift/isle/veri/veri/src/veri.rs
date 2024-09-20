@@ -545,6 +545,33 @@ impl Domain {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Variables(HashMap<String, Symbolic>);
+
+impl Variables {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    fn get(&self, name: &String) -> anyhow::Result<&Symbolic> {
+        self.0
+            .get(name)
+            .ok_or(anyhow::format_err!("undefined variable {name}"))
+    }
+
+    fn set(&mut self, name: String, value: Symbolic) -> anyhow::Result<()> {
+        match self.0.entry(name) {
+            Entry::Occupied(e) => {
+                anyhow::bail!("redefinition of variable {name}", name = e.key());
+            }
+            Entry::Vacant(e) => {
+                e.insert(value);
+                Ok(())
+            }
+        }
+    }
+}
+
 struct ConditionsBuilder<'a> {
     expansion: &'a Expansion,
     prog: &'a Program,
@@ -757,18 +784,18 @@ impl<'a> ConditionsBuilder<'a> {
             .ok_or(anyhow::format_err!("no spec for term {term_name}",))?;
 
         // Assignment of signature variables to expressions.
-        let mut vars = HashMap::new();
+        let mut vars = Variables::new();
 
         // Arguments.
         if term_spec.args.len() != args.len() {
             anyhow::bail!("incorrect number of arguments for term {term_name}");
         }
         for (name, arg) in zip(&term_spec.args, args) {
-            vars.insert(name.0.clone(), arg.clone());
+            vars.set(name.0.clone(), arg.clone())?;
         }
 
         // Return value.
-        vars.insert(term_spec.ret.0.clone(), ret.clone());
+        vars.set(term_spec.ret.0.clone(), ret.clone())?;
 
         // Requires.
         let mut requires: Vec<ExprId> = Vec::new();
@@ -927,17 +954,10 @@ impl<'a> ConditionsBuilder<'a> {
         Ok(())
     }
 
-    fn spec_expr(
-        &mut self,
-        expr: &spec::Expr,
-        vars: &HashMap<String, Symbolic>,
-    ) -> anyhow::Result<Symbolic> {
+    fn spec_expr(&mut self, expr: &spec::Expr, vars: &Variables) -> anyhow::Result<Symbolic> {
         match expr {
             spec::Expr::Var(v) => {
-                let var_name = &v.0;
-                let v = vars
-                    .get(var_name)
-                    .ok_or(anyhow::format_err!("undefined variable {var_name}"))?;
+                let v = vars.get(&v.0)?;
                 Ok(v.clone())
             }
 
@@ -1147,7 +1167,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn spec_expr_no_vars(&mut self, expr: &spec::Expr) -> anyhow::Result<Symbolic> {
-        let no_vars = HashMap::new();
+        let no_vars = Variables::new();
         self.spec_expr(expr, &no_vars)
     }
 
@@ -1207,7 +1227,7 @@ impl<'a> ConditionsBuilder<'a> {
         &mut self,
         on: &spec::Expr,
         arms: &[(spec::Expr, spec::Expr)],
-        vars: &HashMap<String, Symbolic>,
+        vars: &Variables,
     ) -> anyhow::Result<Symbolic> {
         // Generate sub-expressions.
         let on = self.spec_expr(on, vars)?;
@@ -1244,20 +1264,13 @@ impl<'a> ConditionsBuilder<'a> {
         &mut self,
         defs: &[(Ident, spec::Expr)],
         body: &spec::Expr,
-        vars: &HashMap<String, Symbolic>,
+        vars: &Variables,
     ) -> anyhow::Result<Symbolic> {
         // Evaluate let defs.
         let mut let_vars = vars.clone();
         for (name, expr) in defs {
             let expr = self.spec_expr(expr, &let_vars)?;
-            match let_vars.entry(name.0.clone()) {
-                Entry::Occupied(_) => {
-                    anyhow::bail!("let expression shadows variable {name}", name = name.0)
-                }
-                Entry::Vacant(e) => {
-                    e.insert(expr);
-                }
-            }
+            let_vars.set(name.0.clone(), expr)?;
         }
 
         // Evaluate body in let-binding scope.
@@ -1268,21 +1281,14 @@ impl<'a> ConditionsBuilder<'a> {
         &mut self,
         decls: &[Ident],
         body: &spec::Expr,
-        vars: &HashMap<String, Symbolic>,
+        vars: &Variables,
     ) -> anyhow::Result<Symbolic> {
         // Declare new variables.
         let mut with_vars = vars.clone();
         for name in decls {
             // QUESTION(mbm): allow with scopes to optionally specify types?
             let expr = Symbolic::Scalar(self.alloc_variable(Type::Unknown, name.0.clone()));
-            match with_vars.entry(name.0.clone()) {
-                Entry::Occupied(_) => {
-                    anyhow::bail!("with expression shadows variable {name}", name = name.0)
-                }
-                Entry::Vacant(e) => {
-                    e.insert(expr);
-                }
-            }
+            with_vars.set(name.0.clone(), expr)?;
         }
 
         // Evaluate body in new scope.
