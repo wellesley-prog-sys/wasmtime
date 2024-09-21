@@ -30,8 +30,8 @@
             (with
                 (v2_0 v2_1 v2_2)
                 (and
-                    (= rm v2_1)
                     (= rn v2_0)
+                    (= rm v2_1)
                     (= rd v2_2)
                     (=
                         v2_2
@@ -47,8 +47,8 @@
             (with
                 (v3_0 v3_1 v3_2)
                 (and
-                    (= rm v3_1)
                     (= rn v3_0)
+                    (= rm v3_1)
                     (= rd v3_2)
                     (=
                         v3_2
@@ -60,8 +60,8 @@
             (with
                 (v4_0 v4_1 v4_2)
                 (and
-                    (= rm v4_1)
                     (= rn v4_0)
+                    (= rm v4_1)
                     (= rd v4_2)
                     (=
                         v4_2
@@ -75,8 +75,8 @@
             (with
                 (v5_0 v5_1 v5_2)
                 (and
-                    (= rm v5_1)
                     (= rn v5_0)
+                    (= rm v5_1)
                     (= rd v5_2)
                     (= v5_2 (bvor v5_0 v5_1)))))
         (=>
@@ -108,8 +108,8 @@
             (with
                 (v8_0 v8_1 v8_2)
                 (and
-                    (= rm v8_1)
                     (= rn v8_0)
+                    (= rm v8_1)
                     (= rd v8_2)
                     (=
                         v8_2
@@ -123,8 +123,8 @@
             (with
                 (v9_0 v9_1 v9_2)
                 (and
-                    (= rm v9_1)
                     (= rn v9_0)
+                    (= rm v9_1)
                     (= rd v9_2)
                     (= v9_2 (bvand v9_0 v9_1)))))
         (=>
@@ -171,8 +171,8 @@
             (with
                 (v13_0 v13_1 v13_2)
                 (and
-                    (= rm v13_1)
                     (= rn v13_0)
+                    (= rm v13_1)
                     (= rd v13_2)
                     (= v13_2 (bvxor v13_0 v13_1)))))
         (=>
@@ -195,8 +195,8 @@
             (with
                 (v15_0 v15_1 v15_2)
                 (and
-                    (= rm v15_1)
                     (= rn v15_0)
+                    (= rm v15_1)
                     (= rd v15_2)
                     (= v15_2 (bvxor v15_0 (bvnot v15_1))))))
         (=>
@@ -204,13 +204,13 @@
             (with
                 (v16_0 v16_1 v16_2 v16_3 v16_4 v16_5 v16_6 v16_7 v16_8)
                 (and
-                    (= rm v16_1)
                     (= rn v16_0)
-                    (= (:N (:flags_out result)) v16_7)
-                    (= (:Z (:flags_out result)) v16_6)
-                    (= (:V (:flags_out result)) v16_4)
+                    (= rm v16_1)
                     (= rd v16_8)
                     (= (:C (:flags_out result)) v16_5)
+                    (= (:N (:flags_out result)) v16_7)
+                    (= (:V (:flags_out result)) v16_4)
+                    (= (:Z (:flags_out result)) v16_6)
                     (=
                         v16_2
                         (bvadd (extract 31 0 v16_0) (extract 31 0 v16_1)))
@@ -253,11 +253,11 @@
                 (and
                     (= rn v17_0)
                     (= rm v17_1)
-                    (= (:C (:flags_out result)) v17_4)
-                    (= (:Z (:flags_out result)) v17_5)
-                    (= (:V (:flags_out result)) v17_3)
-                    (= (:N (:flags_out result)) v17_6)
                     (= rd v17_7)
+                    (= (:C (:flags_out result)) v17_4)
+                    (= (:N (:flags_out result)) v17_6)
+                    (= (:V (:flags_out result)) v17_3)
+                    (= (:Z (:flags_out result)) v17_5)
                     (= v17_2 (bvadd v17_0 v17_1))
                     (=
                         v17_3
@@ -289,13 +289,13 @@
             (with
                 (v18_0 v18_1 v18_2 v18_3 v18_4 v18_5 v18_6 v18_7 v18_8 v18_9)
                 (and
-                    (= rm v18_0)
                     (= rn v18_2)
+                    (= rm v18_0)
                     (= rd v18_9)
-                    (= (:Z (:flags_out result)) v18_7)
+                    (= (:C (:flags_out result)) v18_6)
                     (= (:N (:flags_out result)) v18_8)
                     (= (:V (:flags_out result)) v18_5)
-                    (= (:C (:flags_out result)) v18_6)
+                    (= (:Z (:flags_out result)) v18_7)
                     (= v18_1 (bvnot (extract 31 0 v18_0)))
                     (=
                         v18_3
@@ -347,13 +347,13 @@
             (with
                 (v19_0 v19_1 v19_2 v19_3 v19_4 v19_5 v19_6 v19_7 v19_8)
                 (and
-                    (= rm v19_0)
                     (= rn v19_2)
-                    (= (:N (:flags_out result)) v19_7)
-                    (= (:Z (:flags_out result)) v19_6)
-                    (= (:C (:flags_out result)) v19_5)
-                    (= (:V (:flags_out result)) v19_4)
+                    (= rm v19_0)
                     (= rd v19_8)
+                    (= (:C (:flags_out result)) v19_5)
+                    (= (:N (:flags_out result)) v19_7)
+                    (= (:V (:flags_out result)) v19_4)
+                    (= (:Z (:flags_out result)) v19_6)
                     (= v19_1 (bvnot v19_0))
                     (= v19_3 (bvadd v19_2 (bvnot v19_0)))
                     (=
@@ -401,8 +401,8 @@
             (with
                 (v20_0 v20_1 v20_2)
                 (and
-                    (= rm v20_1)
                     (= rn v20_0)
+                    (= rm v20_1)
                     (= rd v20_2)
                     (=
                         v20_2
@@ -433,8 +433,8 @@
             (with
                 (v22_0 v22_1 v22_2 v22_3 v22_4 v22_5)
                 (and
-                    (= rm v22_0)
                     (= rn v22_3)
+                    (= rm v22_0)
                     (= rd v22_5)
                     (= v22_1 (= v22_0 #x0000000000000000))
                     (if
@@ -496,9 +496,9 @@
             (with
                 (v25_0 v25_1 v25_2 v25_3)
                 (and
+                    (= rn v25_0)
                     (= rm v25_1)
                     (= (:C (:flags_in result)) v25_2)
-                    (= rn v25_0)
                     (= rd v25_3)
                     (=
                         v25_3

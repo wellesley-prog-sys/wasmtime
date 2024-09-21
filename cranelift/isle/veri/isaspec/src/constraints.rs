@@ -11,7 +11,7 @@ use tracing::debug;
 
 use crate::spec::*;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub enum Target {
     Var(String),
     Index(Box<Target>, usize),

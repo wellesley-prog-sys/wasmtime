@@ -782,7 +782,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-isle",
  "cranelift-isle-veri-aslp",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "reqwest",
  "tracing",
  "tracing-subscriber",

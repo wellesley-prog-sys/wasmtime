@@ -129,7 +129,7 @@ impl Builder {
         // Reads mapping.
         let reads = global.reads();
         let init = global.init();
-        for target in reads {
+        for target in reads.iter().sorted() {
             // Expect mapping for the read.
             let Some(mapping) = case.mappings.reads.get(target) else {
                 anyhow::bail!("read of {target} is unmapped");
@@ -149,7 +149,7 @@ impl Builder {
         // Writes mapping.
         let writes = global.writes();
         let bindings = global.bindings();
-        for target in writes {
+        for target in writes.iter().sorted() {
             // Expect mapping for the write.
             let Some(mapping) = case.mappings.writes.get(target) else {
                 anyhow::bail!("write to {target} is unmapped");
