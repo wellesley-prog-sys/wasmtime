@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use anyhow::bail;
 use cranelift_codegen::isa::aarch64::inst::Inst;
 use cranelift_isle::ast::{Def, Spec, SpecExpr};
 use cranelift_isle::lexer::Pos;
@@ -114,8 +115,6 @@ impl Builder {
     }
 
     fn case(&self, i: usize, case: &InstConfig) -> anyhow::Result<Conditions> {
-        let mut provides = Vec::new();
-
         // Semantics.
         let block = inst_semantics(&case.inst, &self.client)?;
 
@@ -127,6 +126,7 @@ impl Builder {
         let global = translator.global();
 
         // Reads mapping.
+        let mut substitutions = HashMap::new();
         let reads = global.reads();
         let init = global.init();
         for target in reads.iter().sorted() {
@@ -138,8 +138,8 @@ impl Builder {
             // Lookup variable holding the initial read value.
             let v = &init[target];
 
-            // Bind to mapped expression.
-            provides.push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
+            // Substitute variable for mapped expression.
+            substitutions.insert(v.clone(), mapping.expr.clone());
         }
 
         if let Some(target) = case.mappings.required_reads().difference(reads).next() {
@@ -160,8 +160,8 @@ impl Builder {
                 anyhow::bail!("{target} not bound to variable");
             };
 
-            // Bind to mapped expression.
-            provides.push(spec_eq(mapping.expr.clone(), spec_var(v.clone())));
+            // Substitute variable for mapped expression.
+            substitutions.insert(v.clone(), mapping.expr.clone());
         }
 
         if let Some(target) = case.mappings.required_writes().difference(writes).next() {
@@ -169,17 +169,97 @@ impl Builder {
         }
 
         // Finalize provided constraints.
-        //
-        // Wrap in a scope to declare and encapsulate temporary variables.
-        provides.extend(global.constraints().iter().cloned());
+        let mut provides = Vec::new();
+        for constraint in global.constraints() {
+            provides.push(substitute(constraint.clone(), &substitutions)?);
+        }
 
-        let decls: Vec<_> = global.vars().iter().sorted().cloned().collect();
-        let with_scope = spec_with(spec_idents(&decls), spec_all(provides));
+        // Determine remaining temporaries and encapsulate in a scope.
+        let temporaries: Vec<_> = global
+            .vars()
+            .iter()
+            .filter(|v| !substitutions.contains_key(*v))
+            .sorted()
+            .cloned()
+            .collect();
+        if !temporaries.is_empty() {
+            let with_scope = spec_with(spec_idents(&temporaries), spec_all(provides));
+            provides = vec![with_scope];
+        }
 
         // Conditions.
         Ok(Conditions {
             requires: case.require.clone(),
-            provides: vec![with_scope],
+            provides,
         })
     }
+}
+
+fn substitute(
+    expr: SpecExpr,
+    substitutions: &HashMap<String, SpecExpr>,
+) -> anyhow::Result<SpecExpr> {
+    Ok(match expr {
+        // Variable
+        SpecExpr::Var { ref var, pos: _ } => {
+            if let Some(substitution) = substitutions.get(&var.0) {
+                substitution.clone()
+            } else {
+                expr
+            }
+        }
+
+        // Constants are unchanged.
+        SpecExpr::ConstInt { .. }
+        | SpecExpr::ConstBitVec { .. }
+        | SpecExpr::ConstBool { .. }
+        | SpecExpr::Enum { .. } => expr,
+
+        // Scopes require care to ensure we are not replacing introduced variables.
+        SpecExpr::Let { defs, body, pos } => SpecExpr::Let {
+            defs: defs
+                .into_iter()
+                .map(|(var, expr)| {
+                    if substitutions.contains_key(&var.0) {
+                        bail!("substituted variable collides with let binding");
+                    }
+                    Ok((var, substitute(expr, substitutions)?))
+                })
+                .collect::<anyhow::Result<_>>()?,
+            body: Box::new(substitute(*body, substitutions)?),
+            pos,
+        },
+        SpecExpr::With { decls, body, pos } => {
+            for decl in &decls {
+                if substitutions.contains_key(&decl.0) {
+                    bail!("substituted variable collides with with scope");
+                }
+            }
+            SpecExpr::With {
+                decls,
+                body: Box::new(substitute(*body, substitutions)?),
+                pos,
+            }
+        }
+
+        // Recurse into child expressions.
+        SpecExpr::Field { field, x, pos } => SpecExpr::Field {
+            field,
+            x: Box::new(substitute(*x, substitutions)?),
+            pos,
+        },
+        SpecExpr::Op { op, args, pos } => SpecExpr::Op {
+            op,
+            args: args
+                .into_iter()
+                .map(|arg| substitute(arg, substitutions))
+                .collect::<anyhow::Result<_>>()?,
+            pos,
+        },
+        SpecExpr::Pair { l, r, pos } => SpecExpr::Pair {
+            l: Box::new(substitute(*l, substitutions)?),
+            r: Box::new(substitute(*r, substitutions)?),
+            pos,
+        },
+    })
 }
