@@ -55,7 +55,7 @@ pub enum Expr {
     BVNot(Box<Expr>),
     //CLZ(Box<Expr>),
     //A64CLZ(Box<Expr>, Box<Expr>),
-    //CLS(Box<Expr>),
+    Cls(Box<Expr>),
     //A64CLS(Box<Expr>, Box<Expr>),
     //Rev(Box<Expr>),
     //A64Rev(Box<Expr>, Box<Expr>),
@@ -193,7 +193,7 @@ impl Expr {
                 //SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
 
                 // Vaishu TODO: CLS
-                //SpecOp::Cls => unop(|x| Expr::CLS(x), args, pos, env),
+                SpecOp::Cls => unary_expr!(Expr::Cls, args, pos),
                 //SpecOp::Popcnt => unop(|x| Expr::BVPopcnt(x), args, pos, env),
                 //SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
 
