@@ -1,4 +1,5 @@
 use std::io;
+use std::path::PathBuf;
 
 use clap::Parser as ClapParser;
 use cranelift_codegen::isa::aarch64::inst::{
@@ -18,6 +19,10 @@ struct Args {
     /// Server URL
     #[arg(long = "server", required = true)]
     server: String,
+
+    // Output directory.
+    #[arg(long, required = true)]
+    output: PathBuf,
 
     /// Print debugging output (repeat for more detail)
     #[arg(short = 'd', long = "debug", action = clap::ArgAction::Count)]
@@ -46,22 +51,33 @@ fn main() -> anyhow::Result<()> {
     let client = Client::new(&http_client, args.server)?;
 
     // Conversion.
-    let mut defs = Vec::new();
-    let cfgs = define();
-    for cfg in cfgs {
-        let builder = Builder::new(cfg, &client);
-        let def = builder.build()?;
-        defs.push(def);
-    }
+    let file_configs = define();
+    for file_config in file_configs {
+        // Generate specs.
+        let mut defs = Vec::new();
+        for spec_config in file_config.specs {
+            let builder = Builder::new(spec_config, &client);
+            let def = builder.build()?;
+            defs.push(def);
+        }
 
-    // Output.
-    printer::dump(&defs).unwrap();
+        // Output.
+        let path = args.output.join(file_config.name);
+        let mut output = std::fs::File::create(path)?;
+        printer::print(&defs, 78, &mut output)?;
+    }
 
     Ok(())
 }
 
-/// Define specificiations to generate.
-fn define() -> Vec<SpecConfig> {
+/// Configuration for an ISLE specification file to generate.
+struct FileConfig {
+    name: PathBuf,
+    specs: Vec<SpecConfig>,
+}
+
+/// Define specifications to generate.
+fn define() -> Vec<FileConfig> {
     // ALUOp
     let alu_ops = [
         ALUOp::Add,
@@ -211,7 +227,17 @@ fn define() -> Vec<SpecConfig> {
             .collect(),
     };
 
-    vec![alu_rrr, alu_rrrr]
+    // Files to generate.
+    vec![
+        FileConfig {
+            name: "alu_rrr.isle".into(),
+            specs: vec![alu_rrr],
+        },
+        FileConfig {
+            name: "alu_rrrr.isle".into(),
+            specs: vec![alu_rrrr],
+        },
+    ]
 }
 
 fn is_alu_op_size_supported(alu_op: ALUOp, size: OperandSize) -> bool {
