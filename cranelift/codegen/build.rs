@@ -209,9 +209,8 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
 
     let code = {
         let file_paths = compilation
-            .tracked_inputs
-            .iter()
-            .chain(compilation.untracked_inputs.iter());
+            .paths()
+            .map_err(|e| Errors::from_io(e, "list isle compilation file paths"))?;
 
         let mut options = isle::codegen::CodegenOptions::default();
         // Because we include!() the generated ISLE source, we cannot
