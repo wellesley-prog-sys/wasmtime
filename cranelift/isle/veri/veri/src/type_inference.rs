@@ -332,6 +332,9 @@ impl<'a> SystemBuilder<'a> {
             }
             Expr::BVUlt(y, z)
             | Expr::BVUle(y, z)
+            | Expr::BVUgt(y, z)
+            | Expr::BVUge(y, z)
+            | Expr::BVSgt(y, z)
             | Expr::BVSge(y, z)
             | Expr::BVSlt(y, z)
             | Expr::BVSle(y, z)

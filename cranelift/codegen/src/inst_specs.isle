@@ -80,3 +80,56 @@
     ((args (bv 32)) (ret (bv 32)))
     ((args (bv 64)) (ret (bv 64)))
 )
+
+(model IntCC
+      (enum (bv 4)
+            (Equal #x0)
+            (NotEqual #x1)
+            (SignedGreaterThan #x2)
+            (SignedGreaterThanOrEqual #x3)
+            (SignedLessThan #x4)
+            (SignedLessThanOrEqual #x5)
+            (UnsignedGreaterThan #x6)
+            (UnsignedGreaterThanOrEqual #x7)
+            (UnsignedLessThan #x8)
+            (UnsignedLessThanOrEqual #x9)   
+      )
+)
+
+(spec (icmp c x y)
+    (provide
+        (= result
+            (switch c
+                ((IntCC.Equal) (if (= x y) #x01 #x00))
+                ((IntCC.NotEqual) (if (not (= x y)) #x01 #x00))
+                ((IntCC.SignedGreaterThan) (if (bvsgt x y) #x01 #x00))
+                ((IntCC.SignedGreaterThanOrEqual) (if (bvsge x y) #x01 #x00))
+                ((IntCC.SignedLessThan) (if (bvslt x y) #x01 #x00))
+                ((IntCC.SignedLessThanOrEqual) (if (bvsle x y) #x01 #x00))
+                ((IntCC.UnsignedGreaterThan) (if (bvugt x y) #x01 #x00))
+                ((IntCC.UnsignedGreaterThanOrEqual) (if (bvuge x y) #x01 #x00))
+                ((IntCC.UnsignedLessThan) (if (bvult x y) #x01 #x00))
+                ((IntCC.UnsignedLessThanOrEqual) (if (bvule x y) #x01 #x00)))))
+(require
+        ;; AVH TODO: if we understand enums semantically, we can generate this
+        (or
+            (= c (IntCC.Equal))
+            (= c (IntCC.NotEqual))
+            (= c (IntCC.UnsignedGreaterThanOrEqual))
+            (= c (IntCC.UnsignedGreaterThan))
+            (= c (IntCC.UnsignedLessThanOrEqual))
+            (= c (IntCC.UnsignedLessThan))
+            (= c (IntCC.SignedGreaterThanOrEqual))
+            (= c (IntCC.SignedGreaterThan))
+            (= c (IntCC.SignedLessThanOrEqual))
+            (= c (IntCC.SignedLessThan)))))
+
+;; (instantiate iadd
+;;     ((args (bv 8) (bv 8)) (ret (bv 8)))
+
+(instantiate icmp
+    ((args (bv 8) (bv 8) (bv 8)) (ret (bv 8)))
+    ((args (bv 8) (bv 16) (bv 16)) (ret (bv 8)))
+    ((args (bv 8) (bv 32) (bv 32)) (ret (bv 8)))
+    ((args (bv 8) (bv 64) (bv 64)) (ret (bv 8)))
+)

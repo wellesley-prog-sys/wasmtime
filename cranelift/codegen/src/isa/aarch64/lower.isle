@@ -53,7 +53,7 @@
 
 ;; Base case, simply adding things in registers.
 (rule iadd_base_case -1 (lower (has_type (fits_in_64 ty) (iadd x y)))
-      (add ty  x x))
+      (add ty  x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule iadd_imm12_right 4 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
@@ -1964,7 +1964,7 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
 
-(rule -1 (lower (icmp cond x @ (value_type in_ty) y))
+(rule icmp_value_ty -1 (lower (icmp cond x @ (value_type in_ty) y))
       (lower_icmp_into_reg cond x y in_ty $I8))
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

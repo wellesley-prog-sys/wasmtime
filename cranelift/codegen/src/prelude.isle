@@ -56,6 +56,8 @@
 (type ValueSlice (primitive ValueSlice))
 
 ;; Extract the type of a `Value`.
+(spec (value_type arg) 
+  (provide (= arg (widthof result))))
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 

@@ -1691,6 +1691,13 @@
     (Nv)
 ))
 
+(model Cond
+      (enum (bv 4)
+            (Lo #x3)
+            (Hi #x8)
+            (Lt #xb)
+            (Gt #xc)))
+
 (type VectorSize extern
   (enum
     (Size8x8)
@@ -4360,6 +4367,7 @@
 ;; `lower_icmp` contains shared functionality for lowering `icmp`
 ;; sequences, which `lower_icmp_into_{reg,flags}` extend from.
 (decl lower_icmp (IntCC Value Value Type) FlagsAndCC)
+(attr lower_icmp_into_reg chain)
 (decl lower_icmp_into_reg (IntCC Value Value Type Type) ValueRegs)
 (decl lower_icmp_into_flags (IntCC Value Value Type) FlagsAndCC)
 
@@ -4404,6 +4412,8 @@
 
 ;; Vectors.
 ;; `icmp` into flags for vectors is invalid.
+;; AVH TODO: need to be able to exclude vector exapansions
+
 (rule 1 (lower_icmp_into_reg cond x y in_ty @ (multi_lane _ _) _out_ty)
       (let ((cond Cond (cond_code cond))
             (rn Reg (put_in_reg x))
@@ -4418,7 +4428,7 @@
 (rule (lower_extend_op $I16 (ArgumentExtension.Uext)) (ExtendOp.UXTH))
 
 ;; Integers <= 64-bits.
-(rule -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
+(rule lower_icmp_into_reg_fits_in_64 -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
       (if (ty_int_ref_scalar_64 in_ty))
       (let ((cc Cond (cond_code cond)))
         (flags_and_cc_to_bool (lower_icmp cond rn rm in_ty))))

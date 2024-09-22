@@ -42,6 +42,9 @@ pub enum Expr {
 
     BVUlt(ExprId, ExprId),
     BVUle(ExprId, ExprId),
+    BVUgt(ExprId, ExprId),
+    BVUge(ExprId, ExprId),
+    BVSgt(ExprId, ExprId),
     BVSge(ExprId, ExprId),
     BVSlt(ExprId, ExprId),
     BVSle(ExprId, ExprId),
@@ -107,6 +110,9 @@ impl Expr {
             | &Self::Lte(x, y)
             | &Self::BVUlt(x, y)
             | &Self::BVUle(x, y)
+            | &Self::BVUgt(x, y)
+            | &Self::BVUge(x, y)
+            | &Self::BVSgt(x, y)
             | &Self::BVSge(x, y)
             | &Self::BVSlt(x, y)
             | &Self::BVSle(x, y)
@@ -143,6 +149,9 @@ impl std::fmt::Display for Expr {
             Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
             Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
             Self::BVUle(x, y) => write!(f, "bvule({}, {})", x.index(), y.index()),
+            Self::BVUgt(x, y) => write!(f, "bvugt({}, {})", x.index(), y.index()),
+            Self::BVUge(x, y) => write!(f, "bvuge({}, {})", x.index(), y.index()),
+            Self::BVSgt(x, y) => write!(f, "bvsgt({}, {})", x.index(), y.index()),
             Self::BVSge(x, y) => write!(f, "bvsge({}, {})", x.index(), y.index()),
             Self::BVSlt(x, y) => write!(f, "bvslt({}, {})", x.index(), y.index()),
             Self::BVSle(x, y) => write!(f, "bvsle({}, {})", x.index(), y.index()),
@@ -996,6 +1005,25 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSge(x, y)))
+            }
+
+
+            spec::Expr::BVSgt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSgt(x, y)))
+            }
+
+            spec::Expr::BVUgt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUgt(x, y)))
+            }
+
+            spec::Expr::BVUge(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUge(x, y)))
             }
 
             spec::Expr::BVSlt(x, y) => {
