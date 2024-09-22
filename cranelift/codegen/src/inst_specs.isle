@@ -80,3 +80,11 @@
     ((args (bv 32)) (ret (bv 32)))
     ((args (bv 64)) (ret (bv 64)))
 )
+
+(spec (cls x) (provide (= result (cls x))))
+(instantiate cls
+    ((args (bv 8)) (ret (bv 8)))
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 64)) (ret (bv 64)))
+)

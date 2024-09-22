@@ -191,6 +191,8 @@ impl Expr {
                 SpecOp::BVNeg => unary_expr!(Expr::BVNeg, args, pos),
                 //SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
                 //SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
+
+                // Vaishu TODO: CLS
                 //SpecOp::Cls => unop(|x| Expr::CLS(x), args, pos, env),
                 //SpecOp::Popcnt => unop(|x| Expr::BVPopcnt(x), args, pos, env),
                 //SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
