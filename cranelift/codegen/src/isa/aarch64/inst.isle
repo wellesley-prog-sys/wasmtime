@@ -1104,37 +1104,6 @@
       )
 )
 
-(spec (MInst.AluRRRR alu_op size rd rn rm ra)
-      (provide
-            (=>
-                  (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
-                        (= rd (bvadd ra (bvmul rn rm)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvadd (extract 31 0 ra) (bvmul (extract 31 0 rn) (extract 31 0 rm)))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
-                        (= rd (bvsub ra (bvmul rn rm)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvsub (extract 31 0 ra) (bvmul (extract 31 0 rn) (extract 31 0 rm)))))
-            )
-      )
-      (require
-            (or
-                  (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size32)))
-            )
-      )
-)
-
 (spec (MInst.AluRRRShift alu_op size rd rn rm shiftop)
       (provide
             (switch size

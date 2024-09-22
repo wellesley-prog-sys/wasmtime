@@ -41,7 +41,8 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     // ASLp client.
-    let client = Client::new(reqwest::blocking::Client::new(), args.server)?;
+    let http_client = reqwest::blocking::Client::new();
+    let client = Client::new(&http_client, args.server)?;
 
     // Conversion.
     let insts = define_insts();

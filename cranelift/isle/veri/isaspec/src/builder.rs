@@ -77,21 +77,20 @@ pub struct InstConfig {
     pub mappings: Mappings,
 }
 
-pub struct Builder {
+pub struct Builder<'a> {
     cfg: SpecConfig,
-    client: Client,
+    client: &'a Client<'a>,
 }
 
-impl Builder {
-    pub fn new(cfg: SpecConfig, client: Client) -> Self {
+impl<'a> Builder<'a> {
+    pub fn new(cfg: SpecConfig, client: &'a Client<'a>) -> Self {
         Self { cfg, client }
     }
 
-    pub fn build(&self) -> anyhow::Result<Vec<Def>> {
+    pub fn build(&self) -> anyhow::Result<Def> {
         let spec = self.spec(&self.cfg)?;
         let def = Def::Spec(spec);
-        let defs = vec![def];
-        Ok(defs)
+        Ok(def)
     }
 
     fn spec(&self, cfg: &SpecConfig) -> anyhow::Result<Spec> {
@@ -116,7 +115,7 @@ impl Builder {
 
     fn case(&self, i: usize, case: &InstConfig) -> anyhow::Result<Conditions> {
         // Semantics.
-        let block = inst_semantics(&case.inst, &self.client)?;
+        let block = inst_semantics(&case.inst, self.client)?;
 
         // Translation.
         let prefix = format!("v{i}_");

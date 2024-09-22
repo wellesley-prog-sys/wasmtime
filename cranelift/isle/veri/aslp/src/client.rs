@@ -4,14 +4,14 @@ use tracing::debug;
 
 use crate::{ast::Block, parser};
 
-pub struct Client {
-    client: reqwest::blocking::Client,
+pub struct Client<'a> {
+    client: &'a reqwest::blocking::Client,
     server_url: reqwest::Url,
 }
 
-impl Client {
+impl<'a> Client<'a> {
     pub fn new<U: IntoUrl>(
-        client: reqwest::blocking::Client,
+        client: &'a reqwest::blocking::Client,
         server_url: U,
     ) -> anyhow::Result<Self> {
         Ok(Self {

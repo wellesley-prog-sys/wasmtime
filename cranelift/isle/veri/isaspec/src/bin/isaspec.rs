@@ -1,7 +1,9 @@
 use std::io;
 
 use clap::Parser as ClapParser;
-use cranelift_codegen::isa::aarch64::inst::{writable_xreg, xreg, ALUOp, Inst, OperandSize};
+use cranelift_codegen::isa::aarch64::inst::{
+    writable_xreg, xreg, ALUOp, ALUOp3, Inst, OperandSize,
+};
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
 use cranelift_isle_veri_isaspec::aarch64::pstate_field;
@@ -40,12 +42,17 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     // ASLp client.
-    let client = Client::new(reqwest::blocking::Client::new(), args.server)?;
+    let http_client = reqwest::blocking::Client::new();
+    let client = Client::new(&http_client, args.server)?;
 
     // Conversion.
-    let cfg = define();
-    let builder = Builder::new(cfg, client);
-    let defs = builder.build()?;
+    let mut defs = Vec::new();
+    let cfgs = define();
+    for cfg in cfgs {
+        let builder = Builder::new(cfg, &client);
+        let def = builder.build()?;
+        defs.push(def);
+    }
 
     // Output.
     printer::dump(&defs).unwrap();
@@ -53,8 +60,8 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Define specificiation to generate.
-fn define() -> SpecConfig {
+/// Define specificiations to generate.
+fn define() -> Vec<SpecConfig> {
     // ALUOp
     let alu_ops = [
         ALUOp::Add,
@@ -113,13 +120,13 @@ fn define() -> SpecConfig {
         cases: alu_ops
             .iter()
             .copied()
-            .cartesian_product(sizes)
-            .filter(|(alu_op, size)| is_alu_op_size_supported(*alu_op, *size))
+            .cartesian_product(&sizes)
+            .filter(|(alu_op, size)| is_alu_op_size_supported(*alu_op, **size))
             .map(|(alu_op, size)| InstConfig {
                 // Instruction to generate specification from.
                 inst: Inst::AluRRR {
                     alu_op,
-                    size,
+                    size: *size,
                     rd: writable_xreg(4),
                     rn: xreg(5),
                     rm: xreg(6),
@@ -143,7 +150,68 @@ fn define() -> SpecConfig {
             .collect(),
     };
 
-    alu_rrr
+    // AluRRRR
+    let alu_ops = [ALUOp3::MAdd, ALUOp3::MSub];
+
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(7),
+        Mapping::require(spec_var("ra".to_string())),
+    );
+
+    let alu_rrrr = SpecConfig {
+        // Spec signature.
+        term: "MInst.AluRRRR".to_string(),
+        args: ["alu_op", "size", "rd", "rn", "rm", "ra"]
+            .map(String::from)
+            .to_vec(),
+
+        cases: alu_ops
+            .iter()
+            .copied()
+            .cartesian_product(&sizes)
+            .map(|(alu_op, size)| InstConfig {
+                // Instruction to generate specification from.
+                inst: Inst::AluRRRR {
+                    alu_op,
+                    size: *size,
+                    rd: writable_xreg(4),
+                    rn: xreg(5),
+                    rm: xreg(6),
+                    ra: xreg(7),
+                },
+
+                // Requires.
+                require: vec![
+                    spec_eq(
+                        spec_var("alu_op".to_string()),
+                        spec_enum("ALUOp3".to_string(), format!("{alu_op:?}")),
+                    ),
+                    spec_eq(
+                        spec_var("size".to_string()),
+                        spec_enum("OperandSize".to_string(), format!("{size:?}")),
+                    ),
+                ],
+
+                // Mappings from state to specification parameters.
+                mappings: mappings.clone(),
+            })
+            .collect(),
+    };
+
+    vec![alu_rrr, alu_rrrr]
 }
 
 fn is_alu_op_size_supported(alu_op: ALUOp, size: OperandSize) -> bool {
