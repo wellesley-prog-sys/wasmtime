@@ -171,9 +171,10 @@ impl Printable for Attr {
 
 impl Printable for AttrKind {
     fn to_doc(&self) -> RcDoc<()> {
-        RcDoc::text(match self {
-            AttrKind::Chain => "chain",
-        })
+        match self {
+            AttrKind::Chain => sexp(vec![RcDoc::text("veri"), RcDoc::text("chain")]),
+            AttrKind::Tag(tag) => sexp(vec![RcDoc::text("tag"), tag.to_doc()]),
+        }
     }
 }
 

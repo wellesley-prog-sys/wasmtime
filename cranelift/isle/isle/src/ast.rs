@@ -110,6 +110,9 @@ pub enum AttrKind {
     /// possible applications of rules to this term will be generated and
     /// verified.
     Chain,
+
+    /// Tag allows for categorizing terms.
+    Tag(Ident),
 }
 
 /// An expression used to specify term semantics, similar to SMT-LIB syntax.

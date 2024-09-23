@@ -529,11 +529,11 @@
 
 (decl pure is_fneg_neg (IsFneg) u64)
 (rule (is_fneg_neg (IsFneg.Result n _)) n)
-(attr is_fneg_neg chain)
+(attr is_fneg_neg (veri chain))
 
 (decl pure get_fneg_value (IsFneg) Value)
 (rule (get_fneg_value (IsFneg.Result _ v)) v)
-(attr get_fneg_value chain)
+(attr get_fneg_value (veri chain))
 
 (decl fmadd_series (Type u64 u64 Value Value Value) InstOutput)
 ;; MAdd: + x * y + z

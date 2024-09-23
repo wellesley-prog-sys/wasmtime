@@ -120,6 +120,17 @@ impl Expansion {
         terms
     }
 
+    /// Tags that appear on any term in the expansion.
+    pub fn term_tags(&self, prog: &Program) -> HashSet<String> {
+        let mut tags = HashSet::new();
+        for term_id in self.terms(prog) {
+            if let Some(term_tags) = prog.specenv.tags.get(&term_id) {
+                tags = &tags | term_tags;
+            }
+        }
+        tags
+    }
+
     fn constructor_bindings(&self) -> Vec<(BindingId, TermId)> {
         self.bindings
             .iter()

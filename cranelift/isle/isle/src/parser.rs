@@ -365,17 +365,28 @@ impl<'a> Parser<'a> {
         let term = self.parse_ident()?;
         let mut kinds = Vec::new();
         while !self.is_rparen() {
-            let sym = self.expect_symbol()?;
-            kinds.push(self.parse_attr_kind(sym.as_str())?);
+            kinds.push(self.parse_attr_kind()?);
         }
         Ok(Attr { term, kinds, pos })
     }
 
-    fn parse_attr_kind(&mut self, s: &str) -> Result<AttrKind> {
+    fn parse_attr_kind(&mut self) -> Result<AttrKind> {
+        self.expect_lparen()?;
         let pos = self.pos();
-        match s {
+        let kind = match &self.expect_symbol()?[..] {
+            "veri" => self.parse_attr_kind_veri()?,
+            "tag" => AttrKind::Tag(self.parse_ident()?),
+            x => return Err(self.error(pos, format!("Not a valid attribute: {x}"))),
+        };
+        self.expect_rparen()?;
+        Ok(kind)
+    }
+
+    fn parse_attr_kind_veri(&mut self) -> Result<AttrKind> {
+        let pos = self.pos();
+        match &self.expect_symbol()?[..] {
             "chain" => Ok(AttrKind::Chain),
-            x => Err(self.error(pos, format!("Not a valid attribute: {x}"))),
+            x => Err(self.error(pos, format!("Not a valid verification attribute: {x}"))),
         }
     }
 

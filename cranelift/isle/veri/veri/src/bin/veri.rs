@@ -29,6 +29,10 @@ struct Opts {
     #[arg(long)]
     rule: Option<String>,
 
+    /// Skip expansions containing terms with this tag.
+    #[arg(long = "skip-tag", value_name = "TAG")]
+    skip_tags: Vec<String>,
+
     /// Path to SMT2 replay file.
     #[arg(long, required = true)]
     smt2_replay_path: std::path::PathBuf,
@@ -132,7 +136,7 @@ fn main() -> anyhow::Result<()> {
     // Process expansions.
     let expansions = expander.expansions();
     for (i, expansion) in expansions.iter().enumerate() {
-        if !should_verify(expansion, target, &prog) {
+        if !should_verify(expansion, target, &opts.skip_tags, &prog) {
             continue;
         }
 
@@ -158,7 +162,20 @@ fn main() -> anyhow::Result<()> {
 
 /// Heuristic to select which expansions we attempt verification for.
 /// Specifically, verify all expansions where the first rule is named.
-fn should_verify(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -> bool {
+fn should_verify(
+    expansion: &Expansion,
+    target: Option<&Rule>,
+    skip_tags: &[String],
+    prog: &Program,
+) -> bool {
+    // Skip if the expansion involves skipped tags.
+    let tags = expansion.term_tags(prog);
+    for skip_tag in skip_tags {
+        if tags.contains(skip_tag) {
+            return false;
+        }
+    }
+
     // If an explicit target rule is specified, limit to expansions containing it.
     if let Some(target) = target {
         return expansion.rules.contains(&target.id);

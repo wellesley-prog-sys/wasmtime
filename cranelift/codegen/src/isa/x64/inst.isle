@@ -1227,7 +1227,7 @@
 ;; In other words this function's job is to find constants and then defer to
 ;; `amode_imm_reg*`.
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
-(attr to_amode_add chain)
+(attr to_amode_add (veri chain))
 (rule 0 (to_amode_add flags x y offset)
         (amode_imm_reg_reg_shift flags x y offset))
 (rule 1 (to_amode_add flags x (i32_from_iconst c) offset)
@@ -1253,14 +1253,14 @@
 ;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
 ;; otherwise falls back on `ImmReg`.
 (decl amode_imm_reg (MemFlags Value Offset32) Amode)
-(attr amode_imm_reg chain)
+(attr amode_imm_reg (veri chain))
 (rule 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
 (rule 1 (amode_imm_reg flags (iadd x y) offset)
         (amode_imm_reg_reg_shift flags x y offset))
 
 (decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) Amode)
-(attr amode_imm_reg_reg_shift chain)
+(attr amode_imm_reg_reg_shift (veri chain))
 (rule 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
 (rule 1 (amode_imm_reg_reg_shift flags x (ishl y (iconst (uimm8 shift))) offset)
@@ -2678,7 +2678,7 @@
          dst)))
 
 (decl x64_alurmi_with_flags_paired (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
-(attr x64_alurmi_with_flags_paired chain)
+(attr x64_alurmi_with_flags_paired (veri chain))
 (rule (x64_alurmi_with_flags_paired opc (fits_in_64 ty) src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
@@ -2690,7 +2690,7 @@
          dst)))
 
 (decl x64_alurmi_flags_side_effect (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
-(attr x64_alurmi_flags_side_effect chain)
+(attr x64_alurmi_flags_side_effect (veri chain))
 (rule (x64_alurmi_flags_side_effect opc (fits_in_64 ty) src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.AluRmiR (raw_operand_size_of_type ty)
@@ -2701,7 +2701,7 @@
 
 ;; Should only be used for Adc and Sbb
 (decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
-(attr x64_alurmi_with_flags_chained chain)
+(attr x64_alurmi_with_flags_chained (veri chain))
 (rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesAndProducesFlags.ReturnsReg
@@ -4971,7 +4971,7 @@
 
 ;; Lower an Icmp result into a boolean value in a register.
 (decl lower_icmp_bool (IcmpCondResult) ValueRegs)
-(attr lower_icmp_bool chain)
+(attr lower_icmp_bool (veri chain))
 (rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
       (with_flags producer (x64_setcc cc)))
 

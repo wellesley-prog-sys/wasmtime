@@ -411,6 +411,9 @@ pub struct SpecEnv {
     /// Terms that should be chained.
     pub chain: HashSet<TermId>,
 
+    /// Tags applied to each term.
+    pub tags: HashMap<TermId, HashSet<String>>,
+
     // Type instantiations for the given term.
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
 
@@ -429,6 +432,7 @@ impl SpecEnv {
         let mut env = Self {
             term_spec: HashMap::new(),
             chain: HashSet::new(),
+            tags: HashMap::new(),
             term_instantiations: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
@@ -551,6 +555,9 @@ impl SpecEnv {
                     match attr_kind {
                         AttrKind::Chain => {
                             self.chain.insert(term_id);
+                        }
+                        AttrKind::Tag(tag) => {
+                            self.tags.entry(term_id).or_default().insert(tag.0.clone());
                         }
                     }
                 }

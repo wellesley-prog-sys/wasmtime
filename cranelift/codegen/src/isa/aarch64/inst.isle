@@ -1001,6 +1001,34 @@
                        (end Reg)
                        (step Imm12))))
 
+(attr MInst.VecDup (tag vector))
+(attr MInst.VecDupFromFpu (tag vector))
+(attr MInst.VecDupFPImm (tag vector))
+(attr MInst.VecDupImm (tag vector))
+(attr MInst.VecExtend (tag vector))
+(attr MInst.VecMovElement (tag vector))
+(attr MInst.VecRRLong (tag vector))
+(attr MInst.VecRRNarrowLow (tag vector))
+(attr MInst.VecRRNarrowHigh (tag vector))
+(attr MInst.VecRRPair (tag vector))
+(attr MInst.VecRRRLong (tag vector))
+(attr MInst.VecRRRLongMod (tag vector))
+(attr MInst.VecRRPairLong (tag vector))
+(attr MInst.VecRRR (tag vector))
+(attr MInst.VecRRRMod (tag vector))
+(attr MInst.VecFmlaElem (tag vector))
+(attr MInst.VecMisc (tag vector))
+(attr MInst.VecLanes (tag vector))
+(attr MInst.VecShiftImm (tag vector))
+(attr MInst.VecShiftImmMod (tag vector))
+(attr MInst.VecExtract (tag vector))
+(attr MInst.VecTbl (tag vector))
+(attr MInst.VecTblExt (tag vector))
+(attr MInst.VecTbl2 (tag vector))
+(attr MInst.VecTbl2Ext (tag vector))
+(attr MInst.VecLoadReplicate (tag vector))
+(attr MInst.VecCSel (tag vector))
+
 (model MInst
       (type
             (struct
@@ -1009,6 +1037,8 @@
             )
       )
 )
+
+(attr MInst.AluRRImm12 (tag testing))
 
 (spec (MInst.AluRRImm12 alu_op size rd rn imm12)
       (provide
@@ -2112,7 +2142,7 @@
   (imm12_from_negated_value (has_type ty (iconst n)))
   (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
   imm)
-(attr imm12_from_negated_value chain)
+(attr imm12_from_negated_value (veri chain))
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
@@ -2323,12 +2353,12 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
         src1 src2 shift)))
-(attr cmp_rr_shift chain)
+(attr cmp_rr_shift (veri chain))
 
 ;; Helper for emitting `cmp` instructions, setting flags, with an arithmetic right-shifted
 ;; second operand register.
 (decl cmp_rr_shift_asr (OperandSize Reg Reg u64) ProducesFlags)
-(attr cmp_rr_shift_asr chain)
+(attr cmp_rr_shift_asr (veri chain))
 (rule (cmp_rr_shift_asr size src1 src2 shift_amount)
       (if-let shift (ashr_from_u64 $I64 shift_amount))
       (ProducesFlags.ProducesFlagsSideEffect
@@ -3366,13 +3396,13 @@
 (rule (sink_atomic_load x @ (atomic_load _ addr))
       (let ((_ Unit (sink_inst x)))
            (put_in_reg addr)))
-(attr sink_atomic_load chain)
+(attr sink_atomic_load (veri chain))
 
 ;; Helper for generating either an `AluRRR`, `AluRRRShift`, or `AluRRImmLogic`
 ;; instruction depending on the input. Note that this requires that the `ALUOp`
 ;; specified is commutative.
 (decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
-(attr alu_rs_imm_logic_commutative chain)
+(attr alu_rs_imm_logic_commutative (veri chain))
 
 ;; Base case of operating on registers.
 (rule -1 (alu_rs_imm_logic_commutative op ty x y)
@@ -3397,7 +3427,7 @@
 ;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
 ;; that the operation is commutative.
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
-(attr alu_rs_imm_logic chain)
+(attr alu_rs_imm_logic (veri chain))
 (rule -1 (alu_rs_imm_logic op ty x y)
       (alu_rrr op ty x y))
 (rule (alu_rs_imm_logic op ty x (iconst k))
@@ -3554,7 +3584,7 @@
 
 
 (decl sink_load_into_addr (Type Inst) Reg)
-(attr sink_load_into_addr chain)
+(attr sink_load_into_addr (veri chain))
 (rule (sink_load_into_addr ty x @ (load _ addr (offset32 offset)))
       (let ((_ Unit (sink_inst x)))
         (add_imm_to_addr addr (i64_as_u64 offset))))
@@ -4166,18 +4196,18 @@
 
 ;; Materialize a `FlagsAndCC` into a boolean `ValueRegs`.
 (decl flags_and_cc_to_bool (FlagsAndCC) ValueRegs)
-(attr flags_and_cc_to_bool chain)
+(attr flags_and_cc_to_bool (veri chain))
 (rule (flags_and_cc_to_bool (FlagsAndCC.FlagsAndCC flags cc))
       (with_flags flags (materialize_bool_result (cond_code cc))))
 
 ;; Get the `ProducesFlags` out of a `FlagsAndCC`.
 (decl flags_and_cc_flags (FlagsAndCC) ProducesFlags)
-(attr flags_and_cc_flags chain)
+(attr flags_and_cc_flags (veri chain))
 (rule (flags_and_cc_flags (FlagsAndCC.FlagsAndCC flags _cc)) flags)
 
 ;; Get the `IntCC` out of a `FlagsAndCC`.
 (decl flags_and_cc_cc (FlagsAndCC) IntCC)
-(attr flags_and_cc_cc chain)
+(attr flags_and_cc_cc (veri chain))
 (rule (flags_and_cc_cc (FlagsAndCC.FlagsAndCC _flags cc)) cc)
 
 ;; Helpers for lowering `icmp` sequences.

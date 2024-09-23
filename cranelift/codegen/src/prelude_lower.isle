@@ -212,7 +212,7 @@
 ;; Convert a MultiReg with three registers into an InstOutput containing
 ;; one ValueRegs containing the first two regs and one containing the third reg
 (decl multi_reg_to_pair_and_single (MultiReg) InstOutput)
-(attr multi_reg_to_pair_and_single chain)
+(attr multi_reg_to_pair_and_single (veri chain))
 (rule (multi_reg_to_pair_and_single (MultiReg.Three a b c))
       (output_pair (value_regs a b) c))
 
@@ -505,7 +505,7 @@
 
 ;; Chain another producer to a `ProducesFlags`.
 (decl produces_flags_concat (ProducesFlags ProducesFlags) ProducesFlags)
-(attr produces_flags_concat chain)
+(attr produces_flags_concat (veri chain))
 (rule (produces_flags_concat (ProducesFlags.ProducesFlagsSideEffect inst1) (ProducesFlags.ProducesFlagsSideEffect inst2))
       (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2))
 
