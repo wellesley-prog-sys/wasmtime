@@ -167,7 +167,7 @@ fn define() -> Vec<FileConfig> {
     };
 
     // AluRRRR
-    let alu_ops = [ALUOp3::MAdd, ALUOp3::MSub];
+    let alu3_ops = [ALUOp3::MAdd, ALUOp3::MSub, ALUOp3::UMAddL, ALUOp3::SMAddL];
 
     let mut mappings = flags_mappings();
     mappings.writes.insert(
@@ -194,10 +194,11 @@ fn define() -> Vec<FileConfig> {
             .map(String::from)
             .to_vec(),
 
-        cases: alu_ops
+        cases: alu3_ops
             .iter()
             .copied()
             .cartesian_product(&sizes)
+            .filter(|(alu3_op, size)| is_alu3_op_size_supported(*alu3_op, **size))
             .map(|(alu_op, size)| InstConfig {
                 // Instruction to generate specification from.
                 inst: Inst::AluRRRR {
@@ -304,6 +305,13 @@ fn define() -> Vec<FileConfig> {
 fn is_alu_op_size_supported(alu_op: ALUOp, size: OperandSize) -> bool {
     match alu_op {
         ALUOp::SMulH | ALUOp::UMulH | ALUOp::SDiv | ALUOp::UDiv => size == OperandSize::Size64,
+        _ => true,
+    }
+}
+
+fn is_alu3_op_size_supported(alu3_op: ALUOp3, size: OperandSize) -> bool {
+    match alu3_op {
+        ALUOp3::UMAddL | ALUOp3::SMAddL => size == OperandSize::Size32,
         _ => true,
     }
 }

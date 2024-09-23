@@ -24,10 +24,35 @@
                         (bvmul (extract 31 0 rn) (extract 31 0 rm))))))
         (=>
             (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
-            (= rd (bvsub ra (bvmul rn rm)))))
+            (= rd (bvsub ra (bvmul rn rm))))
+        (=>
+            (and (= alu_op (ALUOp3.UMAddL)) (= size (OperandSize.Size32)))
+            (=
+                rd
+                (bvadd
+                    ra
+                    (bvmul
+                        (zero_ext 64 (extract 31 0 rn))
+                        (zero_ext 64 (extract 31 0 rm))))))
+        (=>
+            (and (= alu_op (ALUOp3.SMAddL)) (= size (OperandSize.Size32)))
+            (=
+                rd
+                (bvadd
+                    (extract 63 0 (sign_ext 128 ra))
+                    (extract
+                        63
+                        0
+                        (sign_ext
+                            128
+                            (bvmul
+                                (sign_ext 64 (extract 31 0 rn))
+                                (sign_ext 64 (extract 31 0 rm)))))))))
     (require
         (or
             (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size32)))
             (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
             (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64))))))
+            (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp3.UMAddL)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp3.SMAddL)) (= size (OperandSize.Size32))))))
