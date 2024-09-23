@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use clap::Parser as ClapParser;
 use cranelift_codegen::isa::aarch64::inst::{
-    writable_xreg, xreg, ALUOp, ALUOp3, Inst, OperandSize,
+    writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Inst, OperandSize,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
@@ -227,6 +227,63 @@ fn define() -> Vec<FileConfig> {
             .collect(),
     };
 
+    // BitRR
+    let bit_ops = [
+        BitOp::Cls,
+        // --------------
+        // BitOp::RBit,
+        // BitOp::Clz,
+        // BitOp::Rev16,
+        // BitOp::Rev32,
+        // BitOp::Rev64,
+    ];
+
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+
+    let bit_rr = SpecConfig {
+        // Spec signature.
+        term: "MInst.BitRR".to_string(),
+        args: ["op", "size", "rd", "rn"].map(String::from).to_vec(),
+
+        cases: bit_ops
+            .iter()
+            .copied()
+            .cartesian_product(&sizes)
+            .map(|(op, size)| InstConfig {
+                // Instruction to generate specification from.
+                inst: Inst::BitRR {
+                    op,
+                    size: *size,
+                    rd: writable_xreg(4),
+                    rn: xreg(5),
+                },
+
+                // Requires.
+                require: vec![
+                    spec_eq(
+                        spec_var("op".to_string()),
+                        spec_enum("BitOp".to_string(), format!("{op:?}")),
+                    ),
+                    spec_eq(
+                        spec_var("size".to_string()),
+                        spec_enum("OperandSize".to_string(), format!("{size:?}")),
+                    ),
+                ],
+
+                // Mappings from state to specification parameters.
+                mappings: mappings.clone(),
+            })
+            .collect(),
+    };
+
     // Files to generate.
     vec![
         FileConfig {
@@ -236,6 +293,10 @@ fn define() -> Vec<FileConfig> {
         FileConfig {
             name: "alu_rrrr.isle".into(),
             specs: vec![alu_rrrr],
+        },
+        FileConfig {
+            name: "bit_rr.isle".into(),
+            specs: vec![bit_rr],
         },
     ]
 }
