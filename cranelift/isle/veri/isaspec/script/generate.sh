@@ -9,7 +9,7 @@ function usage() {
 }
 
 aslp_server="${ASLP_SERVER:-}"
-output="../../../codegen/src/isa/aarch64/inst_specs.isle"
+output_path="../../../codegen/src/isa/aarch64/spec/"
 while getopts "s:o:h" opt; do
     case "${opt}" in
         s) aslp_server="${OPTARG}" ;;
@@ -23,4 +23,4 @@ done
 cargo run --bin isaspec \
     -- \
     --server "${aslp_server}" \
-    >"${output}"
+    --output "${output_path}"

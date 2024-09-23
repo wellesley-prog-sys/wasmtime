@@ -1,8 +1,9 @@
 use std::io;
+use std::path::PathBuf;
 
 use clap::Parser as ClapParser;
 use cranelift_codegen::isa::aarch64::inst::{
-    writable_xreg, xreg, ALUOp, ALUOp3, Inst, OperandSize,
+    writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Inst, OperandSize,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
@@ -18,6 +19,10 @@ struct Args {
     /// Server URL
     #[arg(long = "server", required = true)]
     server: String,
+
+    // Output directory.
+    #[arg(long, required = true)]
+    output: PathBuf,
 
     /// Print debugging output (repeat for more detail)
     #[arg(short = 'd', long = "debug", action = clap::ArgAction::Count)]
@@ -46,22 +51,33 @@ fn main() -> anyhow::Result<()> {
     let client = Client::new(&http_client, args.server)?;
 
     // Conversion.
-    let mut defs = Vec::new();
-    let cfgs = define();
-    for cfg in cfgs {
-        let builder = Builder::new(cfg, &client);
-        let def = builder.build()?;
-        defs.push(def);
-    }
+    let file_configs = define();
+    for file_config in file_configs {
+        // Generate specs.
+        let mut defs = Vec::new();
+        for spec_config in file_config.specs {
+            let builder = Builder::new(spec_config, &client);
+            let def = builder.build()?;
+            defs.push(def);
+        }
 
-    // Output.
-    printer::dump(&defs).unwrap();
+        // Output.
+        let path = args.output.join(file_config.name);
+        let mut output = std::fs::File::create(path)?;
+        printer::print(&defs, 78, &mut output)?;
+    }
 
     Ok(())
 }
 
-/// Define specificiations to generate.
-fn define() -> Vec<SpecConfig> {
+/// Configuration for an ISLE specification file to generate.
+struct FileConfig {
+    name: PathBuf,
+    specs: Vec<SpecConfig>,
+}
+
+/// Define specifications to generate.
+fn define() -> Vec<FileConfig> {
     // ALUOp
     let alu_ops = [
         ALUOp::Add,
@@ -211,7 +227,78 @@ fn define() -> Vec<SpecConfig> {
             .collect(),
     };
 
-    vec![alu_rrr, alu_rrrr]
+    // BitRR
+    let bit_ops = [
+        BitOp::Cls,
+        // --------------
+        // BitOp::RBit,
+        // BitOp::Clz,
+        // BitOp::Rev16,
+        // BitOp::Rev32,
+        // BitOp::Rev64,
+    ];
+
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+
+    let bit_rr = SpecConfig {
+        // Spec signature.
+        term: "MInst.BitRR".to_string(),
+        args: ["op", "size", "rd", "rn"].map(String::from).to_vec(),
+
+        cases: bit_ops
+            .iter()
+            .copied()
+            .cartesian_product(&sizes)
+            .map(|(op, size)| InstConfig {
+                // Instruction to generate specification from.
+                inst: Inst::BitRR {
+                    op,
+                    size: *size,
+                    rd: writable_xreg(4),
+                    rn: xreg(5),
+                },
+
+                // Requires.
+                require: vec![
+                    spec_eq(
+                        spec_var("op".to_string()),
+                        spec_enum("BitOp".to_string(), format!("{op:?}")),
+                    ),
+                    spec_eq(
+                        spec_var("size".to_string()),
+                        spec_enum("OperandSize".to_string(), format!("{size:?}")),
+                    ),
+                ],
+
+                // Mappings from state to specification parameters.
+                mappings: mappings.clone(),
+            })
+            .collect(),
+    };
+
+    // Files to generate.
+    vec![
+        FileConfig {
+            name: "alu_rrr.isle".into(),
+            specs: vec![alu_rrr],
+        },
+        FileConfig {
+            name: "alu_rrrr.isle".into(),
+            specs: vec![alu_rrrr],
+        },
+        FileConfig {
+            name: "bit_rr.isle".into(),
+            specs: vec![bit_rr],
+        },
+    ]
 }
 
 fn is_alu_op_size_supported(alu_op: ALUOp, size: OperandSize) -> bool {

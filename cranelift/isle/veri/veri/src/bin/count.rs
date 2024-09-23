@@ -58,7 +58,7 @@ impl Opts {
                 "unknown ISLE compilation: {}",
                 self.name
             ))?
-            .inputs())
+            .paths()?)
     }
 }
 
