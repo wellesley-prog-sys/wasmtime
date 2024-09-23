@@ -367,25 +367,3 @@
             (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
             (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size32)))
             (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64))))))
-
-
-;; Alexa: hand-modified MInst.AluRRR from the spec for MInst.AluRRR
-(spec
-    (MInst.AluRRImm12 alu_op size rd rn imm)
-    (provide
-        (=>
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvadd
-                        (bvadd (extract 31 0 rn) (bvnot (zero_ext 32 imm)))
-                        #x00000001))))
-        (=>
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-            (= rd (bvadd (bvadd rn (bvnot (zero_ext 44 imm)))) #x0000000000000001)))
-    (require
-        (or
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64))))))
