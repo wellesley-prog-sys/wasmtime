@@ -182,6 +182,7 @@ impl<'a> Solver<'a> {
                 self.expr_atom(y),
             ])),
             Expr::BVNot(x) => Ok(self.smt.bvnot(self.expr_atom(x))),
+            Expr::Cls(x) => Ok(self.smt.bvnot(self.expr_atom(x))),
             Expr::BVNeg(x) => Ok(self.smt.bvneg(self.expr_atom(x))),
             Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVOr(x, y) => Ok(self.smt.bvor(self.expr_atom(x), self.expr_atom(y))),

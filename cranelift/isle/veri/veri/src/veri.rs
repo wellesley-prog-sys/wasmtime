@@ -51,6 +51,7 @@ pub enum Expr {
     // Unary.
     BVNot(ExprId),
     BVNeg(ExprId),
+    Cls(ExprId),
 
     // Binary.
     BVAdd(ExprId, ExprId),
@@ -99,6 +100,7 @@ impl Expr {
             | &Self::BVNeg(x)
             | &Self::BVExtract(_, _, x)
             | &Self::Int2BV(_, x)
+            | &Self::Cls(x)
             | &Self::WidthOf(x) => vec![x],
 
             // Binary
@@ -153,6 +155,7 @@ impl std::fmt::Display for Expr {
             Self::BVSaddo(x, y) => write!(f, "bvsaddo({}, {})", x.index(), y.index()),
             Self::BVNot(x) => write!(f, "bvnot({})", x.index()),
             Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
+            Self::Cls(x) => write!(f, "cls({})", x.index()),
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
             Self::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
             Self::BVMul(x, y) => write!(f, "bvmul({}, {})", x.index(), y.index()),
@@ -1050,6 +1053,11 @@ impl<'a> ConditionsBuilder<'a> {
             spec::Expr::BVNeg(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVNeg(x)))
+            }
+
+            spec::Expr::Cls(x) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Cls(x)))
             }
 
             spec::Expr::BVAdd(x, y) => {
