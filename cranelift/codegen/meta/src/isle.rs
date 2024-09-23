@@ -1,3 +1,5 @@
+use std::io::Result;
+
 /// A list of compilations (transformations from ISLE source to
 /// generated Rust source) that exist in the repository.
 ///
@@ -31,12 +33,40 @@ pub struct IsleCompilation {
 }
 
 impl IsleCompilation {
+    /// All inputs to the computation, tracked or untracked. May contain directories.
     pub fn inputs(&self) -> Vec<std::path::PathBuf> {
         self.tracked_inputs
             .iter()
             .chain(self.untracked_inputs.iter())
             .cloned()
             .collect()
+    }
+
+    /// All path inputs to the compilation. Directory inputs are expanded to the
+    /// list of all ISLE files in the directory.
+    pub fn paths(&self) -> Result<Vec<std::path::PathBuf>> {
+        let mut paths = Vec::new();
+        for input in self.inputs() {
+            paths.extend(Self::expand_paths(&input)?);
+        }
+        Ok(paths)
+    }
+
+    fn expand_paths(input: &std::path::PathBuf) -> Result<Vec<std::path::PathBuf>> {
+        if input.is_file() {
+            return Ok(vec![input.clone()]);
+        }
+
+        let mut paths = Vec::new();
+        for entry in std::fs::read_dir(input)? {
+            let path = entry?.path();
+            if let Some(ext) = path.extension() {
+                if ext == "isle" {
+                    paths.push(path);
+                }
+            }
+        }
+        Ok(paths)
     }
 }
 
@@ -127,7 +157,7 @@ pub fn get_isle_compilations(
                     inst_specs_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("inst_neon.isle"),
-                    src_isa_aarch64.join("inst_specs.isle"),
+                    src_isa_aarch64.join("spec"),
                     src_isa_aarch64.join("lower.isle"),
                     src_isa_aarch64.join("lower_dynamic_neon.isle"),
                 ],
