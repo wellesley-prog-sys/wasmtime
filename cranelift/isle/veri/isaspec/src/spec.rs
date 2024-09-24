@@ -40,12 +40,24 @@ pub fn spec_ternary(op: SpecOp, x: SpecExpr, y: SpecExpr, z: SpecExpr) -> SpecEx
     spec_op(op, vec![x, y, z])
 }
 
+pub fn spec_not(x: SpecExpr) -> SpecExpr {
+    spec_unary(SpecOp::Not, x)
+}
+
 pub fn spec_if(c: SpecExpr, t: SpecExpr, e: SpecExpr) -> SpecExpr {
     spec_ternary(SpecOp::If, c, t, e)
 }
 
 pub fn spec_eq(x: SpecExpr, y: SpecExpr) -> SpecExpr {
     spec_binary(SpecOp::Eq, x, y)
+}
+
+pub fn spec_eq_bool(x: SpecExpr, val: bool) -> SpecExpr {
+    if val {
+        x
+    } else {
+        spec_not(x)
+    }
 }
 
 pub fn spec_or(args: Vec<SpecExpr>) -> SpecExpr {

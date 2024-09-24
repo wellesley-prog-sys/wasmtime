@@ -10,10 +10,13 @@ use cranelift_isle::ast::Def;
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
 use cranelift_isle_veri_isaspec::aarch64::pstate_field;
+use cranelift_isle_veri_isaspec::spec::{
+    spec_const_int, spec_enum, spec_eq, spec_eq_bool, spec_field, spec_var,
+};
 use itertools::Itertools;
 
+use cranelift_isle_veri_isaspec::aarch64;
 use cranelift_isle_veri_isaspec::builder::{Builder, InstConfig, Mapping, Mappings, SpecConfig};
-use cranelift_isle_veri_isaspec::{aarch64, spec::*};
 
 #[derive(ClapParser)]
 #[command(version, about)]
@@ -299,6 +302,60 @@ fn define() -> Vec<FileConfig> {
             .collect(),
     };
 
+    // Extend
+    let extend_signed = [false, true];
+    let extend_bits = [8u8, 16u8, 32u8, 64u8];
+
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+
+    let extend = SpecConfig {
+        // Spec signature.
+        term: "MInst.Extend".to_string(),
+        args: ["rd", "rn", "signed", "from_bits", "to_bits"]
+            .map(String::from)
+            .to_vec(),
+        cases: extend_bits
+            .iter()
+            .cartesian_product(&extend_bits)
+            .filter(|(from_bits, to_bits)| from_bits < to_bits)
+            .cartesian_product(&extend_signed)
+            .map(|((from_bits, to_bits), signed)| InstConfig {
+                // Instruction to generate specification from.
+                inst: Inst::Extend {
+                    rd: writable_xreg(4),
+                    rn: xreg(5),
+                    signed: *signed,
+                    from_bits: *from_bits,
+                    to_bits: *to_bits,
+                },
+
+                // Requires.
+                require: vec![
+                    spec_eq_bool(spec_var("signed".to_string()), *signed),
+                    spec_eq(
+                        spec_var("from_bits".to_string()),
+                        spec_const_int((*from_bits).into()),
+                    ),
+                    spec_eq(
+                        spec_var("to_bits".to_string()),
+                        spec_const_int((*to_bits).into()),
+                    ),
+                ],
+
+                // Mappings from state to specification parameters.
+                mappings: mappings.clone(),
+            })
+            .collect(),
+    };
+
     // Files to generate.
     vec![
         FileConfig {
@@ -312,6 +369,10 @@ fn define() -> Vec<FileConfig> {
         FileConfig {
             name: "bit_rr.isle".into(),
             specs: vec![bit_rr],
+        },
+        FileConfig {
+            name: "extend.isle".into(),
+            specs: vec![extend],
         },
     ]
 }
