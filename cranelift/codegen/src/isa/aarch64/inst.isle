@@ -1337,6 +1337,17 @@
     (Rev64)
 ))
 
+(model BitOp
+      (enum (bv 8)
+            ;; Bit reverse
+            (RBit #x0)
+            (Clz #x1)
+            (Cls #x2)
+            ;; Byte reverse
+            (Rev16 #x3)
+            (Rev32 #x4)
+            (Rev64 #x5)))
+
 (type MemLabel extern (enum))
 (type SImm9 extern (enum))
 (type UImm12Scaled extern (enum))
@@ -2014,6 +2025,7 @@
 (decl u8_into_uimm5 (u8) UImm5)
 (extern constructor u8_into_uimm5 u8_into_uimm5)
 
+(spec (u8_into_imm12 arg) (provide (= result (zero_ext 24 arg))))
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
 
@@ -3289,6 +3301,7 @@
 ;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Place a `Value` into a register, sign extending it to 32-bits
+(attr put_in_reg_sext32 chain)
 (decl put_in_reg_sext32 (Value) Reg)
 (rule -1 (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
       (extend val $true (ty_bits ty) 32))
