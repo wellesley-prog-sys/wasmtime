@@ -42,7 +42,8 @@ cargo run --bin veri --profile "${profile}" -- \
     --codegen-crate-dir ../../../codegen/ \
     --work-dir "${tmp_dir}" \
     --name "${arch}" \
-    --smt2-replay-path /dev/null \
+    --smt2-replay-path output/out.smt \
     --timeout 60 \
+    --debug \
     "$@" \
     | tee "${output_dir}/${arch}.veri"
