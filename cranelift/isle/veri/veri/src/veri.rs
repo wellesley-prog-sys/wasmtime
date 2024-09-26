@@ -7,9 +7,10 @@ use crate::{
 };
 use cranelift_isle::{
     ast::Ident,
-    sema::{Sym, TermId, TypeId, VariantId},
+    sema::{RuleId, Sym, TermId, TypeId, VariantId},
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
+use easy_smt::{Context, SExpr};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     iter::zip,
@@ -379,6 +380,13 @@ pub struct Call {
     pub signatures: Vec<Signature>,
 }
 
+#[derive(Clone, Debug)]
+pub struct UnsatResult {
+    pub term: TermId,
+    pub args: Vec<Option<Value>>,
+    pub ret: Option<Value>,
+}
+
 /// Verification conditions for an expansion.
 #[derive(Debug, Default)]
 pub struct Conditions {
@@ -515,6 +523,19 @@ impl Conditions {
         }
 
         Ok(())
+    }
+
+    pub fn print_rule(&self, model: &Model, prog: &Program, smt: &Context) -> Vec<SExpr> {
+        let unsat_result_map: Vec<UnsatResult> = self
+            .calls
+            .iter()
+            .map(|call| UnsatResult {
+                term: call.term.clone(),
+                args: call.args.iter().map(|a| a.eval(model).ok()).collect(),
+                ret: call.ret.eval(model).ok(),
+            })
+            .collect();
+        return prog.display_rule(model, &unsat_result_map, smt);
     }
 }
 

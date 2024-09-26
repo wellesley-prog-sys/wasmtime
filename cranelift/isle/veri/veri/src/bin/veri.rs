@@ -216,6 +216,11 @@ fn verify_expansion_type_instantiation(
         Verification::Failure(model) => {
             println!("model:");
             conditions.print_model(&model, prog)?;
+            println!("rule:");
+            for sexpr in conditions.print_rule(&model, prog, &solver.smt) {
+                println!("{}", solver.smt.display(sexpr));
+            }
+
             anyhow::bail!("verification failed");
         }
         Verification::Success | Verification::Unknown => (),

@@ -44,7 +44,7 @@ impl std::fmt::Display for Verification {
 }
 
 pub struct Solver<'a> {
-    smt: Context,
+    pub smt: Context,
     conditions: &'a Conditions,
     assignment: &'a Assignment,
     fresh_idx: usize,
@@ -107,6 +107,9 @@ impl<'a> Solver<'a> {
             Response::Unsat => Verification::Success,
             Response::Unknown => Verification::Unknown,
         };
+
+        // Instead of returning Model, return SExpr
+        // For now return SExpr as well as a tuple
 
         // Leave solver context frame.
         self.smt.pop()?;
