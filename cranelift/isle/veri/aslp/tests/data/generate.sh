@@ -20,8 +20,7 @@ function aslt() {
     {
         echo ':set impdef "Has SHA1 Crypto instructions" = TRUE'
         echo ":ast A64 0x${opcode}"
-    } \
-    | opam exec -- dune exec --root="${ASLP_DIR}" -- asli
+    } | asli
 }
 
 # Generate named testcase for a given assembly instruction.
