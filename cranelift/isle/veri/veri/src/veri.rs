@@ -338,6 +338,27 @@ impl Symbolic {
         }
     }
 
+    // Build a new value by applying the given map function to all constituent
+    // scalars in this symbolic value.
+    fn scalar_map<F>(&self, f: &mut F) -> Symbolic
+    where
+        F: FnMut(ExprId) -> ExprId,
+    {
+        match self {
+            Symbolic::Scalar(x) => Symbolic::Scalar(f(*x)),
+            Symbolic::Struct(fields) => Symbolic::Struct(
+                fields
+                    .iter()
+                    .map(|field| SymbolicField {
+                        name: field.name.clone(),
+                        value: field.value.scalar_map(f),
+                    })
+                    .collect(),
+            ),
+            v => todo!("scalar map: {v:?}"),
+        }
+    }
+
     fn merge<F>(a: &Symbolic, b: &Symbolic, merge: &mut F) -> Result<Symbolic>
     where
         F: FnMut(ExprId, ExprId) -> ExprId,
@@ -1406,7 +1427,7 @@ impl<'a> ConditionsBuilder<'a> {
     ) -> Result<Symbolic> {
         // Generate sub-expressions.
         let on = self.spec_expr(on, vars)?;
-        let mut arms = arms
+        let arms = arms
             .iter()
             .map(|(value, then)| {
                 let value = self.spec_expr(value, vars)?;
@@ -1415,24 +1436,22 @@ impl<'a> ConditionsBuilder<'a> {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        // Exhaustiveness: assert one condition must hold.
-        let conds = arms.iter().map(|(cond, _)| cond).cloned().collect();
-        let exhaustive = self.any(conds);
-        self.conditions.assertions.push(exhaustive);
+        // Build an undefined fallback value.
+        let Some((_, value)) = arms.last() else {
+            bail!("switch must have at least one arm");
+        };
+        let fallback = value.scalar_map(&mut |_| self.undef_variable());
 
         // Represent as nested conditionals.
         //
         // Note the condition of the last arm is not explicitly checked: we rely
         // on the exhaustiveness assertion.
-        //
-        // QUESTION(mbm): is it correct to always assert the exchaustiveness
-        // condition? Or should it be treated as a requires, which is asserted
-        // or assumed depending on which side it appears on?
-        let (_, last) = arms.pop().expect("switch must have at least one arm");
         arms.iter()
             .rev()
             .cloned()
-            .try_fold(last, |acc, (cond, then)| self.conditional(cond, then, acc))
+            .try_fold(fallback, |acc, (cond, then)| {
+                self.conditional(cond, then, acc)
+            })
     }
 
     fn spec_let(
@@ -1546,13 +1565,6 @@ impl<'a> ConditionsBuilder<'a> {
             .unwrap_or_else(|| self.boolean(true))
     }
 
-    fn any(&mut self, exprs: Vec<ExprId>) -> ExprId {
-        exprs
-            .into_iter()
-            .reduce(|acc, e| self.dedup_expr(Expr::Or(acc, e)))
-            .unwrap_or_else(|| self.boolean(false))
-    }
-
     fn boolean(&mut self, value: bool) -> ExprId {
         self.constant(Const::Bool(value))
     }
@@ -1652,6 +1664,10 @@ impl<'a> ConditionsBuilder<'a> {
             .get(&type_id)
             .ok_or(format_err!("unspecified model for type {type_name}"))?;
         self.alloc_value(ty, name)
+    }
+
+    fn undef_variable(&mut self) -> ExprId {
+        self.alloc_variable(Type::Unknown, "undef".to_string())
     }
 
     fn alloc_variable(&mut self, ty: Type, name: String) -> ExprId {
