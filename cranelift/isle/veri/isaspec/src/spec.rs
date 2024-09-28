@@ -84,11 +84,17 @@ pub fn spec_op(op: SpecOp, args: Vec<SpecExpr>) -> SpecExpr {
     }
 }
 
-pub fn spec_enum(name: String, variant: String) -> SpecExpr {
+pub fn spec_enum(name: String, variant: String, args: Vec<SpecExpr>) -> SpecExpr {
     SpecExpr::Enum {
-        name: spec_ident(format!("{}.{}", name, variant)),
+        name: spec_ident(name),
+        variant: spec_ident(variant),
+        args,
         pos: Pos::default(),
     }
+}
+
+pub fn spec_enum_unit(name: String, variant: String) -> SpecExpr {
+    spec_enum(name, variant, Vec::new())
 }
 
 pub fn spec_field(field: String, x: SpecExpr) -> SpecExpr {

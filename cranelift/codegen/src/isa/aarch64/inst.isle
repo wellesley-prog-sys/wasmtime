@@ -1243,30 +1243,6 @@
     (SbcS)
 ))
 
-(model ALUOp
-      (enum (bv 8)
-            (Add        #x00)
-            (Sub        #x01)
-            (Orr        #x02)
-            (OrrNot     #x03)
-            (And        #x04)
-            (AndNot     #x05)
-            (Eor        #x06)
-            (EorNot     #x07)
-            (AddS       #x08)
-            (SubS       #x09)
-            (SMulH      #x0a)
-            (UMulH      #x0b)
-            (SDiv       #x0c)
-            (UDiv       #x0d)
-            (RotR       #x0e)
-            (Lsr        #x0f)
-            (Asr        #x10)
-            (Lsl        #x11)
-            (Adc        #x12)
-      )
-)
-
 ;; An ALU operation with three arguments.
 (type ALUOp3
   (enum
@@ -1279,15 +1255,6 @@
     ;; Signed-Multiply-add
     (SMAddL)
 ))
-
-(model ALUOp3
-      (enum (bv 8)
-            (MAdd       #x00)
-            (MSub       #x01)
-            (UMAddL     #x02)
-            (SMAddL     #x03)
-      )
-)
 
 (type MoveWideOp
   (enum
@@ -1495,18 +1462,13 @@
       (enum Size32
             Size64))
 
-(model OperandSize
-      (enum Int
-            (Size32 32)
-            (Size64 64)))
-
 (type TestBitAndBranchKind (enum (Z) (NZ)))
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
 (decl operand_size (Type) OperandSize)
 (spec (operand_size ty)
       (provide
-            (= result (if (<= ty 32) 32 64)))
+            (= result (if (<= ty 32) (OperandSize.Size32) (OperandSize.Size64))))
       (require
             (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 (rule 1 (operand_size (fits_in_32 _ty)) (OperandSize.Size32))

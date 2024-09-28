@@ -504,7 +504,12 @@ impl<'a> Parser<'a> {
             } else if self.is_sym() && !self.is_spec_bit_vector() {
                 let sym_pos = self.pos();
                 let sym = self.expect_symbol()?;
-                if let Ok(op) = self.parse_spec_op(sym.as_str()) {
+                if let Some(variant) = sym.strip_suffix('?') {
+                    let variant = self.str_to_ident(sym_pos, variant)?;
+                    let x = Box::new(self.parse_spec_expr()?);
+                    self.expect_rparen()?;
+                    Ok(SpecExpr::Discriminator { variant, x, pos })
+                } else if let Ok(op) = self.parse_spec_op(sym.as_str()) {
                     let mut args: Vec<SpecExpr> = vec![];
                     while !self.is_rparen() {
                         args.push(self.parse_spec_expr()?);
@@ -516,10 +521,18 @@ impl<'a> Parser<'a> {
                     let x = Box::new(self.parse_spec_expr()?);
                     self.expect_rparen()?;
                     Ok(SpecExpr::Field { field, x, pos })
-                } else {
-                    let name = self.str_to_ident(pos, &sym)?;
+                } else if let Some((name, variant)) = sym.split_once('.') {
+                    let name = self.str_to_ident(pos, &name)?;
+                    let variant = self.str_to_ident(pos, &variant)?;
                     self.expect_rparen()?;
-                    Ok(SpecExpr::Enum { name, pos })
+                    Ok(SpecExpr::Enum {
+                        name,
+                        variant,
+                        args: Vec::new(),
+                        pos,
+                    })
+                } else {
+                    Err(self.error(pos, "Unexpected spec expression".into()))
                 }
             } else {
                 // TODO(mbm): support Unit
@@ -626,51 +639,6 @@ impl<'a> Parser<'a> {
         let val = if self.eat_sym_str("type")? {
             let ty = self.parse_model_type()?;
             ModelValue::TypeValue(ty)
-        } else if self.eat_sym_str("enum")? {
-            let ty = self.parse_model_type()?;
-
-            let mut variants = vec![];
-            let mut has_explicit_value = false;
-            let mut implicit_idx = None;
-
-            while !self.is_rparen() {
-                self.expect_lparen()?; // enum value
-                let name = self.parse_ident()?;
-                let val = if self.is_rparen() {
-                    // has implicit enum value
-                    if has_explicit_value {
-                        return Err(self.error(
-                            pos,
-                            format!(
-                                "Spec enum has unexpected implicit value after implicit value."
-                            ),
-                        ));
-                    }
-                    implicit_idx = Some(if let Some(idx) = implicit_idx {
-                        idx + 1
-                    } else {
-                        0
-                    });
-                    SpecExpr::ConstInt {
-                        val: implicit_idx.unwrap(),
-                        pos,
-                    }
-                } else {
-                    if implicit_idx.is_some() {
-                        return Err(self.error(
-                            pos,
-                            format!(
-                                "Spec enum has unexpected explicit value after implicit value."
-                            ),
-                        ));
-                    }
-                    has_explicit_value = true;
-                    self.parse_spec_expr()?
-                };
-                self.expect_rparen()?;
-                variants.push((name, val));
-            }
-            ModelValue::EnumValues(ty, variants)
         } else if self.eat_sym_str("const")? {
             let val = self.parse_spec_expr()?;
             ModelValue::ConstValue(val)

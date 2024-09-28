@@ -1,6 +1,10 @@
 use std::cmp::Ordering;
 
-use cranelift_isle::ast::{Ident, ModelType};
+use cranelift_isle::{
+    ast::{Ident, ModelType},
+    lexer::Pos,
+    sema::{self, TypeEnv, VariantId},
+};
 
 /// Width of a bit vector.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -84,6 +88,7 @@ impl PartialOrd for Type {
 pub enum Compound {
     Primitive(Type),
     Struct(Vec<Field>),
+    Enum(Vec<Variant>),
     // TODO(mbm): intern name identifier
     Named(Ident),
 }
@@ -93,6 +98,55 @@ pub struct Field {
     // TODO(mbm): intern name identifier
     pub name: Ident,
     pub ty: Compound,
+}
+
+impl Field {
+    fn from_isle(field: &sema::Field, tyenv: &TypeEnv) -> Self {
+        let ty = &tyenv.types[field.ty.index()];
+        Self {
+            name: Ident(tyenv.syms[field.name.index()].clone(), Pos::default()),
+            ty: Compound::named_from_isle(ty, tyenv),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Variant {
+    pub name: Ident,
+    pub id: VariantId,
+    pub fields: Vec<Field>,
+}
+
+impl Variant {
+    fn from_isle(variant: &sema::Variant, tyenv: &TypeEnv) -> Self {
+        Self {
+            name: Ident(tyenv.syms[variant.name.index()].clone(), variant.pos),
+            id: variant.id,
+            fields: variant
+                .fields
+                .iter()
+                .map(|f| Field::from_isle(f, tyenv))
+                .collect(),
+        }
+    }
+
+    pub fn is_unit(&self) -> bool {
+        self.fields.is_empty()
+    }
+
+    pub fn ty(&self) -> Compound {
+        Compound::Struct(self.fields.clone())
+    }
+}
+
+impl std::fmt::Display for Variant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_unit() {
+            write!(f, "{name}", name = self.name.0)
+        } else {
+            write!(f, "{name} {ty}", name = self.name.0, ty = self.ty())
+        }
+    }
 }
 
 impl Compound {
@@ -116,9 +170,36 @@ impl Compound {
         }
     }
 
+    /// Derive a type corresponding to the given ISLE type, if possible. For
+    /// ISLE internal enumerations, this will build the corresponding VeriISLE
+    /// enum representation.
+    pub fn from_isle(ty: &sema::Type, tyenv: &TypeEnv) -> Option<Self> {
+        match ty {
+            sema::Type::Enum { variants, .. } => Some(Self::Enum(
+                variants
+                    .iter()
+                    .map(|v| Variant::from_isle(v, tyenv))
+                    .collect(),
+            )),
+            _ => None,
+        }
+    }
+
+    /// Build a named reference to the given ISLE type.
+    pub fn named_from_isle(ty: &sema::Type, tyenv: &TypeEnv) -> Self {
+        Self::Named(Ident(ty.name(tyenv).to_string(), ty.pos()))
+    }
+
     pub fn as_primitive(&self) -> Option<&Type> {
         match self {
             Compound::Primitive(ty) => Some(ty),
+            _ => None,
+        }
+    }
+
+    pub fn as_enum(&self) -> Option<&Vec<Variant>> {
+        match self {
+            Compound::Enum(variants) => Some(variants),
             _ => None,
         }
     }
@@ -137,6 +218,17 @@ impl std::fmt::Display for Compound {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Compound::Enum(variants) => {
+                write!(
+                    f,
+                    "enum{{{variants}}}",
+                    variants = variants
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Compound::Named(name) => write!(f, "{}", name.0),
         }
     }

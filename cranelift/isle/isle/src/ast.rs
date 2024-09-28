@@ -145,6 +145,12 @@ pub enum SpecExpr {
         x: Box<SpecExpr>,
         pos: Pos,
     },
+    /// Discriminator is a predicate that tests the variant of an enum value.
+    Discriminator {
+        variant: Ident,
+        x: Box<SpecExpr>,
+        pos: Pos,
+    },
     /// An application of a type variant or term.
     Op {
         op: SpecOp,
@@ -169,9 +175,11 @@ pub enum SpecExpr {
         r: Box<SpecExpr>,
         pos: Pos,
     },
-    /// Enums variant values (enums defined by model)
+    /// Construct enum variant.
     Enum {
         name: Ident,
+        variant: Ident,
+        args: Vec<SpecExpr>,
         pos: Pos,
     },
 }
@@ -184,6 +192,7 @@ impl SpecExpr {
             | &Self::ConstBool { pos, .. }
             | &Self::Var { pos, .. }
             | &Self::Field { pos, .. }
+            | &Self::Discriminator { pos, .. }
             | &Self::Op { pos, .. }
             | &Self::Let { pos, .. }
             | &Self::With { pos, .. }
@@ -309,8 +318,6 @@ pub struct ModelField {
 pub enum ModelValue {
     /// Correspond to ISLE types
     TypeValue(ModelType),
-    /// Correspond to ISLE enums, identifier is the enum variant name
-    EnumValues(ModelType, Vec<(Ident, SpecExpr)>),
     /// Corresponds to ISLE external constants.
     ConstValue(SpecExpr),
 }

@@ -17,11 +17,11 @@ pub enum Expr {
     // Terminal nodes
     Var(Ident),
     Const(Const),
-    // TODO(mbm): Enum identifier should be mapped to TermId
-    Enum(Ident),
+    Constructor(Constructor),
     //True,
     //False,
     Field(Ident, Box<Expr>),
+    Discriminator(Ident, Box<Expr>),
 
     // Get the width of a bitvector
     WidthOf(Box<Expr>),
@@ -184,6 +184,9 @@ impl Expr {
             ast::SpecExpr::Field { field, x, pos: _ } => {
                 Expr::Field(field.clone(), Box::new(Expr::from_ast(x)))
             }
+            ast::SpecExpr::Discriminator { variant, x, pos: _ } => {
+                Expr::Discriminator(variant.clone(), Box::new(Expr::from_ast(x)))
+            }
             ast::SpecExpr::Op { op, args, pos } => match op {
                 // Unary
                 SpecOp::Not => unary_expr!(Expr::Not, args, pos),
@@ -321,7 +324,16 @@ impl Expr {
                     l, r
                 )
             }
-            ast::SpecExpr::Enum { name, pos: _ } => Expr::Enum(name.clone()),
+            ast::SpecExpr::Enum {
+                name,
+                variant,
+                args,
+                pos: _,
+            } => Expr::Constructor(Constructor::Enum {
+                name: name.clone(),
+                variant: variant.clone(),
+                args: args.iter().map(Expr::from_ast).collect(),
+            }),
         }
     }
 }
@@ -334,6 +346,16 @@ fn spec_expr_to_usize(expr: &ast::SpecExpr) -> Option<usize> {
         }
         _ => None,
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum Constructor {
+    Enum {
+        // TODO(mbm): Enum identifiers should be mapped to TermId?
+        name: Ident,
+        variant: Ident,
+        args: Vec<Expr>,
+    },
 }
 
 // QUESTION(mbm): should we make the result explicit in the spec syntax?
@@ -422,13 +444,10 @@ pub struct SpecEnv {
 
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
-
-    /// Value for enum variant.
-    pub enum_value: HashMap<TermId, Expr>,
 }
 
 impl SpecEnv {
-    pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Self {
+    pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> anyhow::Result<Self> {
         let mut env = Self {
             term_spec: HashMap::new(),
             chain: HashSet::new(),
@@ -436,19 +455,20 @@ impl SpecEnv {
             term_instantiations: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
-            enum_value: HashMap::new(),
         };
 
-        env.collect_models(defs, termenv, tyenv);
+        env.collect_models(defs, tyenv);
+        env.derive_type_models(tyenv)?;
+        env.derive_enum_variant_specs(termenv, tyenv)?;
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv);
         env.collect_attrs(defs, termenv, tyenv);
         env.check_for_chained_terms_with_spec();
 
-        env
+        Ok(env)
     }
 
-    fn collect_models(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_models(&mut self, defs: &[Def], tyenv: &TypeEnv) {
         for def in defs {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
@@ -462,38 +482,70 @@ impl SpecEnv {
                         // TODO(mbm): ensure the type of the expression matches the type of the
                         self.const_value.insert(sym, Expr::from_ast(val));
                     }
-                    ast::ModelValue::EnumValues(model_type, vals) => {
-                        self.set_model_type(name, model_type, tyenv);
-
-                        // TODO(mbm): validate enum variants against the type definition
-                        // TODO(mbm): ensure the enum doesn't have non-unit variants
-                        // TODO(mbm): enforce that the enum values are distinct
-                        for (variant, expr) in vals {
-                            let ident = ast::Variant::full_name(name, variant);
-                            // TODO(mbm): error on missing variant rather than panic
-                            let term_id = termenv
-                                .get_term_by_name(tyenv, &ident)
-                                .expect("enum variant should exist");
-                            // TODO(mbm): enforce that the enum value expression is constant
-                            let val = Expr::from_ast(expr);
-                            self.enum_value.insert(term_id, val.clone());
-
-                            // Synthesize spec.
-                            //
-                            // Enum values are sugar for term specs of the form
-                            // `(provide (= result <value>))`.
-                            let mut spec = Spec::new();
-                            spec.pos = expr.pos();
-                            spec.provides.push(Expr::Eq(
-                                Box::new(Expr::Var(spec.ret.clone())),
-                                Box::new(val.clone()),
-                            ));
-                            self.term_spec.insert(term_id, spec);
-                        }
-                    }
                 }
             }
         }
+    }
+
+    fn derive_type_models(&mut self, tyenv: &TypeEnv) -> anyhow::Result<()> {
+        for ty in &tyenv.types {
+            // Has an explicit model already been specified?
+            if self.has_model(ty.id()) {
+                continue;
+            }
+
+            // Derive a model from ISLE type, if possible.
+            let Some(derived_type) = Compound::from_isle(ty, tyenv) else {
+                continue;
+            };
+
+            // Register derived.
+            self.type_model.insert(ty.id(), derived_type);
+        }
+        Ok(())
+    }
+
+    fn derive_enum_variant_specs(
+        &mut self,
+        termenv: &TermEnv,
+        tyenv: &TypeEnv,
+    ) -> anyhow::Result<()> {
+        for (type_id, model) in &self.type_model {
+            if let Compound::Enum(variants) = model {
+                let ty = &tyenv.types[type_id.index()];
+                let name = Ident(ty.name(tyenv).to_string(), ty.pos());
+
+                for variant in variants {
+                    // Lookup the corresponding term.
+                    let full_name = ast::Variant::full_name(&name, &variant.name);
+                    let term_id =
+                        termenv
+                            .get_term_by_name(tyenv, &full_name)
+                            .ok_or(anyhow::format_err!(
+                                "could not find variant term {name}",
+                                name = full_name.0
+                            ))?;
+
+                    // Synthesize spec.
+                    let args: Vec<Ident> = variant.fields.iter().map(|f| f.name.clone()).collect();
+
+                    let constructor = Constructor::Enum {
+                        name: name.clone(),
+                        variant: variant.name.clone(),
+                        args: args.iter().map(|arg| Expr::Var(arg.clone())).collect(),
+                    };
+
+                    let mut spec = Spec::new();
+                    spec.args = args;
+                    spec.provides.push(Expr::Eq(
+                        Box::new(Expr::Var(spec.ret.clone())),
+                        Box::new(Expr::Constructor(constructor)),
+                    ));
+                    self.term_spec.insert(term_id, spec);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn set_model_type(&mut self, name: &Ident, model_type: &ModelType, tyenv: &TypeEnv) {
@@ -578,5 +630,9 @@ impl SpecEnv {
     /// Report whether the given term has a specification.
     pub fn has_spec(&self, term_id: TermId) -> bool {
         self.term_spec.contains_key(&term_id)
+    }
+
+    pub fn has_model(&self, type_id: TypeId) -> bool {
+        self.type_model.contains_key(&type_id)
     }
 }

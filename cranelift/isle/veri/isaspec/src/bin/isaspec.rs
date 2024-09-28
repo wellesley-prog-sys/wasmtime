@@ -11,7 +11,7 @@ use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
 use cranelift_isle_veri_isaspec::aarch64::pstate_field;
 use cranelift_isle_veri_isaspec::spec::{
-    spec_const_int, spec_enum, spec_eq, spec_eq_bool, spec_field, spec_var,
+    spec_const_int, spec_enum_unit, spec_eq, spec_eq_bool, spec_field, spec_var,
 };
 use itertools::Itertools;
 
@@ -169,11 +169,11 @@ fn define() -> Vec<FileConfig> {
                 require: vec![
                     spec_eq(
                         spec_var("alu_op".to_string()),
-                        spec_enum("ALUOp".to_string(), format!("{alu_op:?}")),
+                        spec_enum_unit("ALUOp".to_string(), format!("{alu_op:?}")),
                     ),
                     spec_eq(
                         spec_var("size".to_string()),
-                        spec_enum("OperandSize".to_string(), format!("{size:?}")),
+                        spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
                     ),
                 ],
 
@@ -231,11 +231,11 @@ fn define() -> Vec<FileConfig> {
                 require: vec![
                     spec_eq(
                         spec_var("alu_op".to_string()),
-                        spec_enum("ALUOp3".to_string(), format!("{alu_op:?}")),
+                        spec_enum_unit("ALUOp3".to_string(), format!("{alu_op:?}")),
                     ),
                     spec_eq(
                         spec_var("size".to_string()),
-                        spec_enum("OperandSize".to_string(), format!("{size:?}")),
+                        spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
                     ),
                 ],
 
@@ -288,11 +288,11 @@ fn define() -> Vec<FileConfig> {
                 require: vec![
                     spec_eq(
                         spec_var("op".to_string()),
-                        spec_enum("BitOp".to_string(), format!("{op:?}")),
+                        spec_enum_unit("BitOp".to_string(), format!("{op:?}")),
                     ),
                     spec_eq(
                         spec_var("size".to_string()),
-                        spec_enum("OperandSize".to_string(), format!("{size:?}")),
+                        spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
                     ),
                 ],
 

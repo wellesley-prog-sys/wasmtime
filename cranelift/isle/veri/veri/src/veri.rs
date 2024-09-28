@@ -1,9 +1,9 @@
 use crate::{
     expand::Expansion,
     program::Program,
-    spec::{self, Signature},
+    spec::{self, Constructor, Signature},
     trie_again::{binding_type, BindingType},
-    types::{Compound, Const, Type, Width},
+    types::{Compound, Const, Type, Variant, Width},
 };
 use cranelift_isle::{
     ast::Ident,
@@ -215,25 +215,31 @@ impl SymbolicField {
 }
 
 #[derive(Debug, Clone)]
-pub enum Symbolic {
-    Scalar(ExprId),
-    Struct(Vec<SymbolicField>),
-    Option(SymbolicOption),
-    Tuple(Vec<Symbolic>),
+pub struct SymbolicEnum {
+    discriminant: ExprId,
+    variants: Vec<SymbolicVariant>,
 }
 
 #[derive(Debug, Clone)]
-pub struct FieldValue {
+pub struct SymbolicVariant {
     name: String,
-    value: Value,
+    discriminant: usize,
+    value: Symbolic,
 }
 
-#[derive(Clone, Debug)]
-pub enum Value {
-    Const(Const),
-    Struct(Vec<FieldValue>),
-    Option(Option<Box<Value>>),
-    Tuple(Vec<Value>),
+impl std::fmt::Display for SymbolicVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{name} {value}", name = self.name, value = self.value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Symbolic {
+    Scalar(ExprId),
+    Struct(Vec<SymbolicField>),
+    Enum(SymbolicEnum),
+    Option(SymbolicOption),
+    Tuple(Vec<Symbolic>),
 }
 
 impl Symbolic {
@@ -247,6 +253,13 @@ impl Symbolic {
     fn as_struct(&self) -> Option<&Vec<SymbolicField>> {
         match self {
             Self::Struct(fields) => Some(fields),
+            _ => None,
+        }
+    }
+
+    fn as_enum(&self) -> Option<&SymbolicEnum> {
+        match self {
+            Self::Enum(e) => Some(e),
             _ => None,
         }
     }
@@ -286,6 +299,29 @@ impl Symbolic {
                     .map(|f| f.eval(model))
                     .collect::<anyhow::Result<_>>()?,
             )),
+            Symbolic::Enum(e) => {
+                // Determine the enum variant by looking up the discriminant.
+                let discriminant = model
+                    .get(&e.discriminant)
+                    .ok_or(anyhow::format_err!("undefined discriminant in model"))?
+                    .as_int()
+                    .ok_or(anyhow::format_err!(
+                        "model value for discriminant is not an integer"
+                    ))?
+                    .try_into()
+                    .unwrap();
+                let variant = e
+                    .variants
+                    .iter()
+                    .find(|v| v.discriminant == discriminant)
+                    .ok_or(anyhow::format_err!(
+                        "no variant with discriminant {discriminant}"
+                    ))?;
+                Ok(Value::Enum(Box::new(VariantValue {
+                    name: variant.name.clone(),
+                    value: variant.value.eval(model)?,
+                })))
+            }
             Symbolic::Option(opt) => match model.get(&opt.some) {
                 Some(Const::Bool(true)) => {
                     Ok(Value::Option(Some(Box::new(opt.inner.eval(model)?))))
@@ -300,6 +336,52 @@ impl Symbolic {
                     .map(|s| s.eval(model))
                     .collect::<anyhow::Result<_>>()?,
             )),
+        }
+    }
+
+    fn merge<F>(a: &Symbolic, b: &Symbolic, merge: &mut F) -> anyhow::Result<Symbolic>
+    where
+        F: FnMut(ExprId, ExprId) -> ExprId,
+    {
+        if std::mem::discriminant(a) != std::mem::discriminant(b) {
+            anyhow::bail!("conditional arms have incompatible types");
+        }
+        match (a, b) {
+            (Symbolic::Scalar(a), Symbolic::Scalar(b)) => Ok(merge(*a, *b).into()),
+            (Symbolic::Struct(a_fields), Symbolic::Struct(b_fields)) => {
+                assert_eq!(a_fields.len(), b_fields.len());
+                Ok(Symbolic::Struct(
+                    zip(a_fields, b_fields)
+                        .map(|(a, b)| {
+                            assert_eq!(a.name, b.name);
+                            Ok(SymbolicField {
+                                name: a.name.clone(),
+                                value: Symbolic::merge(&a.value, &b.value, merge)?,
+                            })
+                        })
+                        .collect::<anyhow::Result<_>>()?,
+                ))
+            }
+            (Symbolic::Enum(a), Symbolic::Enum(b)) => {
+                let discriminant = merge(a.discriminant, b.discriminant);
+                assert_eq!(a.variants.len(), b.variants.len());
+                let variants = zip(&a.variants, &b.variants)
+                    .map(|(a, b)| {
+                        assert_eq!(a.name, b.name);
+                        assert_eq!(a.discriminant, b.discriminant);
+                        Ok(SymbolicVariant {
+                            name: a.name.clone(),
+                            discriminant: a.discriminant,
+                            value: Symbolic::merge(&a.value, &b.value, merge)?,
+                        })
+                    })
+                    .collect::<anyhow::Result<_>>()?;
+                Ok(Symbolic::Enum(SymbolicEnum {
+                    discriminant,
+                    variants,
+                }))
+            }
+            case => todo!("symbolic merge types: {case:?}"),
         }
     }
 }
@@ -332,6 +414,17 @@ impl std::fmt::Display for Symbolic {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Symbolic::Enum(e) => write!(
+                f,
+                "{{{discriminant}, {variants}}}",
+                discriminant = e.discriminant.index(),
+                variants = e
+                    .variants
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Symbolic::Option(SymbolicOption { some, inner }) => {
                 write!(f, "Option{{some: {}, inner: {inner}}}", some.index())
             }
@@ -348,6 +441,27 @@ impl std::fmt::Display for Symbolic {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum Value {
+    Const(Const),
+    Struct(Vec<FieldValue>),
+    Enum(Box<VariantValue>),
+    Option(Option<Box<Value>>),
+    Tuple(Vec<Value>),
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldValue {
+    name: String,
+    value: Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct VariantValue {
+    name: String,
+    value: Value,
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -361,6 +475,7 @@ impl std::fmt::Display for Value {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Value::Enum(v) => write!(f, "{name} {value}", name = v.name, value = v.value),
             Value::Option(Some(v)) => write!(f, "Some({v})"),
             Value::Option(None) => write!(f, "None"),
             Value::Tuple(elements) => write!(
@@ -963,11 +1078,16 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::Const(c) => Ok(self.constant(c.clone()).into()),
 
-            spec::Expr::Enum(name) => self.spec_enum(name),
+            spec::Expr::Constructor(constructor) => self.construct(constructor, vars),
 
             spec::Expr::Field(name, x) => {
                 let x = self.spec_expr(x, vars)?;
                 self.spec_field(name, x)
+            }
+
+            spec::Expr::Discriminator(variant, x) => {
+                let x = self.spec_expr(x, vars)?;
+                self.spec_discriminator(variant, x)
             }
 
             // TODO(mbm): fix boilerplate for common expressions
@@ -1186,26 +1306,88 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
-    fn spec_enum(&mut self, name: &Ident) -> anyhow::Result<Symbolic> {
-        // Lookup variant term.
-        // TODO(mbm): move term lookup to the SpecEnv construction stage?
-        let variant_name = &name.0;
-        let term_id = self
-            .prog
-            .termenv
-            .get_term_by_name(&self.prog.tyenv, name)
-            .ok_or(anyhow::format_err!("unknown enum variant {variant_name}"))?;
+    fn construct(
+        &mut self,
+        constructor: &Constructor,
+        vars: &Variables,
+    ) -> anyhow::Result<Symbolic> {
+        match constructor {
+            Constructor::Enum {
+                name,
+                variant,
+                args,
+            } => {
+                // Lookup ISLE type by name.
+                let type_id = self
+                    .prog
+                    .tyenv
+                    .get_type_by_name(name)
+                    .ok_or(anyhow::format_err!(
+                        "unknown enum type {name}",
+                        name = name.0
+                    ))?;
 
-        // Lookup specified value.
-        let spec_value = self
-            .prog
-            .specenv
-            .enum_value
-            .get(&term_id)
-            .ok_or(anyhow::format_err!(
-                "value of enum variant {variant_name} is unspecified"
-            ))?;
-        self.spec_expr_no_vars(spec_value)
+                // Determine type model.
+                let model =
+                    self.prog
+                        .specenv
+                        .type_model
+                        .get(&type_id)
+                        .ok_or(anyhow::format_err!(
+                            "unspecified model for type {name}",
+                            name = name.0
+                        ))?;
+
+                // Should be an enum.
+                let variants = model.as_enum().ok_or(anyhow::format_err!(
+                    "{name} expected to have enum type",
+                    name = name.0
+                ))?;
+
+                // Lookup variant.
+                let variant =
+                    variants
+                        .iter()
+                        .find(|v| v.name.0 == variant.0)
+                        .ok_or(anyhow::format_err!(
+                            "unknown variant {variant}",
+                            variant = variant.0
+                        ))?;
+
+                // Discriminant: constant value since we are constructing a known variant.
+                let discriminant = self.constant(Const::Int(variant.id.index().try_into()?));
+
+                Ok(Symbolic::Enum(SymbolicEnum {
+                    discriminant,
+                    variants: variants
+                        .iter()
+                        .map(|v| {
+                            // For all except the variant under construction, allocate an undefined variant.
+                            if v.id != variant.id {
+                                // QUESTION(mbm): use undef variant or IfThen and fresh bits in solver?
+                                return self.alloc_variant(v, "undef".to_string());
+                            }
+
+                            // Construct a variant provided arguments.
+                            assert_eq!(args.len(), v.fields.len());
+                            let fields = zip(&v.fields, args)
+                                .map(|(f, a)| {
+                                    Ok(SymbolicField {
+                                        name: f.name.0.clone(),
+                                        value: self.spec_expr(a, vars)?,
+                                    })
+                                })
+                                .collect::<anyhow::Result<_>>()?;
+                            Ok(SymbolicVariant {
+                                name: v.name.0.clone(),
+                                discriminant: v.id.index(),
+                                value: Symbolic::Struct(fields),
+                            })
+                        })
+                        .collect::<anyhow::Result<_>>()?,
+                }))
+            }
+        }
     }
 
     fn spec_field(&mut self, name: &Ident, v: Symbolic) -> anyhow::Result<Symbolic> {
@@ -1221,6 +1403,27 @@ impl<'a> ConditionsBuilder<'a> {
             .ok_or(anyhow::format_err!("missing struct field: {}", name.0))?;
 
         Ok(field.value.clone())
+    }
+
+    fn spec_discriminator(&mut self, name: &Ident, v: Symbolic) -> anyhow::Result<Symbolic> {
+        let e = v
+            .as_enum()
+            .ok_or(anyhow::format_err!("discriminator for non-enum value"))?;
+
+        let variant = e
+            .variants
+            .iter()
+            .find(|v| v.name == name.0)
+            .ok_or(anyhow::format_err!("missing enum variant: {}", name.0))?;
+
+        let discriminator = self.discriminator(e, variant);
+
+        Ok(discriminator.into())
+    }
+
+    fn discriminator(&mut self, e: &SymbolicEnum, variant: &SymbolicVariant) -> ExprId {
+        let discriminant = self.constant(Const::Int(variant.discriminant.try_into().unwrap()));
+        self.exprs_equal(e.discriminant, discriminant)
     }
 
     fn spec_switch(
@@ -1296,15 +1499,9 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn conditional(&mut self, c: ExprId, t: Symbolic, e: Symbolic) -> anyhow::Result<Symbolic> {
-        if std::mem::discriminant(&t) != std::mem::discriminant(&e) {
-            anyhow::bail!("conditional arms have incompatible types");
-        }
-        match (t, e) {
-            (Symbolic::Scalar(t), Symbolic::Scalar(e)) => {
-                Ok(self.scalar(Expr::Conditional(c, t, e)))
-            }
-            case => todo!("conditional arm types: {case:?}"),
-        }
+        Symbolic::merge(&t, &e, &mut |t, e| {
+            self.dedup_expr(Expr::Conditional(c, t, e))
+        })
     }
 
     fn bindings_equal(&mut self, a: BindingId, b: BindingId) -> ExprId {
@@ -1331,6 +1528,25 @@ impl<'a> ConditionsBuilder<'a> {
 
                 // All fields must be equal.
                 self.all(fields_eq)
+            }
+
+            (Symbolic::Enum(u), Symbolic::Enum(v)) => {
+                // Discriminant equality.
+                let discriminants_eq = self.exprs_equal(u.discriminant, v.discriminant);
+                let mut equalities = vec![discriminants_eq];
+
+                // Variant equality conditions.
+                assert_eq!(u.variants.len(), v.variants.len(), "variant count mismatch");
+                let variants_eq = zip(&u.variants, &v.variants).map(|(uv, vv)| {
+                    assert_eq!(uv.name, vv.name, "variant name mismatch");
+                    let ud = self.discriminator(&u, uv);
+                    let eq = self.values_equal(uv.value.clone(), vv.value.clone());
+                    self.dedup_expr(Expr::Imp(ud, eq))
+                });
+                equalities.extend(variants_eq);
+
+                // Combine discriminant and variant conditions.
+                self.all(equalities)
             }
 
             (Symbolic::Tuple(us), Symbolic::Tuple(vs)) => {
@@ -1429,6 +1645,14 @@ impl<'a> ConditionsBuilder<'a> {
                     })
                     .collect::<anyhow::Result<_>>()?,
             )),
+            Compound::Enum(variants) => Ok(Symbolic::Enum(SymbolicEnum {
+                discriminant: self
+                    .alloc_variable(Type::Int, Variable::component_name(&name, "discriminant")),
+                variants: variants
+                    .iter()
+                    .map(|v| self.alloc_variant(v, name.clone()))
+                    .collect::<anyhow::Result<_>>()?,
+            })),
             Compound::Named(type_name) => {
                 // TODO(mbm): named type model cycle detection
                 // TODO(mbm): type ID lookup should happen in SpecEnv
@@ -1440,6 +1664,19 @@ impl<'a> ConditionsBuilder<'a> {
                 self.alloc_model(type_id, name)
             }
         }
+    }
+
+    fn alloc_variant(
+        &mut self,
+        variant: &Variant,
+        name: String,
+    ) -> anyhow::Result<SymbolicVariant> {
+        let name = Variable::component_name(&name, &variant.name.0);
+        Ok(SymbolicVariant {
+            name: variant.name.0.clone(),
+            discriminant: variant.id.index(),
+            value: self.alloc_value(&variant.ty(), name)?,
+        })
     }
 
     fn alloc_model(&mut self, type_id: TypeId, name: String) -> anyhow::Result<Symbolic> {

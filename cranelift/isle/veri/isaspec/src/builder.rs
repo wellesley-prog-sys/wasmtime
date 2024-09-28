@@ -209,10 +209,9 @@ fn substitute(
         }
 
         // Constants are unchanged.
-        SpecExpr::ConstInt { .. }
-        | SpecExpr::ConstBitVec { .. }
-        | SpecExpr::ConstBool { .. }
-        | SpecExpr::Enum { .. } => expr,
+        SpecExpr::ConstInt { .. } | SpecExpr::ConstBitVec { .. } | SpecExpr::ConstBool { .. } => {
+            expr
+        }
 
         // Scopes require care to ensure we are not replacing introduced variables.
         SpecExpr::Let { defs, body, pos } => SpecExpr::Let {
@@ -247,6 +246,11 @@ fn substitute(
             x: Box::new(substitute(*x, substitutions)?),
             pos,
         },
+        SpecExpr::Discriminator { variant, x, pos } => SpecExpr::Discriminator {
+            variant,
+            x: Box::new(substitute(*x, substitutions)?),
+            pos,
+        },
         SpecExpr::Op { op, args, pos } => SpecExpr::Op {
             op,
             args: args
@@ -258,6 +262,20 @@ fn substitute(
         SpecExpr::Pair { l, r, pos } => SpecExpr::Pair {
             l: Box::new(substitute(*l, substitutions)?),
             r: Box::new(substitute(*r, substitutions)?),
+            pos,
+        },
+        SpecExpr::Enum {
+            name,
+            variant,
+            args,
+            pos,
+        } => SpecExpr::Enum {
+            name,
+            variant,
+            args: args
+                .into_iter()
+                .map(|arg| substitute(arg, substitutions))
+                .collect::<anyhow::Result<_>>()?,
             pos,
         },
     })

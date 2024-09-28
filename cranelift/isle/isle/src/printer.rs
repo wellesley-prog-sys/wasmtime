@@ -182,15 +182,6 @@ impl Printable for ModelValue {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             ModelValue::TypeValue(ref mt) => sexp(vec![RcDoc::text("type"), mt.to_doc()]),
-            ModelValue::EnumValues(ref ty, ref values) => sexp(
-                Vec::from([RcDoc::text("enum"), ty.to_doc()])
-                    .into_iter()
-                    .chain(
-                        values
-                            .iter()
-                            .map(|(name, expr)| sexp(vec![name.to_doc(), expr.to_doc()])),
-                    ),
-            ),
             v => todo!("model value: {v:?}"),
         }
     }
@@ -250,9 +241,21 @@ impl Printable for SpecExpr {
                     .chain(args.iter().map(|a| a.to_doc())),
             ),
             SpecExpr::Pair { l, r, .. } => sexp(vec![l.to_doc(), r.to_doc()]),
-            SpecExpr::Enum { name, .. } => sexp(vec![name.to_doc()]),
+            SpecExpr::Enum {
+                name,
+                variant,
+                args,
+                pos: _,
+            } => sexp(
+                Vec::from([RcDoc::text(format!("{}.{}", name.0, variant.0))])
+                    .into_iter()
+                    .chain(args.iter().map(|a| a.to_doc())),
+            ),
             SpecExpr::Field { field, x, pos: _ } => {
                 sexp(vec![RcDoc::text(format!(":{}", field.0)), x.to_doc()])
+            }
+            SpecExpr::Discriminator { variant, x, pos: _ } => {
+                sexp(vec![RcDoc::text(format!("{}?", variant.0)), x.to_doc()])
             }
             SpecExpr::Let { defs, body, pos: _ } => sexp(vec![
                 RcDoc::text("let"),

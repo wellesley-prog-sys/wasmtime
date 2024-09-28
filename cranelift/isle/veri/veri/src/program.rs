@@ -1,4 +1,5 @@
 use crate::spec::{self, SpecEnv};
+use anyhow::{bail, Result};
 use cranelift_isle::ast::Ident;
 use cranelift_isle::error::{Errors, ErrorsBuilder};
 use cranelift_isle::files::Files;
@@ -22,11 +23,11 @@ impl Program {
     pub fn from_files(
         paths: &Vec<std::path::PathBuf>,
         expand_internal_extractors: bool,
-    ) -> Result<Self, Errors> {
+    ) -> Result<Self> {
         let files = match Files::from_paths(paths) {
             Ok(files) => files,
             Err((path, err)) => {
-                return Err(Errors::from_io(
+                bail!(Errors::from_io(
                     err,
                     format!("cannot read file {}", path.display()),
                 ))
@@ -39,26 +40,26 @@ impl Program {
         for (file, src) in files.file_texts.iter().enumerate() {
             let lexer = match lexer::Lexer::new(file, src) {
                 Ok(lexer) => lexer,
-                Err(err) => return Err(Errors::new(vec![err], files)),
+                Err(err) => bail!(Errors::new(vec![err], files)),
             };
 
             match parser::parse(lexer) {
                 Ok(mut ds) => defs.append(&mut ds),
-                Err(err) => return Err(Errors::new(vec![err], files)),
+                Err(err) => bail!(Errors::new(vec![err], files)),
             }
         }
 
         let mut tyenv = match sema::TypeEnv::from_ast(&defs) {
             Ok(type_env) => type_env,
-            Err(errs) => return Err(Errors::new(errs, files)),
+            Err(errs) => bail!(Errors::new(errs, files)),
         };
 
         let termenv = match sema::TermEnv::from_ast(&mut tyenv, &defs, expand_internal_extractors) {
             Ok(term_env) => term_env,
-            Err(errs) => return Err(Errors::new(errs, files)),
+            Err(errs) => bail!(Errors::new(errs, files)),
         };
 
-        let specenv = spec::SpecEnv::from_ast(&defs, &termenv, &tyenv);
+        let specenv = spec::SpecEnv::from_ast(&defs, &termenv, &tyenv)?;
 
         Ok(Self {
             files,
