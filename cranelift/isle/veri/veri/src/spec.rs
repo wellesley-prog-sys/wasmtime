@@ -1,3 +1,4 @@
+use anyhow::{format_err, Result};
 use cranelift_isle::{
     ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
@@ -447,7 +448,7 @@ pub struct SpecEnv {
 }
 
 impl SpecEnv {
-    pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> anyhow::Result<Self> {
+    pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<Self> {
         let mut env = Self {
             term_spec: HashMap::new(),
             chain: HashSet::new(),
@@ -487,7 +488,7 @@ impl SpecEnv {
         }
     }
 
-    fn derive_type_models(&mut self, tyenv: &TypeEnv) -> anyhow::Result<()> {
+    fn derive_type_models(&mut self, tyenv: &TypeEnv) -> Result<()> {
         for ty in &tyenv.types {
             // Has an explicit model already been specified?
             if self.has_model(ty.id()) {
@@ -505,11 +506,7 @@ impl SpecEnv {
         Ok(())
     }
 
-    fn derive_enum_variant_specs(
-        &mut self,
-        termenv: &TermEnv,
-        tyenv: &TypeEnv,
-    ) -> anyhow::Result<()> {
+    fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for (type_id, model) in &self.type_model {
             if let Compound::Enum(variants) = model {
                 let ty = &tyenv.types[type_id.index()];
@@ -521,7 +518,7 @@ impl SpecEnv {
                     let term_id =
                         termenv
                             .get_term_by_name(tyenv, &full_name)
-                            .ok_or(anyhow::format_err!(
+                            .ok_or(format_err!(
                                 "could not find variant term {name}",
                                 name = full_name.0
                             ))?;

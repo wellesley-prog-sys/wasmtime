@@ -1,3 +1,4 @@
+use anyhow::Result;
 use clap::Parser as ClapParser;
 use cranelift_isle_veri_aslp::parser;
 use std::{fs, path::PathBuf};
@@ -13,7 +14,7 @@ struct Args {
     debug_level: u8,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     tracing_subscriber::fmt()

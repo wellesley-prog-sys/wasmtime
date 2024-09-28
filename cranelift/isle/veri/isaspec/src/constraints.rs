@@ -4,7 +4,7 @@ use core::fmt;
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
-use anyhow::format_err;
+use anyhow::{bail, format_err, Result};
 use cranelift_isle::ast::{SpecExpr, SpecOp};
 use cranelift_isle_veri_aslp::ast::{Block, Expr, Func, LExpr, Slice, Stmt};
 use tracing::debug;
@@ -31,7 +31,7 @@ impl fmt::Display for Target {
 impl TryFrom<&LExpr> for Target {
     type Error = anyhow::Error;
 
-    fn try_from(lexpr: &LExpr) -> anyhow::Result<Self> {
+    fn try_from(lexpr: &LExpr) -> Result<Self> {
         match lexpr {
             LExpr::Var(v) => Ok(Target::Var(v.clone())),
             LExpr::ArrayIndex { array, index } => {
@@ -53,7 +53,7 @@ impl TryFrom<&LExpr> for Target {
 impl TryFrom<&Expr> for Target {
     type Error = anyhow::Error;
 
-    fn try_from(expr: &Expr) -> anyhow::Result<Self> {
+    fn try_from(expr: &Expr) -> Result<Self> {
         match expr {
             Expr::Var(v) => Ok(Target::Var(v.clone())),
             Expr::ArrayIndex { array, index } => {
@@ -257,13 +257,13 @@ impl Translator {
         self.scope_mut().write(target.clone(), v.to_string());
     }
 
-    fn read(&mut self, target: &Target) -> anyhow::Result<String> {
+    fn read(&mut self, target: &Target) -> Result<String> {
         // Read from innermost scope.
         for scope in self.stack.iter_mut().rev() {
             match scope.read(target) {
                 None => continue,
                 Some(Binding::Var(v)) => return Ok(v.clone()),
-                Some(Binding::Uninitialized) => anyhow::bail!("uninitialized read: {target}"),
+                Some(Binding::Uninitialized) => bail!("uninitialized read: {target}"),
                 Some(Binding::Global) => {
                     let v = self.vars.alloc();
                     scope.init_var(target.clone(), v.clone());
@@ -273,24 +273,24 @@ impl Translator {
         }
         let scope = self.scope_mut();
         debug!(?scope, "scope");
-        anyhow::bail!("undefined read: {target}")
+        bail!("undefined read: {target}")
     }
 
-    pub fn translate(&mut self, block: &Block) -> anyhow::Result<()> {
+    pub fn translate(&mut self, block: &Block) -> Result<()> {
         self.enter();
         self.block(block)?;
         self.exit();
         Ok(())
     }
 
-    fn block(&mut self, block: &Block) -> anyhow::Result<()> {
+    fn block(&mut self, block: &Block) -> Result<()> {
         for stmt in &block.stmts {
             self.stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn stmt(&mut self, stmt: &Stmt) -> anyhow::Result<()> {
+    fn stmt(&mut self, stmt: &Stmt) -> Result<()> {
         match stmt {
             Stmt::Assign { lhs, rhs } => {
                 let target = lhs.try_into()?;
@@ -391,7 +391,7 @@ impl Translator {
         }
     }
 
-    fn assign(&mut self, target: &Target, rhs: SpecExpr) -> anyhow::Result<()> {
+    fn assign(&mut self, target: &Target, rhs: SpecExpr) -> Result<()> {
         // Bind the expression to a variable.
         let v = self.bind(rhs)?;
 
@@ -402,7 +402,7 @@ impl Translator {
     }
 
     // Bind expression to a variable and return it.
-    fn bind(&mut self, expr: SpecExpr) -> anyhow::Result<String> {
+    fn bind(&mut self, expr: SpecExpr) -> Result<String> {
         let v = self.vars.alloc();
         self.scope_mut().add_var(v.clone());
         let lhs = spec_var(v.clone());
@@ -410,7 +410,7 @@ impl Translator {
         Ok(v)
     }
 
-    fn expr(&mut self, expr: &Expr) -> anyhow::Result<SpecExpr> {
+    fn expr(&mut self, expr: &Expr) -> Result<SpecExpr> {
         match expr {
             Expr::Apply {
                 func,
@@ -434,7 +434,7 @@ impl Translator {
         }
     }
 
-    fn func(&mut self, func: &Func, args: &[Expr]) -> anyhow::Result<SpecExpr> {
+    fn func(&mut self, func: &Func, args: &[Expr]) -> Result<SpecExpr> {
         match func.name.as_str() {
             "ZeroExtend" => {
                 let (x, w) = expect_binary(args)?;
@@ -591,7 +591,7 @@ impl Translator {
         }
     }
 
-    fn slice(&mut self, x: &Expr, slice: &Slice) -> anyhow::Result<SpecExpr> {
+    fn slice(&mut self, x: &Expr, slice: &Slice) -> Result<SpecExpr> {
         match slice {
             Slice::LowWidth(l, w) => {
                 let l = expect_size(l)?;
@@ -609,28 +609,28 @@ impl Translator {
     }
 }
 
-fn expect_unary<T>(xs: &[T]) -> anyhow::Result<&T> {
+fn expect_unary<T>(xs: &[T]) -> Result<&T> {
     if xs.len() != 1 {
-        anyhow::bail!("expected unary");
+        bail!("expected unary");
     }
     Ok(&xs[0])
 }
 
-fn expect_binary<T>(xs: &[T]) -> anyhow::Result<(&T, &T)> {
+fn expect_binary<T>(xs: &[T]) -> Result<(&T, &T)> {
     if xs.len() != 2 {
-        anyhow::bail!("expected binary");
+        bail!("expected binary");
     }
     Ok((&xs[0], &xs[1]))
 }
 
-fn expect_ternary<T>(xs: &[T]) -> anyhow::Result<(&T, &T, &T)> {
+fn expect_ternary<T>(xs: &[T]) -> Result<(&T, &T, &T)> {
     if xs.len() != 3 {
-        anyhow::bail!("expected ternary");
+        bail!("expected ternary");
     }
     Ok((&xs[0], &xs[1], &xs[2]))
 }
 
-fn expect_size(expr: &Expr) -> anyhow::Result<usize> {
+fn expect_size(expr: &Expr) -> Result<usize> {
     Ok(expr
         .as_lit_int()
         .ok_or(format_err!("epected literal integer"))?

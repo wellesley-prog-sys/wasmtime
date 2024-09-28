@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use anyhow::bail;
+use anyhow::{bail, Result};
 use cranelift_codegen::isa::aarch64::inst::Inst;
 use cranelift_isle::ast::{Def, Spec, SpecExpr};
 use cranelift_isle::lexer::Pos;
@@ -87,13 +87,13 @@ impl<'a> Builder<'a> {
         Self { cfg, client }
     }
 
-    pub fn build(&self) -> anyhow::Result<Def> {
+    pub fn build(&self) -> Result<Def> {
         let spec = self.spec(&self.cfg)?;
         let def = Def::Spec(spec);
         Ok(def)
     }
 
-    fn spec(&self, cfg: &SpecConfig) -> anyhow::Result<Spec> {
+    fn spec(&self, cfg: &SpecConfig) -> Result<Spec> {
         // Derive conditions for each case.
         let conds: Vec<Conditions> = cfg
             .cases
@@ -113,7 +113,7 @@ impl<'a> Builder<'a> {
         Ok(spec)
     }
 
-    fn case(&self, i: usize, case: &InstConfig) -> anyhow::Result<Conditions> {
+    fn case(&self, i: usize, case: &InstConfig) -> Result<Conditions> {
         // Semantics.
         let block = inst_semantics(&case.inst, self.client)?;
 
@@ -131,7 +131,7 @@ impl<'a> Builder<'a> {
         for target in reads.iter().sorted() {
             // Expect mapping for the read.
             let Some(mapping) = case.mappings.reads.get(target) else {
-                anyhow::bail!("read of {target} is unmapped");
+                bail!("read of {target} is unmapped");
             };
 
             // Lookup variable holding the initial read value.
@@ -142,7 +142,7 @@ impl<'a> Builder<'a> {
         }
 
         if let Some(target) = case.mappings.required_reads().difference(reads).next() {
-            anyhow::bail!("{target} should have been read");
+            bail!("{target} should have been read");
         }
 
         // Writes mapping.
@@ -151,12 +151,12 @@ impl<'a> Builder<'a> {
         for target in writes.iter().sorted() {
             // Expect mapping for the write.
             let Some(mapping) = case.mappings.writes.get(target) else {
-                anyhow::bail!("write to {target} is unmapped");
+                bail!("write to {target} is unmapped");
             };
 
             // Lookup bound variable.
             let Some(Binding::Var(v)) = bindings.get(target) else {
-                anyhow::bail!("{target} not bound to variable");
+                bail!("{target} not bound to variable");
             };
 
             // Substitute variable for mapped expression.
@@ -164,7 +164,7 @@ impl<'a> Builder<'a> {
         }
 
         if let Some(target) = case.mappings.required_writes().difference(writes).next() {
-            anyhow::bail!("{target} should have been written");
+            bail!("{target} should have been written");
         }
 
         // Finalize provided constraints.
@@ -194,10 +194,7 @@ impl<'a> Builder<'a> {
     }
 }
 
-fn substitute(
-    expr: SpecExpr,
-    substitutions: &HashMap<String, SpecExpr>,
-) -> anyhow::Result<SpecExpr> {
+fn substitute(expr: SpecExpr, substitutions: &HashMap<String, SpecExpr>) -> Result<SpecExpr> {
     Ok(match expr {
         // Variable
         SpecExpr::Var { ref var, pos: _ } => {
@@ -223,7 +220,7 @@ fn substitute(
                     }
                     Ok((var, substitute(expr, substitutions)?))
                 })
-                .collect::<anyhow::Result<_>>()?,
+                .collect::<Result<_>>()?,
             body: Box::new(substitute(*body, substitutions)?),
             pos,
         },
@@ -256,7 +253,7 @@ fn substitute(
             args: args
                 .into_iter()
                 .map(|arg| substitute(arg, substitutions))
-                .collect::<anyhow::Result<_>>()?,
+                .collect::<Result<_>>()?,
             pos,
         },
         SpecExpr::Pair { l, r, pos } => SpecExpr::Pair {
@@ -275,7 +272,7 @@ fn substitute(
             args: args
                 .into_iter()
                 .map(|arg| substitute(arg, substitutions))
-                .collect::<anyhow::Result<_>>()?,
+                .collect::<Result<_>>()?,
             pos,
         },
     })

@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, iter::zip};
 
-use anyhow::Context as _;
+use anyhow::{bail, Context as _, Result};
 use easy_smt::{Context, Response, SExpr, SExprData};
 
 use crate::{
@@ -55,7 +55,7 @@ impl<'a> Solver<'a> {
         smt: Context,
         conditions: &'a Conditions,
         assignment: &'a Assignment,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         let mut solver = Self {
             smt,
             conditions,
@@ -66,7 +66,7 @@ impl<'a> Solver<'a> {
         Ok(solver)
     }
 
-    pub fn encode(&mut self) -> anyhow::Result<()> {
+    pub fn encode(&mut self) -> Result<()> {
         // Expressions
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
             let x = ExprId(i);
@@ -79,7 +79,7 @@ impl<'a> Solver<'a> {
         Ok(())
     }
 
-    pub fn check_assumptions_feasibility(&mut self) -> anyhow::Result<Applicability> {
+    pub fn check_assumptions_feasibility(&mut self) -> Result<Applicability> {
         // Enter solver context frame.
         self.smt.push()?;
 
@@ -100,7 +100,7 @@ impl<'a> Solver<'a> {
         Ok(verdict)
     }
 
-    pub fn check_verification_condition(&mut self) -> anyhow::Result<Verification> {
+    pub fn check_verification_condition(&mut self) -> Result<Verification> {
         // Enter solver context frame.
         self.smt.push()?;
 
@@ -120,18 +120,18 @@ impl<'a> Solver<'a> {
         Ok(verdict)
     }
 
-    pub fn model(&mut self) -> anyhow::Result<Model> {
+    pub fn model(&mut self) -> Result<Model> {
         let xs: Vec<_> = (0..self.conditions.exprs.len()).map(ExprId).collect();
         let expr_atoms = xs.iter().map(|x| self.expr_atom(*x)).collect();
         let values = self.smt.get_value(expr_atoms)?;
         let consts = values
             .iter()
             .map(|(_, v)| self.const_from_sexpr(*v))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         Ok(zip(xs, consts).collect())
     }
 
-    fn declare_expr(&mut self, x: ExprId) -> anyhow::Result<()> {
+    fn declare_expr(&mut self, x: ExprId) -> Result<()> {
         // Determine expression type value.
         let tv = self.assignment.try_assignment(x)?;
 
@@ -144,24 +144,24 @@ impl<'a> Solver<'a> {
         Ok(())
     }
 
-    fn type_to_sort(&self, ty: &Type) -> anyhow::Result<SExpr> {
+    fn type_to_sort(&self, ty: &Type) -> Result<SExpr> {
         match *ty {
             Type::BitVector(Width::Bits(width)) => {
                 Ok(self.smt.bit_vec_sort(self.smt.numeral(width)))
             }
             Type::Int => Ok(self.smt.int_sort()),
             Type::Bool => Ok(self.smt.bool_sort()),
-            _ => anyhow::bail!("no smt2 sort for type {ty}"),
+            _ => bail!("no smt2 sort for type {ty}"),
         }
     }
 
-    fn assign_expr(&mut self, x: ExprId, expr: &Expr) -> anyhow::Result<()> {
+    fn assign_expr(&mut self, x: ExprId, expr: &Expr) -> Result<()> {
         let lhs = self.smt.atom(self.expr_name(x));
         let rhs = self.expr_to_smt(expr)?;
         Ok(self.smt.assert(self.smt.eq(lhs, rhs))?)
     }
 
-    fn expr_to_smt(&mut self, expr: &Expr) -> anyhow::Result<SExpr> {
+    fn expr_to_smt(&mut self, expr: &Expr) -> Result<SExpr> {
         match *expr {
             Expr::Variable(_) => unreachable!("variables have no corresponding expression"),
             Expr::Const(ref c) => Ok(self.constant(c)),
@@ -221,7 +221,7 @@ impl<'a> Solver<'a> {
         }
     }
 
-    fn bv_zero_ext(&self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
+    fn bv_zero_ext(&self, w: ExprId, x: ExprId) -> Result<SExpr> {
         // TODO(mbm): dedupe logic with bv_sign_ext and bv_conv_to?
 
         // Destination width expression should have known integer value.
@@ -245,7 +245,7 @@ impl<'a> Solver<'a> {
         Ok(self.zero_extend(padding, self.expr_atom(x)))
     }
 
-    fn bv_sign_ext(&self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
+    fn bv_sign_ext(&self, w: ExprId, x: ExprId) -> Result<SExpr> {
         // TODO(mbm): dedupe logic with bv_conv_to?
 
         // Destination width expression should have known integer value.
@@ -269,7 +269,7 @@ impl<'a> Solver<'a> {
         Ok(self.sign_extend(padding, self.expr_atom(x)))
     }
 
-    fn bv_conv_to(&mut self, w: ExprId, x: ExprId) -> anyhow::Result<SExpr> {
+    fn bv_conv_to(&mut self, w: ExprId, x: ExprId) -> Result<SExpr> {
         // Destination width expression should have known integer value.
         let dst: usize = self
             .assignment
@@ -299,7 +299,7 @@ impl<'a> Solver<'a> {
         }
     }
 
-    fn width_of(&self, x: ExprId) -> anyhow::Result<SExpr> {
+    fn width_of(&self, x: ExprId) -> Result<SExpr> {
         // QUESTION(mbm): should width_of expressions be elided or replaced after type inference?
 
         // Expression type should be a bit-vector of known width.
@@ -312,7 +312,7 @@ impl<'a> Solver<'a> {
         Ok(self.smt.numeral(width))
     }
 
-    fn verification_condition(&mut self) -> anyhow::Result<()> {
+    fn verification_condition(&mut self) -> Result<()> {
         // (not (<assumptions> => <assertions>))
         let assumptions = self.all(&self.conditions.assumptions);
         let assertions = self.all(&self.conditions.assertions);
@@ -371,10 +371,10 @@ impl<'a> Solver<'a> {
     }
 
     /// Parse a constant SMT literal.
-    fn const_from_sexpr(&self, sexpr: SExpr) -> anyhow::Result<Const> {
+    fn const_from_sexpr(&self, sexpr: SExpr) -> Result<Const> {
         let atom = match self.smt.get(sexpr) {
             SExprData::Atom(a) => a,
-            SExprData::List(_) => anyhow::bail!("non-atomic smt expression is not a constant"),
+            SExprData::List(_) => bail!("non-atomic smt expression is not a constant"),
         };
 
         if atom == "true" {
@@ -388,7 +388,7 @@ impl<'a> Solver<'a> {
         } else if atom.starts_with(|c: char| c.is_ascii_digit()) {
             Ok(Const::Int(atom.parse()?))
         } else {
-            anyhow::bail!("unsupported smt constant: {atom}")
+            bail!("unsupported smt constant: {atom}")
         }
     }
 
@@ -413,7 +413,7 @@ impl<'a> Solver<'a> {
         }
     }
 
-    fn fresh_bits(&mut self, n: usize) -> anyhow::Result<SExpr> {
+    fn fresh_bits(&mut self, n: usize) -> Result<SExpr> {
         let name = format!("fresh{}", self.fresh_idx);
         self.fresh_idx += 1;
         let sort = self.smt.bit_vec_sort(self.smt.numeral(n));

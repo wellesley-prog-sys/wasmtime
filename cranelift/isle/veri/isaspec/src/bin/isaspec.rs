@@ -2,6 +2,7 @@ use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use anyhow::Result;
 use clap::Parser as ClapParser;
 use cranelift_codegen::isa::aarch64::inst::{
     writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Inst, OperandSize,
@@ -34,7 +35,7 @@ struct Args {
     debug_level: u8,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     // Setup tracing output.
@@ -74,7 +75,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn write_spec(path: &Path, defs: &Vec<Def>) -> anyhow::Result<()> {
+fn write_spec(path: &Path, defs: &Vec<Def>) -> Result<()> {
     let mut output = std::fs::File::create(path)?;
 
     // Code generation warning.

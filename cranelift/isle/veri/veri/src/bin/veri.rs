@@ -1,3 +1,4 @@
+use anyhow::{bail, format_err, Result};
 use clap::{Parser, ValueEnum};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::sema::Rule;
@@ -55,7 +56,7 @@ struct Opts {
 }
 
 impl Opts {
-    fn isle_input_files(&self) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    fn isle_input_files(&self) -> Result<Vec<std::path::PathBuf>> {
         // Generate ISLE files.
         let gen_dir = &self.work_dir;
         generate_isle(gen_dir)?;
@@ -66,10 +67,7 @@ impl Opts {
         // Return inputs from the matching compilation, if any.
         Ok(compilations
             .lookup(&self.name)
-            .ok_or(anyhow::format_err!(
-                "unknown ISLE compilation: {}",
-                self.name
-            ))?
+            .ok_or(format_err!("unknown ISLE compilation: {}", self.name))?
             .paths()?)
     }
 }
@@ -105,7 +103,7 @@ impl SolverBackend {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let _ = env_logger::try_init();
     let opts = Opts::parse();
 
@@ -119,7 +117,7 @@ fn main() -> anyhow::Result<()> {
     let target = if let Some(id) = opts.rule {
         Some(
             prog.get_rule_by_identifier(&id)
-                .ok_or(anyhow::format_err!("unknown rule {id}"))?,
+                .ok_or(format_err!("unknown rule {id}"))?,
         )
     } else {
         None
@@ -207,7 +205,7 @@ fn verify_expansion(
     timeout_seconds: u32,
     skip_solver: bool,
     debug: bool,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
     if debug {
@@ -239,7 +237,7 @@ fn verify_expansion(
             type_inference::Status::Solved => (),
             type_inference::Status::Inapplicable => continue,
             type_inference::Status::Underconstrained => {
-                anyhow::bail!("underconstrained type inference")
+                bail!("underconstrained type inference")
             }
         }
 
@@ -269,7 +267,7 @@ fn verify_expansion_type_instantiation(
     solver_backend: &SolverBackend,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     // Solve.
     let replay_file = std::fs::File::create(replay_path)?;
     let binary = solver_backend.prog();
@@ -287,7 +285,7 @@ fn verify_expansion_type_instantiation(
     match applicability {
         Applicability::Applicable => (),
         Applicability::Inapplicable => return Ok(()),
-        Applicability::Unknown => anyhow::bail!("could not prove applicability"),
+        Applicability::Unknown => bail!("could not prove applicability"),
     };
 
     let verification = solver.check_verification_condition()?;
@@ -296,7 +294,7 @@ fn verify_expansion_type_instantiation(
         Verification::Failure(model) => {
             println!("model:");
             conditions.print_model(&model, prog)?;
-            anyhow::bail!("verification failed");
+            bail!("verification failed");
         }
         Verification::Success | Verification::Unknown => (),
     };

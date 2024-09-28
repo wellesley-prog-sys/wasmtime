@@ -1,3 +1,4 @@
+use anyhow::Result;
 use clap::Parser as ClapParser;
 use cranelift_codegen::isa::aarch64::inst::{
     vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Inst, OperandSize,
@@ -24,7 +25,7 @@ struct Args {
     debug_level: u8,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     // Setup tracing output.
@@ -231,7 +232,7 @@ fn define_insts() -> Vec<Inst> {
 }
 
 // Convert a semantics block and print the result.
-fn convert_block(block: &Block) -> anyhow::Result<()> {
+fn convert_block(block: &Block) -> Result<()> {
     // Translation.
     let mut translator = Translator::new(aarch64::state(), "v".to_string());
     translator.translate(block)?;

@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use reqwest::IntoUrl;
 use serde::Deserialize;
 use tracing::debug;
@@ -10,17 +11,14 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
-    pub fn new<U: IntoUrl>(
-        client: &'a reqwest::blocking::Client,
-        server_url: U,
-    ) -> anyhow::Result<Self> {
+    pub fn new<U: IntoUrl>(client: &'a reqwest::blocking::Client, server_url: U) -> Result<Self> {
         Ok(Self {
             client,
             server_url: server_url.into_url()?,
         })
     }
 
-    pub fn opcode(&self, opcode: u32) -> anyhow::Result<Block> {
+    pub fn opcode(&self, opcode: u32) -> Result<Block> {
         // Model for response JSON data.
         #[derive(Deserialize, Debug)]
         struct Response {
@@ -41,7 +39,7 @@ impl<'a> Client<'a> {
 
         // Ensure response instruction matches.
         if res.instruction != opcode_hex {
-            anyhow::bail!("response opcode mismatch");
+            bail!("response opcode mismatch");
         }
 
         // Parse semantics.

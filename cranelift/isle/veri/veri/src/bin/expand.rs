@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::{format_err, Result};
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle_veri::debug::print_expansion;
@@ -50,7 +51,7 @@ struct Opts {
 }
 
 impl Opts {
-    fn isle_input_files(&self) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    fn isle_input_files(&self) -> Result<Vec<std::path::PathBuf>> {
         // Generate ISLE files.
         let gen_dir = &self.work_dir;
         generate_isle(gen_dir)?;
@@ -61,15 +62,12 @@ impl Opts {
         // Return inputs from the matching compilation, if any.
         Ok(compilations
             .lookup(&self.name)
-            .ok_or(anyhow::format_err!(
-                "unknown ISLE compilation: {}",
-                self.name
-            ))?
+            .ok_or(format_err!("unknown ISLE compilation: {}", self.name))?
             .paths()?)
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let opts = Opts::parse();
 
     // Read ISLE inputs.

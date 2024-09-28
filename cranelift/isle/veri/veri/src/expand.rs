@@ -1,4 +1,5 @@
 use crate::{program::Program, reachability::Reachability};
+use anyhow::{format_err, Result};
 use cranelift_isle::{
     disjointsets::DisjointSets,
     sema::{RuleId, TermId},
@@ -178,10 +179,7 @@ pub struct Chaining<'a> {
 }
 
 impl<'a> Chaining<'a> {
-    pub fn new(
-        prog: &'a Program,
-        term_rule_sets: &'a HashMap<TermId, RuleSet>,
-    ) -> anyhow::Result<Self> {
+    pub fn new(prog: &'a Program, term_rule_sets: &'a HashMap<TermId, RuleSet>) -> Result<Self> {
         Ok(Self {
             prog,
             term_rule_sets,
@@ -194,16 +192,16 @@ impl<'a> Chaining<'a> {
         })
     }
 
-    pub fn chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+    pub fn chain_term(&mut self, term_name: &str) -> Result<()> {
         let term_id = self
             .prog
             .get_term_by_name(term_name)
-            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+            .ok_or(format_err!("unknown term {term_name}"))?;
         self.include.insert(term_id);
         Ok(())
     }
 
-    pub fn chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+    pub fn chain_terms(&mut self, term_names: &Vec<String>) -> Result<()> {
         for term_name in term_names {
             self.chain_term(term_name)?;
         }
@@ -220,16 +218,16 @@ impl<'a> Chaining<'a> {
         self.max_rules = max_rules;
     }
 
-    pub fn exclude_chain_term(&mut self, term_name: &str) -> anyhow::Result<()> {
+    pub fn exclude_chain_term(&mut self, term_name: &str) -> Result<()> {
         let term_id = self
             .prog
             .get_term_by_name(term_name)
-            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+            .ok_or(format_err!("unknown term {term_name}"))?;
         self.exclude.insert(term_id);
         Ok(())
     }
 
-    pub fn exclude_chain_terms(&mut self, term_names: &Vec<String>) -> anyhow::Result<()> {
+    pub fn exclude_chain_terms(&mut self, term_names: &Vec<String>) -> Result<()> {
         for term_name in term_names {
             self.exclude_chain_term(term_name)?;
         }
@@ -386,11 +384,11 @@ impl<'a> Expander<'a> {
     }
 
     /// Add the given named term as an expansion root.
-    pub fn add_root_term_name(&mut self, term_name: &str) -> anyhow::Result<()> {
+    pub fn add_root_term_name(&mut self, term_name: &str) -> Result<()> {
         let term_id = self
             .prog
             .get_term_by_name(term_name)
-            .ok_or(anyhow::format_err!("unknown term {term_name}"))?;
+            .ok_or(format_err!("unknown term {term_name}"))?;
         self.add_root(term_id);
         Ok(())
     }
