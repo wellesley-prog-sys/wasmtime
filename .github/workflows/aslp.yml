@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/aslp.yml'
       - '**/aslp/**'
+      - '**/isaspec/**'
   pull_request:
     branches:
       - veriisle
@@ -25,6 +26,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: main
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Install LLVM
         env:
           LLVM_VERSION: 18
@@ -49,6 +52,16 @@ jobs:
           ./script/install/aslp.sh -i "${ASLP_PATH}" -t "${RUNNER_TEMP}"
       - name: Configure ASLp
         run: echo "${ASLP_PATH}/bin" >> $GITHUB_PATH
+
+      - name: Generate ISA Specifications
+        working-directory: main/cranelift/isle/veri/isaspec
+        run: ./script/generate.sh -l
+      - name: Git Status
+        working-directory: main
+        run: |
+          git diff
+          test -z "$(git status --porcelain)"
+
       - name: Generate ASLp Test Data
         working-directory: main/cranelift/isle/veri/aslp/tests/data
         run: ./generate.sh
