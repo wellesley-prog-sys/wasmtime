@@ -400,37 +400,30 @@ impl<'a> Parser<'a> {
         }
         self.expect_rparen()?; // end term with args
 
-        self.expect_lparen()?; // provide
-        if !self.eat_sym_str("provide")? {
-            return Err(self.error(
-                pos,
-                "Invalid spec: expected (spec (<term> <args>) (provide ...) ...)".to_string(),
-            ));
-        };
-        let mut provides = vec![];
-        while !self.is_rparen() {
-            provides.push(self.parse_spec_expr()?);
-        }
-        self.expect_rparen()?; // end provide
-
-        let requires = if self.is_lparen() {
+        let mut provides = Vec::new();
+        let mut requires = Vec::new();
+        while self.is_lparen() {
             self.expect_lparen()?;
-            if !self.eat_sym_str("require")? {
-                return Err(self.error(
-                    pos,
-                    "Invalid spec: expected (spec (<term> <args>) (provide ...) (require ...))"
-                        .to_string(),
-                ));
+            match &self.expect_symbol()?[..] {
+                "provide" => {
+                    while !self.is_rparen() {
+                        provides.push(self.parse_spec_expr()?);
+                    }
+                }
+                "require" => {
+                    while !self.is_rparen() {
+                        requires.push(self.parse_spec_expr()?);
+                    }
+                }
+                field => {
+                    return Err(self.error(
+                        pos,
+                        format!("Invalid spec: unexpected field {field}. Expect (provide ...) or (require ...)"),
+                    ));
+                }
             }
-            let mut require = vec![];
-            while !self.is_rparen() {
-                require.push(self.parse_spec_expr()?);
-            }
-            self.expect_rparen()?; // end provide
-            require
-        } else {
-            vec![]
-        };
+            self.expect_rparen()?;
+        }
 
         Ok(Spec {
             term: term,
