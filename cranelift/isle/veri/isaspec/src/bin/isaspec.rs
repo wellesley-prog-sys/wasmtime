@@ -17,10 +17,10 @@ use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
 use cranelift_isle_veri_isaspec::aarch64::{self, pstate_field};
 use cranelift_isle_veri_isaspec::builder::{
-    Arm, Builder, Case, Cases, InstConfig, Mapping, Mappings, Match, SpecConfig,
+    Arm, Builder, Case, Cases, InstConfig, Mapping, MappingBuilder, Mappings, Match, SpecConfig,
 };
 use cranelift_isle_veri_isaspec::spec::{
-    spec_binary, spec_const_int, spec_eq, spec_eq_bool, spec_field, spec_var,
+    spec_binary, spec_const_int, spec_eq, spec_eq_bool, spec_var,
 };
 
 #[derive(ClapParser)]
@@ -489,26 +489,26 @@ where
 
     // ISA load state mapped to read effect.
     let read_effect = ReadEffect::new();
-    let isa_load = spec_var("isa_load".to_string());
-    let loaded_value = spec_var("loaded_value".to_string());
+    static ISA_LOAD: &str = "isa_load";
+    static LOADED_VALUE: &str = "loaded_value";
     mappings.writes.insert(
         read_effect.active,
-        Mapping::require(spec_field("active".to_string(), isa_load.clone())),
+        MappingBuilder::state(ISA_LOAD).field("active").build(),
     );
     mappings.writes.insert(
         read_effect.addr,
-        Mapping::require(spec_field("addr".to_string(), isa_load.clone())),
+        MappingBuilder::state(ISA_LOAD).field("addr").build(),
     );
     mappings.writes.insert(
         read_effect.size,
-        Mapping::require(spec_field("size".to_string(), isa_load.clone())),
+        MappingBuilder::state(ISA_LOAD).field("size").build(),
     );
     mappings.reads.insert(
         read_effect.value,
         Mapping::require(spec_binary(
             SpecOp::ConvTo,
             spec_const_int(size_bits.try_into().unwrap()),
-            loaded_value.clone(),
+            spec_var(LOADED_VALUE.to_string()),
         )),
     );
 
@@ -578,26 +578,24 @@ where
 
 fn flags_mappings() -> Mappings {
     // Instruction model is the MInst value itself, which is considered the result of the variant term.
-    let inst = spec_var("result".to_string());
+    let inst = MappingBuilder::var("result").allow();
 
     // Input and output flags of the instruction are fields of the MInst model.
-    let flags_in = spec_field("flags_in".to_string(), inst.clone());
-    let flags_out = spec_field("flags_out".to_string(), inst.clone());
+    let flags_in = inst.clone().field("flags_in");
+    let flags_out = inst.clone().field("flags_out");
 
     // Construct read and write mappings for each NZCV field.
     let mut mappings = Mappings::default();
     for field in &["N", "Z", "C", "V"] {
         // Read
-        mappings.reads.insert(
-            pstate_field(field),
-            Mapping::allow(spec_field(field.to_string(), flags_in.clone())),
-        );
+        mappings
+            .reads
+            .insert(pstate_field(field), flags_in.clone().field(field).build());
 
         // Write
-        mappings.writes.insert(
-            pstate_field(field),
-            Mapping::allow(spec_field(field.to_string(), flags_out.clone())),
-        );
+        mappings
+            .writes
+            .insert(pstate_field(field), flags_out.clone().field(field).build());
     }
 
     mappings

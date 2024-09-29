@@ -13,6 +13,7 @@ use cranelift_isle_veri_aslp::client::Client;
 
 use crate::constraints::{Binding, Target, Translator};
 use crate::semantics::inst_semantics;
+use crate::spec::spec_field;
 use crate::{
     aarch64,
     spec::{
@@ -58,11 +59,16 @@ pub enum Expectation {
 pub struct Mapping {
     expr: SpecExpr,
     expect: Expectation,
+    modifies: Vec<String>,
 }
 
 impl Mapping {
     pub fn new(expr: SpecExpr, expect: Expectation) -> Self {
-        Self { expr, expect }
+        Self {
+            expr,
+            expect,
+            modifies: Vec::new(),
+        }
     }
 
     pub fn require(expr: SpecExpr) -> Self {
@@ -71,6 +77,42 @@ impl Mapping {
 
     pub fn allow(expr: SpecExpr) -> Self {
         Self::new(expr, Expectation::Allow)
+    }
+}
+
+#[derive(Clone)]
+pub struct MappingBuilder(Mapping);
+
+impl MappingBuilder {
+    pub fn new(expr: SpecExpr) -> Self {
+        Self(Mapping::new(expr, Expectation::Require))
+    }
+
+    pub fn var(name: &str) -> Self {
+        Self::new(spec_var(name.to_string()))
+    }
+
+    pub fn state(name: &str) -> Self {
+        Self::new(spec_var(name.to_string())).modifies(name)
+    }
+
+    pub fn field(mut self, field: &str) -> Self {
+        self.0.expr = spec_field(field.to_string(), self.0.expr);
+        self
+    }
+
+    pub fn allow(mut self) -> Self {
+        self.0.expect = Expectation::Allow;
+        self
+    }
+
+    pub fn modifies(mut self, state: &str) -> Self {
+        self.0.modifies.push(state.to_string());
+        self
+    }
+
+    pub fn build(self) -> Mapping {
+        self.0
     }
 }
 
@@ -128,7 +170,7 @@ impl<'a> Builder<'a> {
             args: spec_idents(&self.cfg.args),
             requires: cond.requires,
             provides: cond.provides,
-            modifies: Vec::new(),
+            modifies: spec_idents(&cond.modifies.iter().sorted().cloned().collect::<Vec<_>>()),
             pos: Pos::default(),
         };
         Ok(spec)
@@ -152,6 +194,7 @@ impl<'a> Builder<'a> {
                 let x = spec_var(m.on.clone());
                 let mut arm_requires = Vec::new();
                 let mut arms = Vec::new();
+                let mut modifies = HashSet::new();
                 for arm in &m.arms {
                     // Build conditions for the arm body.
                     let cond = self.cases(&arm.body)?;
@@ -174,6 +217,9 @@ impl<'a> Builder<'a> {
                     });
                     require.extend(cond.requires);
                     arm_requires.push(spec_all(require));
+
+                    // Merge modifies.
+                    modifies.extend(cond.modifies);
                 }
 
                 Ok(Conditions {
@@ -183,6 +229,7 @@ impl<'a> Builder<'a> {
                         arms,
                         pos: Pos::default(),
                     }],
+                    modifies,
                 })
             }
         }
@@ -200,6 +247,7 @@ impl<'a> Builder<'a> {
 
         // Reads mapping.
         let mut substitutions = HashMap::new();
+        let mut modifies = HashSet::new();
         let reads = global.reads();
         let init = global.init();
         for target in reads.iter().sorted() {
@@ -213,6 +261,11 @@ impl<'a> Builder<'a> {
 
             // Substitute variable for mapped expression.
             substitutions.insert(v.clone(), mapping.expr.clone());
+
+            // Read operations should not modify state.
+            if !mapping.modifies.is_empty() {
+                bail!("read of {target} should not modify state");
+            }
         }
 
         if let Some(target) = case.mappings.required_reads().difference(reads).next() {
@@ -235,6 +288,9 @@ impl<'a> Builder<'a> {
 
             // Substitute variable for mapped expression.
             substitutions.insert(v.clone(), mapping.expr.clone());
+
+            // Update modifies list.
+            modifies.extend(mapping.modifies.clone());
         }
 
         if let Some(target) = case.mappings.required_writes().difference(writes).next() {
@@ -264,6 +320,7 @@ impl<'a> Builder<'a> {
         Ok(Conditions {
             requires: Vec::new(),
             provides,
+            modifies,
         })
     }
 }

@@ -359,6 +359,13 @@ impl Printable for Spec {
                 .into_iter()
                 .chain(self.args.iter().map(|a| a.to_doc())),
         ));
+        if !self.modifies.is_empty() {
+            parts.push(sexp(
+                Vec::from([RcDoc::text("modifies")])
+                    .into_iter()
+                    .chain(self.modifies.iter().map(|e| e.to_doc())),
+            ));
+        }
         if !self.provides.is_empty() {
             parts.push(sexp(
                 Vec::from([RcDoc::text("provide")])
@@ -371,13 +378,6 @@ impl Printable for Spec {
                 Vec::from([RcDoc::text("require")])
                     .into_iter()
                     .chain(self.requires.iter().map(|e| e.to_doc())),
-            ));
-        }
-        if !self.modifies.is_empty() {
-            parts.push(sexp(
-                Vec::from([RcDoc::text("modifies")])
-                    .into_iter()
-                    .chain(self.modifies.iter().map(|e| e.to_doc())),
             ));
         }
         sexp(parts)

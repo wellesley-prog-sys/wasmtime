@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{bail, Result};
 
@@ -148,6 +148,7 @@ pub fn spec_ident(id: String) -> Ident {
 pub struct Conditions {
     pub requires: Vec<SpecExpr>,
     pub provides: Vec<SpecExpr>,
+    pub modifies: HashSet<String>,
 }
 
 impl Conditions {
@@ -155,6 +156,7 @@ impl Conditions {
         Self {
             requires: Vec::new(),
             provides: Vec::new(),
+            modifies: HashSet::new(),
         }
     }
 
@@ -176,6 +178,7 @@ impl Conditions {
                         )
                     })
                     .collect(),
+                modifies: cs.iter().fold(HashSet::new(), |acc, c| &acc | &c.modifies),
             },
         }
     }

@@ -2,6 +2,7 @@
 
 (spec
     (MInst.ULoad8 rd mem flags)
+    (modifies isa_load)
     (provide
         (match
             mem
@@ -29,6 +30,7 @@
 
 (spec
     (MInst.SLoad8 rd mem flags)
+    (modifies isa_load)
     (provide
         (match
             mem
@@ -48,6 +50,7 @@
 
 (spec
     (MInst.ULoad16 rd mem flags)
+    (modifies isa_load)
     (provide
         (match
             mem
@@ -77,6 +80,7 @@
 
 (spec
     (MInst.SLoad16 rd mem flags)
+    (modifies isa_load)
     (provide
         (match
             mem
@@ -98,6 +102,7 @@
 
 (spec
     (MInst.ULoad32 rd mem flags)
+    (modifies isa_load)
     (provide
         (match
             mem
@@ -119,6 +124,7 @@
 
 (spec
     (MInst.SLoad32 rd mem flags)
+    (modifies isa_load)
     (provide
         (match
             mem
@@ -140,6 +146,7 @@
 
 (spec
     (MInst.ULoad64 rd mem flags)
+    (modifies isa_load)
     (provide
         (match
             mem
