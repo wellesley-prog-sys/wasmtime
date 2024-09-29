@@ -3,58 +3,66 @@
 (spec
     (MInst.AluRRRR alu_op size rd rn rm ra)
     (provide
-        (=>
-            (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvadd
-                        (extract 31 0 ra)
-                        (bvmul (extract 31 0 rn) (extract 31 0 rm))))))
-        (=>
-            (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
-            (= rd (bvadd ra (bvmul rn rm))))
-        (=>
-            (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvsub
-                        (extract 31 0 ra)
-                        (bvmul (extract 31 0 rn) (extract 31 0 rm))))))
-        (=>
-            (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
-            (= rd (bvsub ra (bvmul rn rm))))
-        (=>
-            (and (= alu_op (ALUOp3.UMAddL)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (bvadd
-                    ra
-                    (bvmul
-                        (zero_ext 64 (extract 31 0 rn))
-                        (zero_ext 64 (extract 31 0 rm))))))
-        (=>
-            (and (= alu_op (ALUOp3.SMAddL)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (bvadd
-                    (extract 63 0 (sign_ext 128 ra))
-                    (extract
-                        63
-                        0
-                        (sign_ext
-                            128
-                            (bvmul
-                                (sign_ext 64 (extract 31 0 rn))
-                                (sign_ext 64 (extract 31 0 rm)))))))))
+        (match
+            size
+            ((Size64)
+                (match
+                    alu_op
+                    ((MAdd) (= rd (bvadd ra (bvmul rn rm))))
+                    ((MSub) (= rd (bvsub ra (bvmul rn rm))))))
+            ((Size32)
+                (match
+                    alu_op
+                    ((MAdd)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvadd
+                                    (extract 31 0 ra)
+                                    (bvmul
+                                        (extract 31 0 rn)
+                                        (extract 31 0 rm))))))
+                    ((MSub)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvsub
+                                    (extract 31 0 ra)
+                                    (bvmul
+                                        (extract 31 0 rn)
+                                        (extract 31 0 rm))))))
+                    ((UMAddL)
+                        (=
+                            rd
+                            (bvadd
+                                ra
+                                (bvmul
+                                    (zero_ext 64 (extract 31 0 rn))
+                                    (zero_ext 64 (extract 31 0 rm))))))
+                    ((SMAddL)
+                        (=
+                            rd
+                            (bvadd
+                                (extract 63 0 (sign_ext 128 ra))
+                                (extract
+                                    63
+                                    0
+                                    (sign_ext
+                                        128
+                                        (bvmul
+                                            (sign_ext 64 (extract 31 0 rn))
+                                            (sign_ext
+                                                64
+                                                (extract 31 0 rm))))))))))))
     (require
         (or
-            (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp3.MAdd)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp3.MSub)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp3.UMAddL)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp3.SMAddL)) (= size (OperandSize.Size32))))))
+            (and (Size64? size) (or (MAdd? alu_op) (MSub? alu_op)))
+            (and
+                (Size32? size)
+                (or
+                    (MAdd? alu_op)
+                    (MSub? alu_op)
+                    (UMAddL? alu_op)
+                    (SMAddL? alu_op))))))

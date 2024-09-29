@@ -1,12 +1,13 @@
 //! Construction of VeriISLE specifications from ASLp semantics.
 
 use std::collections::{HashMap, HashSet};
+use std::vec;
 
 use anyhow::{bail, Result};
 use itertools::Itertools;
 
 use cranelift_codegen::isa::aarch64::inst::Inst;
-use cranelift_isle::ast::{Def, Spec, SpecExpr};
+use cranelift_isle::ast::{self, Def, Spec, SpecExpr};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle_veri_aslp::client::Client;
 
@@ -14,7 +15,9 @@ use crate::constraints::{Binding, Target, Translator};
 use crate::semantics::inst_semantics;
 use crate::{
     aarch64,
-    spec::{spec_all, spec_ident, spec_idents, spec_with, substitute, Conditions},
+    spec::{
+        spec_all, spec_any, spec_ident, spec_idents, spec_var, spec_with, substitute, Conditions,
+    },
 };
 
 pub struct SpecConfig {
@@ -26,11 +29,23 @@ pub struct SpecConfig {
 pub enum Cases {
     Instruction(InstConfig),
     Cases(Vec<Case>),
+    Match(Match),
 }
 
 pub struct Case {
     pub conds: Vec<SpecExpr>,
     pub cases: Cases,
+}
+
+pub struct Match {
+    pub on: String,
+    pub arms: Vec<Arm>,
+}
+
+pub struct Arm {
+    pub variant: String,
+    pub args: Vec<String>,
+    pub body: Cases,
 }
 
 #[derive(Clone)]
@@ -131,6 +146,43 @@ impl<'a> Builder<'a> {
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(Conditions::merge(conds))
+            }
+            Cases::Match(m) => {
+                let x = spec_var(m.on.clone());
+                let mut arm_requires = Vec::new();
+                let mut arms = Vec::new();
+                for arm in &m.arms {
+                    // Build conditions for the arm body.
+                    let cond = self.cases(&arm.body)?;
+
+                    // Provides form the body of the arm.
+                    arms.push(ast::Arm {
+                        variant: spec_ident(arm.variant.clone()),
+                        args: spec_idents(&arm.args),
+                        body: spec_all(cond.provides),
+                        pos: Pos::default(),
+                    });
+
+                    // This arm requires a match on the variant, as well as
+                    // requirements from the body.
+                    let mut require = Vec::new();
+                    require.push(SpecExpr::Discriminator {
+                        variant: spec_ident(arm.variant.clone()),
+                        x: Box::new(x.clone()),
+                        pos: Pos::default(),
+                    });
+                    require.extend(cond.requires);
+                    arm_requires.push(spec_all(require));
+                }
+
+                Ok(Conditions {
+                    requires: vec![spec_any(arm_requires)],
+                    provides: vec![SpecExpr::Match {
+                        x: Box::new(x),
+                        arms,
+                        pos: Pos::default(),
+                    }],
+                })
             }
         }
     }

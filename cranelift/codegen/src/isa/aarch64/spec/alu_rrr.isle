@@ -3,333 +3,396 @@
 (spec
     (MInst.AluRRR alu_op size rd rn rm)
     (provide
-        (=>
-            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
-            (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (extract 31 0 rm)))))
-        (=>
-            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-            (= rd (bvadd rn rm)))
-        (=>
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvadd
-                        (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm)))
-                        #x00000001))))
-        (=>
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-            (= rd (bvadd (bvadd rn (bvnot rm)) #x0000000000000001)))
-        (=>
-            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
-            (= rd (zero_ext 64 (bvor (extract 31 0 rn) (extract 31 0 rm)))))
-        (=>
-            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
-            (= rd (bvor rn rm)))
-        (=>
-            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvor (extract 31 0 rn) (bvnot (extract 31 0 rm))))))
-        (=>
-            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
-            (= rd (bvor rn (bvnot rm))))
-        (=>
-            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
-            (= rd (zero_ext 64 (bvand (extract 31 0 rn) (extract 31 0 rm)))))
-        (=>
-            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
-            (= rd (bvand rn rm)))
-        (=>
-            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvand (extract 31 0 rn) (bvnot (extract 31 0 rm))))))
-        (=>
-            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
-            (= rd (bvand rn (bvnot rm))))
-        (=>
-            (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
-            (= rd (zero_ext 64 (bvxor (extract 31 0 rn) (extract 31 0 rm)))))
-        (=>
-            (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
-            (= rd (bvxor rn rm)))
-        (=>
-            (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvxor (extract 31 0 rn) (bvnot (extract 31 0 rm))))))
-        (=>
-            (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
-            (= rd (bvxor rn (bvnot rm))))
-        (=>
-            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size32)))
-            (with
-                (t2 t3)
-                (and
-                    (= t2 (bvadd (extract 31 0 rn) (extract 31 0 rm)))
-                    (=
-                        t3
-                        (zero_ext
-                            64
-                            (bvadd (extract 31 0 rn) (extract 31 0 rm))))
-                    (=
-                        (:V (:flags_out result))
-                        (bvnot
-                            (if
+        (match
+            size
+            ((Size64)
+                (match
+                    alu_op
+                    ((Add) (= rd (bvadd rn rm)))
+                    ((Sub)
+                        (=
+                            rd
+                            (bvadd (bvadd rn (bvnot rm)) #x0000000000000001)))
+                    ((Orr) (= rd (bvor rn rm)))
+                    ((OrrNot) (= rd (bvor rn (bvnot rm))))
+                    ((And) (= rd (bvand rn rm)))
+                    ((AndNot) (= rd (bvand rn (bvnot rm))))
+                    ((Eor) (= rd (bvxor rn rm)))
+                    ((EorNot) (= rd (bvxor rn (bvnot rm))))
+                    ((AddS)
+                        (with
+                            (t2)
+                            (and
+                                (= t2 (bvadd rn rm))
                                 (=
-                                    (sign_ext 64 t2)
+                                    (:V (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                (sign_ext 128 t2)
+                                                (bvadd
+                                                    (sign_ext 128 rn)
+                                                    (sign_ext 128 rm)))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:C (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                (zero_ext 128 t2)
+                                                (bvadd
+                                                    (zero_ext 128 rn)
+                                                    (zero_ext 128 rm)))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:Z (:flags_out result))
+                                    (if (= t2 #x0000000000000000) #b1 #b0))
+                                (=
+                                    (:N (:flags_out result))
+                                    (extract 63 63 t2))
+                                (= rd t2))))
+                    ((SubS)
+                        (with
+                            (t1 t3)
+                            (and
+                                (= t1 (bvnot rm))
+                                (= t3 (bvadd rn (bvnot rm)))
+                                (=
+                                    (:V (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                (sign_ext
+                                                    128
+                                                    (bvadd
+                                                        t3
+                                                        #x0000000000000001))
+                                                (bvadd
+                                                    (bvadd
+                                                        (sign_ext 128 rn)
+                                                        (sign_ext 128 t1))
+                                                    #x00000000000000000000000000000001))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:C (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                (zero_ext
+                                                    128
+                                                    (bvadd
+                                                        t3
+                                                        #x0000000000000001))
+                                                (bvadd
+                                                    (bvadd
+                                                        (zero_ext 128 rn)
+                                                        (zero_ext 128 t1))
+                                                    #x00000000000000000000000000000001))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:Z (:flags_out result))
+                                    (if
+                                        (=
+                                            (bvadd t3 #x0000000000000001)
+                                            #x0000000000000000)
+                                        #b1
+                                        #b0))
+                                (=
+                                    (:N (:flags_out result))
+                                    (extract
+                                        63
+                                        63
+                                        (bvadd t3 #x0000000000000001)))
+                                (= rd (bvadd t3 #x0000000000000001)))))
+                    ((SMulH)
+                        (=
+                            rd
+                            (extract
+                                127
+                                64
+                                (bvmul (sign_ext 128 rn) (sign_ext 128 rm)))))
+                    ((UMulH)
+                        (=
+                            rd
+                            (extract
+                                127
+                                64
+                                (bvmul (zero_ext 128 rn) (zero_ext 128 rm)))))
+                    ((SDiv)
+                        (with
+                            (t1 t2 t4)
+                            (and
+                                (= t1 (= rm #x0000000000000000))
+                                (if
+                                    t1
+                                    (= t2 #x0000000000000000)
+                                    (=
+                                        t4
+                                        (extract
+                                            63
+                                            0
+                                            (if
+                                                (and
+                                                    (= rn #x8000000000000000)
+                                                    (= rm #xffffffffffffffff))
+                                                #x00000000000000008000000000000000
+                                                (sign_ext
+                                                    128
+                                                    (bvsdiv rn rm))))))
+                                (= rd (if t1 t2 t4)))))
+                    ((UDiv)
+                        (with
+                            (t1 t2 t4)
+                            (and
+                                (= t1 (= rm #x0000000000000000))
+                                (if
+                                    t1
+                                    (= t2 #x0000000000000000)
+                                    (=
+                                        t4
+                                        (extract
+                                            63
+                                            0
+                                            (bvsdiv
+                                                (zero_ext 128 rn)
+                                                (zero_ext 128 rm)))))
+                                (= rd (if t1 t2 t4)))))
+                    ((Adc)
+                        (=
+                            rd
+                            (bvadd
+                                (bvadd rn rm)
+                                (zero_ext
+                                    64
+                                    (extract
+                                        0
+                                        0
+                                        (:C (:flags_in result)))))))))
+            ((Size32)
+                (match
+                    alu_op
+                    ((Add)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvadd (extract 31 0 rn) (extract 31 0 rm)))))
+                    ((Sub)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvadd
                                     (bvadd
-                                        (sign_ext 64 (extract 31 0 rn))
-                                        (sign_ext 64 (extract 31 0 rm))))
-                                #b1
-                                #b0)))
-                    (=
-                        (:C (:flags_out result))
-                        (bvnot
-                            (if
+                                        (extract 31 0 rn)
+                                        (bvnot (extract 31 0 rm)))
+                                    #x00000001))))
+                    ((Orr)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvor (extract 31 0 rn) (extract 31 0 rm)))))
+                    ((OrrNot)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvor
+                                    (extract 31 0 rn)
+                                    (bvnot (extract 31 0 rm))))))
+                    ((And)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvand (extract 31 0 rn) (extract 31 0 rm)))))
+                    ((AndNot)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvand
+                                    (extract 31 0 rn)
+                                    (bvnot (extract 31 0 rm))))))
+                    ((Eor)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvxor (extract 31 0 rn) (extract 31 0 rm)))))
+                    ((EorNot)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (bvxor
+                                    (extract 31 0 rn)
+                                    (bvnot (extract 31 0 rm))))))
+                    ((AddS)
+                        (with
+                            (t2 t3)
+                            (and
+                                (=
+                                    t2
+                                    (bvadd
+                                        (extract 31 0 rn)
+                                        (extract 31 0 rm)))
+                                (=
+                                    t3
+                                    (zero_ext
+                                        64
+                                        (bvadd
+                                            (extract 31 0 rn)
+                                            (extract 31 0 rm))))
+                                (=
+                                    (:V (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                (sign_ext 64 t2)
+                                                (bvadd
+                                                    (sign_ext
+                                                        64
+                                                        (extract 31 0 rn))
+                                                    (sign_ext
+                                                        64
+                                                        (extract 31 0 rm))))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:C (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                t3
+                                                (bvadd
+                                                    (zero_ext
+                                                        64
+                                                        (extract 31 0 rn))
+                                                    (zero_ext
+                                                        64
+                                                        (extract 31 0 rm))))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:Z (:flags_out result))
+                                    (if (= t2 #x00000000) #b1 #b0))
+                                (=
+                                    (:N (:flags_out result))
+                                    (extract 31 31 t2))
+                                (= rd t3))))
+                    ((SubS)
+                        (with
+                            (t1 t3 t4)
+                            (and
+                                (= t1 (bvnot (extract 31 0 rm)))
                                 (=
                                     t3
                                     (bvadd
-                                        (zero_ext 64 (extract 31 0 rn))
-                                        (zero_ext 64 (extract 31 0 rm))))
-                                #b1
-                                #b0)))
-                    (=
-                        (:Z (:flags_out result))
-                        (if (= t2 #x00000000) #b1 #b0))
-                    (= (:N (:flags_out result)) (extract 31 31 t2))
-                    (= rd t3))))
-        (=>
-            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size64)))
-            (with
-                (t2)
-                (and
-                    (= t2 (bvadd rn rm))
-                    (=
-                        (:V (:flags_out result))
-                        (bvnot
-                            (if
-                                (=
-                                    (sign_ext 128 t2)
-                                    (bvadd
-                                        (sign_ext 128 rn)
-                                        (sign_ext 128 rm)))
-                                #b1
-                                #b0)))
-                    (=
-                        (:C (:flags_out result))
-                        (bvnot
-                            (if
-                                (=
-                                    (zero_ext 128 t2)
-                                    (bvadd
-                                        (zero_ext 128 rn)
-                                        (zero_ext 128 rm)))
-                                #b1
-                                #b0)))
-                    (=
-                        (:Z (:flags_out result))
-                        (if (= t2 #x0000000000000000) #b1 #b0))
-                    (= (:N (:flags_out result)) (extract 63 63 t2))
-                    (= rd t2))))
-        (=>
-            (and (= alu_op (ALUOp.SubS)) (= size (OperandSize.Size32)))
-            (with
-                (t1 t3 t4)
-                (and
-                    (= t1 (bvnot (extract 31 0 rm)))
-                    (= t3 (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))))
-                    (=
-                        t4
-                        (zero_ext
-                            64
-                            (bvadd
-                                (bvadd
-                                    (extract 31 0 rn)
-                                    (bvnot (extract 31 0 rm)))
-                                #x00000001)))
-                    (=
-                        (:V (:flags_out result))
-                        (bvnot
-                            (if
-                                (=
-                                    (sign_ext 64 (bvadd t3 #x00000001))
-                                    (bvadd
-                                        (bvadd
-                                            (sign_ext 64 (extract 31 0 rn))
-                                            (sign_ext 64 t1))
-                                        #x0000000000000001))
-                                #b1
-                                #b0)))
-                    (=
-                        (:C (:flags_out result))
-                        (bvnot
-                            (if
+                                        (extract 31 0 rn)
+                                        (bvnot (extract 31 0 rm))))
                                 (=
                                     t4
-                                    (bvadd
-                                        (bvadd
-                                            (zero_ext 64 (extract 31 0 rn))
-                                            (zero_ext 64 t1))
-                                        #x0000000000000001))
-                                #b1
-                                #b0)))
-                    (=
-                        (:Z (:flags_out result))
-                        (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
-                    (=
-                        (:N (:flags_out result))
-                        (extract 31 31 (bvadd t3 #x00000001)))
-                    (= rd t4))))
-        (=>
-            (and (= alu_op (ALUOp.SubS)) (= size (OperandSize.Size64)))
-            (with
-                (t1 t3)
-                (and
-                    (= t1 (bvnot rm))
-                    (= t3 (bvadd rn (bvnot rm)))
-                    (=
-                        (:V (:flags_out result))
-                        (bvnot
-                            (if
-                                (=
-                                    (sign_ext
-                                        128
-                                        (bvadd t3 #x0000000000000001))
-                                    (bvadd
-                                        (bvadd
-                                            (sign_ext 128 rn)
-                                            (sign_ext 128 t1))
-                                        #x00000000000000000000000000000001))
-                                #b1
-                                #b0)))
-                    (=
-                        (:C (:flags_out result))
-                        (bvnot
-                            (if
-                                (=
                                     (zero_ext
-                                        128
-                                        (bvadd t3 #x0000000000000001))
-                                    (bvadd
+                                        64
                                         (bvadd
-                                            (zero_ext 128 rn)
-                                            (zero_ext 128 t1))
-                                        #x00000000000000000000000000000001))
-                                #b1
-                                #b0)))
-                    (=
-                        (:Z (:flags_out result))
-                        (if
-                            (=
-                                (bvadd t3 #x0000000000000001)
-                                #x0000000000000000)
-                            #b1
-                            #b0))
-                    (=
-                        (:N (:flags_out result))
-                        (extract 63 63 (bvadd t3 #x0000000000000001)))
-                    (= rd (bvadd t3 #x0000000000000001)))))
-        (=>
-            (and (= alu_op (ALUOp.SMulH)) (= size (OperandSize.Size64)))
-            (=
-                rd
-                (extract 127 64 (bvmul (sign_ext 128 rn) (sign_ext 128 rm)))))
-        (=>
-            (and (= alu_op (ALUOp.UMulH)) (= size (OperandSize.Size64)))
-            (=
-                rd
-                (extract 127 64 (bvmul (zero_ext 128 rn) (zero_ext 128 rm)))))
-        (=>
-            (and (= alu_op (ALUOp.SDiv)) (= size (OperandSize.Size64)))
-            (with
-                (t1 t2 t4)
-                (and
-                    (= t1 (= rm #x0000000000000000))
-                    (if
-                        t1
-                        (= t2 #x0000000000000000)
+                                            (bvadd
+                                                (extract 31 0 rn)
+                                                (bvnot (extract 31 0 rm)))
+                                            #x00000001)))
+                                (=
+                                    (:V (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                (sign_ext
+                                                    64
+                                                    (bvadd t3 #x00000001))
+                                                (bvadd
+                                                    (bvadd
+                                                        (sign_ext
+                                                            64
+                                                            (extract 31 0 rn))
+                                                        (sign_ext 64 t1))
+                                                    #x0000000000000001))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:C (:flags_out result))
+                                    (bvnot
+                                        (if
+                                            (=
+                                                t4
+                                                (bvadd
+                                                    (bvadd
+                                                        (zero_ext
+                                                            64
+                                                            (extract 31 0 rn))
+                                                        (zero_ext 64 t1))
+                                                    #x0000000000000001))
+                                            #b1
+                                            #b0)))
+                                (=
+                                    (:Z (:flags_out result))
+                                    (if
+                                        (= (bvadd t3 #x00000001) #x00000000)
+                                        #b1
+                                        #b0))
+                                (=
+                                    (:N (:flags_out result))
+                                    (extract 31 31 (bvadd t3 #x00000001)))
+                                (= rd t4))))
+                    ((Adc)
                         (=
-                            t4
-                            (extract
-                                63
-                                0
-                                (if
-                                    (and
-                                        (= rn #x8000000000000000)
-                                        (= rm #xffffffffffffffff))
-                                    #x00000000000000008000000000000000
-                                    (sign_ext 128 (bvsdiv rn rm))))))
-                    (= rd (if t1 t2 t4)))))
-        (=>
-            (and (= alu_op (ALUOp.UDiv)) (= size (OperandSize.Size64)))
-            (with
-                (t1 t2 t4)
-                (and
-                    (= t1 (= rm #x0000000000000000))
-                    (if
-                        t1
-                        (= t2 #x0000000000000000)
-                        (=
-                            t4
-                            (extract
-                                63
-                                0
-                                (bvsdiv
-                                    (zero_ext 128 rn)
-                                    (zero_ext 128 rm)))))
-                    (= rd (if t1 t2 t4)))))
-        (=>
-            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size32)))
-            (=
-                rd
-                (zero_ext
-                    64
-                    (bvadd
-                        (bvadd (extract 31 0 rn) (extract 31 0 rm))
-                        (zero_ext
-                            32
-                            (extract 0 0 (:C (:flags_in result))))))))
-        (=>
-            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size64)))
-            (=
-                rd
-                (bvadd
-                    (bvadd rn rm)
-                    (zero_ext 64 (extract 0 0 (:C (:flags_in result))))))))
+                            rd
+                            (zero_ext
+                                64
+                                (bvadd
+                                    (bvadd
+                                        (extract 31 0 rn)
+                                        (extract 31 0 rm))
+                                    (zero_ext
+                                        32
+                                        (extract
+                                            0
+                                            0
+                                            (:C (:flags_in result))))))))))))
     (require
         (or
-            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.AddS)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.SubS)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.SubS)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.SMulH)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.UMulH)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.SDiv)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.UDiv)) (= size (OperandSize.Size64)))
-            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size32)))
-            (and (= alu_op (ALUOp.Adc)) (= size (OperandSize.Size64))))))
+            (and
+                (Size64? size)
+                (or
+                    (Add? alu_op)
+                    (Sub? alu_op)
+                    (Orr? alu_op)
+                    (OrrNot? alu_op)
+                    (And? alu_op)
+                    (AndNot? alu_op)
+                    (Eor? alu_op)
+                    (EorNot? alu_op)
+                    (AddS? alu_op)
+                    (SubS? alu_op)
+                    (SMulH? alu_op)
+                    (UMulH? alu_op)
+                    (SDiv? alu_op)
+                    (UDiv? alu_op)
+                    (Adc? alu_op)))
+            (and
+                (Size32? size)
+                (or
+                    (Add? alu_op)
+                    (Sub? alu_op)
+                    (Orr? alu_op)
+                    (OrrNot? alu_op)
+                    (And? alu_op)
+                    (AndNot? alu_op)
+                    (Eor? alu_op)
+                    (EorNot? alu_op)
+                    (AddS? alu_op)
+                    (SubS? alu_op)
+                    (Adc? alu_op))))))

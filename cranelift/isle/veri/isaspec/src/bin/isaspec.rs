@@ -4,21 +4,20 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::Parser as ClapParser;
+use itertools::Itertools;
+
 use cranelift_codegen::isa::aarch64::inst::{
     writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Inst, OperandSize,
 };
 use cranelift_isle::ast::Def;
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
-use cranelift_isle_veri_isaspec::aarch64::pstate_field;
-use cranelift_isle_veri_isaspec::spec::{
-    spec_const_int, spec_enum_unit, spec_eq, spec_eq_bool, spec_field, spec_var,
-};
-use itertools::Itertools;
-
-use cranelift_isle_veri_isaspec::aarch64;
+use cranelift_isle_veri_isaspec::aarch64::{self, pstate_field};
 use cranelift_isle_veri_isaspec::builder::{
-    Builder, Case, Cases, InstConfig, Mapping, Mappings, SpecConfig,
+    Arm, Builder, Case, Cases, InstConfig, Mapping, Mappings, Match, SpecConfig,
+};
+use cranelift_isle_veri_isaspec::spec::{
+    spec_const_int, spec_eq, spec_eq_bool, spec_field, spec_var,
 };
 
 #[derive(ClapParser)]
@@ -98,7 +97,28 @@ struct FileConfig {
 
 /// Define specifications to generate.
 fn define() -> Vec<FileConfig> {
-    // ALUOp
+    vec![
+        FileConfig {
+            name: "alu_rrr.isle".into(),
+            specs: vec![define_alu_rrr()],
+        },
+        FileConfig {
+            name: "alu_rrrr.isle".into(),
+            specs: vec![define_alu_rrrr()],
+        },
+        FileConfig {
+            name: "bit_rr.isle".into(),
+            specs: vec![define_bit_rr()],
+        },
+        FileConfig {
+            name: "extend.isle".into(),
+            specs: vec![define_extend()],
+        },
+    ]
+}
+
+// MInst.AluRRR specification configuration.
+fn define_alu_rrr() -> SpecConfig {
     let alu_ops = [
         ALUOp::Add,
         ALUOp::Sub,
@@ -129,7 +149,7 @@ fn define() -> Vec<FileConfig> {
     ];
 
     // OperandSize
-    let sizes = vec![OperandSize::Size32, OperandSize::Size64];
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
 
     // AluRRR
     let mut mappings = flags_mappings();
@@ -146,52 +166,66 @@ fn define() -> Vec<FileConfig> {
         Mapping::require(spec_var("rm".to_string())),
     );
 
-    let alu_rrr = SpecConfig {
+    SpecConfig {
         // Spec signature.
         term: "MInst.AluRRR".to_string(),
         args: ["alu_op", "size", "rd", "rn", "rm"]
             .map(String::from)
             .to_vec(),
 
-        cases: Cases::Cases(
-            alu_ops
+        cases: Cases::Match(Match {
+            on: "size".to_string(),
+            arms: sizes
                 .iter()
-                .copied()
-                .cartesian_product(&sizes)
-                .filter(|(alu_op, size)| is_alu_op_size_supported(*alu_op, **size))
-                .map(|(alu_op, size)| Case {
-                    conds: vec![
-                        spec_eq(
-                            spec_var("alu_op".to_string()),
-                            spec_enum_unit("ALUOp".to_string(), format!("{alu_op:?}")),
-                        ),
-                        spec_eq(
-                            spec_var("size".to_string()),
-                            spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
-                        ),
-                    ],
-                    cases: Cases::Instruction(InstConfig {
-                        // Instruction to generate specification from.
-                        inst: Inst::AluRRR {
-                            alu_op,
-                            size: *size,
-                            rd: writable_xreg(4),
-                            rn: xreg(5),
-                            rm: xreg(6),
-                        },
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: "alu_op".to_string(),
+                        arms: alu_ops
+                            .iter()
+                            .filter(|alu_op| is_alu_op_size_supported(**alu_op, *size))
+                            .map(|alu_op| Arm {
+                                variant: format!("{alu_op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Instruction(InstConfig {
+                                    inst: Inst::AluRRR {
+                                        alu_op: *alu_op,
+                                        size: *size,
+                                        rd: writable_xreg(4),
+                                        rn: xreg(5),
+                                        rm: xreg(6),
+                                    },
 
-                        // Mappings from state to specification parameters.
-                        mappings: mappings.clone(),
+                                    // Mappings from state to specification parameters.
+                                    mappings: mappings.clone(),
+                                }),
+                            })
+                            .collect(),
                     }),
                 })
                 .collect(),
-        ),
-    };
+        }),
+    }
+}
 
-    // AluRRRR
+fn is_alu_op_size_supported(alu_op: ALUOp, size: OperandSize) -> bool {
+    match alu_op {
+        ALUOp::SMulH | ALUOp::UMulH | ALUOp::SDiv | ALUOp::UDiv => size == OperandSize::Size64,
+        _ => true,
+    }
+}
+
+// MInst.AluRRRR specification configuration.
+fn define_alu_rrrr() -> SpecConfig {
+    // ALUOp3
     let alu3_ops = [ALUOp3::MAdd, ALUOp3::MSub, ALUOp3::UMAddL, ALUOp3::SMAddL];
 
-    let mut mappings = flags_mappings();
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    let mut mappings = Mappings::default();
     mappings.writes.insert(
         aarch64::gpreg(4),
         Mapping::require(spec_var("rd".to_string())),
@@ -209,49 +243,58 @@ fn define() -> Vec<FileConfig> {
         Mapping::require(spec_var("ra".to_string())),
     );
 
-    let alu_rrrr = SpecConfig {
+    SpecConfig {
         // Spec signature.
         term: "MInst.AluRRRR".to_string(),
         args: ["alu_op", "size", "rd", "rn", "rm", "ra"]
             .map(String::from)
             .to_vec(),
 
-        cases: Cases::Cases(
-            alu3_ops
+        cases: Cases::Match(Match {
+            on: "size".to_string(),
+            arms: sizes
                 .iter()
-                .copied()
-                .cartesian_product(&sizes)
-                .filter(|(alu3_op, size)| is_alu3_op_size_supported(*alu3_op, **size))
-                .map(|(alu_op, size)| Case {
-                    conds: vec![
-                        spec_eq(
-                            spec_var("alu_op".to_string()),
-                            spec_enum_unit("ALUOp3".to_string(), format!("{alu_op:?}")),
-                        ),
-                        spec_eq(
-                            spec_var("size".to_string()),
-                            spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
-                        ),
-                    ],
-                    cases: Cases::Instruction(InstConfig {
-                        // Instruction to generate specification from.
-                        inst: Inst::AluRRRR {
-                            alu_op,
-                            size: *size,
-                            rd: writable_xreg(4),
-                            rn: xreg(5),
-                            rm: xreg(6),
-                            ra: xreg(7),
-                        },
-
-                        // Mappings from state to specification parameters.
-                        mappings: mappings.clone(),
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: "alu_op".to_string(),
+                        arms: alu3_ops
+                            .iter()
+                            .filter(|alu3_op| is_alu3_op_size_supported(**alu3_op, *size))
+                            .map(|alu_op| Arm {
+                                variant: format!("{alu_op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Instruction(InstConfig {
+                                    inst: Inst::AluRRRR {
+                                        alu_op: *alu_op,
+                                        size: *size,
+                                        rd: writable_xreg(4),
+                                        rn: xreg(5),
+                                        rm: xreg(6),
+                                        ra: xreg(7),
+                                    },
+                                    mappings: mappings.clone(),
+                                }),
+                            })
+                            .collect(),
                     }),
                 })
                 .collect(),
-        ),
-    };
+        }),
+    }
+}
 
+fn is_alu3_op_size_supported(alu3_op: ALUOp3, size: OperandSize) -> bool {
+    match alu3_op {
+        ALUOp3::UMAddL | ALUOp3::SMAddL => size == OperandSize::Size32,
+        _ => true,
+    }
+}
+
+// MInst.BitRR specification configuration.
+fn define_bit_rr() -> SpecConfig {
     // BitRR
     let bit_ops = [
         BitOp::Cls,
@@ -263,7 +306,10 @@ fn define() -> Vec<FileConfig> {
         // BitOp::Rev64,
     ];
 
-    let mut mappings = flags_mappings();
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    let mut mappings = Mappings::default();
     mappings.writes.insert(
         aarch64::gpreg(4),
         Mapping::require(spec_var("rd".to_string())),
@@ -273,49 +319,50 @@ fn define() -> Vec<FileConfig> {
         Mapping::require(spec_var("rn".to_string())),
     );
 
-    let bit_rr = SpecConfig {
+    SpecConfig {
         // Spec signature.
         term: "MInst.BitRR".to_string(),
         args: ["op", "size", "rd", "rn"].map(String::from).to_vec(),
 
-        cases: Cases::Cases(
-            bit_ops
+        cases: Cases::Match(Match {
+            on: "size".to_string(),
+            arms: sizes
                 .iter()
-                .copied()
-                .cartesian_product(&sizes)
-                .map(|(op, size)| Case {
-                    conds: vec![
-                        spec_eq(
-                            spec_var("op".to_string()),
-                            spec_enum_unit("BitOp".to_string(), format!("{op:?}")),
-                        ),
-                        spec_eq(
-                            spec_var("size".to_string()),
-                            spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
-                        ),
-                    ],
-                    cases: Cases::Instruction(InstConfig {
-                        // Instruction to generate specification from.
-                        inst: Inst::BitRR {
-                            op,
-                            size: *size,
-                            rd: writable_xreg(4),
-                            rn: xreg(5),
-                        },
-
-                        // Mappings from state to specification parameters.
-                        mappings: mappings.clone(),
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: "op".to_string(),
+                        arms: bit_ops
+                            .iter()
+                            .map(|op| Arm {
+                                variant: format!("{op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Instruction(InstConfig {
+                                    inst: Inst::BitRR {
+                                        op: *op,
+                                        size: *size,
+                                        rd: writable_xreg(4),
+                                        rn: xreg(5),
+                                    },
+                                    mappings: mappings.clone(),
+                                }),
+                            })
+                            .collect(),
                     }),
                 })
                 .collect(),
-        ),
-    };
+        }),
+    }
+}
 
+fn define_extend() -> SpecConfig {
     // Extend
-    let extend_signed = [false, true];
-    let extend_bits = [8u8, 16u8, 32u8, 64u8];
+    let signed = [false, true];
+    let bits = [8u8, 16u8, 32u8, 64u8];
 
-    let mut mappings = flags_mappings();
+    let mut mappings = Mappings::default();
     mappings.writes.insert(
         aarch64::gpreg(4),
         Mapping::require(spec_var("rd".to_string())),
@@ -325,18 +372,17 @@ fn define() -> Vec<FileConfig> {
         Mapping::require(spec_var("rn".to_string())),
     );
 
-    let extend = SpecConfig {
+    SpecConfig {
         // Spec signature.
         term: "MInst.Extend".to_string(),
         args: ["rd", "rn", "signed", "from_bits", "to_bits"]
             .map(String::from)
             .to_vec(),
         cases: Cases::Cases(
-            extend_bits
-                .iter()
-                .cartesian_product(&extend_bits)
+            bits.iter()
+                .cartesian_product(&bits)
                 .filter(|(from_bits, to_bits)| from_bits < to_bits)
-                .cartesian_product(&extend_signed)
+                .cartesian_product(&signed)
                 .map(|((from_bits, to_bits), signed)| Case {
                     conds: vec![
                         spec_eq_bool(spec_var("signed".to_string()), *signed),
@@ -365,40 +411,6 @@ fn define() -> Vec<FileConfig> {
                 })
                 .collect(),
         ),
-    };
-
-    // Files to generate.
-    vec![
-        FileConfig {
-            name: "alu_rrr.isle".into(),
-            specs: vec![alu_rrr],
-        },
-        FileConfig {
-            name: "alu_rrrr.isle".into(),
-            specs: vec![alu_rrrr],
-        },
-        FileConfig {
-            name: "bit_rr.isle".into(),
-            specs: vec![bit_rr],
-        },
-        FileConfig {
-            name: "extend.isle".into(),
-            specs: vec![extend],
-        },
-    ]
-}
-
-fn is_alu_op_size_supported(alu_op: ALUOp, size: OperandSize) -> bool {
-    match alu_op {
-        ALUOp::SMulH | ALUOp::UMulH | ALUOp::SDiv | ALUOp::UDiv => size == OperandSize::Size64,
-        _ => true,
-    }
-}
-
-fn is_alu3_op_size_supported(alu3_op: ALUOp3, size: OperandSize) -> bool {
-    match alu3_op {
-        ALUOp3::UMAddL | ALUOp3::SMAddL => size == OperandSize::Size32,
-        _ => true,
     }
 }
 

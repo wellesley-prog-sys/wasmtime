@@ -23,6 +23,10 @@ pub fn spec_true() -> SpecExpr {
     spec_const_bool(true)
 }
 
+pub fn spec_false() -> SpecExpr {
+    spec_const_bool(false)
+}
+
 pub fn spec_const_bit_vector(val: u128, width: usize) -> SpecExpr {
     assert!(width > 0);
     SpecExpr::ConstBitVec {
@@ -66,6 +70,14 @@ pub fn spec_eq_bool(x: SpecExpr, val: bool) -> SpecExpr {
 
 pub fn spec_or(args: Vec<SpecExpr>) -> SpecExpr {
     spec_op(SpecOp::Or, args)
+}
+
+pub fn spec_any(xs: Vec<SpecExpr>) -> SpecExpr {
+    match xs.len() {
+        0 => spec_false(),
+        1 => xs[0].clone(),
+        _ => spec_or(xs),
+    }
 }
 
 pub fn spec_and(args: Vec<SpecExpr>) -> SpecExpr {
