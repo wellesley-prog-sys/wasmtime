@@ -17,7 +17,9 @@ use cranelift_isle_veri_isaspec::spec::{
 use itertools::Itertools;
 
 use cranelift_isle_veri_isaspec::aarch64;
-use cranelift_isle_veri_isaspec::builder::{Builder, InstConfig, Mapping, Mappings, SpecConfig};
+use cranelift_isle_veri_isaspec::builder::{
+    Builder, Case, Cases, InstConfig, Mapping, Mappings, SpecConfig,
+};
 
 #[derive(ClapParser)]
 #[command(version, about)]
@@ -151,37 +153,42 @@ fn define() -> Vec<FileConfig> {
             .map(String::from)
             .to_vec(),
 
-        cases: alu_ops
-            .iter()
-            .copied()
-            .cartesian_product(&sizes)
-            .filter(|(alu_op, size)| is_alu_op_size_supported(*alu_op, **size))
-            .map(|(alu_op, size)| InstConfig {
-                // Instruction to generate specification from.
-                inst: Inst::AluRRR {
-                    alu_op,
-                    size: *size,
-                    rd: writable_xreg(4),
-                    rn: xreg(5),
-                    rm: xreg(6),
-                },
+        cases: Cases::Cases(
+            alu_ops
+                .iter()
+                .copied()
+                .cartesian_product(&sizes)
+                .filter(|(alu_op, size)| is_alu_op_size_supported(*alu_op, **size))
+                .enumerate()
+                .map(|(index, (alu_op, size))| Case {
+                    conds: vec![
+                        spec_eq(
+                            spec_var("alu_op".to_string()),
+                            spec_enum_unit("ALUOp".to_string(), format!("{alu_op:?}")),
+                        ),
+                        spec_eq(
+                            spec_var("size".to_string()),
+                            spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
+                        ),
+                    ],
+                    cases: Cases::Instruction(InstConfig {
+                        // Instruction to generate specification from.
+                        inst: Inst::AluRRR {
+                            alu_op,
+                            size: *size,
+                            rd: writable_xreg(4),
+                            rn: xreg(5),
+                            rm: xreg(6),
+                        },
 
-                // Requires.
-                require: vec![
-                    spec_eq(
-                        spec_var("alu_op".to_string()),
-                        spec_enum_unit("ALUOp".to_string(), format!("{alu_op:?}")),
-                    ),
-                    spec_eq(
-                        spec_var("size".to_string()),
-                        spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
-                    ),
-                ],
+                        // Mappings from state to specification parameters.
+                        mappings: mappings.clone(),
 
-                // Mappings from state to specification parameters.
-                mappings: mappings.clone(),
-            })
-            .collect(),
+                        index,
+                    }),
+                })
+                .collect(),
+        ),
     };
 
     // AluRRRR
@@ -212,38 +219,43 @@ fn define() -> Vec<FileConfig> {
             .map(String::from)
             .to_vec(),
 
-        cases: alu3_ops
-            .iter()
-            .copied()
-            .cartesian_product(&sizes)
-            .filter(|(alu3_op, size)| is_alu3_op_size_supported(*alu3_op, **size))
-            .map(|(alu_op, size)| InstConfig {
-                // Instruction to generate specification from.
-                inst: Inst::AluRRRR {
-                    alu_op,
-                    size: *size,
-                    rd: writable_xreg(4),
-                    rn: xreg(5),
-                    rm: xreg(6),
-                    ra: xreg(7),
-                },
+        cases: Cases::Cases(
+            alu3_ops
+                .iter()
+                .copied()
+                .cartesian_product(&sizes)
+                .filter(|(alu3_op, size)| is_alu3_op_size_supported(*alu3_op, **size))
+                .enumerate()
+                .map(|(index, (alu_op, size))| Case {
+                    conds: vec![
+                        spec_eq(
+                            spec_var("alu_op".to_string()),
+                            spec_enum_unit("ALUOp3".to_string(), format!("{alu_op:?}")),
+                        ),
+                        spec_eq(
+                            spec_var("size".to_string()),
+                            spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
+                        ),
+                    ],
+                    cases: Cases::Instruction(InstConfig {
+                        // Instruction to generate specification from.
+                        inst: Inst::AluRRRR {
+                            alu_op,
+                            size: *size,
+                            rd: writable_xreg(4),
+                            rn: xreg(5),
+                            rm: xreg(6),
+                            ra: xreg(7),
+                        },
 
-                // Requires.
-                require: vec![
-                    spec_eq(
-                        spec_var("alu_op".to_string()),
-                        spec_enum_unit("ALUOp3".to_string(), format!("{alu_op:?}")),
-                    ),
-                    spec_eq(
-                        spec_var("size".to_string()),
-                        spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
-                    ),
-                ],
+                        // Mappings from state to specification parameters.
+                        mappings: mappings.clone(),
 
-                // Mappings from state to specification parameters.
-                mappings: mappings.clone(),
-            })
-            .collect(),
+                        index,
+                    }),
+                })
+                .collect(),
+        ),
     };
 
     // BitRR
@@ -272,35 +284,40 @@ fn define() -> Vec<FileConfig> {
         term: "MInst.BitRR".to_string(),
         args: ["op", "size", "rd", "rn"].map(String::from).to_vec(),
 
-        cases: bit_ops
-            .iter()
-            .copied()
-            .cartesian_product(&sizes)
-            .map(|(op, size)| InstConfig {
-                // Instruction to generate specification from.
-                inst: Inst::BitRR {
-                    op,
-                    size: *size,
-                    rd: writable_xreg(4),
-                    rn: xreg(5),
-                },
+        cases: Cases::Cases(
+            bit_ops
+                .iter()
+                .copied()
+                .cartesian_product(&sizes)
+                .enumerate()
+                .map(|(index, (op, size))| Case {
+                    conds: vec![
+                        spec_eq(
+                            spec_var("op".to_string()),
+                            spec_enum_unit("BitOp".to_string(), format!("{op:?}")),
+                        ),
+                        spec_eq(
+                            spec_var("size".to_string()),
+                            spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
+                        ),
+                    ],
+                    cases: Cases::Instruction(InstConfig {
+                        // Instruction to generate specification from.
+                        inst: Inst::BitRR {
+                            op,
+                            size: *size,
+                            rd: writable_xreg(4),
+                            rn: xreg(5),
+                        },
 
-                // Requires.
-                require: vec![
-                    spec_eq(
-                        spec_var("op".to_string()),
-                        spec_enum_unit("BitOp".to_string(), format!("{op:?}")),
-                    ),
-                    spec_eq(
-                        spec_var("size".to_string()),
-                        spec_enum_unit("OperandSize".to_string(), format!("{size:?}")),
-                    ),
-                ],
+                        // Mappings from state to specification parameters.
+                        mappings: mappings.clone(),
 
-                // Mappings from state to specification parameters.
-                mappings: mappings.clone(),
-            })
-            .collect(),
+                        index,
+                    }),
+                })
+                .collect(),
+        ),
     };
 
     // Extend
@@ -323,38 +340,43 @@ fn define() -> Vec<FileConfig> {
         args: ["rd", "rn", "signed", "from_bits", "to_bits"]
             .map(String::from)
             .to_vec(),
-        cases: extend_bits
-            .iter()
-            .cartesian_product(&extend_bits)
-            .filter(|(from_bits, to_bits)| from_bits < to_bits)
-            .cartesian_product(&extend_signed)
-            .map(|((from_bits, to_bits), signed)| InstConfig {
-                // Instruction to generate specification from.
-                inst: Inst::Extend {
-                    rd: writable_xreg(4),
-                    rn: xreg(5),
-                    signed: *signed,
-                    from_bits: *from_bits,
-                    to_bits: *to_bits,
-                },
+        cases: Cases::Cases(
+            extend_bits
+                .iter()
+                .cartesian_product(&extend_bits)
+                .filter(|(from_bits, to_bits)| from_bits < to_bits)
+                .cartesian_product(&extend_signed)
+                .enumerate()
+                .map(|(index, ((from_bits, to_bits), signed))| Case {
+                    conds: vec![
+                        spec_eq_bool(spec_var("signed".to_string()), *signed),
+                        spec_eq(
+                            spec_var("from_bits".to_string()),
+                            spec_const_int((*from_bits).into()),
+                        ),
+                        spec_eq(
+                            spec_var("to_bits".to_string()),
+                            spec_const_int((*to_bits).into()),
+                        ),
+                    ],
+                    cases: Cases::Instruction(InstConfig {
+                        // Instruction to generate specification from.
+                        inst: Inst::Extend {
+                            rd: writable_xreg(4),
+                            rn: xreg(5),
+                            signed: *signed,
+                            from_bits: *from_bits,
+                            to_bits: *to_bits,
+                        },
 
-                // Requires.
-                require: vec![
-                    spec_eq_bool(spec_var("signed".to_string()), *signed),
-                    spec_eq(
-                        spec_var("from_bits".to_string()),
-                        spec_const_int((*from_bits).into()),
-                    ),
-                    spec_eq(
-                        spec_var("to_bits".to_string()),
-                        spec_const_int((*to_bits).into()),
-                    ),
-                ],
+                        // Mappings from state to specification parameters.
+                        mappings: mappings.clone(),
 
-                // Mappings from state to specification parameters.
-                mappings: mappings.clone(),
-            })
-            .collect(),
+                        index,
+                    }),
+                })
+                .collect(),
+        ),
     };
 
     // Files to generate.

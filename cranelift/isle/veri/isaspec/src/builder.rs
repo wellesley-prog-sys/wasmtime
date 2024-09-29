@@ -3,20 +3,34 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{bail, Result};
+use itertools::Itertools;
+
 use cranelift_codegen::isa::aarch64::inst::Inst;
-use cranelift_isle::ast::{Arm, Def, Spec, SpecExpr};
+use cranelift_isle::ast::{Def, Spec, SpecExpr};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle_veri_aslp::client::Client;
-use itertools::Itertools;
 
 use crate::constraints::{Binding, Target, Translator};
 use crate::semantics::inst_semantics;
-use crate::{aarch64, spec::*};
+use crate::{
+    aarch64,
+    spec::{spec_all, spec_ident, spec_idents, spec_with, substitute, Conditions},
+};
 
 pub struct SpecConfig {
     pub term: String,
     pub args: Vec<String>,
-    pub cases: Vec<InstConfig>,
+    pub cases: Cases,
+}
+
+pub enum Cases {
+    Instruction(InstConfig),
+    Cases(Vec<Case>),
+}
+
+pub struct Case {
+    pub conds: Vec<SpecExpr>,
+    pub cases: Cases,
 }
 
 #[derive(Clone)]
@@ -73,8 +87,8 @@ impl Mappings {
 
 pub struct InstConfig {
     pub inst: Inst,
-    pub require: Vec<SpecExpr>,
     pub mappings: Mappings,
+    pub index: usize,
 }
 
 pub struct Builder<'a> {
@@ -88,37 +102,46 @@ impl<'a> Builder<'a> {
     }
 
     pub fn build(&self) -> Result<Def> {
-        let spec = self.spec(&self.cfg)?;
+        let spec = self.spec()?;
         let def = Def::Spec(spec);
         Ok(def)
     }
 
-    fn spec(&self, cfg: &SpecConfig) -> Result<Spec> {
-        // Derive conditions for each case.
-        let conds: Vec<Conditions> = cfg
-            .cases
-            .iter()
-            .enumerate()
-            .map(|(i, c)| self.case(i, c))
-            .collect::<Result<_, _>>()?;
-        let cond = Conditions::merge(conds);
+    fn spec(&self) -> Result<Spec> {
+        let cond = self.cases(&self.cfg.cases)?;
         let spec = Spec {
-            term: spec_ident(cfg.term.clone()),
-            args: spec_idents(&cfg.args),
+            term: spec_ident(self.cfg.term.clone()),
+            args: spec_idents(&self.cfg.args),
             requires: cond.requires,
             provides: cond.provides,
             pos: Pos::default(),
         };
-
         Ok(spec)
     }
 
-    fn case(&self, i: usize, case: &InstConfig) -> Result<Conditions> {
+    fn cases(&self, cases: &Cases) -> Result<Conditions> {
+        match cases {
+            Cases::Instruction(case) => self.case(case),
+            Cases::Cases(cases) => {
+                let conds = cases
+                    .iter()
+                    .map(|case| {
+                        let mut cond = self.cases(&case.cases)?;
+                        cond.requires.extend(case.conds.clone());
+                        Ok(cond)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Conditions::merge(conds))
+            }
+        }
+    }
+
+    fn case(&self, case: &InstConfig) -> Result<Conditions> {
         // Semantics.
         let block = inst_semantics(&case.inst, self.client)?;
 
         // Translation.
-        let prefix = format!("v{i}_");
+        let prefix = format!("v{}_", case.index);
         let mut translator = Translator::new(aarch64::state(), prefix);
         translator.translate(&block)?;
 
@@ -188,119 +211,8 @@ impl<'a> Builder<'a> {
 
         // Conditions.
         Ok(Conditions {
-            requires: case.require.clone(),
+            requires: Vec::new(),
             provides,
         })
     }
-}
-
-fn substitute(expr: SpecExpr, substitutions: &HashMap<String, SpecExpr>) -> Result<SpecExpr> {
-    Ok(match expr {
-        // Variable
-        SpecExpr::Var { ref var, pos: _ } => {
-            if let Some(substitution) = substitutions.get(&var.0) {
-                substitution.clone()
-            } else {
-                expr
-            }
-        }
-
-        // Constants are unchanged.
-        SpecExpr::ConstInt { .. } | SpecExpr::ConstBitVec { .. } | SpecExpr::ConstBool { .. } => {
-            expr
-        }
-
-        // Scopes require care to ensure we are not replacing introduced variables.
-        SpecExpr::Match { x, arms, pos } => SpecExpr::Match {
-            x: Box::new(substitute(*x, substitutions)?),
-            arms: arms
-                .into_iter()
-                .map(
-                    |Arm {
-                         variant,
-                         args,
-                         body,
-                         pos,
-                     }| {
-                        for arg in &args {
-                            if substitutions.contains_key(&arg.0) {
-                                bail!("substituted variable collides with match arm");
-                            }
-                        }
-                        Ok(Arm {
-                            variant,
-                            args,
-                            body: substitute(body, substitutions)?,
-                            pos,
-                        })
-                    },
-                )
-                .collect::<Result<_>>()?,
-            pos,
-        },
-        SpecExpr::Let { defs, body, pos } => SpecExpr::Let {
-            defs: defs
-                .into_iter()
-                .map(|(var, expr)| {
-                    if substitutions.contains_key(&var.0) {
-                        bail!("substituted variable collides with let binding");
-                    }
-                    Ok((var, substitute(expr, substitutions)?))
-                })
-                .collect::<Result<_>>()?,
-            body: Box::new(substitute(*body, substitutions)?),
-            pos,
-        },
-        SpecExpr::With { decls, body, pos } => {
-            for decl in &decls {
-                if substitutions.contains_key(&decl.0) {
-                    bail!("substituted variable collides with with scope");
-                }
-            }
-            SpecExpr::With {
-                decls,
-                body: Box::new(substitute(*body, substitutions)?),
-                pos,
-            }
-        }
-
-        // Recurse into child expressions.
-        SpecExpr::Field { field, x, pos } => SpecExpr::Field {
-            field,
-            x: Box::new(substitute(*x, substitutions)?),
-            pos,
-        },
-        SpecExpr::Discriminator { variant, x, pos } => SpecExpr::Discriminator {
-            variant,
-            x: Box::new(substitute(*x, substitutions)?),
-            pos,
-        },
-        SpecExpr::Op { op, args, pos } => SpecExpr::Op {
-            op,
-            args: args
-                .into_iter()
-                .map(|arg| substitute(arg, substitutions))
-                .collect::<Result<_>>()?,
-            pos,
-        },
-        SpecExpr::Pair { l, r, pos } => SpecExpr::Pair {
-            l: Box::new(substitute(*l, substitutions)?),
-            r: Box::new(substitute(*r, substitutions)?),
-            pos,
-        },
-        SpecExpr::Enum {
-            name,
-            variant,
-            args,
-            pos,
-        } => SpecExpr::Enum {
-            name,
-            variant,
-            args: args
-                .into_iter()
-                .map(|arg| substitute(arg, substitutions))
-                .collect::<Result<_>>()?,
-            pos,
-        },
-    })
 }
