@@ -88,7 +88,6 @@ impl Mappings {
 pub struct InstConfig {
     pub inst: Inst,
     pub mappings: Mappings,
-    pub index: usize,
 }
 
 pub struct Builder<'a> {
@@ -141,8 +140,7 @@ impl<'a> Builder<'a> {
         let block = inst_semantics(&case.inst, self.client)?;
 
         // Translation.
-        let prefix = format!("v{}_", case.index);
-        let mut translator = Translator::new(aarch64::state(), prefix);
+        let mut translator = Translator::new(aarch64::state(), "t".to_string());
         translator.translate(&block)?;
 
         let global = translator.global();

@@ -159,8 +159,7 @@ fn define() -> Vec<FileConfig> {
                 .copied()
                 .cartesian_product(&sizes)
                 .filter(|(alu_op, size)| is_alu_op_size_supported(*alu_op, **size))
-                .enumerate()
-                .map(|(index, (alu_op, size))| Case {
+                .map(|(alu_op, size)| Case {
                     conds: vec![
                         spec_eq(
                             spec_var("alu_op".to_string()),
@@ -183,8 +182,6 @@ fn define() -> Vec<FileConfig> {
 
                         // Mappings from state to specification parameters.
                         mappings: mappings.clone(),
-
-                        index,
                     }),
                 })
                 .collect(),
@@ -225,8 +222,7 @@ fn define() -> Vec<FileConfig> {
                 .copied()
                 .cartesian_product(&sizes)
                 .filter(|(alu3_op, size)| is_alu3_op_size_supported(*alu3_op, **size))
-                .enumerate()
-                .map(|(index, (alu_op, size))| Case {
+                .map(|(alu_op, size)| Case {
                     conds: vec![
                         spec_eq(
                             spec_var("alu_op".to_string()),
@@ -250,8 +246,6 @@ fn define() -> Vec<FileConfig> {
 
                         // Mappings from state to specification parameters.
                         mappings: mappings.clone(),
-
-                        index,
                     }),
                 })
                 .collect(),
@@ -289,8 +283,7 @@ fn define() -> Vec<FileConfig> {
                 .iter()
                 .copied()
                 .cartesian_product(&sizes)
-                .enumerate()
-                .map(|(index, (op, size))| Case {
+                .map(|(op, size)| Case {
                     conds: vec![
                         spec_eq(
                             spec_var("op".to_string()),
@@ -312,8 +305,6 @@ fn define() -> Vec<FileConfig> {
 
                         // Mappings from state to specification parameters.
                         mappings: mappings.clone(),
-
-                        index,
                     }),
                 })
                 .collect(),
@@ -346,8 +337,7 @@ fn define() -> Vec<FileConfig> {
                 .cartesian_product(&extend_bits)
                 .filter(|(from_bits, to_bits)| from_bits < to_bits)
                 .cartesian_product(&extend_signed)
-                .enumerate()
-                .map(|(index, ((from_bits, to_bits), signed))| Case {
+                .map(|((from_bits, to_bits), signed)| Case {
                     conds: vec![
                         spec_eq_bool(spec_var("signed".to_string()), *signed),
                         spec_eq(
@@ -371,8 +361,6 @@ fn define() -> Vec<FileConfig> {
 
                         // Mappings from state to specification parameters.
                         mappings: mappings.clone(),
-
-                        index,
                     }),
                 })
                 .collect(),
