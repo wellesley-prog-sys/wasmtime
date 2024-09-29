@@ -16,6 +16,7 @@ pub enum Def {
     Attr(Attr),
     Spec(Spec),
     Model(Model),
+    State(State),
     Form(Form),
     Instantiation(Instantiation),
     Extern(Extern),
@@ -303,6 +304,8 @@ pub struct Spec {
     pub provides: Vec<SpecExpr>,
     /// Require statements, which express preconditions on the term
     pub requires: Vec<SpecExpr>,
+    /// State variables modified by the term.
+    pub modifies: Vec<Ident>,
     pub pos: Pos,
 }
 
@@ -345,6 +348,18 @@ pub struct Model {
     pub name: Ident,
     /// The value of the type or enum (potentially multiple values)
     pub val: ModelValue,
+}
+
+/// Declare an element of global state accessible by verification specs.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct State {
+    /// Name of the state element.
+    pub name: Ident,
+    /// Type of the state element.
+    pub ty: ModelType,
+    /// Default specification, applied if the state is not modified.
+    pub default: SpecExpr,
+    pub pos: Pos,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

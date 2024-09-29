@@ -185,6 +185,7 @@ impl<'a> Parser<'a> {
             "decl" => Def::Decl(self.parse_decl()?),
             "attr" => Def::Attr(self.parse_attr()?),
             "spec" => Def::Spec(self.parse_spec()?),
+            "state" => Def::State(self.parse_state()?),
             "model" => Def::Model(self.parse_model()?),
             "form" => Def::Form(self.parse_form()?),
             "instantiate" => Def::Instantiation(self.parse_instantiation()?),
@@ -402,6 +403,7 @@ impl<'a> Parser<'a> {
 
         let mut provides = Vec::new();
         let mut requires = Vec::new();
+        let mut modifies = Vec::new();
         while self.is_lparen() {
             self.expect_lparen()?;
             match &self.expect_symbol()?[..] {
@@ -415,6 +417,11 @@ impl<'a> Parser<'a> {
                         requires.push(self.parse_spec_expr()?);
                     }
                 }
+                "modifies" => {
+                    while !self.is_rparen() {
+                        modifies.push(self.parse_ident()?);
+                    }
+                }
                 field => {
                     return Err(self.error(
                         pos,
@@ -426,10 +433,11 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Spec {
-            term: term,
+            term,
             args,
             provides,
             requires,
+            modifies,
             pos,
         })
     }
@@ -722,6 +730,29 @@ impl<'a> Parser<'a> {
                 "Model type be a Bool, Int, BitVector (bv ...) or Struct (struct ...)".to_string(),
             ))
         }
+    }
+
+    fn parse_state(&mut self) -> Result<State> {
+        let pos = self.pos();
+        let name = self.parse_ident()?;
+        let ty = self.parse_tagged_type("type")?;
+
+        self.expect_lparen()?;
+        if !self.eat_sym_str("default")? {
+            return Err(self.error(
+                self.pos(),
+                format!("Invalid default: expected (default <expr>)"),
+            ));
+        };
+        let default = self.parse_spec_expr()?;
+        self.expect_rparen()?;
+
+        Ok(State {
+            name,
+            ty,
+            default,
+            pos,
+        })
     }
 
     fn parse_form(&mut self) -> Result<Form> {

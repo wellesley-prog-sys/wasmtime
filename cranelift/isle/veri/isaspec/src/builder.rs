@@ -128,6 +128,7 @@ impl<'a> Builder<'a> {
             args: spec_idents(&self.cfg.args),
             requires: cond.requires,
             provides: cond.provides,
+            modifies: Vec::new(),
             pos: Pos::default(),
         };
         Ok(spec)

@@ -1,7 +1,7 @@
 use crate::{
     expand::Expansion,
     program::Program,
-    spec::{self, Arm, Constructor, Signature},
+    spec::{self, Arm, Constructor, Signature, State},
     trie_again::{binding_type, BindingType},
     types::{Compound, Const, Type, Variant, Width},
 };
@@ -719,6 +719,8 @@ struct ConditionsBuilder<'a> {
     expansion: &'a Expansion,
     prog: &'a Program,
 
+    state: Variables,
+    modified_state: HashSet<String>,
     binding_value: HashMap<BindingId, Symbolic>,
     expr_map: HashMap<Expr, ExprId>,
     conditions: Conditions,
@@ -729,6 +731,8 @@ impl<'a> ConditionsBuilder<'a> {
         Self {
             expansion,
             prog,
+            state: Variables::new(),
+            modified_state: HashSet::new(),
             binding_value: HashMap::new(),
             expr_map: HashMap::new(),
             conditions: Conditions::default(),
@@ -736,6 +740,11 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn build(mut self) -> Result<Conditions> {
+        // State initialization.
+        for state in &self.prog.specenv.state {
+            self.init_state(state)?;
+        }
+
         // Bindings.
         for (i, binding) in self.expansion.bindings.iter().enumerate() {
             if let Some(binding) = binding {
@@ -764,10 +773,40 @@ impl<'a> ConditionsBuilder<'a> {
             self.conditions.assumptions.push(eq);
         }
 
+        // State defaults.
+        for state in &self.prog.specenv.state {
+            // The default only applies if the state was not modified.
+            if !self.modified_state.contains(&state.name.0) {
+                self.assume_state_default(state)?;
+            }
+        }
+
         // Validate
         self.conditions.validate()?;
 
         Ok(self.conditions)
+    }
+
+    fn init_state(&mut self, state: &State) -> Result<()> {
+        let name = &state.name.0;
+        let value = self.alloc_value(&state.ty, name.clone())?;
+        self.state.set(name.clone(), value)?;
+        Ok(())
+    }
+
+    fn assume_state_default(&mut self, state: &State) -> anyhow::Result<()> {
+        // Evaluate the default spec expression in a scope that only defines
+        // the state variable itself.
+        let mut vars = Variables::new();
+        let name = &state.name.0;
+        vars.set(name.clone(), self.state.get(name)?.clone())?;
+        let expr = self.spec_expr(&state.default, &vars)?;
+
+        // The expression should define an assumption about the state variable,
+        // so should be a scalar boolean.
+        self.conditions.assumptions.push(expr.try_into()?);
+
+        Ok(())
     }
 
     fn add_binding(&mut self, id: BindingId, binding: &Binding) -> Result<()> {
@@ -917,7 +956,7 @@ impl<'a> ConditionsBuilder<'a> {
             .ok_or(format_err!("no spec for term {term_name}",))?;
 
         // Assignment of signature variables to expressions.
-        let mut vars = Variables::new();
+        let mut vars = self.state.clone();
 
         // Arguments.
         if term_spec.args.len() != args.len() {
@@ -963,6 +1002,10 @@ impl<'a> ConditionsBuilder<'a> {
                 self.conditions.assertions.extend(provides);
             }
         }
+
+        // Record modified state.
+        self.modified_state
+            .extend(term_spec.modifies.iter().map(|v| v.0.clone()));
 
         // Record callsite.
         let signatures = self

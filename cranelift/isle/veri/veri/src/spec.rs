@@ -1,4 +1,4 @@
-use anyhow::{format_err, Result};
+use anyhow::{bail, format_err, Result};
 use cranelift_isle::{
     ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
@@ -388,6 +388,7 @@ pub struct Spec {
     pub ret: Ident,
     pub provides: Vec<Expr>,
     pub requires: Vec<Expr>,
+    pub modifies: Vec<Ident>,
     pub pos: Pos,
 }
 
@@ -398,6 +399,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: Vec::new(),
             requires: Vec::new(),
+            modifies: Vec::new(),
             pos: Pos::default(),
         }
     }
@@ -408,6 +410,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: spec.provides.iter().map(Expr::from_ast).collect(),
             requires: spec.requires.iter().map(Expr::from_ast).collect(),
+            modifies: spec.modifies.clone(),
             pos: spec.pos,
         }
     }
@@ -415,6 +418,13 @@ impl Spec {
     fn result_ident() -> Ident {
         Ident(RESULT.to_string(), Pos::default())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct State {
+    pub name: Ident,
+    pub ty: Compound,
+    pub default: Expr,
 }
 
 #[derive(Debug, Clone)]
@@ -452,6 +462,9 @@ pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
 
+    /// State elements.
+    pub state: Vec<State>,
+
     /// Terms that should be chained.
     pub chain: HashSet<TermId>,
 
@@ -472,6 +485,7 @@ impl SpecEnv {
     pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<Self> {
         let mut env = Self {
             term_spec: HashMap::new(),
+            state: Vec::new(),
             chain: HashSet::new(),
             tags: HashMap::new(),
             term_instantiations: HashMap::new(),
@@ -482,6 +496,7 @@ impl SpecEnv {
         env.collect_models(defs, tyenv);
         env.derive_type_models(tyenv)?;
         env.derive_enum_variant_specs(termenv, tyenv)?;
+        env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv);
         env.collect_attrs(defs, termenv, tyenv);
@@ -579,6 +594,39 @@ impl SpecEnv {
         );
         self.type_model
             .insert(type_id, Compound::from_ast(model_type));
+    }
+
+    fn collect_state(&mut self, defs: &[Def]) -> Result<()> {
+        // Collect states.
+        for def in defs {
+            if let ast::Def::State(ast::State {
+                name,
+                ty,
+                default,
+                pos: _,
+            }) = def
+            {
+                let ty = Compound::from_ast(ty);
+                let default = Expr::from_ast(default);
+                self.state.push(State {
+                    name: name.clone(),
+                    ty,
+                    default,
+                });
+            }
+        }
+
+        // Check for duplicates.
+        let mut names = HashSet::new();
+        for state in &self.state {
+            let name = &state.name.0;
+            if names.contains(name) {
+                bail!("duplicate state {name}");
+            }
+            names.insert(name);
+        }
+
+        Ok(())
     }
 
     fn collect_instantiations(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {

@@ -93,6 +93,7 @@ impl Printable for Def {
             }
             Def::Attr(ref a) => a.to_doc(),
             Def::Spec(ref s) => s.to_doc(),
+            Def::State(ref s) => s.to_doc(),
             Def::Model(ref m) => sexp(vec![RcDoc::text("model"), m.name.to_doc(), m.val.to_doc()]),
             Def::Form(ref f) => {
                 let mut parts = vec![RcDoc::text("form")];
@@ -372,7 +373,25 @@ impl Printable for Spec {
                     .chain(self.requires.iter().map(|e| e.to_doc())),
             ));
         }
+        if !self.modifies.is_empty() {
+            parts.push(sexp(
+                Vec::from([RcDoc::text("modifies")])
+                    .into_iter()
+                    .chain(self.modifies.iter().map(|e| e.to_doc())),
+            ));
+        }
         sexp(parts)
+    }
+}
+
+impl Printable for State {
+    fn to_doc(&self) -> RcDoc<()> {
+        sexp(vec![
+            RcDoc::text("state"),
+            self.name.to_doc(),
+            sexp(vec![RcDoc::text("type"), self.ty.to_doc()]),
+            sexp(vec![RcDoc::text("default"), self.default.to_doc()]),
+        ])
     }
 }
 
