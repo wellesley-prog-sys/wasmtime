@@ -157,6 +157,12 @@ pub enum SpecExpr {
         args: Vec<SpecExpr>,
         pos: Pos,
     },
+    /// Enum pattern matching.
+    Match {
+        x: Box<SpecExpr>,
+        arms: Vec<Arm>,
+        pos: Pos,
+    },
     /// Let bindings.
     Let {
         defs: Vec<(Ident, SpecExpr)>,
@@ -194,6 +200,7 @@ impl SpecExpr {
             | &Self::Field { pos, .. }
             | &Self::Discriminator { pos, .. }
             | &Self::Op { pos, .. }
+            | &Self::Match { pos, .. }
             | &Self::Let { pos, .. }
             | &Self::With { pos, .. }
             | &Self::Pair { pos, .. }
@@ -274,6 +281,15 @@ pub enum SpecOp {
     // Control operations
     If,
     Switch,
+}
+
+/// Arm of a spec match expression.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Arm {
+    pub variant: Ident,
+    pub args: Vec<Ident>,
+    pub body: SpecExpr,
+    pub pos: Pos,
 }
 
 /// A specification of the semantics of a term.

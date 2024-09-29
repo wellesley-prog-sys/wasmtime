@@ -501,6 +501,15 @@ impl<'a> Parser<'a> {
                 let body = Box::new(self.parse_spec_expr()?);
                 self.expect_rparen()?;
                 Ok(SpecExpr::With { decls, body, pos })
+            } else if self.eat_sym_str("match")? {
+                let x = Box::new(self.parse_spec_expr()?);
+                let mut arms = Vec::new();
+                while !(self.is_rparen()) {
+                    let arm = self.parse_arm()?;
+                    arms.push(arm);
+                }
+                self.expect_rparen()?;
+                Ok(SpecExpr::Match { x, arms, pos })
             } else if self.is_sym() && !self.is_spec_bit_vector() {
                 let sym_pos = self.pos();
                 let sym = self.expect_symbol()?;
@@ -598,6 +607,26 @@ impl<'a> Parser<'a> {
             "clz" => Ok(SpecOp::Clz),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
+    }
+
+    fn parse_arm(&mut self) -> Result<Arm> {
+        self.expect_lparen()?;
+        let pos = self.pos();
+        self.expect_lparen()?;
+        let variant = self.parse_ident()?;
+        let mut args = Vec::new();
+        while !self.is_rparen() {
+            args.push(self.parse_ident()?);
+        }
+        self.expect_rparen()?;
+        let body = self.parse_spec_expr()?;
+        self.expect_rparen()?;
+        Ok(Arm {
+            variant,
+            args,
+            body,
+            pos,
+        })
     }
 
     fn parse_spec_bit_vector(&mut self) -> Result<(u128, usize)> {

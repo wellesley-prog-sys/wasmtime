@@ -257,6 +257,11 @@ impl Printable for SpecExpr {
             SpecExpr::Discriminator { variant, x, pos: _ } => {
                 sexp(vec![RcDoc::text(format!("{}?", variant.0)), x.to_doc()])
             }
+            SpecExpr::Match { x, arms, pos: _ } => sexp(
+                Vec::from([RcDoc::text("match"), x.to_doc()])
+                    .into_iter()
+                    .chain(arms.iter().map(|arm| arm.to_doc())),
+            ),
             SpecExpr::Let { defs, body, pos: _ } => sexp(vec![
                 RcDoc::text("let"),
                 sexp(defs.iter().map(|(n, e)| sexp(vec![n.to_doc(), e.to_doc()]))),
@@ -329,6 +334,19 @@ impl Printable for SpecOp {
             SpecOp::Cls => "cls",
             SpecOp::Clz => "clz",
         })
+    }
+}
+
+impl Printable for Arm {
+    fn to_doc(&self) -> RcDoc<()> {
+        sexp(vec![
+            sexp(
+                Vec::from([self.variant.to_doc()])
+                    .into_iter()
+                    .chain(self.args.iter().map(|a| a.to_doc())),
+            ),
+            self.body.to_doc(),
+        ])
     }
 }
 

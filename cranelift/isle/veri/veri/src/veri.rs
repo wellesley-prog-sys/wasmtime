@@ -1,7 +1,7 @@
 use crate::{
     expand::Expansion,
     program::Program,
-    spec::{self, Constructor, Signature},
+    spec::{self, Arm, Constructor, Signature},
     trie_again::{binding_type, BindingType},
     types::{Compound, Const, Type, Variant, Width},
 };
@@ -219,6 +219,15 @@ impl SymbolicField {
 pub struct SymbolicEnum {
     discriminant: ExprId,
     variants: Vec<SymbolicVariant>,
+}
+
+impl SymbolicEnum {
+    fn try_variant_by_name(&self, name: &str) -> Result<&SymbolicVariant> {
+        self.variants
+            .iter()
+            .find(|v| v.name == name)
+            .ok_or(format_err!("no variant with name {name}"))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1241,6 +1250,8 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::Switch(on, arms) => self.spec_switch(on, arms, vars),
 
+            spec::Expr::Match(on, arms) => self.spec_match(on, arms, vars),
+
             spec::Expr::Let(defs, body) => self.spec_let(defs, body, vars),
 
             spec::Expr::With(decls, body) => self.spec_with(decls, body, vars),
@@ -1402,15 +1413,8 @@ impl<'a> ConditionsBuilder<'a> {
         let e = v
             .as_enum()
             .ok_or(format_err!("discriminator for non-enum value"))?;
-
-        let variant = e
-            .variants
-            .iter()
-            .find(|v| v.name == name.0)
-            .ok_or(format_err!("missing enum variant: {}", name.0))?;
-
+        let variant = e.try_variant_by_name(&name.0)?;
         let discriminator = self.discriminator(e, variant);
-
         Ok(discriminator.into())
     }
 
@@ -1425,9 +1429,9 @@ impl<'a> ConditionsBuilder<'a> {
         arms: &[(spec::Expr, spec::Expr)],
         vars: &Variables,
     ) -> Result<Symbolic> {
-        // Generate sub-expressions.
+        // Generate branch arms.
         let on = self.spec_expr(on, vars)?;
-        let arms = arms
+        let cases = arms
             .iter()
             .map(|(value, then)| {
                 let value = self.spec_expr(value, vars)?;
@@ -1436,17 +1440,59 @@ impl<'a> ConditionsBuilder<'a> {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        // Build an expression splitting over cases.
+        self.cases(&cases)
+    }
+
+    fn spec_match(&mut self, on: &spec::Expr, arms: &[Arm], vars: &Variables) -> Result<Symbolic> {
+        // Generate the enum value to match on.
+        let on = self.spec_expr(on, vars)?;
+        let e = on.as_enum().ok_or(format_err!("match on non-enum value"))?;
+
+        // Generate cases.
+        let mut cases = Vec::new();
+        for arm in arms {
+            // Lookup the variant.
+            let variant = e.try_variant_by_name(&arm.variant.0)?;
+
+            // Arm condition is that the discriminant matches the variant.
+            let cond = self.discriminator(e, variant);
+
+            // Arm value is the result of the body expression, evaluated with
+            // the variants fields brought into scope.
+            let Some(fields) = variant.value.as_struct() else {
+                bail!("variant {name} must have struct value", name = variant.name);
+            };
+            if arm.args.len() != fields.len() {
+                bail!(
+                    "incorrect number of arguments for variant {name}",
+                    name = variant.name
+                );
+            }
+            let mut arm_vars = vars.clone();
+            for (arg, field) in zip(&arm.args, fields) {
+                arm_vars.set(arg.0.clone(), field.value.clone())?;
+            }
+            let body = self.spec_expr(&arm.body, &arm_vars)?;
+
+            // Add case for this match arm.
+            cases.push((cond, body));
+        }
+
+        // Build an expression splitting over cases.
+        self.cases(&cases)
+    }
+
+    fn cases(&mut self, cases: &[(ExprId, Symbolic)]) -> Result<Symbolic> {
         // Build an undefined fallback value.
-        let Some((_, value)) = arms.last() else {
-            bail!("switch must have at least one arm");
+        let Some((_, value)) = cases.last() else {
+            bail!("must have at least one case");
         };
         let fallback = value.scalar_map(&mut |_| self.undef_variable());
 
         // Represent as nested conditionals.
-        //
-        // Note the condition of the last arm is not explicitly checked: we rely
-        // on the exhaustiveness assertion.
-        arms.iter()
+        cases
+            .iter()
             .rev()
             .cloned()
             .try_fold(fallback, |acc, (cond, then)| {

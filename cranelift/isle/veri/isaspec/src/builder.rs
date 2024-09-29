@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{bail, Result};
 use cranelift_codegen::isa::aarch64::inst::Inst;
-use cranelift_isle::ast::{Def, Spec, SpecExpr};
+use cranelift_isle::ast::{Arm, Def, Spec, SpecExpr};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle_veri_aslp::client::Client;
 use itertools::Itertools;
@@ -211,6 +211,33 @@ fn substitute(expr: SpecExpr, substitutions: &HashMap<String, SpecExpr>) -> Resu
         }
 
         // Scopes require care to ensure we are not replacing introduced variables.
+        SpecExpr::Match { x, arms, pos } => SpecExpr::Match {
+            x: Box::new(substitute(*x, substitutions)?),
+            arms: arms
+                .into_iter()
+                .map(
+                    |Arm {
+                         variant,
+                         args,
+                         body,
+                         pos,
+                     }| {
+                        for arg in &args {
+                            if substitutions.contains_key(&arg.0) {
+                                bail!("substituted variable collides with match arm");
+                            }
+                        }
+                        Ok(Arm {
+                            variant,
+                            args,
+                            body: substitute(body, substitutions)?,
+                            pos,
+                        })
+                    },
+                )
+                .collect::<Result<_>>()?,
+            pos,
+        },
         SpecExpr::Let { defs, body, pos } => SpecExpr::Let {
             defs: defs
                 .into_iter()

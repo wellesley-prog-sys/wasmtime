@@ -104,6 +104,8 @@ pub enum Expr {
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
     // Switch
     Switch(Box<Expr>, Vec<(Expr, Expr)>),
+    // Match
+    Match(Box<Expr>, Vec<Arm>),
     // Let bindings
     Let(Vec<(Ident, Expr)>, Box<Expr>),
     // With scope.
@@ -301,6 +303,18 @@ impl Expr {
                 }
                 _ => todo!("ast spec op: {op:?}"),
             },
+            ast::SpecExpr::Match { x, arms, pos: _ } => {
+                let x = Box::new(Expr::from_ast(x));
+                let arms = arms
+                    .iter()
+                    .map(|arm| Arm {
+                        variant: arm.variant.clone(),
+                        args: arm.args.clone(),
+                        body: Expr::from_ast(&arm.body),
+                    })
+                    .collect();
+                Expr::Match(x, arms)
+            }
             ast::SpecExpr::Let { defs, body, pos: _ } => {
                 let defs = defs
                     .iter()
@@ -357,6 +371,13 @@ pub enum Constructor {
         variant: Ident,
         args: Vec<Expr>,
     },
+}
+
+#[derive(Debug, Clone)]
+pub struct Arm {
+    pub variant: Ident,
+    pub args: Vec<Ident>,
+    pub body: Expr,
 }
 
 // QUESTION(mbm): should we make the result explicit in the spec syntax?
