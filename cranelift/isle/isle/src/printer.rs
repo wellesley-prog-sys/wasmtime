@@ -182,7 +182,7 @@ impl Printable for ModelValue {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             ModelValue::TypeValue(ref mt) => sexp(vec![RcDoc::text("type"), mt.to_doc()]),
-            v => todo!("model value: {v:?}"),
+            ModelValue::ConstValue(ref c) => sexp(vec![RcDoc::text("const"), c.to_doc()]),
         }
     }
 }
