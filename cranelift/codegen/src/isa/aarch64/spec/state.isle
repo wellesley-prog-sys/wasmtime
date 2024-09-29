@@ -1,0 +1,13 @@
+; Parameters of a load operation.
+(state isa_load
+    (type
+        (struct
+            (active Bool)
+            (size Int)
+            (addr (bv 64))
+        )
+    )
+    (default
+        (not (:active isa_load))
+    )
+)

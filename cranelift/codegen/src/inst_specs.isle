@@ -1,3 +1,5 @@
+;;;; Verification Type Models ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (model Imm64 (type (bv 64)))
 
 ; REVIEW(mbm): do we need to model MemFlags?
@@ -9,6 +11,21 @@
 ))
 
 (model Offset32 (type (bv 32)))
+
+;;;; State Definitions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Value loaded from memory.
+;
+; We deliberately do not attempt to model the entire state of memory. Modeling a
+; loaded value this way allows us to express the fact that loaded values on CLIF
+; and ISA side will be equivalent (combined with an assertion on address
+; equality).
+(state loaded_value
+    (type (bv 64))
+    (default true)
+)
+
+;;;; CLIF Instruction Specifications ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (spec (iadd x y)
     (provide (= result (bvadd x y))))

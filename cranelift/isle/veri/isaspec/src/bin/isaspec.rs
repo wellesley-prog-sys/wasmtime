@@ -4,12 +4,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::Parser as ClapParser;
+use cranelift_codegen::ir::MemFlags;
+use cranelift_codegen::{Reg, Writable};
+use cranelift_isle_veri_isaspec::memory::ReadEffect;
 use itertools::Itertools;
 
 use cranelift_codegen::isa::aarch64::inst::{
-    writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Inst, OperandSize,
+    writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, Inst, OperandSize,
 };
-use cranelift_isle::ast::Def;
+use cranelift_isle::ast::{Def, SpecOp};
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
 use cranelift_isle_veri_isaspec::aarch64::{self, pstate_field};
@@ -17,7 +20,7 @@ use cranelift_isle_veri_isaspec::builder::{
     Arm, Builder, Case, Cases, InstConfig, Mapping, Mappings, Match, SpecConfig,
 };
 use cranelift_isle_veri_isaspec::spec::{
-    spec_const_int, spec_eq, spec_eq_bool, spec_field, spec_var,
+    spec_binary, spec_const_int, spec_eq, spec_eq_bool, spec_field, spec_var,
 };
 
 #[derive(ClapParser)]
@@ -109,6 +112,10 @@ fn define() -> Vec<FileConfig> {
         FileConfig {
             name: "bit_rr.isle".into(),
             specs: vec![define_bit_rr()],
+        },
+        FileConfig {
+            name: "loads.isle".into(),
+            specs: define_loads(),
         },
         FileConfig {
             name: "extend.isle".into(),
@@ -411,6 +418,161 @@ fn define_extend() -> SpecConfig {
                 })
                 .collect(),
         ),
+    }
+}
+
+fn define_loads() -> Vec<SpecConfig> {
+    // ULoad8
+    let uload8 = define_load("MInst.ULoad8", 8, |rd, mem, flags| Inst::ULoad8 {
+        rd,
+        mem,
+        flags,
+    });
+
+    // SLoad8
+    let sload8 = define_load("MInst.SLoad8", 8, |rd, mem, flags| Inst::SLoad8 {
+        rd,
+        mem,
+        flags,
+    });
+
+    // ULoad16
+    let uload16 = define_load("MInst.ULoad16", 16, |rd, mem, flags| Inst::ULoad16 {
+        rd,
+        mem,
+        flags,
+    });
+
+    // SLoad16
+    let sload16 = define_load("MInst.SLoad16", 16, |rd, mem, flags| Inst::SLoad16 {
+        rd,
+        mem,
+        flags,
+    });
+
+    // ULoad32
+    let uload32 = define_load("MInst.ULoad32", 32, |rd, mem, flags| Inst::ULoad32 {
+        rd,
+        mem,
+        flags,
+    });
+
+    // SLoad32
+    let sload32 = define_load("MInst.SLoad32", 32, |rd, mem, flags| Inst::SLoad32 {
+        rd,
+        mem,
+        flags,
+    });
+
+    // ULoad64
+    let uload64 = define_load("MInst.ULoad64", 64, |rd, mem, flags| Inst::ULoad64 {
+        rd,
+        mem,
+        flags,
+    });
+
+    vec![uload8, sload8, uload16, sload16, uload32, sload32, uload64]
+}
+
+fn define_load<F>(term: &str, size_bits: usize, inst: F) -> SpecConfig
+where
+    F: Fn(Writable<Reg>, AMode, MemFlags) -> Inst,
+{
+    // Mappings.
+    let mut mappings = Mappings::default();
+
+    // Destination register.
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+
+    // ISA load state mapped to read effect.
+    let read_effect = ReadEffect::new();
+    let isa_load = spec_var("isa_load".to_string());
+    let loaded_value = spec_var("loaded_value".to_string());
+    mappings.writes.insert(
+        read_effect.active,
+        Mapping::require(spec_field("active".to_string(), isa_load.clone())),
+    );
+    mappings.writes.insert(
+        read_effect.addr,
+        Mapping::require(spec_field("addr".to_string(), isa_load.clone())),
+    );
+    mappings.writes.insert(
+        read_effect.size,
+        Mapping::require(spec_field("size".to_string(), isa_load.clone())),
+    );
+    mappings.reads.insert(
+        read_effect.value,
+        Mapping::require(spec_binary(
+            SpecOp::ConvTo,
+            spec_const_int(size_bits.try_into().unwrap()),
+            loaded_value.clone(),
+        )),
+    );
+
+    // RegReg
+    let mut reg_reg_mappings = mappings.clone();
+    reg_reg_mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    reg_reg_mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+
+    let reg_reg = Arm {
+        variant: "RegReg".to_string(),
+        args: ["rn", "rm"].map(String::from).to_vec(),
+        body: Cases::Instruction(InstConfig {
+            inst: inst(
+                writable_xreg(4),
+                AMode::RegReg {
+                    rn: xreg(5),
+                    rm: xreg(6),
+                },
+                MemFlags::new(),
+            ),
+            mappings: reg_reg_mappings,
+        }),
+    };
+
+    // RegScaled
+    let mut reg_scaled_mappings = mappings.clone();
+    reg_scaled_mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    reg_scaled_mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+
+    let reg_scaled = Arm {
+        variant: "RegScaled".to_string(),
+        args: ["rn", "rm"].map(String::from).to_vec(),
+        body: Cases::Instruction(InstConfig {
+            inst: inst(
+                writable_xreg(4),
+                AMode::RegScaled {
+                    rn: xreg(5),
+                    rm: xreg(6),
+                },
+                MemFlags::new(),
+            ),
+            mappings: reg_scaled_mappings,
+        }),
+    };
+
+    SpecConfig {
+        term: term.to_string(),
+        args: ["rd", "mem", "flags"].map(String::from).to_vec(),
+        cases: Cases::Match(Match {
+            on: "mem".to_string(),
+            arms: vec![reg_reg, reg_scaled],
+        }),
     }
 }
 

@@ -9,6 +9,7 @@ use cranelift_isle::ast::{SpecExpr, SpecOp};
 use cranelift_isle_veri_aslp::ast::{Block, Expr, Func, LExpr, Slice, Stmt};
 use tracing::debug;
 
+use crate::memory::ReadEffect;
 use crate::spec::*;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
@@ -439,13 +440,13 @@ impl Translator {
             "ZeroExtend" => {
                 let (x, w) = expect_binary(args)?;
                 let x = self.expr(x)?;
-                let w = spec_const_int(expect_size(w)?.try_into()?);
+                let w = spec_const_int(expect_lit_int_as_usize(w)?.try_into()?);
                 Ok(spec_binary(SpecOp::ZeroExt, w, x))
             }
             "SignExtend" => {
                 let (x, w) = expect_binary(args)?;
                 let x = self.expr(x)?;
-                let w = spec_const_int(expect_size(w)?.try_into()?);
+                let w = spec_const_int(expect_lit_int_as_usize(w)?.try_into()?);
                 Ok(spec_binary(SpecOp::SignExt, w, x))
             }
             "not_bool" => {
@@ -587,6 +588,10 @@ impl Translator {
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVSlt, lhs, rhs))
             }
+            "Mem.read" => {
+                let (addr, size, access) = expect_ternary(args)?;
+                self.mem_read(addr, size, access)
+            }
             unexpected => todo!("func: {unexpected}"),
         }
     }
@@ -594,8 +599,8 @@ impl Translator {
     fn slice(&mut self, x: &Expr, slice: &Slice) -> Result<SpecExpr> {
         match slice {
             Slice::LowWidth(l, w) => {
-                let l = expect_size(l)?;
-                let w = expect_size(w)?;
+                let l = expect_lit_int_as_usize(l)?;
+                let w = expect_lit_int_as_usize(w)?;
                 let h = l + w - 1;
                 let x = self.expr(x)?;
                 Ok(spec_ternary(
@@ -606,6 +611,27 @@ impl Translator {
                 ))
             }
         }
+    }
+
+    fn mem_read(&mut self, addr: &Expr, size: &Expr, access: &Expr) -> Result<SpecExpr> {
+        // Map parameters to spec expressions.
+        let addr = self.expr(addr)?;
+        let size_bytes = expect_lit_int_as_usize(size)?;
+
+        // Access flags not implemented: error on unexpected non-zero value.
+        let access = expect_lit_int_as_usize(access)?;
+        if access != 0 {
+            bail!("non-zero memory read access flags");
+        }
+
+        // Memory read operation modifies read effect variables.
+        let read_effect = ReadEffect::new();
+        self.assign(&read_effect.active, spec_true())?;
+        self.assign(&read_effect.size, spec_const_int(size_bytes.try_into()?))?;
+        self.assign(&read_effect.addr, addr)?;
+
+        let value = self.read(&read_effect.value)?;
+        Ok(spec_var(value))
     }
 }
 
@@ -630,9 +656,9 @@ fn expect_ternary<T>(xs: &[T]) -> Result<(&T, &T, &T)> {
     Ok((&xs[0], &xs[1], &xs[2]))
 }
 
-fn expect_size(expr: &Expr) -> Result<usize> {
+fn expect_lit_int_as_usize(expr: &Expr) -> Result<usize> {
     Ok(expr
         .as_lit_int()
-        .ok_or(format_err!("epected literal integer"))?
+        .ok_or(format_err!("expected literal integer"))?
         .parse()?)
 }
