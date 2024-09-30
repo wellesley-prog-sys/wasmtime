@@ -203,7 +203,7 @@ impl Compound {
     /// enum representation.
     pub fn from_isle(ty: &sema::Type, tyenv: &TypeEnv) -> Option<Self> {
         match ty {
-            sema::Type::Enum { variants, .. } => Some(Self::Enum(
+            sema::Type::Enum { variants, .. } if !variants.is_empty() => Some(Self::Enum(
                 variants
                     .iter()
                     .map(|v| Variant::from_isle(v, tyenv))
