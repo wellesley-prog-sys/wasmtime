@@ -1038,8 +1038,6 @@
       )
 )
 
-(attr MInst.AluRRImm12 (tag testing))
-
 (spec (MInst.AluRRImm12 alu_op size rd rn imm12)
       (provide
             (=>
