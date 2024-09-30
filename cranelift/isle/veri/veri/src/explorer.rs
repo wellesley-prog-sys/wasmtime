@@ -360,6 +360,7 @@ impl<'a> ExplorerWriter<'a> {
                     <th>&num;</th>
                     <th>Root</th>
                     <th>First Rule</th>
+                    <th>Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -392,6 +393,11 @@ impl<'a> ExplorerWriter<'a> {
                 "<td>{rule_ref}</td>",
                 rule_ref = self.rule_ref(*rule_id)
             )?;
+
+            // Tags
+            let mut tags: Vec<String> = expansion.term_tags(self.prog).iter().cloned().collect();
+            tags.sort();
+            writeln!(output, "<td>{tags}</td>", tags = tags.join(", "))?;
 
             writeln!(output, "</tr>")?;
         }
