@@ -182,7 +182,12 @@ impl<'a> Solver<'a> {
                 self.expr_atom(y),
             ])),
             Expr::BVNot(x) => Ok(self.smt.bvnot(self.expr_atom(x))),
-            Expr::Cls(x) => Ok(self.smt.bvnot(self.expr_atom(x))),
+            // TODO: call new encoded CLS function, pass in self.expr_atom(x), get back SMT implementing CLS
+            Expr::Cls(x) => {
+                let xe = self.expr_atom(x);
+                Ok(example_cls64(&mut self.smt, xe, 0))
+            }
+
             Expr::BVNeg(x) => Ok(self.smt.bvneg(self.expr_atom(x))),
             Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVOr(x, y) => Ok(self.smt.bvor(self.expr_atom(x), self.expr_atom(y))),
@@ -421,4 +426,29 @@ impl<'a> Solver<'a> {
         self.smt.declare_const(&name, sort)?;
         Ok(self.smt.atom(name))
     }
+}
+
+
+pub fn example_cls64(smt: &mut Context, x: SExpr, id: u32) -> SExpr {
+    // Generated code.
+    // total zeros counter
+    let zret0 = smt.declare_const(
+        format!("zret0_{id}", id = id),
+        smt.list(vec![
+            smt.atoms().und,
+            smt.atom("BitVec"),
+            smt.numeral(64),
+        ]),
+    ).unwrap();
+    smt.assert(smt.eq(
+        zret0,
+        smt.list(vec![
+            smt.atoms().und,
+            smt.atom("bv0"),
+            smt.numeral(64),
+        ]),
+    )).unwrap();
+
+    return zret0;
+
 }
