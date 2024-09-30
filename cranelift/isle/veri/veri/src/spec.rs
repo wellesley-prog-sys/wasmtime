@@ -1,4 +1,4 @@
-use anyhow::{bail, format_err, Result};
+use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
     ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
@@ -691,6 +691,47 @@ impl SpecEnv {
                 "chained term should not have spec"
             );
         }
+    }
+
+    /// Resolve any named types in the given compound type.
+    pub fn resolve_type(&self, ty: &Compound, tyenv: &TypeEnv) -> Result<Compound> {
+        ty.resolve(&mut |name| {
+            let type_id = tyenv
+                .get_type_by_name(name)
+                .ok_or(format_err!("unknown type {}", name.0))?;
+            let ty = self
+                .type_model
+                .get(&type_id)
+                .ok_or(format_err!("unspecified model for type {}", name.0))?;
+            Ok(ty.clone())
+        })
+    }
+
+    /// Resolve any named types in the given term signature.
+    pub fn resolve_signature(&self, sig: &Signature, tyenv: &TypeEnv) -> Result<Signature> {
+        Ok(Signature {
+            args: sig
+                .args
+                .iter()
+                .map(|arg| self.resolve_type(arg, tyenv))
+                .collect::<Result<_>>()?,
+            ret: self.resolve_type(&sig.ret, tyenv)?,
+        })
+    }
+
+    /// Lookup instantiations for the given term, with any named types resolved.
+    pub fn resolve_term_instantiations(
+        &self,
+        term_id: &TermId,
+        tyenv: &TypeEnv,
+    ) -> Result<Vec<Signature>> {
+        let Some(sigs) = self.term_instantiations.get(term_id) else {
+            return Ok(Vec::new());
+        };
+
+        sigs.iter()
+            .map(|sig| self.resolve_signature(sig, tyenv))
+            .collect::<Result<_>>()
     }
 
     /// Report whether the given term has a specification.

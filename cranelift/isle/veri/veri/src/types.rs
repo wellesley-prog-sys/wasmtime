@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use anyhow::Result;
 use cranelift_isle::{
     ast::{Ident, ModelType},
     lexer::Pos,
@@ -108,6 +109,17 @@ impl Field {
             ty: Compound::named_from_isle(ty, tyenv),
         }
     }
+
+    /// Resolve any named types.
+    pub fn resolve<F>(&self, lookup: &mut F) -> Result<Self>
+    where
+        F: FnMut(&Ident) -> Result<Compound>,
+    {
+        Ok(Field {
+            name: self.name.clone(),
+            ty: self.ty.resolve(lookup)?,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +148,22 @@ impl Variant {
 
     pub fn ty(&self) -> Compound {
         Compound::Struct(self.fields.clone())
+    }
+
+    /// Resolve any named types.
+    pub fn resolve<F>(&self, lookup: &mut F) -> Result<Self>
+    where
+        F: FnMut(&Ident) -> Result<Compound>,
+    {
+        Ok(Variant {
+            name: self.name.clone(),
+            id: self.id,
+            fields: self
+                .fields
+                .iter()
+                .map(|f| f.resolve(lookup))
+                .collect::<Result<_>>()?,
+        })
     }
 }
 
@@ -201,6 +229,33 @@ impl Compound {
         match self {
             Compound::Enum(variants) => Some(variants),
             _ => None,
+        }
+    }
+
+    /// Resolve any named types.
+    pub fn resolve<F>(&self, lookup: &mut F) -> Result<Self>
+    where
+        F: FnMut(&Ident) -> Result<Compound>,
+    {
+        match self {
+            Compound::Primitive(_) => Ok(self.clone()),
+            Compound::Struct(fields) => Ok(Compound::Struct(
+                fields
+                    .iter()
+                    .map(|f| f.resolve(lookup))
+                    .collect::<Result<_>>()?,
+            )),
+            Compound::Enum(variants) => Ok(Compound::Enum(
+                variants
+                    .iter()
+                    .map(|v| v.resolve(lookup))
+                    .collect::<Result<_>>()?,
+            )),
+            Compound::Named(name) => {
+                // TODO(mbm): named type model cycle detection
+                let ty = lookup(name)?;
+                ty.resolve(lookup)
+            }
         }
     }
 }

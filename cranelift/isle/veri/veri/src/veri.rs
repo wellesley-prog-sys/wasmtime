@@ -1011,10 +1011,7 @@ impl<'a> ConditionsBuilder<'a> {
         let signatures = self
             .prog
             .specenv
-            .term_instantiations
-            .get(&term)
-            .cloned()
-            .unwrap_or_default();
+            .resolve_term_instantiations(&term, &self.prog.tyenv)?;
         self.conditions.calls.push(Call {
             term,
             args: args.to_vec(),
@@ -1722,15 +1719,9 @@ impl<'a> ConditionsBuilder<'a> {
                     .map(|v| self.alloc_variant(v, name.clone()))
                     .collect::<Result<_>>()?,
             })),
-            Compound::Named(type_name) => {
-                // TODO(mbm): named type model cycle detection
-                // TODO(mbm): type ID lookup should happen in SpecEnv
-                let type_id = self
-                    .prog
-                    .tyenv
-                    .get_type_by_name(type_name)
-                    .ok_or(format_err!("unknown type {}", type_name.0))?;
-                self.alloc_model(type_id, name)
+            Compound::Named(_) => {
+                let ty = self.prog.specenv.resolve_type(ty, &self.prog.tyenv)?;
+                self.alloc_value(&ty, name)
             }
         }
     }
