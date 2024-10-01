@@ -2162,6 +2162,7 @@
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for creating the zero register.
+(spec (zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 

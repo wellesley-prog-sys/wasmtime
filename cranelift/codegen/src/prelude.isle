@@ -586,6 +586,14 @@
 
 ;; A pure constructor/extractor that only matches scalar integers, and
 ;; references that can fit in 64 bits.
+(spec (ty_int_ref_scalar_64 ty) 
+      (provide (= result ty))
+      (require 
+            (or 
+                  (= ty 8)
+                  (= ty 16)
+                  (= ty 32)
+                  (= ty 64))))
 (decl pure partial ty_int_ref_scalar_64 (Type) Type)
 (extern constructor ty_int_ref_scalar_64 ty_int_ref_scalar_64)
 (extern extractor ty_int_ref_scalar_64 ty_int_ref_scalar_64_extract)
