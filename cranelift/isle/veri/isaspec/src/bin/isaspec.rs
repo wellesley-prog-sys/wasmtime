@@ -10,7 +10,7 @@ use cranelift_isle_veri_isaspec::memory::ReadEffect;
 use itertools::Itertools;
 
 use cranelift_codegen::isa::aarch64::inst::{
-    writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, Inst, OperandSize,
+    writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, ExtendOp, Inst, OperandSize,
 };
 use cranelift_isle::ast::{Def, SpecOp};
 use cranelift_isle::printer;
@@ -566,12 +566,94 @@ where
         }),
     };
 
+    // RegScaledExtended
+    let extendops = [
+        // Not supported by assembler: UXTB, UXTH, UXTX, SXTB, SXTH
+        ExtendOp::UXTW,
+        ExtendOp::SXTW,
+        ExtendOp::SXTX,
+    ];
+    let mut reg_scaled_extended_mappings = mappings.clone();
+    reg_scaled_extended_mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    reg_scaled_extended_mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+
+    let reg_scaled_extended = Arm {
+        variant: "RegScaledExtended".to_string(),
+        args: ["rn", "rm", "extendop"].map(String::from).to_vec(),
+        body: Cases::Match(Match {
+            on: "extendop".to_string(),
+            arms: extendops
+                .into_iter()
+                .map(|extendop| Arm {
+                    variant: format!("{extendop:?}"),
+                    args: Vec::new(),
+                    body: Cases::Instruction(InstConfig {
+                        inst: inst(
+                            writable_xreg(4),
+                            AMode::RegScaledExtended {
+                                rn: xreg(5),
+                                rm: xreg(6),
+                                extendop,
+                            },
+                            MemFlags::new(),
+                        ),
+                        mappings: reg_scaled_extended_mappings.clone(),
+                    }),
+                })
+                .collect(),
+        }),
+    };
+
+    // RegExtended
+    let mut reg_extended_mappings = mappings.clone();
+    reg_extended_mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    reg_extended_mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+
+    let reg_extended = Arm {
+        variant: "RegExtended".to_string(),
+        args: ["rn", "rm", "extendop"].map(String::from).to_vec(),
+        body: Cases::Match(Match {
+            on: "extendop".to_string(),
+            arms: extendops
+                .into_iter()
+                .map(|extendop| Arm {
+                    variant: format!("{extendop:?}"),
+                    args: Vec::new(),
+                    body: Cases::Instruction(InstConfig {
+                        inst: inst(
+                            writable_xreg(4),
+                            AMode::RegExtended {
+                                rn: xreg(5),
+                                rm: xreg(6),
+                                extendop,
+                            },
+                            MemFlags::new(),
+                        ),
+                        mappings: reg_extended_mappings.clone(),
+                    }),
+                })
+                .collect(),
+        }),
+    };
+
     SpecConfig {
         term: term.to_string(),
         args: ["rd", "mem", "flags"].map(String::from).to_vec(),
         cases: Cases::Match(Match {
             on: "mem".to_string(),
-            arms: vec![reg_reg, reg_scaled],
+            arms: vec![reg_reg, reg_scaled, reg_scaled_extended, reg_extended],
         }),
     }
 }
