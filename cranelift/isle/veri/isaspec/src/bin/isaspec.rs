@@ -500,8 +500,8 @@ where
         MappingBuilder::state(ISA_LOAD).field("addr").build(),
     );
     mappings.writes.insert(
-        read_effect.size,
-        MappingBuilder::state(ISA_LOAD).field("size").build(),
+        read_effect.size_bits,
+        MappingBuilder::state(ISA_LOAD).field("size_bits").build(),
     );
     mappings.reads.insert(
         read_effect.value,

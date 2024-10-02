@@ -617,6 +617,7 @@ impl Translator {
         // Map parameters to spec expressions.
         let addr = self.expr(addr)?;
         let size_bytes = expect_lit_int_as_usize(size)?;
+        let size_bits = 8 * size_bytes;
 
         // Access flags not implemented: error on unexpected non-zero value.
         let access = expect_lit_int_as_usize(access)?;
@@ -627,7 +628,10 @@ impl Translator {
         // Memory read operation modifies read effect variables.
         let read_effect = ReadEffect::new();
         self.assign(&read_effect.active, spec_true())?;
-        self.assign(&read_effect.size, spec_const_int(size_bytes.try_into()?))?;
+        self.assign(
+            &read_effect.size_bits,
+            spec_const_int(size_bits.try_into()?),
+        )?;
         self.assign(&read_effect.addr, addr)?;
 
         let value = self.read(&read_effect.value)?;

@@ -3,7 +3,7 @@ use crate::constraints::Target;
 pub struct ReadEffect {
     pub active: Target,
     pub addr: Target,
-    pub size: Target,
+    pub size_bits: Target,
     pub value: Target,
 }
 
@@ -12,7 +12,7 @@ impl ReadEffect {
         Self {
             active: Target::Field(Box::new(Self::variable()), "ACTIVE".to_string()),
             addr: Target::Field(Box::new(Self::variable()), "ADDR".to_string()),
-            size: Target::Field(Box::new(Self::variable()), "SIZE".to_string()),
+            size_bits: Target::Field(Box::new(Self::variable()), "SIZE_BITS".to_string()),
             value: Target::Field(Box::new(Self::variable()), "VALUE".to_string()),
         }
     }
@@ -22,6 +22,6 @@ impl ReadEffect {
     }
 
     pub fn targets(&self) -> Vec<&Target> {
-        vec![&self.active, &self.addr, &self.size, &self.value]
+        vec![&self.active, &self.addr, &self.size_bits, &self.value]
     }
 }
