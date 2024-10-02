@@ -2406,4 +2406,7 @@
                                                 #x001f
                                                 (bvadd t95 #x0001))))))))))))
     (require
-        (or (and (Size64? size) (Cls? op)) (and (Size32? size) (Cls? op)))))
+        (match
+            size
+            ((Size64) (match op ((Cls) true)))
+            ((Size32) (match op ((Cls) true))))))

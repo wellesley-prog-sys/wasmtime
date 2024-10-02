@@ -16,9 +16,7 @@ use crate::semantics::inst_semantics;
 use crate::spec::spec_field;
 use crate::{
     aarch64,
-    spec::{
-        spec_all, spec_any, spec_ident, spec_idents, spec_var, spec_with, substitute, Conditions,
-    },
+    spec::{spec_all, spec_ident, spec_idents, spec_var, spec_with, substitute, Conditions},
 };
 
 pub struct SpecConfig {
@@ -192,7 +190,7 @@ impl<'a> Builder<'a> {
             }
             Cases::Match(m) => {
                 let x = spec_var(m.on.clone());
-                let mut arm_requires = Vec::new();
+                let mut require_arms = Vec::new();
                 let mut arms = Vec::new();
                 let mut modifies = HashSet::new();
                 for arm in &m.arms {
@@ -209,23 +207,25 @@ impl<'a> Builder<'a> {
 
                     // This arm requires a match on the variant, as well as
                     // requirements from the body.
-                    let mut require = Vec::new();
-                    require.push(SpecExpr::Discriminator {
+                    require_arms.push(ast::Arm {
                         variant: spec_ident(arm.variant.clone()),
-                        x: Box::new(x.clone()),
+                        args: spec_idents(&arm.args),
+                        body: spec_all(cond.requires),
                         pos: Pos::default(),
                     });
-                    require.extend(cond.requires);
-                    arm_requires.push(spec_all(require));
 
                     // Merge modifies.
                     modifies.extend(cond.modifies);
                 }
 
                 Ok(Conditions {
-                    requires: vec![spec_any(arm_requires)],
+                    requires: vec![SpecExpr::Match {
+                        x: Box::new(x.clone()),
+                        arms: require_arms,
+                        pos: Pos::default(),
+                    }],
                     provides: vec![SpecExpr::Match {
-                        x: Box::new(x),
+                        x: Box::new(x.clone()),
                         arms,
                         pos: Pos::default(),
                     }],

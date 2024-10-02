@@ -105,15 +105,14 @@
                                         32
                                         (conv_to 8 loaded_value))))))))))
     (require
-        (or
-            (RegReg? mem)
-            (RegScaled? mem)
-            (and
-                (RegScaledExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop)))
-            (and
-                (RegExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop))))))
+        (match
+            mem
+            ((RegReg rn rm) true)
+            ((RegScaled rn rm) true)
+            ((RegScaledExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.SLoad8 rd mem flags)
@@ -186,15 +185,14 @@
                                 rd
                                 (sign_ext 64 (conv_to 8 loaded_value)))))))))
     (require
-        (or
-            (RegReg? mem)
-            (RegScaled? mem)
-            (and
-                (RegScaledExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop)))
-            (and
-                (RegExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop))))))
+        (match
+            mem
+            ((RegReg rn rm) true)
+            ((RegScaled rn rm) true)
+            ((RegScaledExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.ULoad16 rd mem flags)
@@ -325,15 +323,14 @@
                                         32
                                         (conv_to 16 loaded_value))))))))))
     (require
-        (or
-            (RegReg? mem)
-            (RegScaled? mem)
-            (and
-                (RegScaledExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop)))
-            (and
-                (RegExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop))))))
+        (match
+            mem
+            ((RegReg rn rm) true)
+            ((RegScaled rn rm) true)
+            ((RegScaledExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.SLoad16 rd mem flags)
@@ -422,15 +419,14 @@
                                 rd
                                 (sign_ext 64 (conv_to 16 loaded_value)))))))))
     (require
-        (or
-            (RegReg? mem)
-            (RegScaled? mem)
-            (and
-                (RegScaledExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop)))
-            (and
-                (RegExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop))))))
+        (match
+            mem
+            ((RegReg rn rm) true)
+            ((RegScaled rn rm) true)
+            ((RegScaledExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.ULoad32 rd mem flags)
@@ -519,15 +515,14 @@
                                 rd
                                 (zero_ext 64 (conv_to 32 loaded_value)))))))))
     (require
-        (or
-            (RegReg? mem)
-            (RegScaled? mem)
-            (and
-                (RegScaledExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop)))
-            (and
-                (RegExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop))))))
+        (match
+            mem
+            ((RegReg rn rm) true)
+            ((RegScaled rn rm) true)
+            ((RegScaledExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.SLoad32 rd mem flags)
@@ -616,15 +611,14 @@
                                 rd
                                 (sign_ext 64 (conv_to 32 loaded_value)))))))))
     (require
-        (or
-            (RegReg? mem)
-            (RegScaled? mem)
-            (and
-                (RegScaledExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop)))
-            (and
-                (RegExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop))))))
+        (match
+            mem
+            ((RegReg rn rm) true)
+            ((RegScaled rn rm) true)
+            ((RegScaledExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.ULoad64 rd mem flags)
@@ -711,12 +705,11 @@
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
                             (= rd (conv_to 64 loaded_value))))))))
     (require
-        (or
-            (RegReg? mem)
-            (RegScaled? mem)
-            (and
-                (RegScaledExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop)))
-            (and
-                (RegExtended? mem)
-                (or (UXTW? extendop) (SXTW? extendop) (SXTX? extendop))))))
+        (match
+            mem
+            ((RegReg rn rm) true)
+            ((RegScaled rn rm) true)
+            ((RegScaledExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop)
+                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))

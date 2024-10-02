@@ -50,12 +50,13 @@
                                     (sign_ext 64 (extract 31 0 rn))
                                     (sign_ext 64 (extract 31 0 rm))))))))))
     (require
-        (or
-            (and (Size64? size) (or (MAdd? alu_op) (MSub? alu_op)))
-            (and
-                (Size32? size)
-                (or
-                    (MAdd? alu_op)
-                    (MSub? alu_op)
-                    (UMAddL? alu_op)
-                    (SMAddL? alu_op))))))
+        (match
+            size
+            ((Size64) (match alu_op ((MAdd) true) ((MSub) true)))
+            ((Size32)
+                (match
+                    alu_op
+                    ((MAdd) true)
+                    ((MSub) true)
+                    ((UMAddL) true)
+                    ((SMAddL) true))))))

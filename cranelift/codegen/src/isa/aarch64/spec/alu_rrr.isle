@@ -363,36 +363,37 @@
                                             0
                                             (:C (:flags_in result))))))))))))
     (require
-        (or
-            (and
-                (Size64? size)
-                (or
-                    (Add? alu_op)
-                    (Sub? alu_op)
-                    (Orr? alu_op)
-                    (OrrNot? alu_op)
-                    (And? alu_op)
-                    (AndNot? alu_op)
-                    (Eor? alu_op)
-                    (EorNot? alu_op)
-                    (AddS? alu_op)
-                    (SubS? alu_op)
-                    (SMulH? alu_op)
-                    (UMulH? alu_op)
-                    (SDiv? alu_op)
-                    (UDiv? alu_op)
-                    (Adc? alu_op)))
-            (and
-                (Size32? size)
-                (or
-                    (Add? alu_op)
-                    (Sub? alu_op)
-                    (Orr? alu_op)
-                    (OrrNot? alu_op)
-                    (And? alu_op)
-                    (AndNot? alu_op)
-                    (Eor? alu_op)
-                    (EorNot? alu_op)
-                    (AddS? alu_op)
-                    (SubS? alu_op)
-                    (Adc? alu_op))))))
+        (match
+            size
+            ((Size64)
+                (match
+                    alu_op
+                    ((Add) true)
+                    ((Sub) true)
+                    ((Orr) true)
+                    ((OrrNot) true)
+                    ((And) true)
+                    ((AndNot) true)
+                    ((Eor) true)
+                    ((EorNot) true)
+                    ((AddS) true)
+                    ((SubS) true)
+                    ((SMulH) true)
+                    ((UMulH) true)
+                    ((SDiv) true)
+                    ((UDiv) true)
+                    ((Adc) true)))
+            ((Size32)
+                (match
+                    alu_op
+                    ((Add) true)
+                    ((Sub) true)
+                    ((Orr) true)
+                    ((OrrNot) true)
+                    ((And) true)
+                    ((AndNot) true)
+                    ((Eor) true)
+                    ((EorNot) true)
+                    ((AddS) true)
+                    ((SubS) true)
+                    ((Adc) true))))))
