@@ -45,17 +45,10 @@
                         (=
                             rd
                             (bvadd
-                                (extract 63 0 (sign_ext 128 ra))
-                                (extract
-                                    63
-                                    0
-                                    (sign_ext
-                                        128
-                                        (bvmul
-                                            (sign_ext 64 (extract 31 0 rn))
-                                            (sign_ext
-                                                64
-                                                (extract 31 0 rm))))))))))))
+                                ra
+                                (bvmul
+                                    (sign_ext 64 (extract 31 0 rn))
+                                    (sign_ext 64 (extract 31 0 rm))))))))))
     (require
         (or
             (and (Size64? size) (or (MAdd? alu_op) (MSub? alu_op)))

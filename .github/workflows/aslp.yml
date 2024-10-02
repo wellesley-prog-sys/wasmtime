@@ -8,6 +8,7 @@ on:
       - '.github/workflows/aslp.yml'
       - '**/aslp/**'
       - '**/isaspec/**'
+      - 'cranelift/codegen/src/isa/aarch64/spec/*.isle'
   pull_request:
     branches:
       - veriisle
@@ -15,6 +16,7 @@ on:
       - '.github/workflows/aslp.yml'
       - '**/aslp/**'
       - '**/isaspec/**'
+      - 'cranelift/codegen/src/isa/aarch64/spec/*.isle'
   workflow_dispatch:
 
 jobs:
