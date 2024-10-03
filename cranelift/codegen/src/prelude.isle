@@ -154,6 +154,7 @@
 (decl pure i32_as_i64 (i32) i64)
 (extern constructor i32_as_i64 i32_as_i64)
 (convert i32 i64 i32_as_i64)
+(spec (i32_as_i64 arg) (provide (= result (sign_ext 64 arg))))
 
 (decl pure i64_as_u64 (i64) u64)
 (extern constructor i64_as_u64 i64_as_u64)
@@ -463,6 +464,7 @@
 
 ;; Get the byte width of a given type.
 (decl pure ty_bytes (Type) u16)
+(attr ty_bytes (tag TODO))
 (extern constructor ty_bytes ty_bytes)
 
 ;; Get the type of each lane in the given type.
@@ -586,10 +588,10 @@
 
 ;; A pure constructor/extractor that only matches scalar integers, and
 ;; references that can fit in 64 bits.
-(spec (ty_int_ref_scalar_64 ty) 
+(spec (ty_int_ref_scalar_64 ty)
       (provide (= result ty))
-      (require 
-            (or 
+      (require
+            (or
                   (= ty 8)
                   (= ty 16)
                   (= ty 32)

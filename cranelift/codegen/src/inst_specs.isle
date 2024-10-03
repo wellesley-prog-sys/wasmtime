@@ -25,6 +25,20 @@
     (default true)
 )
 
+; Parameters of a CLIF load operation.
+(state clif_load
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+        )
+    )
+    (default
+        (not (:active clif_load))
+    )
+)
+
 ;;;; Common Term Forms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (form
@@ -111,3 +125,28 @@
 (spec (bitselect c x y)
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)
+
+(spec (load flags p offset)
+    (modifies clif_load loaded_value)
+    (provide
+        ; Activate the CLIF load effect
+        (:active clif_load)
+
+        ; TODO(mbm): load flags
+
+        ; Load size is the width of the loaded value.
+        (= (:size_bits clif_load) (widthof result))
+
+        ; Address calculation.
+        (= (:addr clif_load) (bvadd p (sign_ext 64 offset)))
+
+        ; Result of the load is represented by low bits of the loaded value state register.
+        (= result (conv_to (widthof result) loaded_value))
+    )
+)
+(instantiate load
+    ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 64)))
+)
+
+(attr uextend (tag TODO))
+(attr sextend (tag TODO))

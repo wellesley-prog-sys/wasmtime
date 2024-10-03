@@ -1101,6 +1101,7 @@ impl<'a> ConditionsBuilder<'a> {
         match constraint {
             Constraint::Some => self.constraint_some(binding_id),
             Constraint::ConstPrim { val } => self.const_prim(binding_id, *val),
+            Constraint::ConstInt { val, ty } => self.const_int(binding_id, *val, *ty),
             _ => todo!("constraint: {constraint:?}"),
         }
     }

@@ -1001,6 +1001,8 @@
                        (end Reg)
                        (step Imm12))))
 
+(attr MInst.MovWide (tag TODO))
+
 (attr MInst.FpuMove32 (tag float))
 (attr MInst.FpuMove64 (tag float))
 (attr MInst.FpuMove128 (tag float))
@@ -1368,8 +1370,11 @@
 ))
 
 (type MemLabel extern (enum))
+(model MemLabel (type !))
 (type SImm9 extern (enum))
+(model SImm9 (type !))
 (type UImm12Scaled extern (enum))
+(model UImm12Scaled (type !))
 
 ;; An addressing mode specified for a load/store operation.
 (type AMode
@@ -1473,6 +1478,8 @@
         (SlotOffset
          (off i64))))
 
+(attr AMode.Unscaled (tag TODO))
+(attr AMode.UnsignedOffset (tag TODO))
 
 ;; A memory argument to a load/store-pair.
 (type PairAMode (enum
@@ -2005,6 +2012,7 @@
 (extern constructor move_wide_const_from_inverted_u64 move_wide_const_from_inverted_u64)
 
 (decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
+(attr imm_logic_from_u64 (tag TODO))
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
 (decl pure partial imm_size_from_type (Type) u16)
@@ -2099,6 +2107,9 @@
 
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
+(spec (integral_ty ty)
+      (provide (= result ty))
+      (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
@@ -3282,6 +3293,7 @@
 ;; all bits in the destination register in a defined state, i.e. smaller types
 ;; such as `I8` are either sign- or zero-extended.
 (decl imm (Type ImmExtend u64) Reg)
+(attr imm (veri chain))
 
 ;; Move wide immediate instructions; to simplify, we only match when we
 ;; are zero-extending the value.
@@ -3306,6 +3318,7 @@
        m k k))
 
 (decl load_constant64_full (Type ImmExtend u64) Reg)
+(attr load_constant64_full (tag TODO))
 (extern constructor load_constant64_full load_constant64_full)
 
 ;; Fallback for integral 64-bit constants
@@ -3481,6 +3494,7 @@
 ;; mid-end optimizations that fold constants into load/store immediate offsets
 ;; instead, but for now each backend needs to do this.
 (decl amode (Type Value i32) AMode)
+(attr amode (veri chain))
 (rule 0 (amode ty val offset)
         (amode_no_more_iconst ty val offset))
 (rule 1 (amode ty (iadd x (i32_from_iconst y)) offset)
@@ -3491,6 +3505,7 @@
         (amode_no_more_iconst ty y new_offset))
 
 (decl amode_no_more_iconst (Type Value i32) AMode)
+(attr amode_no_more_iconst (veri chain))
 ;; Base case: move the `offset` into a register and add it to `val` via the
 ;; amode
 (rule 0 (amode_no_more_iconst ty val offset)
@@ -3538,6 +3553,7 @@
         (amode_reg_scaled (amode_add x offset) y))
 
 (decl amode_reg_scaled (Reg Value) AMode)
+(attr amode_reg_scaled (veri chain))
 (rule 0 (amode_reg_scaled base index)
         (AMode.RegScaled base index))
 (rule 1 (amode_reg_scaled base (uextend index @ (value_type $I32)))
@@ -3548,6 +3564,7 @@
 ;; Helper to add a 32-bit signed immediate to the register provided. This will
 ;; select an appropriate `add` instruction to use.
 (decl amode_add (Reg i32) Reg)
+(attr amode_add (veri chain))
 (rule 0 (amode_add x y)
         (add $I64 x (imm $I64 (ImmExtend.Zero) (i64_as_u64 y))))
 (rule 1 (amode_add x y)

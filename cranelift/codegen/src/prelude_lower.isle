@@ -228,6 +228,7 @@
 ;; Add a range fact to a register, when compiling with
 ;; proof-carrying-code enabled.
 (decl add_range_fact (Reg u16 u64 u64) Reg)
+(spec (add_range_fact reg bit_width min max) (provide (= result reg)))
 (extern constructor add_range_fact add_range_fact)
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -412,6 +413,7 @@
 ;; Constant pool emission.
 
 (type VCodeConstant (primitive VCodeConstant))
+(model VCodeConstant (type !))
 
 ;; Add a u64 little-endian constant to the in-memory constant pool and
 ;; return a VCodeConstant index that refers to it. This is

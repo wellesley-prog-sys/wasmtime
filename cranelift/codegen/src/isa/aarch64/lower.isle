@@ -3,9 +3,21 @@
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
 ; QUESTION(mbm): can we capture the "equality on lower bits only" constraint in the lower spec?
-(spec (lower arg)
-      (provide (= result arg)))
 (decl partial lower (Inst) InstOutput)
+(spec (lower arg)
+      (provide
+            ; Computation results match.
+            (= result arg)
+
+            ; Load effects
+
+            ; Either both active, or both not.
+            (= (:active clif_load) (:active isa_load))
+
+            ; If active, their parameters must match.
+            (=> (:active clif_load) (= clif_load isa_load))
+      )
+)
 
 ;; Variant of the main lowering constructor term, which receives an
 ;; additional argument (a vector of branch targets to be used) for
@@ -2328,7 +2340,7 @@
 (rule (lower
        (has_type $I32 (load flags address offset)))
       (aarch64_uload32 (amode $I32 address offset) flags))
-(rule (lower
+(rule load_i64 (lower
        (has_type $I64 (load flags address offset)))
       (aarch64_uload64 (amode $I64 address offset) flags))
 (rule (lower

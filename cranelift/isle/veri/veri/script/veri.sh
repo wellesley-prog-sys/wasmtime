@@ -44,5 +44,6 @@ cargo run --bin veri --profile "${profile}" -- \
     --name "${arch}" \
     --smt2-replay-path /dev/null \
     --timeout 60 \
+    --skip-tag TODO \
     "$@" \
     | tee "${output_dir}/${arch}.veri"
