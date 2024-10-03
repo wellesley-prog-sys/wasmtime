@@ -1234,6 +1234,9 @@
       )
 )
 
+;; Registers.
+(model Reg (type (bv 64)))
+
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
 (type ALUOp

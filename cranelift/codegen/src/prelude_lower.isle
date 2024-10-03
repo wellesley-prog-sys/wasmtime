@@ -41,7 +41,6 @@
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Reg (primitive Reg))
-(model Reg (type (bv)))
 
 (type WritableReg (primitive WritableReg))
 (model WritableReg (type (bv)))
