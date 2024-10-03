@@ -434,7 +434,14 @@ impl<'a> SystemBuilder<'a> {
     fn symbolic(&mut self, v: &Symbolic, ty: Compound) {
         match (v, ty) {
             (Symbolic::Scalar(x), Compound::Primitive(ty)) => self.ty(*x, ty),
-            (Symbolic::Struct(_), Compound::Struct(_)) => todo!("struct type constraints"),
+            (Symbolic::Struct(fields), Compound::Struct(field_tys)) => {
+                assert_eq!(fields.len(), field_tys.len());
+                for (field, field_ty) in zip(fields, field_tys) {
+                    assert_eq!(field.name, field_ty.name.0);
+                    self.symbolic(&field.value, field_ty.ty);
+                }
+            }
+            (Symbolic::Enum(_), Compound::Enum(_)) => todo!("enum type constraints"),
             // QUESTION(mbm): should Option and Tuple be in a different enum so they don't appear in type inference?
             (Symbolic::Option(_), _) => unimplemented!("option types unsupported"),
             (Symbolic::Tuple(_), _) => unimplemented!("tuple types unsupported"),

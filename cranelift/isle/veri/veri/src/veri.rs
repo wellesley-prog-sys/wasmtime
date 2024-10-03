@@ -202,8 +202,8 @@ pub struct SymbolicOption {
 
 #[derive(Debug, Clone)]
 pub struct SymbolicField {
-    name: String,
-    value: Symbolic,
+    pub name: String,
+    pub value: Symbolic,
 }
 
 impl SymbolicField {
