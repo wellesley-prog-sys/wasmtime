@@ -29,10 +29,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: main
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install CVC5
-        working-directory: cranelift/isle/veri/veri
+        working-directory: main/cranelift/isle/veri/veri
         run: |
           mkdir -p "${{ runner.workspace }}/tools/cvc5"
           ./script/install/cvc5.sh -i "${{ runner.workspace }}/tools/cvc5" -t "${RUNNER_TEMP}"
@@ -41,6 +43,14 @@ jobs:
         run: cvc5 --version
       - name: Build
         run: cargo build --release -p cranelift-isle-veri
+        working-directory: main
       - name: Verify
-        working-directory: cranelift/isle/veri/veri
-        run: ./script/veri.sh -a ${{ matrix.arch }} -p release -t "${RUNNER_TEMP}" -o "${RUNNER_TEMP}"
+        working-directory: main/cranelift/isle/veri/veri
+        run: ./script/veri.sh -a ${{ matrix.arch }} -p release -t "${RUNNER_TEMP}" -o "${{ runner.workspace }}/output"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
+        with:
+          name: veri-${{ matrix.arch }}
+          path: ${{ runner.workspace }}/output/${{ matrix.arch }}.veri
+          if-no-files-found: error
+          compression-level: 9
