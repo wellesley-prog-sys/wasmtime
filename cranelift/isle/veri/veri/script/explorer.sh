@@ -10,7 +10,7 @@ function usage() {
     exit 2
 }
 
-output_dir="${ISLE_EXPLORER_OUTPUT_DIR}"
+output_dir="${ISLE_EXPLORER_OUTPUT_DIR:-}"
 while getopts "o:h" opt; do
     case "${opt}" in
         o) output_dir="${OPTARG}" ;;
@@ -19,10 +19,12 @@ while getopts "o:h" opt; do
     esac
 done
 
-if [[ ! -d "${output_dir}" ]]; then
-    echo "output directory does not exist"
-    exit 1
+# Setup output.
+if [[ -z "${output_dir}" ]]; then
+    echo "output directory not set"
+    exit 2
 fi
+mkdir -p "${output_dir}"
 
 # Generate explorer.
 for arch in aarch64 x64; do

@@ -5,6 +5,12 @@ on:
     branches:
       - veriisle
   workflow_dispatch:
+  pull_request:
+    branches:
+      - veriisle
+    paths:
+      - '.github/workflows/explorer.yml'
+      - 'cranelift/isle/veri/veri/script/explorer.sh'
 
 # Sets permissions to allow deployment to Github Pages.
 permissions:
@@ -28,13 +34,16 @@ jobs:
         run: sudo apt-get install -y graphviz
       - name: Build Explorer
         working-directory: cranelift/isle/veri/veri
-        run: ./script/explorer.sh
+        run: ./script/explorer.sh -o "${{ runner.temp }}/explorer"
         env:
           ISLE_EXPLORER_GRAPHS: 'true'
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
+        id: upload
         uses: actions/upload-pages-artifact@v2
         with:
-          path: cranelift/isle/veri/veri/tmp/explorer
+          path: ${{ runner.temp }}/explorer
       - name: Deploy to GitHub Pages
+        if: steps.upload.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v2

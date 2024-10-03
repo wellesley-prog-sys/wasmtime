@@ -8,7 +8,7 @@ function usage() {
     exit 2
 }
 
-output_dir="${ISLE_EXPLORER_OUTPUT_DIR}"
+output_dir="${ISLE_EXPLORER_OUTPUT_DIR:-}"
 port="5050"
 while getopts "o:p:h" opt; do
     case "${opt}" in
