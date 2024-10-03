@@ -428,27 +428,20 @@ impl<'a> Solver<'a> {
     }
 }
 
-
 pub fn example_cls64(smt: &mut Context, x: SExpr, id: u32) -> SExpr {
     // Generated code.
     // total zeros counter
-    let zret0 = smt.declare_const(
-        format!("zret0_{id}", id = id),
-        smt.list(vec![
-            smt.atoms().und,
-            smt.atom("BitVec"),
-            smt.numeral(64),
-        ]),
-    ).unwrap();
+    let zret0 = smt
+        .declare_const(
+            format!("zret0_{id}", id = id),
+            smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
+        )
+        .unwrap();
     smt.assert(smt.eq(
         zret0,
-        smt.list(vec![
-            smt.atoms().und,
-            smt.atom("bv0"),
-            smt.numeral(64),
-        ]),
-    )).unwrap();
+        smt.list(vec![smt.atoms().und, smt.atom("bv0"), smt.numeral(64)]),
+    ))
+    .unwrap();
 
     return zret0;
-
 }
