@@ -682,7 +682,9 @@ impl<'a> Parser<'a> {
 
     fn parse_model_type(&mut self) -> Result<ModelType> {
         let pos = self.pos();
-        if self.eat_sym_str("_")? {
+        if self.eat_sym_str("!")? {
+            Ok(ModelType::Unspecified)
+        } else if self.eat_sym_str("_")? {
             Ok(ModelType::Auto)
         } else if self.eat_sym_str("Bool")? {
             Ok(ModelType::Bool)

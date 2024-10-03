@@ -151,7 +151,11 @@ impl<'a> Solver<'a> {
             }
             Type::Int => Ok(self.smt.int_sort()),
             Type::Bool => Ok(self.smt.bool_sort()),
-            _ => bail!("no smt2 sort for type {ty}"),
+            // Model unspecified variables as an unconstrained boolean.
+            Type::Unspecified => Ok(self.smt.bool_sort()),
+            Type::Unknown | Type::BitVector(Width::Unknown) => {
+                bail!("no smt2 sort for non-concrete type {ty}")
+            }
         }
     }
 

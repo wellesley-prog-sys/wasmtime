@@ -312,7 +312,14 @@ pub struct Spec {
 /// A model of an SMT-LIB type.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ModelType {
-    /// Unspecified primitive type, left to type-inference to determine
+    /// Unspecified type.
+    ///
+    /// Unlike an auto-derived type, unspecified is a concrete type. However,
+    /// values of this type cannot be used for anything non-trivial. It is
+    /// intended to be used as a placeholder for a type that is not yet known,
+    /// but only appears in rules that are not yet covered by verification.
+    Unspecified,
+    /// Automatically deduced primitive type, left to type-inference to determine.
     Auto,
     /// SMT-LIB Int
     Int,

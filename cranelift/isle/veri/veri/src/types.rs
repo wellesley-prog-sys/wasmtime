@@ -37,6 +37,7 @@ impl PartialOrd for Width {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
+    Unspecified,
     Unknown,
     BitVector(Width),
     Int,
@@ -46,6 +47,7 @@ pub enum Type {
 impl Type {
     pub fn is_concrete(&self) -> bool {
         match self {
+            Self::Unspecified => true,
             Self::Unknown | Self::BitVector(Width::Unknown) => false,
             Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
         }
@@ -62,6 +64,7 @@ impl Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::Unspecified => write!(f, "\u{2a33}"),
             Self::Unknown => write!(f, "unk"),
             Self::BitVector(Width::Bits(w)) => write!(f, "bv {w}"),
             Self::BitVector(Width::Unknown) => write!(f, "bv _"),
@@ -74,6 +77,10 @@ impl std::fmt::Display for Type {
 impl PartialOrd for Type {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
+            // Unspecified is equal to itself, but otherwise incomparible.
+            (Type::Unspecified, Type::Unspecified) => Some(Ordering::Equal),
+            (Type::Unspecified, _) | (_, Type::Unspecified) => None,
+
             (Type::Unknown, Type::Unknown) => Some(Ordering::Equal),
             (Type::Unknown, _) => Some(Ordering::Less),
             (_, Type::Unknown) => Some(Ordering::Greater),
@@ -180,6 +187,7 @@ impl std::fmt::Display for Variant {
 impl Compound {
     pub fn from_ast(model: &ModelType) -> Self {
         match model {
+            ModelType::Unspecified => Self::Primitive(Type::Unspecified),
             ModelType::Auto => Self::Primitive(Type::Unknown),
             ModelType::Int => Self::Primitive(Type::Int),
             ModelType::Bool => Self::Primitive(Type::Bool),
@@ -363,6 +371,7 @@ mod tests {
     #[test]
     fn test_type_partial_order_properties() {
         assert_partial_order_properties(&[
+            Type::Unspecified,
             Type::Unknown,
             Type::BitVector(Width::Unknown),
             Type::BitVector(Width::Bits(32)),

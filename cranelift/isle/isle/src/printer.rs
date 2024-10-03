@@ -191,6 +191,7 @@ impl Printable for ModelValue {
 impl Printable for ModelType {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
+            ModelType::Unspecified => RcDoc::text("!"),
             ModelType::Auto => RcDoc::text("_"),
             ModelType::Int => RcDoc::text("Int"),
             ModelType::Bool => RcDoc::text("Bool"),
