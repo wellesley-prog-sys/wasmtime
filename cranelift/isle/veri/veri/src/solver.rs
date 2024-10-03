@@ -9,10 +9,8 @@ use crate::{
     veri::{Conditions, Expr, ExprId, Model},
 };
 
-mod encoded_ops;
 
 use encoded_ops::cls;
-
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Applicability {

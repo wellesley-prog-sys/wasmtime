@@ -1,6 +1,3 @@
-use crate::solver::SolverCtx;
-use easy_smt::SExpr;
-
 // Adapted from https://stackoverflow.com/questions/23856596/how-to-count-leading-zeros-in-a-32-bit-unsigned-integer
 
 // TODO vaishu: you probably want something like this so that you don't need to paste "unwrap()" everywhere.
