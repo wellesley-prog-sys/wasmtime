@@ -1072,43 +1072,6 @@
       )
 )
 
-(spec (MInst.AluRRImm12 alu_op size rd rn imm12)
-      (provide
-            (=>
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-                        (= rd (bvadd rn (zero_ext 64 imm12)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvadd (extract 31 0 rn) (zero_ext 32 imm12))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-                        (= rd (bvsub rn (zero_ext 64 imm12)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvsub (extract 31 0 rn) (zero_ext 32 imm12))))
-            )
-      )
-      (require
-            ; Implemented (opcode, size) combinations.
-            (or
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-            )
-            ; Imm12 immediate is well-formed.
-            (or
-                  (= imm12 (bvand imm12 #x000fff))
-                  (= imm12 (bvand imm12 #xfff000))
-            )
-      )
-)
-
 (spec (MInst.AluRRImmLogic alu_op size rd rn imml)
       (provide
             (=>
@@ -1298,8 +1261,17 @@
 ))
 
 (type UImm5 (primitive UImm5))
+
 (type Imm12 (primitive Imm12))
-(model Imm12 (type (bv 24)))
+(model Imm12
+      (type
+            (struct
+                  (bits (bv 12))
+                  (shift12 Bool)
+            )
+      )
+)
+
 (type ImmLogic (primitive ImmLogic))
 ; Note: ImmLogic values can be 32 or 64 bit.
 ; QUESTION(mbm): do we want to support "polymorphic" models: (model ImmLogic (type (poly (bv 32) (bv 64))))
@@ -2034,12 +2006,20 @@
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 (spec (imm12_from_u64 imm12)
-      (provide (= result (zero_ext 64 imm12)))
+      (provide
+            (= result
+                  (zero_ext 64
+                        (if (:shift12 imm12)
+                              (concat (:bits imm12) #x000)
+                              (concat #x000 (:bits imm12))
+                        )
+                  )
+            )
+      )
       (require
-            ; REVIEW(mbm): correct formulation of imm12?
             (or
-                  (= imm12 (bvand imm12 #x000fff))
-                  (= imm12 (bvand imm12 #xfff000))
+                  (= result (bvand result (zero_ext 64 #x000fff)))
+                  (= result (bvand result (zero_ext 64 #xfff000)))
             )
       )
 )
@@ -2121,18 +2101,28 @@
 (extern constructor is_zero_uimm12 is_zero_uimm12)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
-; REVIEW(mbm): is imm12_from_value spec correct?
-; NOTE(mbm): compare with https://github.com/avanhatt/wasmtime/blob/94ccb9d4d55a479893cb04bc796ec620ed24cee2/cranelift/codegen/src/isa/aarch64/inst.isle#L1867-L1874
 (spec (imm12_from_value imm12)
       (provide
-            ; REVIEW(mbm): zero_ext vs conv_to?
-            (= (zero_ext 128 result) (zero_ext 128 imm12))
+            (=
+                  (zero_ext 128 result)
+                  (zero_ext 128
+                        (if (:shift12 imm12)
+                              (concat (:bits imm12) #x000)
+                              (concat #x000 (:bits imm12))
+                        )
+                  )
+            )
       )
       (require
-            ; REVIEW(mbm): correct formulation of imm12?
-            (or
-                  (= imm12 (bvand imm12 #x000fff))
-                  (= imm12 (bvand imm12 #xfff000))
+            (let
+                  (
+                        (width 128)
+                        (r (zero_ext width result))
+                  )
+                  (or
+                        (= r (bvand r (zero_ext width #x000fff)))
+                        (= r (bvand r (zero_ext width #xfff000)))
+                  )
             )
       )
 )

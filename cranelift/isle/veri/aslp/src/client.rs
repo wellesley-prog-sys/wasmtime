@@ -3,7 +3,7 @@ use reqwest::IntoUrl;
 use serde::Deserialize;
 use tracing::debug;
 
-use crate::{ast::Block, bits::Bits, parser};
+use crate::{ast::Block, opcode::Opcode, parser};
 
 pub struct Client<'a> {
     client: &'a reqwest::blocking::Client,
@@ -18,7 +18,7 @@ impl<'a> Client<'a> {
         })
     }
 
-    pub fn opcode(&self, opcode: Bits) -> Result<Block> {
+    pub fn opcode(&self, opcode: Opcode) -> Result<Block> {
         // Model for response JSON data.
         #[derive(Deserialize, Debug)]
         struct Response {

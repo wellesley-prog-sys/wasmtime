@@ -11,8 +11,8 @@ use cranelift_isle::ast::{self, Def, Spec, SpecExpr};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle_veri_aslp::client::Client;
 
-use crate::constraints::{Binding, Target, Translator};
-use crate::semantics::inst_semantics;
+use crate::bits::Bits;
+use crate::constraints::{Binding, Scope, Target, Translator};
 use crate::spec::spec_field;
 use crate::{
     aarch64,
@@ -140,8 +140,26 @@ impl Mappings {
     }
 }
 
+pub enum Opcodes {
+    Instruction(Inst),
+    Template(Bits),
+}
+
+impl Opcodes {
+    pub fn bits(&self) -> Bits {
+        match self {
+            Opcodes::Instruction(inst) => {
+                let opcode = aarch64::opcode(inst);
+                Bits::from_u32(opcode)
+            }
+            Opcodes::Template(bits) => bits.clone(),
+        }
+    }
+}
+
 pub struct InstConfig {
-    pub inst: Inst,
+    pub opcodes: Opcodes,
+    pub scope: Scope,
     pub mappings: Mappings,
 }
 
@@ -237,10 +255,11 @@ impl<'a> Builder<'a> {
 
     fn case(&self, case: &InstConfig) -> Result<Conditions> {
         // Semantics.
-        let block = inst_semantics(&case.inst, self.client)?;
+        let opcode_bits = case.opcodes.bits();
+        let block = self.client.opcode(opcode_bits.into())?;
 
         // Translation.
-        let mut translator = Translator::new(aarch64::state(), "t".to_string());
+        let mut translator = Translator::new(case.scope.clone(), "t".to_string());
         translator.translate(&block)?;
 
         let global = translator.global();

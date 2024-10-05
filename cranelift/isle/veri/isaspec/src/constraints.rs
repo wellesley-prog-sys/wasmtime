@@ -90,7 +90,7 @@ impl Binding {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Scope {
     constraints: Vec<SpecExpr>,
     vars: HashSet<String>,

@@ -3,8 +3,8 @@
 set -euxo pipefail
 
 # Defaults.
-repo="UQ-PAC/aslp"
-version="9796e56c46b0cb985e2eb9e241ca0aef484d6b27"
+repo="mmcloughlin/aslp"
+version="e5190a099d5885fb486ddc150dd426a8d0c11948"
 ocaml_compiler="4.14.2"
 
 # Options

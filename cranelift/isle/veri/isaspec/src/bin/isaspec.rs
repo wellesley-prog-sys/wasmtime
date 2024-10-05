@@ -1,26 +1,30 @@
+use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
 use cranelift_codegen::ir::MemFlags;
 use cranelift_codegen::{Reg, Writable};
+use cranelift_isle_veri_isaspec::bits::{Bits, Segment};
+use cranelift_isle_veri_isaspec::constraints::Target;
 use cranelift_isle_veri_isaspec::memory::ReadEffect;
 use itertools::Itertools;
 
 use cranelift_codegen::isa::aarch64::inst::{
-    writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, ExtendOp, Inst, OperandSize,
+    writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, ExtendOp, Imm12, Inst, OperandSize,
 };
 use cranelift_isle::ast::{Def, SpecOp};
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::client::Client;
 use cranelift_isle_veri_isaspec::aarch64::{self, pstate_field};
 use cranelift_isle_veri_isaspec::builder::{
-    Arm, Builder, Case, Cases, InstConfig, Mapping, MappingBuilder, Mappings, Match, SpecConfig,
+    Arm, Builder, Case, Cases, InstConfig, Mapping, MappingBuilder, Mappings, Match, Opcodes,
+    SpecConfig,
 };
 use cranelift_isle_veri_isaspec::spec::{
-    spec_binary, spec_const_int, spec_eq, spec_eq_bool, spec_var,
+    spec_binary, spec_const_int, spec_eq, spec_eq_bool, spec_field, spec_var,
 };
 
 #[derive(ClapParser)]
@@ -65,7 +69,7 @@ fn main() -> Result<()> {
     let client = Client::new(&http_client, args.server)?;
 
     // Conversion.
-    let file_configs = define();
+    let file_configs = define()?;
     for file_config in file_configs {
         // Generate specs.
         let mut defs = Vec::new();
@@ -103,8 +107,8 @@ struct FileConfig {
 }
 
 /// Define specifications to generate.
-fn define() -> Vec<FileConfig> {
-    vec![
+fn define() -> Result<Vec<FileConfig>> {
+    Ok(vec![
         FileConfig {
             name: "alu_rrr.isle".into(),
             specs: vec![define_alu_rrr()],
@@ -112,6 +116,10 @@ fn define() -> Vec<FileConfig> {
         FileConfig {
             name: "alu_rrrr.isle".into(),
             specs: vec![define_alu_rrrr()],
+        },
+        FileConfig {
+            name: "alu_rr_imm12.isle".into(),
+            specs: vec![define_alu_rr_imm12()?],
         },
         FileConfig {
             name: "alu_rrr_extend.isle".into(),
@@ -129,7 +137,7 @@ fn define() -> Vec<FileConfig> {
             name: "extend.isle".into(),
             specs: vec![define_extend()],
         },
-    ]
+    ])
 }
 
 // MInst.AluRRR specification configuration.
@@ -205,15 +213,14 @@ fn define_alu_rrr() -> SpecConfig {
                                 variant: format!("{alu_op:?}"),
                                 args: Vec::new(),
                                 body: Cases::Instruction(InstConfig {
-                                    inst: Inst::AluRRR {
+                                    opcodes: Opcodes::Instruction(Inst::AluRRR {
                                         alu_op: *alu_op,
                                         size: *size,
                                         rd: writable_xreg(4),
                                         rn: xreg(5),
                                         rm: xreg(6),
-                                    },
-
-                                    // Mappings from state to specification parameters.
+                                    }),
+                                    scope: aarch64::state(),
                                     mappings: mappings.clone(),
                                 }),
                             })
@@ -282,14 +289,15 @@ fn define_alu_rrrr() -> SpecConfig {
                                 variant: format!("{alu_op:?}"),
                                 args: Vec::new(),
                                 body: Cases::Instruction(InstConfig {
-                                    inst: Inst::AluRRRR {
+                                    opcodes: Opcodes::Instruction(Inst::AluRRRR {
                                         alu_op: *alu_op,
                                         size: *size,
                                         rd: writable_xreg(4),
                                         rn: xreg(5),
                                         rm: xreg(6),
                                         ra: xreg(7),
-                                    },
+                                    }),
+                                    scope: aarch64::state(),
                                     mappings: mappings.clone(),
                                 }),
                             })
@@ -306,6 +314,147 @@ fn is_alu3_op_size_supported(alu3_op: ALUOp3, size: OperandSize) -> bool {
         ALUOp3::UMAddL | ALUOp3::SMAddL => size == OperandSize::Size32,
         _ => true,
     }
+}
+
+// MInst.AluRRImm12 specification configuration.
+fn define_alu_rr_imm12() -> Result<SpecConfig> {
+    // ALUOps supported by AluRRImm12.
+    let alu_ops = [
+        ALUOp::Add,
+        ALUOp::Sub,
+        // ALUOp::AddS,
+        // ALUOp::SubS,
+    ];
+
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    // Imm12.shift12
+    let shift12s = [false, true];
+
+    // Execution scope: define opcode template fields.
+    let mut scope = aarch64::state();
+    let imm12_bits = Target::Var("bits".to_string());
+    scope.global(imm12_bits.clone());
+
+    // Mappings
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        imm12_bits.clone(),
+        MappingBuilder::var("imm12").field("bits").build(),
+    );
+
+    Ok(SpecConfig {
+        term: "MInst.AluRRImm12".to_string(),
+        args: ["alu_op", "size", "rd", "rn", "imm12"]
+            .map(String::from)
+            .to_vec(),
+        cases: Cases::Match(Match {
+            on: "size".to_string(),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| {
+                    Ok(Arm {
+                        variant: format!("{size:?}"),
+                        args: Vec::new(),
+                        body: Cases::Match(Match {
+                            on: "alu_op".to_string(),
+                            arms: alu_ops
+                                .iter()
+                                .map(|alu_op| {
+                                    Ok(Arm {
+                                        variant: format!("{alu_op:?}"),
+                                        args: Vec::new(),
+                                        body: Cases::Cases(
+                                            shift12s
+                                                .iter()
+                                                .map(|shift12| {
+                                                    let template = alu_rr_imm12_template(
+                                                        *alu_op,
+                                                        *size,
+                                                        writable_xreg(4),
+                                                        xreg(5),
+                                                        *shift12,
+                                                    )?;
+                                                    Ok(Case {
+                                                        conds: vec![spec_eq_bool(
+                                                            spec_field(
+                                                                "shift12".to_string(),
+                                                                spec_var("imm12".to_string()),
+                                                            ),
+                                                            *shift12,
+                                                        )],
+                                                        cases: Cases::Instruction(InstConfig {
+                                                            opcodes: Opcodes::Template(template),
+                                                            scope: scope.clone(),
+                                                            mappings: mappings.clone(),
+                                                        }),
+                                                    })
+                                                })
+                                                .collect::<Result<_>>()?,
+                                        ),
+                                    })
+                                })
+                                .collect::<Result<_>>()?,
+                        }),
+                    })
+                })
+                .collect::<Result<_>>()?,
+        }),
+    })
+}
+
+fn alu_rr_imm12_template(
+    alu_op: ALUOp,
+    size: OperandSize,
+    rd: Writable<Reg>,
+    rn: Reg,
+    shift12: bool,
+) -> Result<Bits> {
+    // Assemble a base instruction with a placeholder for the imm12 field.
+    let placeholder = Imm12 { bits: 0, shift12 };
+    let base = Inst::AluRRImm12 {
+        alu_op,
+        size,
+        rd,
+        rn,
+        imm12: placeholder,
+    };
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic immediate fields.
+    let imm = Bits {
+        segments: vec![Segment::Symbolic("bits".to_string(), 12)],
+    };
+    let template = Bits::splice(&bits, &imm, 10)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let bits = assignment.get("bits").unwrap();
+        let imm12 = Imm12 {
+            bits: (*bits).try_into().unwrap(),
+            shift12,
+        };
+        Ok(Inst::AluRRImm12 {
+            alu_op,
+            size,
+            rd,
+            rn,
+            imm12,
+        })
+    })?;
+
+    Ok(template)
 }
 
 // MInst.AluRRRExtend specification configuration.
@@ -372,14 +521,15 @@ fn define_alu_rrr_extend() -> SpecConfig {
                                             variant: format!("{extendop:?}"),
                                             args: Vec::new(),
                                             body: Cases::Instruction(InstConfig {
-                                                inst: Inst::AluRRRExtend {
+                                                opcodes: Opcodes::Instruction(Inst::AluRRRExtend {
                                                     alu_op: *alu_op,
                                                     size: *size,
                                                     rd: writable_xreg(4),
                                                     rn: xreg(5),
                                                     rm: xreg(6),
                                                     extendop,
-                                                },
+                                                }),
+                                                scope: aarch64::state(),
                                                 mappings: mappings.clone(),
                                             }),
                                         })
@@ -441,12 +591,13 @@ fn define_bit_rr() -> SpecConfig {
                                 variant: format!("{op:?}"),
                                 args: Vec::new(),
                                 body: Cases::Instruction(InstConfig {
-                                    inst: Inst::BitRR {
+                                    opcodes: Opcodes::Instruction(Inst::BitRR {
                                         op: *op,
                                         size: *size,
                                         rd: writable_xreg(4),
                                         rn: xreg(5),
-                                    },
+                                    }),
+                                    scope: aarch64::state(),
                                     mappings: mappings.clone(),
                                 }),
                             })
@@ -498,15 +649,14 @@ fn define_extend() -> SpecConfig {
                     ],
                     cases: Cases::Instruction(InstConfig {
                         // Instruction to generate specification from.
-                        inst: Inst::Extend {
+                        opcodes: Opcodes::Instruction(Inst::Extend {
                             rd: writable_xreg(4),
                             rn: xreg(5),
                             signed: *signed,
                             from_bits: *from_bits,
                             to_bits: *to_bits,
-                        },
-
-                        // Mappings from state to specification parameters.
+                        }),
+                        scope: aarch64::state(),
                         mappings: mappings.clone(),
                     }),
                 })
@@ -621,14 +771,15 @@ where
         variant: "RegReg".to_string(),
         args: ["rn", "rm"].map(String::from).to_vec(),
         body: Cases::Instruction(InstConfig {
-            inst: inst(
+            opcodes: Opcodes::Instruction(inst(
                 writable_xreg(4),
                 AMode::RegReg {
                     rn: xreg(5),
                     rm: xreg(6),
                 },
                 MemFlags::new(),
-            ),
+            )),
+            scope: aarch64::state(),
             mappings: reg_reg_mappings,
         }),
     };
@@ -648,14 +799,15 @@ where
         variant: "RegScaled".to_string(),
         args: ["rn", "rm"].map(String::from).to_vec(),
         body: Cases::Instruction(InstConfig {
-            inst: inst(
+            opcodes: Opcodes::Instruction(inst(
                 writable_xreg(4),
                 AMode::RegScaled {
                     rn: xreg(5),
                     rm: xreg(6),
                 },
                 MemFlags::new(),
-            ),
+            )),
+            scope: aarch64::state(),
             mappings: reg_scaled_mappings,
         }),
     };
@@ -688,7 +840,7 @@ where
                     variant: format!("{extendop:?}"),
                     args: Vec::new(),
                     body: Cases::Instruction(InstConfig {
-                        inst: inst(
+                        opcodes: Opcodes::Instruction(inst(
                             writable_xreg(4),
                             AMode::RegScaledExtended {
                                 rn: xreg(5),
@@ -696,7 +848,8 @@ where
                                 extendop,
                             },
                             MemFlags::new(),
-                        ),
+                        )),
+                        scope: aarch64::state(),
                         mappings: reg_scaled_extended_mappings.clone(),
                     }),
                 })
@@ -726,7 +879,7 @@ where
                     variant: format!("{extendop:?}"),
                     args: Vec::new(),
                     body: Cases::Instruction(InstConfig {
-                        inst: inst(
+                        opcodes: Opcodes::Instruction(inst(
                             writable_xreg(4),
                             AMode::RegExtended {
                                 rn: xreg(5),
@@ -734,7 +887,8 @@ where
                                 extendop,
                             },
                             MemFlags::new(),
-                        ),
+                        )),
+                        scope: aarch64::state(),
                         mappings: reg_extended_mappings.clone(),
                     }),
                 })
@@ -775,4 +929,21 @@ fn flags_mappings() -> Mappings {
     }
 
     mappings
+}
+
+// Compare an opcode template against the instruction we expect it to represent.
+fn verify_opcode_template<F>(template: &Bits, expect: F) -> Result<()>
+where
+    F: Fn(&HashMap<String, u32>) -> Result<Inst>,
+{
+    // Iterate over all template values.
+    for concrete in template.into_iter() {
+        let inst = expect(&concrete.assignment)?;
+        let opcode = aarch64::opcode(&inst);
+        let got = concrete.eval()?;
+        if got != opcode {
+            bail!("template mismatch");
+        }
+    }
+    Ok(())
 }
