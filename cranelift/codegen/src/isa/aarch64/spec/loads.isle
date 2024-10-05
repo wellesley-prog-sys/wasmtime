@@ -11,21 +11,13 @@
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 8)
                     (= (:addr isa_load) (bvadd rn rm))
-                    (=
-                        rd
-                        (zero_ext
-                            64
-                            (zero_ext 32 (conv_to 8 loaded_value))))))
+                    (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 8)
                     (= (:addr isa_load) (bvadd rn rm))
-                    (=
-                        rd
-                        (zero_ext
-                            64
-                            (zero_ext 32 (conv_to 8 loaded_value))))))
+                    (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -33,38 +25,20 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext 32 (conv_to 8 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext 32 (conv_to 8 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 8 loaded_value))))))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))))
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -72,47 +46,27 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext 32 (conv_to 8 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext 32 (conv_to 8 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 8 loaded_value))))))))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 8 loaded_value))))))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
-            ((RegScaledExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.SLoad8 rd mem flags)
@@ -139,17 +93,13 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 8 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 8 loaded_value)))))
                     ((SXTX)
                         (and
@@ -164,35 +114,27 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 8 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 8 loaded_value)))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (=
-                                rd
-                                (sign_ext 64 (conv_to 8 loaded_value)))))))))
+                            (= rd (sign_ext 64 (conv_to 8 loaded_value)))))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
-            ((RegScaledExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.ULoad16 rd mem flags)
@@ -205,23 +147,13 @@
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 16)
                     (= (:addr isa_load) (bvadd rn rm))
-                    (=
-                        rd
-                        (zero_ext
-                            64
-                            (zero_ext 32 (conv_to 16 loaded_value))))))
+                    (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 16)
-                    (=
-                        (:addr isa_load)
-                        (bvadd rn (concat (extract 62 0 rm) #b0)))
-                    (=
-                        rd
-                        (zero_ext
-                            64
-                            (zero_ext 32 (conv_to 16 loaded_value))))))
+                    (= (:addr isa_load) (bvadd rn (concat (extract 62 0 rm) #b0)))
+                    (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -229,56 +161,20 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (zero_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b0))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 16 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b0))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b0))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 16 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b0))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 62 0 rm) #b0))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 16 loaded_value))))))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 62 0 rm) #b0))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))))
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -286,51 +182,27 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 16 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 16 loaded_value))))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (=
-                                rd
-                                (zero_ext
-                                    64
-                                    (zero_ext
-                                        32
-                                        (conv_to 16 loaded_value))))))))))
+                            (= rd (zero_ext 64 (zero_ext 32 (conv_to 16 loaded_value))))))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
-            ((RegScaledExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.SLoad16 rd mem flags)
@@ -348,9 +220,7 @@
                 (and
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 16)
-                    (=
-                        (:addr isa_load)
-                        (bvadd rn (concat (extract 62 0 rm) #b0)))
+                    (= (:addr isa_load) (bvadd rn (concat (extract 62 0 rm) #b0)))
                     (= rd (sign_ext 64 (conv_to 16 loaded_value)))))
             ((RegScaledExtended rn rm extendop)
                 (match
@@ -359,37 +229,19 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (zero_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b0))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b0))))
                             (= rd (sign_ext 64 (conv_to 16 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b0))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b0))))
                             (= rd (sign_ext 64 (conv_to 16 loaded_value)))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 62 0 rm) #b0))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 62 0 rm) #b0))))
                             (= rd (sign_ext 64 (conv_to 16 loaded_value)))))))
             ((RegExtended rn rm extendop)
                 (match
@@ -398,35 +250,27 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 16 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 16 loaded_value)))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (=
-                                rd
-                                (sign_ext 64 (conv_to 16 loaded_value)))))))))
+                            (= rd (sign_ext 64 (conv_to 16 loaded_value)))))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
-            ((RegScaledExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.ULoad32 rd mem flags)
@@ -444,9 +288,7 @@
                 (and
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 32)
-                    (=
-                        (:addr isa_load)
-                        (bvadd rn (concat (extract 61 0 rm) #b00)))
+                    (= (:addr isa_load) (bvadd rn (concat (extract 61 0 rm) #b00)))
                     (= rd (zero_ext 64 (conv_to 32 loaded_value)))))
             ((RegScaledExtended rn rm extendop)
                 (match
@@ -455,37 +297,19 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (zero_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b00))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b00))))
                             (= rd (zero_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b00))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b00))))
                             (= rd (zero_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 61 0 rm) #b00))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 61 0 rm) #b00))))
                             (= rd (zero_ext 64 (conv_to 32 loaded_value)))))))
             ((RegExtended rn rm extendop)
                 (match
@@ -494,35 +318,27 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
                             (= rd (zero_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
                             (= rd (zero_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (=
-                                rd
-                                (zero_ext 64 (conv_to 32 loaded_value)))))))))
+                            (= rd (zero_ext 64 (conv_to 32 loaded_value)))))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
-            ((RegScaledExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.SLoad32 rd mem flags)
@@ -540,9 +356,7 @@
                 (and
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 32)
-                    (=
-                        (:addr isa_load)
-                        (bvadd rn (concat (extract 61 0 rm) #b00)))
+                    (= (:addr isa_load) (bvadd rn (concat (extract 61 0 rm) #b00)))
                     (= rd (sign_ext 64 (conv_to 32 loaded_value)))))
             ((RegScaledExtended rn rm extendop)
                 (match
@@ -551,37 +365,19 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (zero_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b00))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b00))))
                             (= rd (sign_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b00))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b00))))
                             (= rd (sign_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 61 0 rm) #b00))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 61 0 rm) #b00))))
                             (= rd (sign_ext 64 (conv_to 32 loaded_value)))))))
             ((RegExtended rn rm extendop)
                 (match
@@ -590,35 +386,27 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
                             (= rd (sign_ext 64 (conv_to 32 loaded_value)))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (=
-                                rd
-                                (sign_ext 64 (conv_to 32 loaded_value)))))))))
+                            (= rd (sign_ext 64 (conv_to 32 loaded_value)))))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
-            ((RegScaledExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
 
 (spec
     (MInst.ULoad64 rd mem flags)
@@ -636,9 +424,7 @@
                 (and
                     (= (:active isa_load) true)
                     (= (:size_bits isa_load) 64)
-                    (=
-                        (:addr isa_load)
-                        (bvadd rn (concat (extract 60 0 rm) #b000)))
+                    (= (:addr isa_load) (bvadd rn (concat (extract 60 0 rm) #b000)))
                     (= rd (conv_to 64 loaded_value))))
             ((RegScaledExtended rn rm extendop)
                 (match
@@ -647,37 +433,19 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 64)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (zero_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b000))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b000))))
                             (= rd (conv_to 64 loaded_value))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 64)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 31 0 rm) #b000))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b000))))
                             (= rd (conv_to 64 loaded_value))))
                     ((SXTX)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 64)
-                            (=
-                                (:addr isa_load)
-                                (bvadd
-                                    rn
-                                    (sign_ext
-                                        64
-                                        (concat (extract 60 0 rm) #b000))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (concat (extract 60 0 rm) #b000))))
                             (= rd (conv_to 64 loaded_value))))))
             ((RegExtended rn rm extendop)
                 (match
@@ -686,17 +454,13 @@
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 64)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (zero_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
                             (= rd (conv_to 64 loaded_value))))
                     ((SXTW)
                         (and
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 64)
-                            (=
-                                (:addr isa_load)
-                                (bvadd rn (sign_ext 64 (extract 31 0 rm))))
+                            (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
                             (= rd (conv_to 64 loaded_value))))
                     ((SXTX)
                         (and
@@ -709,7 +473,5 @@
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
-            ((RegScaledExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop)
-                (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))

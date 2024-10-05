@@ -202,88 +202,38 @@
                                 t98
                                 t99)
                             (and
-                                (=
-                                    t1
-                                    (bvxor
-                                        (extract 63 1 rn)
-                                        (extract 62 0 rn)))
+                                (= t1 (bvxor (extract 63 1 rn) (extract 62 0 rn)))
                                 (= t2 (= (extract 62 62 t1) #b1))
                                 (if
                                     t2
                                     (= t3 #x003e)
                                     (and
-                                        (=
-                                            t4
-                                            (=
-                                                (extract
-                                                    61
-                                                    61
-                                                    (extract 61 0 t1))
-                                                #b1))
+                                        (= t4 (= (extract 61 61 (extract 61 0 t1)) #b1))
                                         (if
                                             t4
                                             (= t5 #x003d)
                                             (and
-                                                (=
-                                                    t6
-                                                    (=
-                                                        (extract
-                                                            60
-                                                            60
-                                                            (extract 60 0 t1))
-                                                        #b1))
+                                                (= t6 (= (extract 60 60 (extract 60 0 t1)) #b1))
                                                 (if
                                                     t6
                                                     (= t7 #x003c)
                                                     (and
-                                                        (=
-                                                            t8
-                                                            (=
-                                                                (extract
-                                                                    59
-                                                                    59
-                                                                    (extract
-                                                                        59
-                                                                        0
-                                                                        t1))
-                                                                #b1))
+                                                        (= t8 (= (extract 59 59 (extract 59 0 t1)) #b1))
                                                         (if
                                                             t8
                                                             (= t9 #x003b)
                                                             (and
-                                                                (=
-                                                                    t10
-                                                                    (=
-                                                                        (extract
-                                                                            58
-                                                                            58
-                                                                            (extract
-                                                                                58
-                                                                                0
-                                                                                t1))
-                                                                        #b1))
+                                                                (= t10 (= (extract 58 58 (extract 58 0 t1)) #b1))
                                                                 (if
                                                                     t10
-                                                                    (=
-                                                                        t11
-                                                                        #x003a)
+                                                                    (= t11 #x003a)
                                                                     (and
                                                                         (=
                                                                             t12
-                                                                            (=
-                                                                                (extract
-                                                                                    57
-                                                                                    57
-                                                                                    (extract
-                                                                                        57
-                                                                                        0
-                                                                                        t1))
-                                                                                #b1))
+                                                                            (= (extract 57 57 (extract 57 0 t1)) #b1))
                                                                         (if
                                                                             t12
-                                                                            (=
-                                                                                t13
-                                                                                #x0039)
+                                                                            (= t13 #x0039)
                                                                             (and
                                                                                 (=
                                                                                     t14
@@ -291,16 +241,11 @@
                                                                                         (extract
                                                                                             56
                                                                                             56
-                                                                                            (extract
-                                                                                                56
-                                                                                                0
-                                                                                                t1))
+                                                                                            (extract 56 0 t1))
                                                                                         #b1))
                                                                                 (if
                                                                                     t14
-                                                                                    (=
-                                                                                        t15
-                                                                                        #x0038)
+                                                                                    (= t15 #x0038)
                                                                                     (and
                                                                                         (=
                                                                                             t16
@@ -308,16 +253,11 @@
                                                                                                 (extract
                                                                                                     55
                                                                                                     55
-                                                                                                    (extract
-                                                                                                        55
-                                                                                                        0
-                                                                                                        t1))
+                                                                                                    (extract 55 0 t1))
                                                                                                 #b1))
                                                                                         (if
                                                                                             t16
-                                                                                            (=
-                                                                                                t17
-                                                                                                #x0037)
+                                                                                            (= t17 #x0037)
                                                                                             (and
                                                                                                 (=
                                                                                                     t18
@@ -332,9 +272,7 @@
                                                                                                         #b1))
                                                                                                 (if
                                                                                                     t18
-                                                                                                    (=
-                                                                                                        t19
-                                                                                                        #x0036)
+                                                                                                    (= t19 #x0036)
                                                                                                     (and
                                                                                                         (=
                                                                                                             t20
@@ -1579,47 +1517,16 @@
                                                                                                                 t181))))
                                                                                                 (=
                                                                                                     t183
-                                                                                                    (if
-                                                                                                        t18
-                                                                                                        t19
-                                                                                                        t182))))
-                                                                                        (=
-                                                                                            t184
-                                                                                            (if
-                                                                                                t16
-                                                                                                t17
-                                                                                                t183))))
-                                                                                (=
-                                                                                    t185
-                                                                                    (if
-                                                                                        t14
-                                                                                        t15
-                                                                                        t184))))
-                                                                        (=
-                                                                            t186
-                                                                            (if
-                                                                                t12
-                                                                                t13
-                                                                                t185))))
-                                                                (=
-                                                                    t187
-                                                                    (if
-                                                                        t10
-                                                                        t11
-                                                                        t186))))
-                                                        (=
-                                                            t188
-                                                            (if t8 t9 t187))))
+                                                                                                    (if t18 t19 t182))))
+                                                                                        (= t184 (if t16 t17 t183))))
+                                                                                (= t185 (if t14 t15 t184))))
+                                                                        (= t186 (if t12 t13 t185))))
+                                                                (= t187 (if t10 t11 t186))))
+                                                        (= t188 (if t8 t9 t187))))
                                                 (= t189 (if t6 t7 t188))))
                                         (= t190 (if t4 t5 t189))))
                                 (= t191 (if t2 t3 t190))
-                                (=
-                                    rd
-                                    (sign_ext
-                                        64
-                                        (bvsub
-                                            #x003f
-                                            (bvadd t191 #x0001)))))))))
+                                (= rd (sign_ext 64 (bvsub #x003f (bvadd t191 #x0001)))))))))
             ((Size32)
                 (match
                     op
@@ -1721,88 +1628,38 @@
                                 t94
                                 t95)
                             (and
-                                (=
-                                    t1
-                                    (bvxor
-                                        (extract 31 1 rn)
-                                        (extract 30 0 rn)))
+                                (= t1 (bvxor (extract 31 1 rn) (extract 30 0 rn)))
                                 (= t2 (= (extract 30 30 t1) #b1))
                                 (if
                                     t2
                                     (= t3 #x001e)
                                     (and
-                                        (=
-                                            t4
-                                            (=
-                                                (extract
-                                                    29
-                                                    29
-                                                    (extract 29 0 t1))
-                                                #b1))
+                                        (= t4 (= (extract 29 29 (extract 29 0 t1)) #b1))
                                         (if
                                             t4
                                             (= t5 #x001d)
                                             (and
-                                                (=
-                                                    t6
-                                                    (=
-                                                        (extract
-                                                            28
-                                                            28
-                                                            (extract 28 0 t1))
-                                                        #b1))
+                                                (= t6 (= (extract 28 28 (extract 28 0 t1)) #b1))
                                                 (if
                                                     t6
                                                     (= t7 #x001c)
                                                     (and
-                                                        (=
-                                                            t8
-                                                            (=
-                                                                (extract
-                                                                    27
-                                                                    27
-                                                                    (extract
-                                                                        27
-                                                                        0
-                                                                        t1))
-                                                                #b1))
+                                                        (= t8 (= (extract 27 27 (extract 27 0 t1)) #b1))
                                                         (if
                                                             t8
                                                             (= t9 #x001b)
                                                             (and
-                                                                (=
-                                                                    t10
-                                                                    (=
-                                                                        (extract
-                                                                            26
-                                                                            26
-                                                                            (extract
-                                                                                26
-                                                                                0
-                                                                                t1))
-                                                                        #b1))
+                                                                (= t10 (= (extract 26 26 (extract 26 0 t1)) #b1))
                                                                 (if
                                                                     t10
-                                                                    (=
-                                                                        t11
-                                                                        #x001a)
+                                                                    (= t11 #x001a)
                                                                     (and
                                                                         (=
                                                                             t12
-                                                                            (=
-                                                                                (extract
-                                                                                    25
-                                                                                    25
-                                                                                    (extract
-                                                                                        25
-                                                                                        0
-                                                                                        t1))
-                                                                                #b1))
+                                                                            (= (extract 25 25 (extract 25 0 t1)) #b1))
                                                                         (if
                                                                             t12
-                                                                            (=
-                                                                                t13
-                                                                                #x0019)
+                                                                            (= t13 #x0019)
                                                                             (and
                                                                                 (=
                                                                                     t14
@@ -1810,16 +1667,11 @@
                                                                                         (extract
                                                                                             24
                                                                                             24
-                                                                                            (extract
-                                                                                                24
-                                                                                                0
-                                                                                                t1))
+                                                                                            (extract 24 0 t1))
                                                                                         #b1))
                                                                                 (if
                                                                                     t14
-                                                                                    (=
-                                                                                        t15
-                                                                                        #x0018)
+                                                                                    (= t15 #x0018)
                                                                                     (and
                                                                                         (=
                                                                                             t16
@@ -1827,16 +1679,11 @@
                                                                                                 (extract
                                                                                                     23
                                                                                                     23
-                                                                                                    (extract
-                                                                                                        23
-                                                                                                        0
-                                                                                                        t1))
+                                                                                                    (extract 23 0 t1))
                                                                                                 #b1))
                                                                                         (if
                                                                                             t16
-                                                                                            (=
-                                                                                                t17
-                                                                                                #x0017)
+                                                                                            (= t17 #x0017)
                                                                                             (and
                                                                                                 (=
                                                                                                     t18
@@ -1851,9 +1698,7 @@
                                                                                                         #b1))
                                                                                                 (if
                                                                                                     t18
-                                                                                                    (=
-                                                                                                        t19
-                                                                                                        #x0016)
+                                                                                                    (= t19 #x0016)
                                                                                                     (and
                                                                                                         (=
                                                                                                             t20
@@ -2362,51 +2207,14 @@
                                                                                                                 t85))))
                                                                                                 (=
                                                                                                     t87
-                                                                                                    (if
-                                                                                                        t18
-                                                                                                        t19
-                                                                                                        t86))))
-                                                                                        (=
-                                                                                            t88
-                                                                                            (if
-                                                                                                t16
-                                                                                                t17
-                                                                                                t87))))
-                                                                                (=
-                                                                                    t89
-                                                                                    (if
-                                                                                        t14
-                                                                                        t15
-                                                                                        t88))))
-                                                                        (=
-                                                                            t90
-                                                                            (if
-                                                                                t12
-                                                                                t13
-                                                                                t89))))
-                                                                (=
-                                                                    t91
-                                                                    (if
-                                                                        t10
-                                                                        t11
-                                                                        t90))))
-                                                        (=
-                                                            t92
-                                                            (if t8 t9 t91))))
+                                                                                                    (if t18 t19 t86))))
+                                                                                        (= t88 (if t16 t17 t87))))
+                                                                                (= t89 (if t14 t15 t88))))
+                                                                        (= t90 (if t12 t13 t89))))
+                                                                (= t91 (if t10 t11 t90))))
+                                                        (= t92 (if t8 t9 t91))))
                                                 (= t93 (if t6 t7 t92))))
                                         (= t94 (if t4 t5 t93))))
                                 (= t95 (if t2 t3 t94))
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (sign_ext
-                                            32
-                                            (bvsub
-                                                #x001f
-                                                (bvadd t95 #x0001))))))))))))
-    (require
-        (match
-            size
-            ((Size64) (match op ((Cls) true)))
-            ((Size32) (match op ((Cls) true))))))
+                                (= rd (zero_ext 64 (sign_ext 32 (bvsub #x001f (bvadd t95 #x0001))))))))))))
+    (require (match size ((Size64) (match op ((Cls) true))) ((Size32) (match op ((Cls) true))))))

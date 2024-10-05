@@ -34,6 +34,10 @@ struct Args {
     #[arg(long, required = true)]
     output: PathBuf,
 
+    // Maximum line width.
+    #[arg(long, default_value = "120")]
+    width: usize,
+
     /// Print debugging output (repeat for more detail)
     #[arg(short = 'd', long = "debug", action = clap::ArgAction::Count)]
     debug_level: u8,
@@ -73,13 +77,13 @@ fn main() -> Result<()> {
 
         // Output.
         let path = args.output.join(file_config.name);
-        write_spec(&path, &defs)?;
+        write_spec(&path, &defs, args.width)?;
     }
 
     Ok(())
 }
 
-fn write_spec(path: &Path, defs: &Vec<Def>) -> Result<()> {
+fn write_spec(path: &Path, defs: &Vec<Def>, width: usize) -> Result<()> {
     let mut output = std::fs::File::create(path)?;
 
     // Code generation warning.
@@ -87,7 +91,7 @@ fn write_spec(path: &Path, defs: &Vec<Def>) -> Result<()> {
     writeln!(output)?;
 
     // Format with ISLE printer.
-    printer::print(defs, 78, &mut output)?;
+    printer::print(defs, width, &mut output)?;
 
     Ok(())
 }

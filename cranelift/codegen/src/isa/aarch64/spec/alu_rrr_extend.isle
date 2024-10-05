@@ -11,125 +11,29 @@
                     ((Add)
                         (match
                             extendop
-                            ((UXTB)
-                                (=
-                                    rd
-                                    (bvadd
-                                        rn
-                                        (zero_ext 64 (extract 7 0 rm)))))
-                            ((UXTH)
-                                (=
-                                    rd
-                                    (bvadd
-                                        rn
-                                        (zero_ext 64 (extract 15 0 rm)))))
-                            ((UXTW)
-                                (=
-                                    rd
-                                    (bvadd
-                                        rn
-                                        (zero_ext 64 (extract 31 0 rm)))))
+                            ((UXTB) (= rd (bvadd rn (zero_ext 64 (extract 7 0 rm)))))
+                            ((UXTH) (= rd (bvadd rn (zero_ext 64 (extract 15 0 rm)))))
+                            ((UXTW) (= rd (bvadd rn (zero_ext 64 (extract 31 0 rm)))))
                             ((UXTX) (= rd (bvadd rn rm)))
-                            ((SXTB)
-                                (=
-                                    rd
-                                    (bvadd
-                                        rn
-                                        (sign_ext 64 (extract 7 0 rm)))))
-                            ((SXTH)
-                                (=
-                                    rd
-                                    (bvadd
-                                        rn
-                                        (sign_ext 64 (extract 15 0 rm)))))
-                            ((SXTW)
-                                (=
-                                    rd
-                                    (bvadd
-                                        rn
-                                        (sign_ext 64 (extract 31 0 rm)))))
+                            ((SXTB) (= rd (bvadd rn (sign_ext 64 (extract 7 0 rm)))))
+                            ((SXTH) (= rd (bvadd rn (sign_ext 64 (extract 15 0 rm)))))
+                            ((SXTW) (= rd (bvadd rn (sign_ext 64 (extract 31 0 rm)))))
                             ((SXTX) (= rd (bvadd rn (sign_ext 64 rm))))))
                     ((Sub)
                         (match
                             extendop
-                            ((UXTB)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd
-                                            rn
-                                            (bvnot
-                                                (zero_ext
-                                                    64
-                                                    (extract 7 0 rm))))
-                                        #x0000000000000001)))
+                            ((UXTB) (= rd (bvadd (bvadd rn (bvnot (zero_ext 64 (extract 7 0 rm)))) #x0000000000000001)))
                             ((UXTH)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd
-                                            rn
-                                            (bvnot
-                                                (zero_ext
-                                                    64
-                                                    (extract 15 0 rm))))
-                                        #x0000000000000001)))
+                                (= rd (bvadd (bvadd rn (bvnot (zero_ext 64 (extract 15 0 rm)))) #x0000000000000001)))
                             ((UXTW)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd
-                                            rn
-                                            (bvnot
-                                                (zero_ext
-                                                    64
-                                                    (extract 31 0 rm))))
-                                        #x0000000000000001)))
-                            ((UXTX)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd rn (bvnot rm))
-                                        #x0000000000000001)))
-                            ((SXTB)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd
-                                            rn
-                                            (bvnot
-                                                (sign_ext
-                                                    64
-                                                    (extract 7 0 rm))))
-                                        #x0000000000000001)))
+                                (= rd (bvadd (bvadd rn (bvnot (zero_ext 64 (extract 31 0 rm)))) #x0000000000000001)))
+                            ((UXTX) (= rd (bvadd (bvadd rn (bvnot rm)) #x0000000000000001)))
+                            ((SXTB) (= rd (bvadd (bvadd rn (bvnot (sign_ext 64 (extract 7 0 rm)))) #x0000000000000001)))
                             ((SXTH)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd
-                                            rn
-                                            (bvnot
-                                                (sign_ext
-                                                    64
-                                                    (extract 15 0 rm))))
-                                        #x0000000000000001)))
+                                (= rd (bvadd (bvadd rn (bvnot (sign_ext 64 (extract 15 0 rm)))) #x0000000000000001)))
                             ((SXTW)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd
-                                            rn
-                                            (bvnot
-                                                (sign_ext
-                                                    64
-                                                    (extract 31 0 rm))))
-                                        #x0000000000000001)))
-                            ((SXTX)
-                                (=
-                                    rd
-                                    (bvadd
-                                        (bvadd rn (bvnot (sign_ext 64 rm)))
-                                        #x0000000000000001)))))
+                                (= rd (bvadd (bvadd rn (bvnot (sign_ext 64 (extract 31 0 rm)))) #x0000000000000001)))
+                            ((SXTX) (= rd (bvadd (bvadd rn (bvnot (sign_ext 64 rm))) #x0000000000000001)))))
                     ((AddS)
                         (match
                             extendop
@@ -143,17 +47,8 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd rn t1))
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                (extract
-                                                                    7
-                                                                    0
-                                                                    rm))))
+                                                        (sign_ext 128 (bvadd rn t1))
+                                                        (bvadd (sign_ext 128 rn) (zero_ext 128 (extract 7 0 rm))))
                                                     #b1
                                                     #b0)))
                                         (=
@@ -161,27 +56,12 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd rn t1))
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                t1)))
+                                                        (zero_ext 128 (bvadd rn t1))
+                                                        (bvadd (zero_ext 128 rn) (zero_ext 128 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd rn t1)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 (bvadd rn t1)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd rn t1) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd rn t1)))
                                         (= rd (bvadd rn t1)))))
                             ((UXTH)
                                 (with
@@ -193,17 +73,8 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd rn t1))
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                (extract
-                                                                    15
-                                                                    0
-                                                                    rm))))
+                                                        (sign_ext 128 (bvadd rn t1))
+                                                        (bvadd (sign_ext 128 rn) (zero_ext 128 (extract 15 0 rm))))
                                                     #b1
                                                     #b0)))
                                         (=
@@ -211,27 +82,12 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd rn t1))
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                t1)))
+                                                        (zero_ext 128 (bvadd rn t1))
+                                                        (bvadd (zero_ext 128 rn) (zero_ext 128 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd rn t1)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 (bvadd rn t1)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd rn t1) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd rn t1)))
                                         (= rd (bvadd rn t1)))))
                             ((UXTW)
                                 (with
@@ -243,17 +99,8 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd rn t1))
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rm))))
+                                                        (sign_ext 128 (bvadd rn t1))
+                                                        (bvadd (sign_ext 128 rn) (zero_ext 128 (extract 31 0 rm))))
                                                     #b1
                                                     #b0)))
                                         (=
@@ -261,27 +108,12 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd rn t1))
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                t1)))
+                                                        (zero_ext 128 (bvadd rn t1))
+                                                        (bvadd (zero_ext 128 rn) (zero_ext 128 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd rn t1)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 (bvadd rn t1)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd rn t1) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd rn t1)))
                                         (= rd (bvadd rn t1)))))
                             ((UXTX)
                                 (with
@@ -292,181 +124,87 @@
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (sign_ext 128 t2)
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (sign_ext
-                                                                128
-                                                                rm)))
+                                                    (= (sign_ext 128 t2) (bvadd (sign_ext 128 rn) (sign_ext 128 rm)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (zero_ext 128 t2)
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                rm)))
+                                                    (= (zero_ext 128 t2) (bvadd (zero_ext 128 rn) (zero_ext 128 rm)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (= t2 #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 t2))
+                                        (= (:Z (:flags_out result)) (if (= t2 #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 t2))
                                         (= rd t2))))
                             ((SXTB)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (sign_ext 64 (extract 7 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (sign_ext
-                                                    64
-                                                    (extract 7 0 rm))))
+                                        (= t3 (bvadd rn (sign_ext 64 (extract 7 0 rm))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (sign_ext 128 t3)
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (sign_ext
-                                                                128
-                                                                t1)))
+                                                    (= (sign_ext 128 t3) (bvadd (sign_ext 128 rn) (sign_ext 128 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (zero_ext 128 t3)
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                t1)))
+                                                    (= (zero_ext 128 t3) (bvadd (zero_ext 128 rn) (zero_ext 128 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (= t3 #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 t3))
                                         (= rd t3))))
                             ((SXTH)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (sign_ext 64 (extract 15 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (sign_ext
-                                                    64
-                                                    (extract 15 0 rm))))
+                                        (= t3 (bvadd rn (sign_ext 64 (extract 15 0 rm))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (sign_ext 128 t3)
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (sign_ext
-                                                                128
-                                                                t1)))
+                                                    (= (sign_ext 128 t3) (bvadd (sign_ext 128 rn) (sign_ext 128 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (zero_ext 128 t3)
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                t1)))
+                                                    (= (zero_ext 128 t3) (bvadd (zero_ext 128 rn) (zero_ext 128 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (= t3 #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 t3))
                                         (= rd t3))))
                             ((SXTW)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (sign_ext 64 (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (sign_ext
-                                                    64
-                                                    (extract 31 0 rm))))
+                                        (= t3 (bvadd rn (sign_ext 64 (extract 31 0 rm))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (sign_ext 128 t3)
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (sign_ext
-                                                                128
-                                                                t1)))
+                                                    (= (sign_ext 128 t3) (bvadd (sign_ext 128 rn) (sign_ext 128 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (zero_ext 128 t3)
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                t1)))
+                                                    (= (zero_ext 128 t3) (bvadd (zero_ext 128 rn) (zero_ext 128 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (= t3 #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 t3))
                                         (= rd t3))))
                             ((SXTX)
                                 (with
@@ -478,37 +216,18 @@
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (sign_ext 128 t3)
-                                                        (bvadd
-                                                            (sign_ext 128 rn)
-                                                            (sign_ext
-                                                                128
-                                                                t1)))
+                                                    (= (sign_ext 128 t3) (bvadd (sign_ext 128 rn) (sign_ext 128 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        (zero_ext 128 t3)
-                                                        (bvadd
-                                                            (zero_ext 128 rn)
-                                                            (zero_ext
-                                                                128
-                                                                t1)))
+                                                    (= (zero_ext 128 t3) (bvadd (zero_ext 128 rn) (zero_ext 128 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (= t3 #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 63 63 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 t3))
                                         (= rd t3))))))
                     ((SubS)
                         (match
@@ -518,33 +237,15 @@
                                     (t1 t3)
                                     (and
                                         (= t1 (zero_ext 64 (extract 7 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (bvnot
-                                                    (zero_ext
-                                                        64
-                                                        (extract 7 0 rm)))))
+                                        (= t3 (bvadd rn (bvnot (zero_ext 64 (extract 7 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -553,76 +254,31 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd t3 #x0000000000000001)))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))
                             ((UXTH)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (zero_ext 64 (extract 15 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (bvnot
-                                                    (zero_ext
-                                                        64
-                                                        (extract 15 0 rm)))))
+                                        (= t3 (bvadd rn (bvnot (zero_ext 64 (extract 15 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -631,76 +287,31 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd t3 #x0000000000000001)))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))
                             ((UXTW)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (zero_ext 64 (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (bvnot
-                                                    (zero_ext
-                                                        64
-                                                        (extract 31 0 rm)))))
+                                        (= t3 (bvadd rn (bvnot (zero_ext 64 (extract 31 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -709,44 +320,17 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd t3 #x0000000000000001)))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))
                             ((UXTX)
                                 (with
                                     (t1 t3)
@@ -758,19 +342,9 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    t1))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 t1))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -779,75 +353,31 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    t1))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 t1))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd t3 #x0000000000000001)))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))
                             ((SXTB)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (sign_ext 64 (extract 7 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (bvnot
-                                                    (sign_ext
-                                                        64
-                                                        (extract 7 0 rm)))))
+                                        (= t3 (bvadd rn (bvnot (sign_ext 64 (extract 7 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -856,76 +386,31 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd t3 #x0000000000000001)))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))
                             ((SXTH)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (sign_ext 64 (extract 15 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (bvnot
-                                                    (sign_ext
-                                                        64
-                                                        (extract 15 0 rm)))))
+                                        (= t3 (bvadd rn (bvnot (sign_ext 64 (extract 15 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -934,76 +419,31 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd t3 #x0000000000000001)))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))
                             ((SXTW)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (sign_ext 64 (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (bvnot
-                                                    (sign_ext
-                                                        64
-                                                        (extract 31 0 rm)))))
+                                        (= t3 (bvadd rn (bvnot (sign_ext 64 (extract 31 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -1012,73 +452,31 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd t3 #x0000000000000001)))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))
                             ((SXTX)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (sign_ext 64 rm))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                rn
-                                                (bvnot (sign_ext 64 rm))))
+                                        (= t3 (bvadd rn (bvnot (sign_ext 64 rm))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (sign_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    128
-                                                                    rn)
-                                                                (sign_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (sign_ext 128 rn) (sign_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
@@ -1087,124 +485,31 @@
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (zero_ext
-                                                            128
-                                                            (bvadd
-                                                                t3
-                                                                #x0000000000000001))
+                                                        (zero_ext 128 (bvadd t3 #x0000000000000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    128
-                                                                    rn)
-                                                                (zero_ext
-                                                                    128
-                                                                    (bvnot
-                                                                        t1)))
+                                                            (bvadd (zero_ext 128 rn) (zero_ext 128 (bvnot t1)))
                                                             #x00000000000000000000000000000001))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        t3
-                                                        #x0000000000000001)
-                                                    #x0000000000000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                63
-                                                63
-                                                (bvadd
-                                                    t3
-                                                    #x0000000000000001)))
-                                        (=
-                                            rd
-                                            (bvadd
-                                                t3
-                                                #x0000000000000001)))))))))
+                                            (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
+                                        (= rd (bvadd t3 #x0000000000000001)))))))))
             ((Size32)
                 (match
                     alu_op
                     ((Add)
                         (match
                             extendop
-                            ((UXTB)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (zero_ext 32 (extract 7 0 rm))))))
-                            ((UXTH)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (zero_ext
-                                                32
-                                                (extract 15 0 rm))))))
-                            ((UXTW)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (extract 31 0 rm)))))
-                            ((UXTX)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (extract 31 0 rm)))))
-                            ((SXTB)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (sign_ext 32 (extract 7 0 rm))))))
-                            ((SXTH)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (sign_ext
-                                                32
-                                                (extract 15 0 rm))))))
-                            ((SXTW)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (sign_ext
-                                                32
-                                                (extract 31 0 rm))))))
-                            ((SXTX)
-                                (=
-                                    rd
-                                    (zero_ext
-                                        64
-                                        (bvadd
-                                            (extract 31 0 rn)
-                                            (sign_ext
-                                                32
-                                                (extract 31 0 rm))))))))
+                            ((UXTB) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (zero_ext 32 (extract 7 0 rm))))))
+                            ((UXTH) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (zero_ext 32 (extract 15 0 rm))))))
+                            ((UXTW) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (extract 31 0 rm)))))
+                            ((UXTX) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (extract 31 0 rm)))))
+                            ((SXTB) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 7 0 rm))))))
+                            ((SXTH) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 15 0 rm))))))
+                            ((SXTW) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 31 0 rm))))))
+                            ((SXTX) (= rd (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 31 0 rm))))))))
                     ((Sub)
                         (match
                             extendop
@@ -1214,12 +519,7 @@
                                     (zero_ext
                                         64
                                         (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (zero_ext
-                                                        32
-                                                        (extract 7 0 rm))))
+                                            (bvadd (extract 31 0 rn) (bvnot (zero_ext 32 (extract 7 0 rm))))
                                             #x00000001))))
                             ((UXTH)
                                 (=
@@ -1227,45 +527,27 @@
                                     (zero_ext
                                         64
                                         (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (zero_ext
-                                                        32
-                                                        (extract 15 0 rm))))
+                                            (bvadd (extract 31 0 rn) (bvnot (zero_ext 32 (extract 15 0 rm))))
                                             #x00000001))))
                             ((UXTW)
                                 (=
                                     rd
                                     (zero_ext
                                         64
-                                        (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot (extract 31 0 rm)))
-                                            #x00000001))))
+                                        (bvadd (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))) #x00000001))))
                             ((UXTX)
                                 (=
                                     rd
                                     (zero_ext
                                         64
-                                        (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot (extract 31 0 rm)))
-                                            #x00000001))))
+                                        (bvadd (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))) #x00000001))))
                             ((SXTB)
                                 (=
                                     rd
                                     (zero_ext
                                         64
                                         (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 7 0 rm))))
+                                            (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 7 0 rm))))
                                             #x00000001))))
                             ((SXTH)
                                 (=
@@ -1273,12 +555,7 @@
                                     (zero_ext
                                         64
                                         (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 15 0 rm))))
+                                            (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 15 0 rm))))
                                             #x00000001))))
                             ((SXTW)
                                 (=
@@ -1286,12 +563,7 @@
                                     (zero_ext
                                         64
                                         (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 31 0 rm))))
+                                            (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 31 0 rm))))
                                             #x00000001))))
                             ((SXTX)
                                 (=
@@ -1299,12 +571,7 @@
                                     (zero_ext
                                         64
                                         (bvadd
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 31 0 rm))))
+                                            (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 31 0 rm))))
                                             #x00000001))))))
                     ((AddS)
                         (match
@@ -1314,167 +581,65 @@
                                     (t1 t3)
                                     (and
                                         (= t1 (zero_ext 32 (extract 7 0 rm)))
-                                        (=
-                                            t3
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (zero_ext
-                                                        32
-                                                        (extract 7 0 rm)))))
+                                        (= t3 (zero_ext 64 (bvadd (extract 31 0 rn) (zero_ext 32 (extract 7 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn)
-                                                                t1))
+                                                        (sign_ext 64 (bvadd (extract 31 0 rn) t1))
                                                         (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    7
-                                                                    0
-                                                                    rm))))
+                                                            (sign_ext 64 (extract 31 0 rn))
+                                                            (zero_ext 64 (extract 7 0 rm))))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        t3
-                                                        (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext 64 t1)))
+                                                    (= t3 (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        t1)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd (extract 31 0 rn) t1)))
+                                            (if (= (bvadd (extract 31 0 rn) t1) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd (extract 31 0 rn) t1)))
                                         (= rd t3))))
                             ((UXTH)
                                 (with
                                     (t1 t3)
                                     (and
                                         (= t1 (zero_ext 32 (extract 15 0 rm)))
-                                        (=
-                                            t3
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (zero_ext
-                                                        32
-                                                        (extract 15 0 rm)))))
+                                        (= t3 (zero_ext 64 (bvadd (extract 31 0 rn) (zero_ext 32 (extract 15 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn)
-                                                                t1))
+                                                        (sign_ext 64 (bvadd (extract 31 0 rn) t1))
                                                         (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    15
-                                                                    0
-                                                                    rm))))
+                                                            (sign_ext 64 (extract 31 0 rn))
+                                                            (zero_ext 64 (extract 15 0 rm))))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        t3
-                                                        (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext 64 t1)))
+                                                    (= t3 (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        t1)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd (extract 31 0 rn) t1)))
+                                            (if (= (bvadd (extract 31 0 rn) t1) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd (extract 31 0 rn) t1)))
                                         (= rd t3))))
                             ((UXTW)
                                 (with
                                     (t2 t3)
                                     (and
-                                        (=
-                                            t2
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (extract 31 0 rm))))
+                                        (= t2 (bvadd (extract 31 0 rn) (extract 31 0 rm)))
+                                        (= t3 (zero_ext 64 (bvadd (extract 31 0 rn) (extract 31 0 rm))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
@@ -1482,18 +647,8 @@
                                                     (=
                                                         (sign_ext 64 t2)
                                                         (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rm))))
+                                                            (sign_ext 64 (extract 31 0 rn))
+                                                            (sign_ext 64 (extract 31 0 rm))))
                                                     #b1
                                                     #b0)))
                                         (=
@@ -1503,43 +658,19 @@
                                                     (=
                                                         t3
                                                         (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rm))))
+                                                            (zero_ext 64 (extract 31 0 rn))
+                                                            (zero_ext 64 (extract 31 0 rm))))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if (= t2 #x00000000) #b1 #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 31 31 t2))
+                                        (= (:Z (:flags_out result)) (if (= t2 #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 t2))
                                         (= rd t3))))
                             ((UXTX)
                                 (with
                                     (t2 t3)
                                     (and
-                                        (=
-                                            t2
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (extract 31 0 rm))))
+                                        (= t2 (bvadd (extract 31 0 rn) (extract 31 0 rm)))
+                                        (= t3 (zero_ext 64 (bvadd (extract 31 0 rn) (extract 31 0 rm))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
@@ -1547,18 +678,8 @@
                                                     (=
                                                         (sign_ext 64 t2)
                                                         (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rm))))
+                                                            (sign_ext 64 (extract 31 0 rn))
+                                                            (sign_ext 64 (extract 31 0 rm))))
                                                     #b1
                                                     #b0)))
                                         (=
@@ -1568,266 +689,116 @@
                                                     (=
                                                         t3
                                                         (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rm))))
+                                                            (zero_ext 64 (extract 31 0 rn))
+                                                            (zero_ext 64 (extract 31 0 rm))))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if (= t2 #x00000000) #b1 #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 31 31 t2))
+                                        (= (:Z (:flags_out result)) (if (= t2 #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 t2))
                                         (= rd t3))))
                             ((SXTB)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 7 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (sign_ext
-                                                    32
-                                                    (extract 7 0 rm))))
-                                        (=
-                                            t4
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (sign_ext
-                                                        32
-                                                        (extract 7 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 7 0 rm))))
+                                        (= t4 (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 7 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
                                                         (sign_ext 64 t3)
-                                                        (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (sign_ext 64 t1)))
+                                                        (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        t4
-                                                        (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext 64 t1)))
+                                                    (= t4 (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if (= t3 #x00000000) #b1 #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 31 31 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 t3))
                                         (= rd t4))))
                             ((SXTH)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 15 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (sign_ext
-                                                    32
-                                                    (extract 15 0 rm))))
-                                        (=
-                                            t4
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (sign_ext
-                                                        32
-                                                        (extract 15 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 15 0 rm))))
+                                        (= t4 (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 15 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
                                                         (sign_ext 64 t3)
-                                                        (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (sign_ext 64 t1)))
+                                                        (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        t4
-                                                        (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext 64 t1)))
+                                                    (= t4 (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if (= t3 #x00000000) #b1 #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 31 31 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 t3))
                                         (= rd t4))))
                             ((SXTW)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (sign_ext
-                                                    32
-                                                    (extract 31 0 rm))))
-                                        (=
-                                            t4
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (sign_ext
-                                                        32
-                                                        (extract 31 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 31 0 rm))))
+                                        (= t4 (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 31 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
                                                         (sign_ext 64 t3)
-                                                        (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (sign_ext 64 t1)))
+                                                        (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        t4
-                                                        (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext 64 t1)))
+                                                    (= t4 (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if (= t3 #x00000000) #b1 #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 31 31 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 t3))
                                         (= rd t4))))
                             ((SXTX)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (sign_ext
-                                                    32
-                                                    (extract 31 0 rm))))
-                                        (=
-                                            t4
-                                            (zero_ext
-                                                64
-                                                (bvadd
-                                                    (extract 31 0 rn)
-                                                    (sign_ext
-                                                        32
-                                                        (extract 31 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 31 0 rm))))
+                                        (= t4 (zero_ext 64 (bvadd (extract 31 0 rn) (sign_ext 32 (extract 31 0 rm)))))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
                                                         (sign_ext 64 t3)
-                                                        (bvadd
-                                                            (sign_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (sign_ext 64 t1)))
+                                                        (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1)))
                                                     #b1
                                                     #b0)))
                                         (=
                                             (:C (:flags_out result))
                                             (bvnot
                                                 (if
-                                                    (=
-                                                        t4
-                                                        (bvadd
-                                                            (zero_ext
-                                                                64
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rn))
-                                                            (zero_ext 64 t1)))
+                                                    (= t4 (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1)))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if (= t3 #x00000000) #b1 #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract 31 31 t3))
+                                        (= (:Z (:flags_out result)) (if (= t3 #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 t3))
                                         (= rd t4))))))
                     ((SubS)
                         (match
@@ -1837,51 +808,24 @@
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (zero_ext 32 (extract 7 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (zero_ext
-                                                        32
-                                                        (extract 7 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (zero_ext 32 (extract 7 0 rm)))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
                                                 (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (zero_ext
-                                                                32
-                                                                (extract
-                                                                    7
-                                                                    0
-                                                                    rm))))
+                                                    (bvadd (extract 31 0 rn) (bvnot (zero_ext 32 (extract 7 0 rm))))
                                                     #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
                                                             (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (sign_ext 64 (extract 31 0 rn))
+                                                                (sign_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -1893,84 +837,37 @@
                                                         t4
                                                         (bvadd
                                                             (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (zero_ext 64 (extract 31 0 rn))
+                                                                (zero_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))
                             ((UXTH)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (zero_ext 32 (extract 15 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (zero_ext
-                                                        32
-                                                        (extract 15 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (zero_ext 32 (extract 15 0 rm)))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
                                                 (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (zero_ext
-                                                                32
-                                                                (extract
-                                                                    15
-                                                                    0
-                                                                    rm))))
+                                                    (bvadd (extract 31 0 rn) (bvnot (zero_ext 32 (extract 15 0 rm))))
                                                     #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
                                                             (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (sign_ext 64 (extract 31 0 rn))
+                                                                (sign_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -1982,78 +879,33 @@
                                                         t4
                                                         (bvadd
                                                             (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (zero_ext 64 (extract 31 0 rn))
+                                                                (zero_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))
                             ((UXTW)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (bvnot (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot (extract 31 0 rm))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
-                                                (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (extract
-                                                                31
-                                                                0
-                                                                rm)))
-                                                    #x00000001)))
+                                                (bvadd (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))) #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    t1))
+                                                            (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -2064,78 +916,32 @@
                                                     (=
                                                         t4
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    t1))
+                                                            (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))
                             ((UXTX)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (bvnot (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot (extract 31 0 rm))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
-                                                (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (extract
-                                                                31
-                                                                0
-                                                                rm)))
-                                                    #x00000001)))
+                                                (bvadd (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))) #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
-                                                            (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    t1))
+                                                            (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -2146,84 +952,36 @@
                                                     (=
                                                         t4
                                                         (bvadd
-                                                            (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    t1))
+                                                            (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))
                             ((SXTB)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 7 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 7 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 7 0 rm)))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
                                                 (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (sign_ext
-                                                                32
-                                                                (extract
-                                                                    7
-                                                                    0
-                                                                    rm))))
+                                                    (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 7 0 rm))))
                                                     #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
                                                             (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (sign_ext 64 (extract 31 0 rn))
+                                                                (sign_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -2235,84 +993,37 @@
                                                         t4
                                                         (bvadd
                                                             (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (zero_ext 64 (extract 31 0 rn))
+                                                                (zero_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))
                             ((SXTH)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 15 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 15 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 15 0 rm)))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
                                                 (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (sign_ext
-                                                                32
-                                                                (extract
-                                                                    15
-                                                                    0
-                                                                    rm))))
+                                                    (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 15 0 rm))))
                                                     #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
                                                             (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (sign_ext 64 (extract 31 0 rn))
+                                                                (sign_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -2324,84 +1035,37 @@
                                                         t4
                                                         (bvadd
                                                             (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (zero_ext 64 (extract 31 0 rn))
+                                                                (zero_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))
                             ((SXTW)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 31 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 31 0 rm)))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
                                                 (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (sign_ext
-                                                                32
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rm))))
+                                                    (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 31 0 rm))))
                                                     #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
                                                             (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (sign_ext 64 (extract 31 0 rn))
+                                                                (sign_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -2413,84 +1077,37 @@
                                                         t4
                                                         (bvadd
                                                             (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (zero_ext 64 (extract 31 0 rn))
+                                                                (zero_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))
                             ((SXTX)
                                 (with
                                     (t1 t3 t4)
                                     (and
                                         (= t1 (sign_ext 32 (extract 31 0 rm)))
-                                        (=
-                                            t3
-                                            (bvadd
-                                                (extract 31 0 rn)
-                                                (bvnot
-                                                    (sign_ext
-                                                        32
-                                                        (extract 31 0 rm)))))
+                                        (= t3 (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 31 0 rm)))))
                                         (=
                                             t4
                                             (zero_ext
                                                 64
                                                 (bvadd
-                                                    (bvadd
-                                                        (extract 31 0 rn)
-                                                        (bvnot
-                                                            (sign_ext
-                                                                32
-                                                                (extract
-                                                                    31
-                                                                    0
-                                                                    rm))))
+                                                    (bvadd (extract 31 0 rn) (bvnot (sign_ext 32 (extract 31 0 rm))))
                                                     #x00000001)))
                                         (=
                                             (:V (:flags_out result))
                                             (bvnot
                                                 (if
                                                     (=
-                                                        (sign_ext
-                                                            64
-                                                            (bvadd
-                                                                t3
-                                                                #x00000001))
+                                                        (sign_ext 64 (bvadd t3 #x00000001))
                                                         (bvadd
                                                             (bvadd
-                                                                (sign_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (sign_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (sign_ext 64 (extract 31 0 rn))
+                                                                (sign_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
@@ -2502,33 +1119,13 @@
                                                         t4
                                                         (bvadd
                                                             (bvadd
-                                                                (zero_ext
-                                                                    64
-                                                                    (extract
-                                                                        31
-                                                                        0
-                                                                        rn))
-                                                                (zero_ext
-                                                                    64
-                                                                    (bvnot
-                                                                        t1)))
+                                                                (zero_ext 64 (extract 31 0 rn))
+                                                                (zero_ext 64 (bvnot t1)))
                                                             #x0000000000000001))
                                                     #b1
                                                     #b0)))
-                                        (=
-                                            (:Z (:flags_out result))
-                                            (if
-                                                (=
-                                                    (bvadd t3 #x00000001)
-                                                    #x00000000)
-                                                #b1
-                                                #b0))
-                                        (=
-                                            (:N (:flags_out result))
-                                            (extract
-                                                31
-                                                31
-                                                (bvadd t3 #x00000001)))
+                                        (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
+                                        (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                         (= rd t4))))))))))
     (require
         (match
