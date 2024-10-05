@@ -3,7 +3,7 @@ use reqwest::IntoUrl;
 use serde::Deserialize;
 use tracing::debug;
 
-use crate::{ast::Block, parser};
+use crate::{ast::Block, bits::Bits, parser};
 
 pub struct Client<'a> {
     client: &'a reqwest::blocking::Client,
@@ -18,7 +18,7 @@ impl<'a> Client<'a> {
         })
     }
 
-    pub fn opcode(&self, opcode: u32) -> Result<Block> {
+    pub fn opcode(&self, opcode: Bits) -> Result<Block> {
         // Model for response JSON data.
         #[derive(Deserialize, Debug)]
         struct Response {
@@ -27,18 +27,18 @@ impl<'a> Client<'a> {
         }
 
         // Issue GET request.
-        let opcode_hex = format!("{opcode:#x}");
+        let opcode = opcode.to_string();
         let res: Response = self
             .client
             .get(self.server_url.clone())
-            .query(&[("opcode", &opcode_hex)])
+            .query(&[("opcode", &opcode)])
             .send()?
             .json()?;
 
         debug!(%res.semantics);
 
         // Ensure response instruction matches.
-        if res.instruction != opcode_hex {
+        if res.instruction != opcode {
             bail!("response opcode mismatch");
         }
 

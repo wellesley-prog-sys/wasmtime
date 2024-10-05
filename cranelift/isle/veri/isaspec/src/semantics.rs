@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cranelift_codegen::isa::aarch64::inst::Inst;
-use cranelift_isle_veri_aslp::{ast::Block, client::Client};
+use cranelift_isle_veri_aslp::{ast::Block, bits::Bits, client::Client};
 use tracing::debug;
 
 use crate::aarch64;
@@ -18,5 +18,6 @@ pub fn inst_semantics(inst: &Inst, client: &Client) -> Result<Block> {
     debug!("asm = {asm}");
 
     // Fetch semantics.
-    client.opcode(opcode)
+    let opcode_bits = Bits::from_u32(opcode);
+    client.opcode(opcode_bits)
 }
