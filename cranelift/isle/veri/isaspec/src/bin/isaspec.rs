@@ -110,6 +110,10 @@ fn define() -> Vec<FileConfig> {
             specs: vec![define_alu_rrrr()],
         },
         FileConfig {
+            name: "alu_rrr_extend.isle".into(),
+            specs: vec![define_alu_rrr_extend()],
+        },
+        FileConfig {
             name: "bit_rr.isle".into(),
             specs: vec![define_bit_rr()],
         },
@@ -297,6 +301,92 @@ fn is_alu3_op_size_supported(alu3_op: ALUOp3, size: OperandSize) -> bool {
     match alu3_op {
         ALUOp3::UMAddL | ALUOp3::SMAddL => size == OperandSize::Size32,
         _ => true,
+    }
+}
+
+// MInst.AluRRRExtend specification configuration.
+fn define_alu_rrr_extend() -> SpecConfig {
+    // ALUOps supported by AluRRRExtend.
+    let alu_ops = [ALUOp::Add, ALUOp::Sub, ALUOp::AddS, ALUOp::SubS];
+
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    // ExtendOp
+    let extendops = [
+        ExtendOp::UXTB,
+        ExtendOp::UXTH,
+        ExtendOp::UXTW,
+        ExtendOp::UXTX,
+        ExtendOp::SXTB,
+        ExtendOp::SXTH,
+        ExtendOp::SXTW,
+        ExtendOp::SXTX,
+    ];
+
+    // AluRRR
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+
+    SpecConfig {
+        term: "MInst.AluRRRExtend".to_string(),
+        args: ["alu_op", "size", "rd", "rn", "rm", "extendop"]
+            .map(String::from)
+            .to_vec(),
+
+        cases: Cases::Match(Match {
+            on: "size".to_string(),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: "alu_op".to_string(),
+                        arms: alu_ops
+                            .iter()
+                            .map(|alu_op| Arm {
+                                variant: format!("{alu_op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Match(Match {
+                                    on: "extendop".to_string(),
+                                    arms: extendops
+                                        .into_iter()
+                                        .map(|extendop| Arm {
+                                            variant: format!("{extendop:?}"),
+                                            args: Vec::new(),
+                                            body: Cases::Instruction(InstConfig {
+                                                inst: Inst::AluRRRExtend {
+                                                    alu_op: *alu_op,
+                                                    size: *size,
+                                                    rd: writable_xreg(4),
+                                                    rn: xreg(5),
+                                                    rm: xreg(6),
+                                                    extendop,
+                                                },
+                                                mappings: mappings.clone(),
+                                            }),
+                                        })
+                                        .collect(),
+                                }),
+                            })
+                            .collect(),
+                    }),
+                })
+                .collect(),
+        }),
     }
 }
 
