@@ -4,7 +4,7 @@ use cranelift_isle::{
     lexer::Pos,
     sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::types::{Compound, Const};
 
@@ -498,7 +498,7 @@ impl SpecEnv {
         env.derive_enum_variant_specs(termenv, tyenv)?;
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
-        env.collect_specs(defs, termenv, tyenv);
+        env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv);
         env.check_for_chained_terms_with_spec();
 
@@ -652,15 +652,26 @@ impl SpecEnv {
         }
     }
 
-    fn collect_specs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_specs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for def in defs {
             if let ast::Def::Spec(spec) = def {
                 let term_id = termenv
                     .get_term_by_name(tyenv, &spec.term)
-                    .expect("spec term should exist");
-                self.term_spec.insert(term_id, Spec::from_ast(spec));
+                    .ok_or(format_err!(
+                        "spec for unknown term {name}",
+                        name = spec.term.0
+                    ))?;
+                match self.term_spec.entry(term_id) {
+                    Entry::Occupied(_) => {
+                        bail!("duplicate spec for term {name}", name = spec.term.0)
+                    }
+                    Entry::Vacant(e) => {
+                        e.insert(Spec::from_ast(spec));
+                    }
+                }
             }
         }
+        Ok(())
     }
 
     fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
