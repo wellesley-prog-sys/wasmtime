@@ -1,8 +1,9 @@
 use anyhow::Result;
 use clap::Parser as ClapParser;
+use cranelift_codegen::ir::types::I64;
 use cranelift_codegen::isa::aarch64::inst::{
-    vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Inst, OperandSize,
-    VecALUOp, VectorSize,
+    vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Imm12, ImmLogic,
+    ImmShift, Inst, OperandSize, ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm, VecALUOp, VectorSize,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::ast::Block;
@@ -100,6 +101,75 @@ fn define_insts() -> Vec<Inst> {
             rn: xreg(5),
             rm: xreg(6),
         });
+    }
+
+    // AluRRImm12
+    let alu_ops_imm12 = [ALUOp::Add, ALUOp::Sub, ALUOp::AddS, ALUOp::SubS];
+    let imm12_vals = [0x000123u64, 0x123000u64];
+    for alu_op in alu_ops_imm12 {
+        for imm12_val in imm12_vals {
+            let imm12 = Imm12::maybe_from_u64(imm12_val).unwrap();
+            insts.push(Inst::AluRRImm12 {
+                alu_op,
+                size: OperandSize::Size64,
+                rd: writable_xreg(4),
+                rn: xreg(5),
+                imm12,
+            });
+        }
+    }
+
+    // AluRRImmLogic
+    let alu_ops_imml = [ALUOp::And, ALUOp::EorNot];
+    let imml_vals = [0xf003fffff003ffffu64, 0xffffffffff000000u64];
+    for alu_op in alu_ops_imml {
+        for imml_val in imml_vals {
+            let imml = ImmLogic::maybe_from_u64(imml_val, I64).unwrap();
+            insts.push(Inst::AluRRImmLogic {
+                alu_op,
+                size: OperandSize::Size64,
+                rd: writable_xreg(4),
+                rn: xreg(5),
+                imml,
+            });
+        }
+    }
+
+    // AluRRImmShift
+    let alu_ops_immshift = [ALUOp::Lsr, ALUOp::Lsl];
+    let immshift_vals = [13u64, 62];
+    for alu_op in alu_ops_immshift {
+        for immshift_val in immshift_vals {
+            let immshift = ImmShift::maybe_from_u64(immshift_val).unwrap();
+            insts.push(Inst::AluRRImmShift {
+                alu_op,
+                size: OperandSize::Size64,
+                rd: writable_xreg(4),
+                rn: xreg(5),
+                immshift,
+            });
+        }
+    }
+
+    // AluRRRShift
+    let alu_ops_rrr_shift = [ALUOp::Add, ALUOp::And];
+    let shiftops = [ShiftOp::LSL, ShiftOp::ASR];
+    let amts = [13u64, 63];
+    for alu_op in alu_ops_rrr_shift {
+        for shiftop in shiftops {
+            for amt in amts {
+                let shiftop =
+                    ShiftOpAndAmt::new(shiftop, ShiftOpShiftImm::maybe_from_shift(amt).unwrap());
+                insts.push(Inst::AluRRRShift {
+                    alu_op,
+                    size: OperandSize::Size64,
+                    rd: writable_xreg(4),
+                    rn: xreg(5),
+                    rm: xreg(6),
+                    shiftop,
+                });
+            }
+        }
     }
 
     // AluRRRR
