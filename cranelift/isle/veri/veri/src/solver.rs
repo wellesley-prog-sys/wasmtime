@@ -10,8 +10,6 @@ use crate::{
 };
 
 
-use encoded_ops::cls;
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum Applicability {
     Applicable,
