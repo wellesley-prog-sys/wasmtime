@@ -1129,76 +1129,6 @@
       )
 )
 
-(spec (MInst.AluRRRShift alu_op size rd rn rm shiftop)
-      (provide
-            (switch size
-                  ; 64-bit
-                  ((OperandSize.Size64)
-                        (let
-                              (
-                                    (s
-                                          (switch (:op shiftop)
-                                                ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                          )
-                                    )
-                              )
-                              (= rd (switch alu_op
-                                    ((ALUOp.Add)      (bvadd rn s))
-                                    ((ALUOp.Sub)      (bvsub rn s))
-                                    ((ALUOp.Orr)      (bvor rn s))
-                                    ((ALUOp.OrrNot)   (bvor rn (bvnot s)))
-                                    ((ALUOp.And)      (bvand rn s))
-                                    ((ALUOp.AndNot)   (bvand rn (bvnot s)))
-                              ))
-                        )
-                  )
-                  ; 32-bit
-                  ((OperandSize.Size32)
-                        (let
-                              (
-                                    (rm32 (extract 31 0 rm))
-                                    (rn32 (extract 31 0 rn))
-                                    (s
-                                          (switch (:op shiftop)
-                                                ((ALUOp.Lsl) (bvshl  rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Lsr) (bvlshr rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Asr) (bvashr rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
-                                          )
-                                    )
-                              )
-                              (= rd (zero_ext 64 (switch alu_op
-                                    ((ALUOp.Add)      (bvadd rn32 s))
-                                    ((ALUOp.Sub)      (bvsub rn32 s))
-                                    ((ALUOp.Orr)      (bvor  rn32 s))
-                                    ((ALUOp.OrrNot)   (bvor  rn32 (bvnot s)))
-                                    ((ALUOp.And)      (bvand rn32 s))
-                                    ((ALUOp.AndNot)   (bvand rn32 (bvnot s)))
-                              )))
-                        )
-                  )
-            )
-      )
-      (require
-            ; Supported operand size.
-            (or
-                  (= size (OperandSize.Size64))
-                  (= size (OperandSize.Size32))
-            )
-
-            ; Supported ops.
-            (or
-                  (= alu_op (ALUOp.Add))
-                  (= alu_op (ALUOp.Sub))
-                  (= alu_op (ALUOp.Orr))
-                  (= alu_op (ALUOp.OrrNot))
-                  (= alu_op (ALUOp.And))
-                  (= alu_op (ALUOp.AndNot))
-            )
-      )
-)
-
 ;; Registers.
 (model Reg (type (bv 64)))
 
@@ -2073,9 +2003,20 @@
 (spec (lshl_from_imm64 ty imm)
       (provide
             (= (:op result) (ALUOp.Lsl))
-            (= (:amt result) (extract 7 0 imm))
+            (= (:amt result)
+                  ; imm & (ty - 1)
+                  (bvand
+                        (extract 7 0 imm)
+                        (bvsub (int2bv 8 ty) #x01)
+                  )
+            )
       )
-      (require (= (extract 63 8 imm) #x00000000000000))
+      (require
+            ; imm < 64
+            (bvult imm #x0000000000000040)
+            ; ty <= 255
+            (<= ty 255)
+      )
 )
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 

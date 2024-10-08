@@ -5,27 +5,34 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
-use cranelift_codegen::ir::MemFlags;
-use cranelift_codegen::{Reg, Writable};
-use cranelift_isle_veri_isaspec::bits::{Bits, Segment};
-use cranelift_isle_veri_isaspec::constraints::Target;
-use cranelift_isle_veri_isaspec::memory::ReadEffect;
-use itertools::Itertools;
-
-use cranelift_codegen::isa::aarch64::inst::{
-    writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, ExtendOp, Imm12, Inst, OperandSize,
+use cranelift_codegen::{
+    ir::MemFlags,
+    isa::aarch64::inst::{
+        writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, ExtendOp, Imm12, Inst, OperandSize,
+        ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm,
+    },
+    Reg, Writable,
 };
-use cranelift_isle::ast::{Def, SpecOp};
-use cranelift_isle::printer;
+use cranelift_isle::{
+    ast::{Def, SpecOp},
+    printer,
+};
 use cranelift_isle_veri_aslp::client::Client;
-use cranelift_isle_veri_isaspec::aarch64::{self, pstate_field};
-use cranelift_isle_veri_isaspec::builder::{
-    Arm, Builder, Case, Cases, InstConfig, Mapping, MappingBuilder, Mappings, Match, Opcodes,
-    SpecConfig,
+use cranelift_isle_veri_isaspec::{
+    aarch64::{self, pstate_field},
+    bits::{Bits, Segment},
+    builder::{
+        Arm, Builder, Case, Cases, InstConfig, Mapping, MappingBuilder, Mappings, Match, Opcodes,
+        SpecConfig,
+    },
+    constraints::Target,
+    memory::ReadEffect,
+    spec::{
+        spec_binary, spec_const_bit_vector, spec_const_int, spec_discriminator, spec_eq,
+        spec_eq_bool, spec_extract, spec_field, spec_var,
+    },
 };
-use cranelift_isle_veri_isaspec::spec::{
-    spec_binary, spec_const_int, spec_eq, spec_eq_bool, spec_field, spec_var,
-};
+use itertools::Itertools;
 
 #[derive(ClapParser)]
 #[command(version, about)]
@@ -122,6 +129,10 @@ fn define() -> Result<Vec<FileConfig>> {
             specs: vec![define_alu_rr_imm12()?],
         },
         FileConfig {
+            name: "alu_rrr_shift.isle".into(),
+            specs: vec![define_alu_rrr_shift()?],
+        },
+        FileConfig {
             name: "alu_rrr_extend.isle".into(),
             specs: vec![define_alu_rrr_extend()],
         },
@@ -197,7 +208,7 @@ fn define_alu_rrr() -> SpecConfig {
             .to_vec(),
 
         cases: Cases::Match(Match {
-            on: "size".to_string(),
+            on: spec_var("size".to_string()),
             arms: sizes
                 .iter()
                 .rev()
@@ -205,7 +216,7 @@ fn define_alu_rrr() -> SpecConfig {
                     variant: format!("{size:?}"),
                     args: Vec::new(),
                     body: Cases::Match(Match {
-                        on: "alu_op".to_string(),
+                        on: spec_var("alu_op".to_string()),
                         arms: alu_ops
                             .iter()
                             .filter(|alu_op| is_alu_op_size_supported(**alu_op, *size))
@@ -273,7 +284,7 @@ fn define_alu_rrrr() -> SpecConfig {
             .to_vec(),
 
         cases: Cases::Match(Match {
-            on: "size".to_string(),
+            on: spec_var("size".to_string()),
             arms: sizes
                 .iter()
                 .rev()
@@ -281,7 +292,7 @@ fn define_alu_rrrr() -> SpecConfig {
                     variant: format!("{size:?}"),
                     args: Vec::new(),
                     body: Cases::Match(Match {
-                        on: "alu_op".to_string(),
+                        on: spec_var("alu_op".to_string()),
                         arms: alu3_ops
                             .iter()
                             .filter(|alu3_op| is_alu3_op_size_supported(**alu3_op, *size))
@@ -358,7 +369,7 @@ fn define_alu_rr_imm12() -> Result<SpecConfig> {
             .map(String::from)
             .to_vec(),
         cases: Cases::Match(Match {
-            on: "size".to_string(),
+            on: spec_var("size".to_string()),
             arms: sizes
                 .iter()
                 .rev()
@@ -367,7 +378,7 @@ fn define_alu_rr_imm12() -> Result<SpecConfig> {
                         variant: format!("{size:?}"),
                         args: Vec::new(),
                         body: Cases::Match(Match {
-                            on: "alu_op".to_string(),
+                            on: spec_var("alu_op".to_string()),
                             arms: alu_ops
                                 .iter()
                                 .map(|alu_op| {
@@ -457,6 +468,203 @@ fn alu_rr_imm12_template(
     Ok(template)
 }
 
+// MInst.AluRRRShift specification configuration.
+fn define_alu_rrr_shift() -> Result<SpecConfig> {
+    // ALUOps supported by AluRRImm12.
+    let alu_ops = [
+        ALUOp::Add,
+        ALUOp::Sub,
+        ALUOp::Orr,
+        ALUOp::And,
+        ALUOp::Eor,
+        ALUOp::OrrNot,
+        ALUOp::EorNot,
+        ALUOp::AndNot,
+        // Flags:
+        // ALUOp::AddS,
+        // ALUOp::SubS,
+        // ALUOp::AndS,
+    ];
+
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    // ShiftOp
+    let shiftops = [
+        ShiftOp::LSL,
+        ShiftOp::LSR,
+        ShiftOp::ASR,
+        // ShiftOp::ROR is defined variant but actually not a valid opcode
+    ];
+
+    Ok(SpecConfig {
+        term: "MInst.AluRRRShift".to_string(),
+        args: ["alu_op", "size", "rd", "rn", "rm", "shiftop"]
+            .map(String::from)
+            .to_vec(),
+        cases: Cases::Match(Match {
+            on: spec_var("alu_op".to_string()),
+            arms: alu_ops
+                .iter()
+                .map(|alu_op| {
+                    Ok(Arm {
+                        variant: format!("{alu_op:?}"),
+                        args: Vec::new(),
+
+                        // Shift operation cases.
+                        //
+                        // Note that the `ShiftOpAndAmt` model actually uses
+                        // `ALUOp` to represent the shift operation.  ISLE does
+                        // not actually materialize the ShiftOp type itself, and
+                        // without support for ghost types, we cannot represent
+                        // it.  Therefore, co-opting ALUOp for the purpose is
+                        // the best we can do.
+                        body: Cases::Match(Match {
+                            on: spec_field("op".to_string(), spec_var("shiftop".to_string())),
+                            arms: shiftops
+                                .iter()
+                                .map(|shiftop| {
+                                    // Map shift operation to the correspondong ALUOp.
+                                    let alu_shift_op = alu_op_from_shiftop(*shiftop);
+                                    Ok(Arm {
+                                        variant: format!("{alu_shift_op:?}"),
+                                        args: Vec::new(),
+                                        body: Cases::Cases(
+                                            sizes
+                                                .iter()
+                                                .rev()
+                                                .map(|size| {
+                                                    alu_rrr_shift_size_case(
+                                                        *alu_op, *size, *shiftop,
+                                                    )
+                                                })
+                                                .collect::<Result<_>>()?,
+                                        ),
+                                    })
+                                })
+                                .collect::<Result<_>>()?,
+                        }),
+                    })
+                })
+                .collect::<Result<_>>()?,
+        }),
+    })
+}
+
+fn alu_rrr_shift_size_case(alu_op: ALUOp, size: OperandSize, op: ShiftOp) -> Result<Case> {
+    // Shift amount field depends on operand size.
+    let amt_width = match size {
+        OperandSize::Size32 => 5,
+        OperandSize::Size64 => 6,
+    };
+    let amt_var = format!("amt{}", amt_width);
+
+    // Setup scope with shift amount variable.
+    let amt_target = Target::Var(amt_var.clone());
+    let mut scope = aarch64::state();
+    scope.global(amt_target.clone());
+
+    // Expressions for the shift amount.
+    //
+    // The model of the shift amount is an 8 bit value, but the instruction
+    // representations only allow 5 or 6 bits (depending on operand size).  We
+    // extract the shift bits from the operand, and require that the higher bits
+    // are zero.
+    static FULL_AMT_WIDTH: usize = 8;
+    let full_amt_expr = spec_field("amt".to_string(), spec_var("shiftop".to_string()));
+    let amt_expr = spec_extract(amt_width - 1, 0, full_amt_expr.clone());
+    let amt_overflow_expr = spec_extract(FULL_AMT_WIDTH - 1, amt_width, full_amt_expr.clone());
+    let amt_overflow_width = FULL_AMT_WIDTH - amt_width;
+    let no_amt_overflow = spec_eq(
+        amt_overflow_expr,
+        spec_const_bit_vector(0, amt_overflow_width),
+    );
+
+    // Mappings
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+    mappings
+        .reads
+        .insert(amt_target.clone(), Mapping::require(amt_expr.clone()));
+
+    // Opcode template
+    //
+    // Assemble a base instruction with a placeholder for the shift amount.
+    let placeholder = ShiftOpShiftImm::maybe_from_shift(0).unwrap();
+    let rd = writable_xreg(4);
+    let rn = xreg(5);
+    let rm = xreg(6);
+    let shiftop = ShiftOpAndAmt::new(op, placeholder);
+    let base = Inst::AluRRRShift {
+        alu_op,
+        size,
+        rd,
+        rn,
+        rm,
+        shiftop,
+    };
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic shift amount.
+    //
+    // The shift amount is 6 bits in the 64-bit case, and 5 bits in the 32-bit
+    // case.  Note that in the 32-bit case, the instruction is explicitly
+    // undefined when bit 5 is 1. Therefore, we must ensure that the symbolic
+    // field variable is only 5 bits.
+    let amt = Bits {
+        segments: vec![Segment::Symbolic(amt_var.to_string(), amt_width)],
+    };
+    let template = Bits::splice(&bits, &amt, 10)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let amt = assignment.get(&amt_var).unwrap();
+        let shift = ShiftOpShiftImm::maybe_from_shift((*amt).into()).unwrap();
+        let shiftop = ShiftOpAndAmt::new(op, shift);
+        Ok(Inst::AluRRRShift {
+            alu_op,
+            size,
+            rd,
+            rn,
+            rm,
+            shiftop,
+        })
+    })?;
+
+    Ok(Case {
+        conds: vec![
+            spec_discriminator(format!("{size:?}"), spec_var("size".to_string())),
+            no_amt_overflow,
+        ],
+        cases: Cases::Instruction(InstConfig {
+            opcodes: Opcodes::Template(template),
+            scope: scope.clone(),
+            mappings: mappings.clone(),
+        }),
+    })
+}
+
+fn alu_op_from_shiftop(op: ShiftOp) -> ALUOp {
+    match op {
+        ShiftOp::LSL => ALUOp::Lsl,
+        ShiftOp::LSR => ALUOp::Lsr,
+        ShiftOp::ASR => ALUOp::Asr,
+        ShiftOp::ROR => ALUOp::RotR,
+    }
+}
+
 // MInst.AluRRRExtend specification configuration.
 fn define_alu_rrr_extend() -> SpecConfig {
     // ALUOps supported by AluRRRExtend.
@@ -499,7 +707,7 @@ fn define_alu_rrr_extend() -> SpecConfig {
             .to_vec(),
 
         cases: Cases::Match(Match {
-            on: "size".to_string(),
+            on: spec_var("size".to_string()),
             arms: sizes
                 .iter()
                 .rev()
@@ -507,14 +715,14 @@ fn define_alu_rrr_extend() -> SpecConfig {
                     variant: format!("{size:?}"),
                     args: Vec::new(),
                     body: Cases::Match(Match {
-                        on: "alu_op".to_string(),
+                        on: spec_var("alu_op".to_string()),
                         arms: alu_ops
                             .iter()
                             .map(|alu_op| Arm {
                                 variant: format!("{alu_op:?}"),
                                 args: Vec::new(),
                                 body: Cases::Match(Match {
-                                    on: "extendop".to_string(),
+                                    on: spec_var("extendop".to_string()),
                                     arms: extendops
                                         .into_iter()
                                         .map(|extendop| Arm {
@@ -576,7 +784,7 @@ fn define_bit_rr() -> SpecConfig {
         args: ["op", "size", "rd", "rn"].map(String::from).to_vec(),
 
         cases: Cases::Match(Match {
-            on: "size".to_string(),
+            on: spec_var("size".to_string()),
             arms: sizes
                 .iter()
                 .rev()
@@ -584,7 +792,7 @@ fn define_bit_rr() -> SpecConfig {
                     variant: format!("{size:?}"),
                     args: Vec::new(),
                     body: Cases::Match(Match {
-                        on: "op".to_string(),
+                        on: spec_var("op".to_string()),
                         arms: bit_ops
                             .iter()
                             .map(|op| Arm {
@@ -833,7 +1041,7 @@ where
         variant: "RegScaledExtended".to_string(),
         args: ["rn", "rm", "extendop"].map(String::from).to_vec(),
         body: Cases::Match(Match {
-            on: "extendop".to_string(),
+            on: spec_var("extendop".to_string()),
             arms: extendops
                 .into_iter()
                 .map(|extendop| Arm {
@@ -872,7 +1080,7 @@ where
         variant: "RegExtended".to_string(),
         args: ["rn", "rm", "extendop"].map(String::from).to_vec(),
         body: Cases::Match(Match {
-            on: "extendop".to_string(),
+            on: spec_var("extendop".to_string()),
             arms: extendops
                 .into_iter()
                 .map(|extendop| Arm {
@@ -900,7 +1108,7 @@ where
         term: term.to_string(),
         args: ["rd", "mem", "flags"].map(String::from).to_vec(),
         cases: Cases::Match(Match {
-            on: "mem".to_string(),
+            on: spec_var("mem".to_string()),
             arms: vec![reg_reg, reg_scaled, reg_scaled_extended, reg_extended],
         }),
     }

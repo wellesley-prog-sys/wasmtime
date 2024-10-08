@@ -1,6 +1,7 @@
 //! Translation of ASLp semantics to constraints.
 
-use core::fmt;
+use core::{fmt, panic};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
@@ -413,11 +414,7 @@ impl Translator {
 
     fn expr(&mut self, expr: &Expr) -> Result<SpecExpr> {
         match expr {
-            Expr::Apply {
-                func,
-                types: _,
-                args,
-            } => self.func(func, args),
+            Expr::Apply { func, types, args } => self.func(func, types, args),
             Expr::Var(..) | Expr::ArrayIndex { .. } | Expr::Field { .. } => {
                 let target: Target = expr.try_into()?;
                 Ok(spec_var(self.read(&target)?))
@@ -435,7 +432,7 @@ impl Translator {
         }
     }
 
-    fn func(&mut self, func: &Func, args: &[Expr]) -> Result<SpecExpr> {
+    fn func(&mut self, func: &Func, types: &[Expr], args: &[Expr]) -> Result<SpecExpr> {
         match func.name.as_str() {
             "ZeroExtend" => {
                 let (x, w) = expect_binary(args)?;
@@ -550,30 +547,9 @@ impl Translator {
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVSdiv, lhs, rhs))
             }
-            "lsr_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): ensure correct bitwidth of shift value
-                let (x, s) = expect_binary(args)?;
-                let x = self.expr(x)?;
-                let s = self.expr(s)?;
-                Ok(spec_binary(SpecOp::BVLshr, x, s))
-            }
-            "asr_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): ensure correct bitwidth of shift value
-                let (x, s) = expect_binary(args)?;
-                let x = self.expr(x)?;
-                let s = self.expr(s)?;
-                Ok(spec_binary(SpecOp::BVAshr, x, s))
-            }
-            "lsl_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): ensure correct bitwidth of shift value
-                let (x, s) = expect_binary(args)?;
-                let x = self.expr(x)?;
-                let s = self.expr(s)?;
-                Ok(spec_binary(SpecOp::BVShl, x, s))
-            }
+            "lsr_bits" => self.shift(SpecOp::BVLshr, types, args),
+            "asr_bits" => self.shift(SpecOp::BVAshr, types, args),
+            "lsl_bits" => self.shift(SpecOp::BVShl, types, args),
             "sle_bits" => {
                 // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
@@ -603,14 +579,28 @@ impl Translator {
                 let w = expect_lit_int_as_usize(w)?;
                 let h = l + w - 1;
                 let x = self.expr(x)?;
-                Ok(spec_ternary(
-                    SpecOp::Extract,
-                    spec_const_int(h.try_into()?),
-                    spec_const_int(l.try_into()?),
-                    x,
-                ))
+                Ok(spec_extract(h, l, x))
             }
         }
+    }
+
+    fn shift(&mut self, op: SpecOp, types: &[Expr], args: &[Expr]) -> Result<SpecExpr> {
+        // Map input and shift to spec expressions.
+        let (x, s) = expect_binary(args)?;
+        let x = self.expr(x)?;
+        let mut s = self.expr(s)?;
+
+        // ASLp maps the shift amount to a bit vector in an integer conversion
+        // pass, which can result in the shift argument being a different width
+        // than the input. If so, extend the shift to match.
+        let (xw, sw) = expect_binary_types(types)?;
+        match xw.cmp(&sw) {
+            Ordering::Greater => s = spec_zero_ext(xw, s),
+            Ordering::Equal => {}
+            Ordering::Less => panic!("shift argument wider than input"),
+        }
+
+        Ok(spec_binary(op, x, s))
     }
 
     fn mem_read(&mut self, addr: &Expr, size: &Expr, access: &Expr) -> Result<SpecExpr> {
@@ -658,6 +648,11 @@ fn expect_ternary<T>(xs: &[T]) -> Result<(&T, &T, &T)> {
         bail!("expected ternary");
     }
     Ok((&xs[0], &xs[1], &xs[2]))
+}
+
+fn expect_binary_types(types: &[Expr]) -> Result<(usize, usize)> {
+    let (t1, t2) = expect_binary(types)?;
+    Ok((expect_lit_int_as_usize(t1)?, expect_lit_int_as_usize(t2)?))
 }
 
 fn expect_lit_int_as_usize(expr: &Expr) -> Result<usize> {

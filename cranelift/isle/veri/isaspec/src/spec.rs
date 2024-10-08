@@ -92,6 +92,15 @@ pub fn spec_all(xs: Vec<SpecExpr>) -> SpecExpr {
     }
 }
 
+pub fn spec_extract(h: usize, l: usize, x: SpecExpr) -> SpecExpr {
+    spec_ternary(
+        SpecOp::Extract,
+        spec_const_int(h.try_into().unwrap()),
+        spec_const_int(l.try_into().unwrap()),
+        x,
+    )
+}
+
 pub fn spec_zero_ext(w: usize, x: SpecExpr) -> SpecExpr {
     spec_ext(SpecOp::ZeroExt, w, x)
 }
@@ -146,6 +155,14 @@ pub fn spec_enum_unit(name: String, variant: String) -> SpecExpr {
 pub fn spec_field(field: String, x: SpecExpr) -> SpecExpr {
     SpecExpr::Field {
         field: spec_ident(field),
+        x: Box::new(x),
+        pos: Pos::default(),
+    }
+}
+
+pub fn spec_discriminator(variant: String, x: SpecExpr) -> SpecExpr {
+    SpecExpr::Discriminator {
+        variant: spec_ident(variant),
         x: Box::new(x),
         pos: Pos::default(),
     }

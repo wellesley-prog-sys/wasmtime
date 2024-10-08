@@ -37,7 +37,7 @@ pub struct Case {
 }
 
 pub struct Match {
-    pub on: String,
+    pub on: SpecExpr,
     pub arms: Vec<Arm>,
 }
 
@@ -207,7 +207,6 @@ impl<'a> Builder<'a> {
                 Ok(Conditions::merge(conds))
             }
             Cases::Match(m) => {
-                let x = spec_var(m.on.clone());
                 let mut require_arms = Vec::new();
                 let mut arms = Vec::new();
                 let mut modifies = HashSet::new();
@@ -238,12 +237,12 @@ impl<'a> Builder<'a> {
 
                 Ok(Conditions {
                     requires: vec![SpecExpr::Match {
-                        x: Box::new(x.clone()),
+                        x: Box::new(m.on.clone()),
                         arms: require_arms,
                         pos: Pos::default(),
                     }],
                     provides: vec![SpecExpr::Match {
-                        x: Box::new(x.clone()),
+                        x: Box::new(m.on.clone()),
                         arms,
                         pos: Pos::default(),
                     }],
