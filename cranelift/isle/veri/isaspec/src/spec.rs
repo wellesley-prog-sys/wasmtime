@@ -92,6 +92,36 @@ pub fn spec_all(xs: Vec<SpecExpr>) -> SpecExpr {
     }
 }
 
+pub fn spec_zero_ext(w: usize, x: SpecExpr) -> SpecExpr {
+    spec_ext(SpecOp::ZeroExt, w, x)
+}
+
+pub fn spec_sign_ext(w: usize, x: SpecExpr) -> SpecExpr {
+    spec_ext(SpecOp::SignExt, w, x)
+}
+
+fn spec_ext(ext_op: SpecOp, w: usize, x: SpecExpr) -> SpecExpr {
+    // Simplify nested extensions.
+    if let SpecExpr::Op {
+        ref op,
+        ref args,
+        pos: _,
+    } = x
+    {
+        if *op == ext_op {
+            if let [SpecExpr::ConstInt { val, .. }, n] = args.as_slice() {
+                let nw: usize = (*val).try_into().unwrap();
+                if w >= nw {
+                    return spec_zero_ext(w, n.clone());
+                }
+            }
+        }
+    }
+
+    // Base case just constructs zero extension operator.
+    spec_binary(ext_op, spec_const_int(w.try_into().unwrap()), x)
+}
+
 pub fn spec_op(op: SpecOp, args: Vec<SpecExpr>) -> SpecExpr {
     SpecExpr::Op {
         op,

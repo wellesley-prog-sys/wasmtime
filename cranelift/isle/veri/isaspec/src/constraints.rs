@@ -440,14 +440,14 @@ impl Translator {
             "ZeroExtend" => {
                 let (x, w) = expect_binary(args)?;
                 let x = self.expr(x)?;
-                let w = spec_const_int(expect_lit_int_as_usize(w)?.try_into()?);
-                Ok(spec_binary(SpecOp::ZeroExt, w, x))
+                let w = expect_lit_int_as_usize(w)?;
+                Ok(spec_zero_ext(w, x))
             }
             "SignExtend" => {
                 let (x, w) = expect_binary(args)?;
                 let x = self.expr(x)?;
-                let w = spec_const_int(expect_lit_int_as_usize(w)?.try_into()?);
-                Ok(spec_binary(SpecOp::SignExt, w, x))
+                let w = expect_lit_int_as_usize(w)?;
+                Ok(spec_sign_ext(w, x))
             }
             "not_bool" => {
                 let x = expect_unary(args)?;
