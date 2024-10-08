@@ -6,7 +6,7 @@ use cranelift_isle::{
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Expansion {
     pub term: TermId,
     pub rules: Vec<RuleId>,

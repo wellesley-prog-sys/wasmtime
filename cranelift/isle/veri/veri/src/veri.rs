@@ -7,7 +7,7 @@ use crate::{
 };
 use cranelift_isle::{
     ast::Ident,
-    sema::{RuleId, Sym, TermId, TypeId, VariantId},
+    sema::{Sym, TermId, TypeId, VariantId},
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use easy_smt::{Context, SExpr};
@@ -395,6 +395,9 @@ pub struct Conditions {
     pub assertions: Vec<ExprId>,
     pub variables: Vec<Variable>,
     pub calls: Vec<Call>,
+    // We should reveal the expansions to the program.rs
+    // in order to print the results from the original rule.
+    pub expansion: Expansion,
 }
 
 impl Conditions {
@@ -525,7 +528,13 @@ impl Conditions {
         Ok(())
     }
 
-    pub fn print_rule(&self, model: &Model, prog: &Program, smt: &Context) -> Vec<SExpr> {
+    pub fn print_rule(
+        &self,
+        expansion: &Expansion,
+        model: &Model,
+        prog: &Program,
+        smt: &Context,
+    ) -> Vec<SExpr> {
         let unsat_result_map: Vec<UnsatResult> = self
             .calls
             .iter()
@@ -535,7 +544,7 @@ impl Conditions {
                 ret: call.ret.eval(model).ok(),
             })
             .collect();
-        return prog.display_rule(model, &unsat_result_map, smt);
+        return prog.display_rule(expansion, model, &unsat_result_map, smt);
     }
 }
 
@@ -581,6 +590,9 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn build(mut self) -> anyhow::Result<Conditions> {
+        // Easiest solution for now-- surface expansions directly:
+        self.conditions.expansion = self.expansion.clone();
+
         // Bindings.
         for (i, binding) in self.expansion.bindings.iter().enumerate() {
             if let Some(binding) = binding {

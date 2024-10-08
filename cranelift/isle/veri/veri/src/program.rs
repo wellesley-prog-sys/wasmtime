@@ -1,3 +1,4 @@
+use crate::expand::Expansion;
 use crate::spec::{self, SpecEnv};
 use crate::veri::{Call, UnsatResult};
 use crate::veri::{Model, Value};
@@ -107,6 +108,7 @@ impl Program {
 
     pub fn display_rule(
         &self,
+        expansion: &Expansion,
         model: &Model,
         calls: &Vec<UnsatResult>,
         smt: &Context,
@@ -114,41 +116,32 @@ impl Program {
         // SExpr
         let mut rules_sexpr: Vec<SExpr> = Vec::new();
 
-        // All TermIds from Calls
-        let term_ids: Vec<TermId> = calls.iter().map(|call| call.term.clone()).collect();
+        // // All TermIds from Calls./script/veri.sh > output/veri-bad.out
+        // let term_ids: Vec<TermId> = calls.iter().map(|call| call.term.clone()).collect();
 
-        // Keep only Rules that involve Calls
-        let term_to_rules: HashMap<TermId, Vec<RuleId>> = self
-            .rules_by_term()
-            .iter()
-            .filter(|(term_id, rule_ids)| term_ids.contains(*term_id) && !rule_ids.is_empty())
-            .map(|(term_id, rule_ids)| (term_id.clone(), rule_ids.clone()))
-            .collect();
+        // // Keep only Rules that involve Calls
+        // let term_to_rules: HashMap<TermId, Vec<RuleId>> = self
+        //     .rules_by_term()
+        //     .iter()
+        //     .filter(|(term_id, rule_ids)| term_ids.contains(*term_id) && !rule_ids.is_empty())
+        //     .map(|(term_id, rule_ids)| (term_id.clone(), rule_ids.clone()))
+        //     .collect();
 
-        for term in term_to_rules {
-            println!("{:?}", term.0);
-            for rule_id in term.1 {
-                let rule = self.rule(rule_id);
-                let sexpr = self.to_sexpr(
-                    calls,
-                    model,
-                    rule,
-                    smt,
-                    &Pattern::Term(
-                        cranelift_isle::sema::TypeId(0),
-                        rule.root_term,
-                        rule.args.clone(),
-                    ),
-                );
-                rules_sexpr.push(sexpr);
-            }
+        for rule_id in expansion.rules.clone() {
+            let rule = self.rule(rule_id);
+            let sexpr = self.to_sexpr(
+                calls,
+                model,
+                rule,
+                smt,
+                &Pattern::Term(
+                    cranelift_isle::sema::TypeId(0),
+                    rule.root_term,
+                    rule.args.clone(),
+                ),
+            );
+            rules_sexpr.push(sexpr);
         }
-
-        println!(
-            "{:?}, {:?}",
-            self.term_name(TermId(310)),
-            self.term_name(TermId(667))
-        );
 
         return rules_sexpr;
     }
