@@ -199,7 +199,7 @@ impl<'a> Solver<'a> {
                     16 => Ok(cls16(&mut self.smt, xe, 0)),
                     32 => Ok(cls32(&mut self.smt, xe, 0)),
                     64 => Ok(cls64(&mut self.smt, xe, 0)),
-                    _ => unimplemented!("Unexpected CLS width")
+                    _ => unimplemented!("Unexpected CLS width"),
                 }
             }
 

@@ -149,7 +149,6 @@
         (= result (conv_to (widthof result) loaded_value))
     )
 )
-
 (instantiate load
     ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 64)))
 )

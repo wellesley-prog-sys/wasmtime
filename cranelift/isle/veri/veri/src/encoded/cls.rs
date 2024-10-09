@@ -1,7 +1,6 @@
 // Adapted from https://stackoverflow.com/questions/23856596/how-to-count-leading-zeros-in-a-32-bit-unsigned-integer
 use easy_smt::*;
 
-
 pub fn declare(smt: &mut Context, name: String, val: SExpr) -> SExpr {
     smt.declare_const(name.clone(), val).unwrap();
     smt.atom(name)
