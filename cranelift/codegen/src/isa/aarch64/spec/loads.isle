@@ -59,14 +59,21 @@
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (= rd (zero_ext 64 (conv_to 8 loaded_value)))))))))
+                            (= rd (zero_ext 64 (conv_to 8 loaded_value)))))))
+            ((Unscaled rn simm9)
+                (and
+                    (= (:active isa_load) true)
+                    (= (:size_bits isa_load) 8)
+                    (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
+                    (= rd (zero_ext 64 (conv_to 8 loaded_value)))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((Unscaled rn simm9) true))))
 
 (spec
     (MInst.SLoad8 rd mem flags)
@@ -127,14 +134,21 @@
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 8)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (= rd (sign_ext 64 (conv_to 8 loaded_value)))))))))
+                            (= rd (sign_ext 64 (conv_to 8 loaded_value)))))))
+            ((Unscaled rn simm9)
+                (and
+                    (= (:active isa_load) true)
+                    (= (:size_bits isa_load) 8)
+                    (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
+                    (= rd (sign_ext 64 (conv_to 8 loaded_value)))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((Unscaled rn simm9) true))))
 
 (spec
     (MInst.ULoad16 rd mem flags)
@@ -195,14 +209,21 @@
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (= rd (zero_ext 64 (conv_to 16 loaded_value)))))))))
+                            (= rd (zero_ext 64 (conv_to 16 loaded_value)))))))
+            ((Unscaled rn simm9)
+                (and
+                    (= (:active isa_load) true)
+                    (= (:size_bits isa_load) 16)
+                    (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
+                    (= rd (zero_ext 64 (conv_to 16 loaded_value)))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((Unscaled rn simm9) true))))
 
 (spec
     (MInst.SLoad16 rd mem flags)
@@ -263,14 +284,21 @@
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 16)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (= rd (sign_ext 64 (conv_to 16 loaded_value)))))))))
+                            (= rd (sign_ext 64 (conv_to 16 loaded_value)))))))
+            ((Unscaled rn simm9)
+                (and
+                    (= (:active isa_load) true)
+                    (= (:size_bits isa_load) 16)
+                    (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
+                    (= rd (sign_ext 64 (conv_to 16 loaded_value)))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((Unscaled rn simm9) true))))
 
 (spec
     (MInst.ULoad32 rd mem flags)
@@ -331,14 +359,21 @@
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (= rd (zero_ext 64 (conv_to 32 loaded_value)))))))))
+                            (= rd (zero_ext 64 (conv_to 32 loaded_value)))))))
+            ((Unscaled rn simm9)
+                (and
+                    (= (:active isa_load) true)
+                    (= (:size_bits isa_load) 32)
+                    (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
+                    (= rd (zero_ext 64 (conv_to 32 loaded_value)))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((Unscaled rn simm9) true))))
 
 (spec
     (MInst.SLoad32 rd mem flags)
@@ -399,14 +434,21 @@
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 32)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (= rd (sign_ext 64 (conv_to 32 loaded_value)))))))))
+                            (= rd (sign_ext 64 (conv_to 32 loaded_value)))))))
+            ((Unscaled rn simm9)
+                (and
+                    (= (:active isa_load) true)
+                    (= (:size_bits isa_load) 32)
+                    (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
+                    (= rd (sign_ext 64 (conv_to 32 loaded_value)))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((Unscaled rn simm9) true))))
 
 (spec
     (MInst.ULoad64 rd mem flags)
@@ -467,11 +509,18 @@
                             (= (:active isa_load) true)
                             (= (:size_bits isa_load) 64)
                             (= (:addr isa_load) (bvadd rn (sign_ext 64 rm)))
-                            (= rd (conv_to 64 loaded_value))))))))
+                            (= rd (conv_to 64 loaded_value))))))
+            ((Unscaled rn simm9)
+                (and
+                    (= (:active isa_load) true)
+                    (= (:size_bits isa_load) 64)
+                    (= (:addr isa_load) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
+                    (= rd (conv_to 64 loaded_value))))))
     (require
         (match
             mem
             ((RegReg rn rm) true)
             ((RegScaled rn rm) true)
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
-            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true))))))
+            ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
+            ((Unscaled rn simm9) true))))
