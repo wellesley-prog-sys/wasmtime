@@ -5,6 +5,7 @@ use std::{
     vec,
 };
 
+use anyhow::{bail, format_err, Result};
 use cranelift_isle::sema::TermId;
 
 use crate::{
@@ -439,7 +440,14 @@ impl<'a> SystemBuilder<'a> {
     fn symbolic(&mut self, v: &Symbolic, ty: Compound) {
         match (v, ty) {
             (Symbolic::Scalar(x), Compound::Primitive(ty)) => self.ty(*x, ty),
-            (Symbolic::Struct(_), Compound::Struct(_)) => todo!("struct type constraints"),
+            (Symbolic::Struct(fields), Compound::Struct(field_tys)) => {
+                assert_eq!(fields.len(), field_tys.len());
+                for (field, field_ty) in zip(fields, field_tys) {
+                    assert_eq!(field.name, field_ty.name.0);
+                    self.symbolic(&field.value, field_ty.ty);
+                }
+            }
+            (Symbolic::Enum(_), Compound::Enum(_)) => todo!("enum type constraints"),
             // QUESTION(mbm): should Option and Tuple be in a different enum so they don't appear in type inference?
             (Symbolic::Option(_), _) => unimplemented!("option types unsupported"),
             (Symbolic::Tuple(_), _) => unimplemented!("tuple types unsupported"),
@@ -540,13 +548,13 @@ impl Assignment {
             .all(|tv| tv.ty().is_concrete())
     }
 
-    pub fn satisfies_constraints(&self, constraints: &[Constraint]) -> anyhow::Result<()> {
+    pub fn satisfies_constraints(&self, constraints: &[Constraint]) -> Result<()> {
         constraints
             .iter()
             .try_for_each(|c| self.satisfies_constraint(c))
     }
 
-    pub fn satisfies_constraint(&self, constraint: &Constraint) -> anyhow::Result<()> {
+    pub fn satisfies_constraint(&self, constraint: &Constraint) -> Result<()> {
         match *constraint {
             Constraint::Type { x, ref ty } => self.expect_expr_type_refinement(x, ty),
             Constraint::SameType { x, y } => self.expect_same_type(x, y),
@@ -563,8 +571,8 @@ impl Assignment {
         self.expr_type_value.get(&x)
     }
 
-    pub fn try_assignment(&self, x: ExprId) -> anyhow::Result<&TypeValue> {
-        self.assignment(x).ok_or(anyhow::format_err!(
+    pub fn try_assignment(&self, x: ExprId) -> Result<&TypeValue> {
+        self.assignment(x).ok_or(format_err!(
             "expression {x} missing assignment",
             x = x.index()
         ))
@@ -574,8 +582,8 @@ impl Assignment {
         self.assignment(x)?.as_value()
     }
 
-    pub fn try_value(&self, x: ExprId) -> anyhow::Result<&Const> {
-        self.value(x).ok_or(anyhow::format_err!(
+    pub fn try_value(&self, x: ExprId) -> Result<&Const> {
+        self.value(x).ok_or(format_err!(
             "expression {x} should be a known value",
             x = x.index()
         ))
@@ -589,8 +597,8 @@ impl Assignment {
         self.value(x)?.as_int()
     }
 
-    pub fn try_int_value(&self, x: ExprId) -> anyhow::Result<i128> {
-        self.int_value(x).ok_or(anyhow::format_err!(
+    pub fn try_int_value(&self, x: ExprId) -> Result<i128> {
+        self.int_value(x).ok_or(format_err!(
             "expression {x} should be a known integer value",
             x = x.index()
         ))
@@ -603,19 +611,19 @@ impl Assignment {
         }
     }
 
-    fn expect_expr_type_refinement(&self, x: ExprId, base: &Type) -> anyhow::Result<()> {
+    fn expect_expr_type_refinement(&self, x: ExprId, base: &Type) -> Result<()> {
         let tv = self.try_assignment(x)?;
         if !tv.refines_type(base) {
-            anyhow::bail!("expected type {tv} to be refinement of {base}")
+            bail!("expected type {tv} to be refinement of {base}")
         }
         Ok(())
     }
 
-    fn expect_same_type(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
+    fn expect_same_type(&self, x: ExprId, y: ExprId) -> Result<()> {
         let tx = self.try_assignment(x)?.ty();
         let ty = self.try_assignment(y)?.ty();
         if tx != ty {
-            anyhow::bail!(
+            bail!(
                 "expressions {x} and {y} should have same type: got {tx} and {ty}",
                 x = x.index(),
                 y = y.index()
@@ -624,11 +632,11 @@ impl Assignment {
         Ok(())
     }
 
-    fn expect_identical(&self, x: ExprId, y: ExprId) -> anyhow::Result<()> {
+    fn expect_identical(&self, x: ExprId, y: ExprId) -> Result<()> {
         let tvx = self.try_assignment(x)?;
         let tvy = self.try_assignment(y)?;
         if tvx != tvy {
-            anyhow::bail!(
+            bail!(
                 "expressions {x} and {y} should be identical: got {tvx} and {tvy}",
                 x = x.index(),
                 y = y.index()
@@ -641,14 +649,14 @@ impl Assignment {
         self.assignment(x)?.ty().as_bit_vector_width()?.as_bits()
     }
 
-    pub fn try_bit_vector_width(&self, x: ExprId) -> anyhow::Result<usize> {
-        self.bit_vector_width(x).ok_or(anyhow::format_err!(
+    pub fn try_bit_vector_width(&self, x: ExprId) -> Result<usize> {
+        self.bit_vector_width(x).ok_or(format_err!(
             "expression {x} should be a bit-vector of known width",
             x = x.index()
         ))
     }
 
-    fn expect_width_of(&self, x: ExprId, w: ExprId) -> anyhow::Result<()> {
+    fn expect_width_of(&self, x: ExprId, w: ExprId) -> Result<()> {
         // Expression x should be a concrete bitvector.
         let width = self.try_bit_vector_width(x)?;
 
@@ -658,7 +666,7 @@ impl Assignment {
         Ok(())
     }
 
-    fn expect_concat(&self, x: ExprId, l: ExprId, r: ExprId) -> anyhow::Result<()> {
+    fn expect_concat(&self, x: ExprId, l: ExprId, r: ExprId) -> Result<()> {
         // All inputs should be bitvectors of known width.
         let x_width = self.try_bit_vector_width(x)?;
         let l_width = self.try_bit_vector_width(l)?;
@@ -669,7 +677,7 @@ impl Assignment {
             .checked_add(r_width)
             .expect("concat width should not overflow");
         if x_width != concat_width {
-            anyhow::bail!(
+            bail!(
                 "expression {x} should be the concatenation of {l} and {r}",
                 x = x.index(),
                 l = l.index(),
@@ -680,15 +688,15 @@ impl Assignment {
         Ok(())
     }
 
-    fn expect_value(&self, x: ExprId, expect: &Const) -> anyhow::Result<()> {
+    fn expect_value(&self, x: ExprId, expect: &Const) -> Result<()> {
         let got = self.try_value(x)?;
         if got != expect {
-            anyhow::bail!("expected value {expect}; got {got}");
+            bail!("expected value {expect}; got {got}");
         }
         Ok(())
     }
 
-    fn expect_implies(&self, c: ExprId, then: &Constraint) -> anyhow::Result<()> {
+    fn expect_implies(&self, c: ExprId, then: &Constraint) -> Result<()> {
         if self.bool_value(c) == Some(true) {
             self.satisfies_constraint(then)
         } else {
@@ -696,7 +704,7 @@ impl Assignment {
         }
     }
 
-    fn expect_clause(&self, literals: &[Literal]) -> anyhow::Result<()> {
+    fn expect_clause(&self, literals: &[Literal]) -> Result<()> {
         for literal in literals {
             match self.literal(literal) {
                 Some(true) | None => {
@@ -707,7 +715,7 @@ impl Assignment {
                 }
             }
         }
-        anyhow::bail!("false clause");
+        bail!("false clause");
     }
 
     pub fn pretty_print(&self, conditions: &Conditions) {

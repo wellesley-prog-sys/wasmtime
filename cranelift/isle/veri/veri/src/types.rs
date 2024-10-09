@@ -1,6 +1,11 @@
 use std::cmp::Ordering;
 
-use cranelift_isle::ast::{Ident, ModelType};
+use anyhow::Result;
+use cranelift_isle::{
+    ast::{Ident, ModelType},
+    lexer::Pos,
+    sema::{self, TypeEnv, VariantId},
+};
 
 /// Width of a bit vector.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -32,6 +37,7 @@ impl PartialOrd for Width {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
+    Unspecified,
     Unknown,
     BitVector(Width),
     Int,
@@ -41,6 +47,7 @@ pub enum Type {
 impl Type {
     pub fn is_concrete(&self) -> bool {
         match self {
+            Self::Unspecified => true,
             Self::Unknown | Self::BitVector(Width::Unknown) => false,
             Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
         }
@@ -57,6 +64,7 @@ impl Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::Unspecified => write!(f, "\u{2a33}"),
             Self::Unknown => write!(f, "unk"),
             Self::BitVector(Width::Bits(w)) => write!(f, "bv {w}"),
             Self::BitVector(Width::Unknown) => write!(f, "bv _"),
@@ -69,6 +77,10 @@ impl std::fmt::Display for Type {
 impl PartialOrd for Type {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
+            // Unspecified is equal to itself, but otherwise incomparible.
+            (Type::Unspecified, Type::Unspecified) => Some(Ordering::Equal),
+            (Type::Unspecified, _) | (_, Type::Unspecified) => None,
+
             (Type::Unknown, Type::Unknown) => Some(Ordering::Equal),
             (Type::Unknown, _) => Some(Ordering::Less),
             (_, Type::Unknown) => Some(Ordering::Greater),
@@ -84,6 +96,7 @@ impl PartialOrd for Type {
 pub enum Compound {
     Primitive(Type),
     Struct(Vec<Field>),
+    Enum(Vec<Variant>),
     // TODO(mbm): intern name identifier
     Named(Ident),
 }
@@ -95,9 +108,86 @@ pub struct Field {
     pub ty: Compound,
 }
 
+impl Field {
+    fn from_isle(field: &sema::Field, tyenv: &TypeEnv) -> Self {
+        let ty = &tyenv.types[field.ty.index()];
+        Self {
+            name: Ident(tyenv.syms[field.name.index()].clone(), Pos::default()),
+            ty: Compound::named_from_isle(ty, tyenv),
+        }
+    }
+
+    /// Resolve any named types.
+    pub fn resolve<F>(&self, lookup: &mut F) -> Result<Self>
+    where
+        F: FnMut(&Ident) -> Result<Compound>,
+    {
+        Ok(Field {
+            name: self.name.clone(),
+            ty: self.ty.resolve(lookup)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Variant {
+    pub name: Ident,
+    pub id: VariantId,
+    pub fields: Vec<Field>,
+}
+
+impl Variant {
+    fn from_isle(variant: &sema::Variant, tyenv: &TypeEnv) -> Self {
+        Self {
+            name: Ident(tyenv.syms[variant.name.index()].clone(), variant.pos),
+            id: variant.id,
+            fields: variant
+                .fields
+                .iter()
+                .map(|f| Field::from_isle(f, tyenv))
+                .collect(),
+        }
+    }
+
+    pub fn is_unit(&self) -> bool {
+        self.fields.is_empty()
+    }
+
+    pub fn ty(&self) -> Compound {
+        Compound::Struct(self.fields.clone())
+    }
+
+    /// Resolve any named types.
+    pub fn resolve<F>(&self, lookup: &mut F) -> Result<Self>
+    where
+        F: FnMut(&Ident) -> Result<Compound>,
+    {
+        Ok(Variant {
+            name: self.name.clone(),
+            id: self.id,
+            fields: self
+                .fields
+                .iter()
+                .map(|f| f.resolve(lookup))
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+impl std::fmt::Display for Variant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_unit() {
+            write!(f, "{name}", name = self.name.0)
+        } else {
+            write!(f, "{name} {ty}", name = self.name.0, ty = self.ty())
+        }
+    }
+}
+
 impl Compound {
     pub fn from_ast(model: &ModelType) -> Self {
         match model {
+            ModelType::Unspecified => Self::Primitive(Type::Unspecified),
             ModelType::Auto => Self::Primitive(Type::Unknown),
             ModelType::Int => Self::Primitive(Type::Int),
             ModelType::Bool => Self::Primitive(Type::Bool),
@@ -116,10 +206,64 @@ impl Compound {
         }
     }
 
+    /// Derive a type corresponding to the given ISLE type, if possible. For
+    /// ISLE internal enumerations, this will build the corresponding VeriISLE
+    /// enum representation.
+    pub fn from_isle(ty: &sema::Type, tyenv: &TypeEnv) -> Option<Self> {
+        match ty {
+            sema::Type::Enum { variants, .. } if !variants.is_empty() => Some(Self::Enum(
+                variants
+                    .iter()
+                    .map(|v| Variant::from_isle(v, tyenv))
+                    .collect(),
+            )),
+            _ => None,
+        }
+    }
+
+    /// Build a named reference to the given ISLE type.
+    pub fn named_from_isle(ty: &sema::Type, tyenv: &TypeEnv) -> Self {
+        Self::Named(Ident(ty.name(tyenv).to_string(), ty.pos()))
+    }
+
     pub fn as_primitive(&self) -> Option<&Type> {
         match self {
             Compound::Primitive(ty) => Some(ty),
             _ => None,
+        }
+    }
+
+    pub fn as_enum(&self) -> Option<&Vec<Variant>> {
+        match self {
+            Compound::Enum(variants) => Some(variants),
+            _ => None,
+        }
+    }
+
+    /// Resolve any named types.
+    pub fn resolve<F>(&self, lookup: &mut F) -> Result<Self>
+    where
+        F: FnMut(&Ident) -> Result<Compound>,
+    {
+        match self {
+            Compound::Primitive(_) => Ok(self.clone()),
+            Compound::Struct(fields) => Ok(Compound::Struct(
+                fields
+                    .iter()
+                    .map(|f| f.resolve(lookup))
+                    .collect::<Result<_>>()?,
+            )),
+            Compound::Enum(variants) => Ok(Compound::Enum(
+                variants
+                    .iter()
+                    .map(|v| v.resolve(lookup))
+                    .collect::<Result<_>>()?,
+            )),
+            Compound::Named(name) => {
+                // TODO(mbm): named type model cycle detection
+                let ty = lookup(name)?;
+                ty.resolve(lookup)
+            }
         }
     }
 }
@@ -137,6 +281,17 @@ impl std::fmt::Display for Compound {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Compound::Enum(variants) => {
+                write!(
+                    f,
+                    "enum{{{variants}}}",
+                    variants = variants
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Compound::Named(name) => write!(f, "{}", name.0),
         }
     }
@@ -216,6 +371,7 @@ mod tests {
     #[test]
     fn test_type_partial_order_properties() {
         assert_partial_order_properties(&[
+            Type::Unspecified,
             Type::Unknown,
             Type::BitVector(Width::Unknown),
             Type::BitVector(Width::Bits(32)),

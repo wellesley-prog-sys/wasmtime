@@ -1001,48 +1001,73 @@
                        (end Reg)
                        (step Imm12))))
 
+(attr MInst.MovWide (tag TODO))
+
+(attr MInst.FpuMove32 (tag float))
+(attr MInst.FpuMove64 (tag float))
+(attr MInst.FpuMove128 (tag float))
+(attr MInst.FpuMoveFromVec (tag float))
+(attr MInst.FpuExtend (tag float))
+(attr MInst.FpuRR (tag float))
+(attr MInst.FpuRRR (tag float))
+(attr MInst.FpuRRI (tag float))
+(attr MInst.FpuRRIMod (tag float))
+(attr MInst.FpuRRRR (tag float))
+(attr MInst.FpuCmp (tag float))
+(attr MInst.FpuLoad16 (tag float))
+(attr MInst.FpuStore16 (tag float))
+(attr MInst.FpuLoad32 (tag float))
+(attr MInst.FpuStore32 (tag float))
+(attr MInst.FpuLoad64 (tag float))
+(attr MInst.FpuStore64 (tag float))
+(attr MInst.FpuLoad128 (tag float))
+(attr MInst.FpuStore128 (tag float))
+(attr MInst.FpuLoadP64 (tag float))
+(attr MInst.FpuStoreP64 (tag float))
+(attr MInst.FpuLoadP128 (tag float))
+(attr MInst.FpuStoreP128 (tag float))
+(attr MInst.FpuToInt (tag float))
+(attr MInst.IntToFpu (tag float))
+(attr MInst.FpuCSel16 (tag float))
+(attr MInst.FpuCSel32 (tag float))
+(attr MInst.FpuCSel64 (tag float))
+(attr MInst.FpuRound (tag float))
+(attr MInst.MovToFpu (tag float))
+(attr MInst.FpuMoveFPImm (tag float))
+
+(attr MInst.VecDup (tag vector))
+(attr MInst.VecDupFromFpu (tag vector))
+(attr MInst.VecDupFPImm (tag vector))
+(attr MInst.VecDupImm (tag vector))
+(attr MInst.VecExtend (tag vector))
+(attr MInst.VecMovElement (tag vector))
+(attr MInst.VecRRLong (tag vector))
+(attr MInst.VecRRNarrowLow (tag vector))
+(attr MInst.VecRRNarrowHigh (tag vector))
+(attr MInst.VecRRPair (tag vector))
+(attr MInst.VecRRRLong (tag vector))
+(attr MInst.VecRRRLongMod (tag vector))
+(attr MInst.VecRRPairLong (tag vector))
+(attr MInst.VecRRR (tag vector))
+(attr MInst.VecRRRMod (tag vector))
+(attr MInst.VecFmlaElem (tag vector))
+(attr MInst.VecMisc (tag vector))
+(attr MInst.VecLanes (tag vector))
+(attr MInst.VecShiftImm (tag vector))
+(attr MInst.VecShiftImmMod (tag vector))
+(attr MInst.VecExtract (tag vector))
+(attr MInst.VecTbl (tag vector))
+(attr MInst.VecTblExt (tag vector))
+(attr MInst.VecTbl2 (tag vector))
+(attr MInst.VecTbl2Ext (tag vector))
+(attr MInst.VecLoadReplicate (tag vector))
+(attr MInst.VecCSel (tag vector))
+
 (model MInst
       (type
             (struct
                   (flags_in  (named NZCV))
                   (flags_out (named NZCV))
-            )
-      )
-)
-
-(spec (MInst.AluRRImm12 alu_op size rd rn imm12)
-      (provide
-            (=>
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-                        (= rd (bvadd rn (zero_ext 64 imm12)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvadd (extract 31 0 rn) (zero_ext 32 imm12))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-                        (= rd (bvsub rn (zero_ext 64 imm12)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvsub (extract 31 0 rn) (zero_ext 32 imm12))))
-            )
-      )
-      (require
-            ; Implemented (opcode, size) combinations.
-            (or
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Sub)) (= size (OperandSize.Size32)))
-            )
-            ; Imm12 immediate is well-formed.
-            (or
-                  (= imm12 (bvand imm12 #x000fff))
-                  (= imm12 (bvand imm12 #xfff000))
             )
       )
 )
@@ -1104,75 +1129,8 @@
       )
 )
 
-(spec (MInst.AluRRRShift alu_op size rd rn rm shiftop)
-      (provide
-            (switch size
-                  ; 64-bit
-                  ((OperandSize.Size64)
-                        (let
-                              (
-                                    (s
-                                          (switch (:op shiftop)
-                                                ((ALUOp.Lsl) (bvshl  rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Lsr) (bvlshr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Asr) (bvashr rm (zero_ext 64 (bvand #x3f (:amt shiftop)))))
-                                          )
-                                    )
-                              )
-                              (= rd (switch alu_op
-                                    ((ALUOp.Add)      (bvadd rn s))
-                                    ((ALUOp.Sub)      (bvsub rn s))
-                                    ((ALUOp.Orr)      (bvor rn s))
-                                    ((ALUOp.OrrNot)   (bvor rn (bvnot s)))
-                                    ((ALUOp.And)      (bvand rn s))
-                                    ((ALUOp.AndNot)   (bvand rn (bvnot s)))
-                              ))
-                        )
-                  )
-                  ; 32-bit
-                  ((OperandSize.Size32)
-                        (let
-                              (
-                                    (rm32 (extract 31 0 rm))
-                                    (rn32 (extract 31 0 rn))
-                                    (s
-                                          (switch (:op shiftop)
-                                                ((ALUOp.Lsl) (bvshl  rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Lsr) (bvlshr rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
-                                                ((ALUOp.Asr) (bvashr rm32 (zero_ext 32 (bvand #x3f (:amt shiftop)))))
-                                          )
-                                    )
-                              )
-                              (= rd (zero_ext 64 (switch alu_op
-                                    ((ALUOp.Add)      (bvadd rn32 s))
-                                    ((ALUOp.Sub)      (bvsub rn32 s))
-                                    ((ALUOp.Orr)      (bvor  rn32 s))
-                                    ((ALUOp.OrrNot)   (bvor  rn32 (bvnot s)))
-                                    ((ALUOp.And)      (bvand rn32 s))
-                                    ((ALUOp.AndNot)   (bvand rn32 (bvnot s)))
-                              )))
-                        )
-                  )
-            )
-      )
-      (require
-            ; Supported operand size.
-            (or
-                  (= size (OperandSize.Size64))
-                  (= size (OperandSize.Size32))
-            )
-
-            ; Supported ops.
-            (or
-                  (= alu_op (ALUOp.Add))
-                  (= alu_op (ALUOp.Sub))
-                  (= alu_op (ALUOp.Orr))
-                  (= alu_op (ALUOp.OrrNot))
-                  (= alu_op (ALUOp.And))
-                  (= alu_op (ALUOp.AndNot))
-            )
-      )
-)
+;; Registers.
+(model Reg (type (bv 64)))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1213,30 +1171,6 @@
     (SbcS)
 ))
 
-(model ALUOp
-      (enum (bv 8)
-            (Add        #x00)
-            (Sub        #x01)
-            (Orr        #x02)
-            (OrrNot     #x03)
-            (And        #x04)
-            (AndNot     #x05)
-            (Eor        #x06)
-            (EorNot     #x07)
-            (AddS       #x08)
-            (SubS       #x09)
-            (SMulH      #x0a)
-            (UMulH      #x0b)
-            (SDiv       #x0c)
-            (UDiv       #x0d)
-            (RotR       #x0e)
-            (Lsr        #x0f)
-            (Asr        #x10)
-            (Lsl        #x11)
-            (Adc        #x12)
-      )
-)
-
 ;; An ALU operation with three arguments.
 (type ALUOp3
   (enum
@@ -1250,15 +1184,6 @@
     (SMAddL)
 ))
 
-(model ALUOp3
-      (enum (bv 8)
-            (MAdd       #x00)
-            (MSub       #x01)
-            (UMAddL     #x02)
-            (SMAddL     #x03)
-      )
-)
-
 (type MoveWideOp
   (enum
     (MovZ)
@@ -1266,8 +1191,17 @@
 ))
 
 (type UImm5 (primitive UImm5))
+
 (type Imm12 (primitive Imm12))
-(model Imm12 (type (bv 24)))
+(model Imm12
+      (type
+            (struct
+                  (bits (bv 12))
+                  (shift12 Bool)
+            )
+      )
+)
+
 (type ImmLogic (primitive ImmLogic))
 ; Note: ImmLogic values can be 32 or 64 bit.
 ; QUESTION(mbm): do we want to support "polymorphic" models: (model ImmLogic (type (poly (bv 32) (bv 64))))
@@ -1349,8 +1283,11 @@
             (Rev64 #x5)))
 
 (type MemLabel extern (enum))
+(model MemLabel (type !))
 (type SImm9 extern (enum))
+(model SImm9 (type !))
 (type UImm12Scaled extern (enum))
+(model UImm12Scaled (type !))
 
 ;; An addressing mode specified for a load/store operation.
 (type AMode
@@ -1454,6 +1391,8 @@
         (SlotOffset
          (off i64))))
 
+(attr AMode.Unscaled (tag TODO))
+(attr AMode.UnsignedOffset (tag TODO))
 
 ;; A memory argument to a load/store-pair.
 (type PairAMode (enum
@@ -1476,18 +1415,13 @@
       (enum Size32
             Size64))
 
-(model OperandSize
-      (enum Int
-            (Size32 32)
-            (Size64 64)))
-
 (type TestBitAndBranchKind (enum (Z) (NZ)))
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
 (decl operand_size (Type) OperandSize)
 (spec (operand_size ty)
       (provide
-            (= result (if (<= ty 32) 32 64)))
+            (= result (if (<= ty 32) (OperandSize.Size32) (OperandSize.Size64))))
       (require
             (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 (rule 1 (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
@@ -1991,6 +1925,7 @@
 (extern constructor move_wide_const_from_inverted_u64 move_wide_const_from_inverted_u64)
 
 (decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
+(attr imm_logic_from_u64 (tag TODO))
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
 (decl pure partial imm_size_from_type (Type) u16)
@@ -2012,12 +1947,20 @@
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 (spec (imm12_from_u64 imm12)
-      (provide (= result (zero_ext 64 imm12)))
+      (provide
+            (= result
+                  (zero_ext 64
+                        (if (:shift12 imm12)
+                              (concat (:bits imm12) #x000)
+                              (concat #x000 (:bits imm12))
+                        )
+                  )
+            )
+      )
       (require
-            ; REVIEW(mbm): correct formulation of imm12?
             (or
-                  (= imm12 (bvand imm12 #x000fff))
-                  (= imm12 (bvand imm12 #xfff000))
+                  (= result (bvand result (zero_ext 64 #x000fff)))
+                  (= result (bvand result (zero_ext 64 #xfff000)))
             )
       )
 )
@@ -2072,9 +2015,20 @@
 (spec (lshl_from_imm64 ty imm)
       (provide
             (= (:op result) (ALUOp.Lsl))
-            (= (:amt result) (extract 7 0 imm))
+            (= (:amt result)
+                  ; imm & (ty - 1)
+                  (bvand
+                        (extract 7 0 imm)
+                        (bvsub (int2bv 8 ty) #x01)
+                  )
+            )
       )
-      (require (= (extract 63 8 imm) #x00000000000000))
+      (require
+            ; imm < 64
+            (bvult imm #x0000000000000040)
+            ; ty <= 255
+            (<= ty 255)
+      )
 )
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 
@@ -2086,6 +2040,9 @@
 
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
+(spec (integral_ty ty)
+      (provide (= result ty))
+      (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
@@ -2097,18 +2054,28 @@
 (extern constructor is_zero_uimm12 is_zero_uimm12)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
-; REVIEW(mbm): is imm12_from_value spec correct?
-; NOTE(mbm): compare with https://github.com/avanhatt/wasmtime/blob/94ccb9d4d55a479893cb04bc796ec620ed24cee2/cranelift/codegen/src/isa/aarch64/inst.isle#L1867-L1874
 (spec (imm12_from_value imm12)
       (provide
-            ; REVIEW(mbm): zero_ext vs conv_to?
-            (= (zero_ext 128 result) (zero_ext 128 imm12))
+            (=
+                  (zero_ext 128 result)
+                  (zero_ext 128
+                        (if (:shift12 imm12)
+                              (concat (:bits imm12) #x000)
+                              (concat #x000 (:bits imm12))
+                        )
+                  )
+            )
       )
       (require
-            ; REVIEW(mbm): correct formulation of imm12?
-            (or
-                  (= imm12 (bvand imm12 #x000fff))
-                  (= imm12 (bvand imm12 #xfff000))
+            (let
+                  (
+                        (width 128)
+                        (r (zero_ext width result))
+                  )
+                  (or
+                        (= r (bvand r (zero_ext width #x000fff)))
+                        (= r (bvand r (zero_ext width #xfff000)))
+                  )
             )
       )
 )
@@ -2124,7 +2091,7 @@
   (imm12_from_negated_value (has_type ty (iconst n)))
   (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
   imm)
-(attr imm12_from_negated_value chain)
+(attr imm12_from_negated_value (veri chain))
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
@@ -2152,6 +2119,7 @@
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for creating the zero register.
+(spec (zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
@@ -2335,12 +2303,12 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
         src1 src2 shift)))
-(attr cmp_rr_shift chain)
+(attr cmp_rr_shift (veri chain))
 
 ;; Helper for emitting `cmp` instructions, setting flags, with an arithmetic right-shifted
 ;; second operand register.
 (decl cmp_rr_shift_asr (OperandSize Reg Reg u64) ProducesFlags)
-(attr cmp_rr_shift_asr chain)
+(attr cmp_rr_shift_asr (veri chain))
 (rule (cmp_rr_shift_asr size src1 src2 shift_amount)
       (if-let shift (ashr_from_u64 $I64 shift_amount))
       (ProducesFlags.ProducesFlagsSideEffect
@@ -3268,6 +3236,7 @@
 ;; all bits in the destination register in a defined state, i.e. smaller types
 ;; such as `I8` are either sign- or zero-extended.
 (decl imm (Type ImmExtend u64) Reg)
+(attr imm (veri chain))
 
 ;; Move wide immediate instructions; to simplify, we only match when we
 ;; are zero-extending the value.
@@ -3292,6 +3261,7 @@
        m k k))
 
 (decl load_constant64_full (Type ImmExtend u64) Reg)
+(attr load_constant64_full (tag TODO))
 (extern constructor load_constant64_full load_constant64_full)
 
 ;; Fallback for integral 64-bit constants
@@ -3379,13 +3349,13 @@
 (rule (sink_atomic_load x @ (atomic_load _ addr))
       (let ((_ Unit (sink_inst x)))
            (put_in_reg addr)))
-(attr sink_atomic_load chain)
+(attr sink_atomic_load (veri chain))
 
 ;; Helper for generating either an `AluRRR`, `AluRRRShift`, or `AluRRImmLogic`
 ;; instruction depending on the input. Note that this requires that the `ALUOp`
 ;; specified is commutative.
 (decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
-(attr alu_rs_imm_logic_commutative chain)
+(attr alu_rs_imm_logic_commutative (veri chain))
 
 ;; Base case of operating on registers.
 (rule -1 (alu_rs_imm_logic_commutative op ty x y)
@@ -3410,7 +3380,7 @@
 ;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
 ;; that the operation is commutative.
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
-(attr alu_rs_imm_logic chain)
+(attr alu_rs_imm_logic (veri chain))
 (rule -1 (alu_rs_imm_logic op ty x y)
       (alu_rrr op ty x y))
 (rule (alu_rs_imm_logic op ty x (iconst k))
@@ -3468,6 +3438,7 @@
 ;; mid-end optimizations that fold constants into load/store immediate offsets
 ;; instead, but for now each backend needs to do this.
 (decl amode (Type Value i32) AMode)
+(attr amode (veri chain))
 (rule 0 (amode ty val offset)
         (amode_no_more_iconst ty val offset))
 (rule 1 (amode ty (iadd x (i32_from_iconst y)) offset)
@@ -3478,6 +3449,7 @@
         (amode_no_more_iconst ty y new_offset))
 
 (decl amode_no_more_iconst (Type Value i32) AMode)
+(attr amode_no_more_iconst (veri chain))
 ;; Base case: move the `offset` into a register and add it to `val` via the
 ;; amode
 (rule 0 (amode_no_more_iconst ty val offset)
@@ -3525,6 +3497,7 @@
         (amode_reg_scaled (amode_add x offset) y))
 
 (decl amode_reg_scaled (Reg Value) AMode)
+(attr amode_reg_scaled (veri chain))
 (rule 0 (amode_reg_scaled base index)
         (AMode.RegScaled base index))
 (rule 1 (amode_reg_scaled base (uextend index @ (value_type $I32)))
@@ -3535,6 +3508,7 @@
 ;; Helper to add a 32-bit signed immediate to the register provided. This will
 ;; select an appropriate `add` instruction to use.
 (decl amode_add (Reg i32) Reg)
+(attr amode_add (veri chain))
 (rule 0 (amode_add x y)
         (add $I64 x (imm $I64 (ImmExtend.Zero) (i64_as_u64 y))))
 (rule 1 (amode_add x y)
@@ -3567,7 +3541,7 @@
 
 
 (decl sink_load_into_addr (Type Inst) Reg)
-(attr sink_load_into_addr chain)
+(attr sink_load_into_addr (veri chain))
 (rule (sink_load_into_addr ty x @ (load _ addr (offset32 offset)))
       (let ((_ Unit (sink_inst x)))
         (add_imm_to_addr addr (i64_as_u64 offset))))
@@ -4179,18 +4153,18 @@
 
 ;; Materialize a `FlagsAndCC` into a boolean `ValueRegs`.
 (decl flags_and_cc_to_bool (FlagsAndCC) ValueRegs)
-(attr flags_and_cc_to_bool chain)
+(attr flags_and_cc_to_bool (veri chain))
 (rule (flags_and_cc_to_bool (FlagsAndCC.FlagsAndCC flags cc))
       (with_flags flags (materialize_bool_result (cond_code cc))))
 
 ;; Get the `ProducesFlags` out of a `FlagsAndCC`.
 (decl flags_and_cc_flags (FlagsAndCC) ProducesFlags)
-(attr flags_and_cc_flags chain)
+(attr flags_and_cc_flags (veri chain))
 (rule (flags_and_cc_flags (FlagsAndCC.FlagsAndCC flags _cc)) flags)
 
 ;; Get the `IntCC` out of a `FlagsAndCC`.
 (decl flags_and_cc_cc (FlagsAndCC) IntCC)
-(attr flags_and_cc_cc chain)
+(attr flags_and_cc_cc (veri chain))
 (rule (flags_and_cc_cc (FlagsAndCC.FlagsAndCC _flags cc)) cc)
 
 ;; Helpers for lowering `icmp` sequences.

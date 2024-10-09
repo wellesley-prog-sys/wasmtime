@@ -6,7 +6,10 @@ use cranelift_codegen::{
     settings, MachBuffer, MachInstEmit,
 };
 
-use crate::constraints::{Scope, Target};
+use crate::{
+    constraints::{Scope, Target},
+    memory::ReadEffect,
+};
 
 pub fn gpreg(i: usize) -> Target {
     let r = Target::Var("_R".to_string());
@@ -28,6 +31,12 @@ pub fn pstate_field(name: &str) -> Target {
 
 pub fn state() -> Scope {
     let mut scope = Scope::new();
+
+    // Memory effects.
+    let read_effect = ReadEffect::new();
+    for target in read_effect.targets() {
+        scope.global(target.clone());
+    }
 
     // General purpose register file.
     for i in 0..31 {

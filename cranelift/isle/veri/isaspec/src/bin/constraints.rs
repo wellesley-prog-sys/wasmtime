@@ -1,7 +1,10 @@
+use anyhow::Result;
 use clap::Parser as ClapParser;
+use cranelift_codegen::ir::types::I64;
 use cranelift_codegen::isa::aarch64::inst::{
-    vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Inst, OperandSize,
-    VecALUOp, VectorSize,
+    vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Imm12, ImmLogic,
+    ImmShift, Inst, MoveWideConst, MoveWideOp, OperandSize, ShiftOp, ShiftOpAndAmt,
+    ShiftOpShiftImm, VecALUOp, VectorSize,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::ast::Block;
@@ -24,7 +27,7 @@ struct Args {
     debug_level: u8,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     // Setup tracing output.
@@ -66,6 +69,9 @@ fn main() -> anyhow::Result<()> {
 fn define_insts() -> Vec<Inst> {
     let mut insts = Vec::new();
 
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
     // AluRRR
     let alu_ops = vec![
         ALUOp::Add,
@@ -101,6 +107,75 @@ fn define_insts() -> Vec<Inst> {
         });
     }
 
+    // AluRRImm12
+    let alu_ops_imm12 = [ALUOp::Add, ALUOp::Sub, ALUOp::AddS, ALUOp::SubS];
+    let imm12_vals = [0x000123u64, 0x123000u64];
+    for alu_op in alu_ops_imm12 {
+        for imm12_val in imm12_vals {
+            let imm12 = Imm12::maybe_from_u64(imm12_val).unwrap();
+            insts.push(Inst::AluRRImm12 {
+                alu_op,
+                size: OperandSize::Size64,
+                rd: writable_xreg(4),
+                rn: xreg(5),
+                imm12,
+            });
+        }
+    }
+
+    // AluRRImmLogic
+    let alu_ops_imml = [ALUOp::And, ALUOp::EorNot];
+    let imml_vals = [0xf003fffff003ffffu64, 0xffffffffff000000u64];
+    for alu_op in alu_ops_imml {
+        for imml_val in imml_vals {
+            let imml = ImmLogic::maybe_from_u64(imml_val, I64).unwrap();
+            insts.push(Inst::AluRRImmLogic {
+                alu_op,
+                size: OperandSize::Size64,
+                rd: writable_xreg(4),
+                rn: xreg(5),
+                imml,
+            });
+        }
+    }
+
+    // AluRRImmShift
+    let alu_ops_immshift = [ALUOp::Lsr, ALUOp::Lsl];
+    let immshift_vals = [13u64, 62];
+    for alu_op in alu_ops_immshift {
+        for immshift_val in immshift_vals {
+            let immshift = ImmShift::maybe_from_u64(immshift_val).unwrap();
+            insts.push(Inst::AluRRImmShift {
+                alu_op,
+                size: OperandSize::Size64,
+                rd: writable_xreg(4),
+                rn: xreg(5),
+                immshift,
+            });
+        }
+    }
+
+    // AluRRRShift
+    let alu_ops_rrr_shift = [ALUOp::Add, ALUOp::And];
+    let shiftops = [ShiftOp::LSL, ShiftOp::ASR];
+    let amts = [13u64, 63];
+    for alu_op in alu_ops_rrr_shift {
+        for shiftop in shiftops {
+            for amt in amts {
+                let shiftop =
+                    ShiftOpAndAmt::new(shiftop, ShiftOpShiftImm::maybe_from_shift(amt).unwrap());
+                insts.push(Inst::AluRRRShift {
+                    alu_op,
+                    size: OperandSize::Size64,
+                    rd: writable_xreg(4),
+                    rn: xreg(5),
+                    rm: xreg(6),
+                    shiftop,
+                });
+            }
+        }
+    }
+
     // AluRRRR
     let alu_ops = vec![ALUOp3::MAdd, ALUOp3::MSub, ALUOp3::UMAddL, ALUOp3::SMAddL];
     for alu_op in alu_ops {
@@ -130,6 +205,22 @@ fn define_insts() -> Vec<Inst> {
             rd: writable_xreg(2),
             rn: xreg(1),
         });
+    }
+
+    // MovWide
+    let mov_wide_ops = [MoveWideOp::MovN, MoveWideOp::MovZ];
+    let values = [0x00001234u64, 0x12340000u64];
+    for mov_wide_op in mov_wide_ops {
+        for size in sizes {
+            for value in values {
+                insts.push(Inst::MovWide {
+                    op: mov_wide_op,
+                    rd: writable_xreg(4),
+                    imm: MoveWideConst::maybe_from_u64(value).unwrap(),
+                    size,
+                });
+            }
+        }
     }
 
     // CSel
@@ -231,7 +322,7 @@ fn define_insts() -> Vec<Inst> {
 }
 
 // Convert a semantics block and print the result.
-fn convert_block(block: &Block) -> anyhow::Result<()> {
+fn convert_block(block: &Block) -> Result<()> {
     // Translation.
     let mut translator = Translator::new(aarch64::state(), "v".to_string());
     translator.translate(block)?;

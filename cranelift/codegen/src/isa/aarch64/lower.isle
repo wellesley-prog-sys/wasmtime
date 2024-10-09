@@ -3,9 +3,21 @@
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
 ; QUESTION(mbm): can we capture the "equality on lower bits only" constraint in the lower spec?
-(spec (lower arg)
-      (provide (= result arg)))
 (decl partial lower (Inst) InstOutput)
+(spec (lower arg)
+      (provide
+            ; Computation results match.
+            (= result arg)
+
+            ; Load effects
+
+            ; Either both active, or both not.
+            (= (:active clif_load) (:active isa_load))
+
+            ; If active, their parameters must match.
+            (=> (:active clif_load) (= clif_load isa_load))
+      )
+)
 
 ;; Variant of the main lowering constructor term, which receives an
 ;; additional argument (a vector of branch targets to be used) for
@@ -529,11 +541,11 @@
 
 (decl pure is_fneg_neg (IsFneg) u64)
 (rule (is_fneg_neg (IsFneg.Result n _)) n)
-(attr is_fneg_neg chain)
+(attr is_fneg_neg (veri chain))
 
 (decl pure get_fneg_value (IsFneg) Value)
 (rule (get_fneg_value (IsFneg.Result _ v)) v)
-(attr get_fneg_value chain)
+(attr get_fneg_value (veri chain))
 
 (decl fmadd_series (Type u64 u64 Value Value Value) InstOutput)
 ;; MAdd: + x * y + z
@@ -780,7 +792,7 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
+(rule ineg_base_case 1 (lower (has_type (fits_in_64 ty) (ineg x)))
       (sub ty (zero_reg) x))
 
 ;; `i128`
@@ -1252,12 +1264,12 @@
 ;; Note that bitwise negation is implemented here as
 ;;
 ;;      NOT rd, rm ==> ORR_NOT rd, zero, rm
-(rule -1 (lower (has_type (fits_in_64 ty) (bnot x)))
+(rule bnot_base_case -1 (lower (has_type (fits_in_64 ty) (bnot x)))
       (orr_not ty (zero_reg) x))
 
 ;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
 ;; value.
-(rule 1 (lower (has_type (fits_in_64 ty)
+(rule bnot_ishl 1 (lower (has_type (fits_in_64 ty)
                        (bnot (ishl x (iconst k)))))
       (if-let amt (lshl_from_imm64 ty k))
       (orr_not_shift ty (zero_reg) x amt))
@@ -1885,7 +1897,7 @@
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (bitselect c x y)))
+(rule bitselect (lower (has_type ty (bitselect c x y)))
       (if (ty_int_ref_scalar_64 ty))
       (let ((tmp1 Reg (and_reg ty x c))
             (tmp2 Reg (bic ty y c)))
@@ -2328,7 +2340,7 @@
 (rule (lower
        (has_type $I32 (load flags address offset)))
       (aarch64_uload32 (amode $I32 address offset) flags))
-(rule (lower
+(rule load_i64 (lower
        (has_type $I64 (load flags address offset)))
       (aarch64_uload64 (amode $I64 address offset) flags))
 (rule (lower

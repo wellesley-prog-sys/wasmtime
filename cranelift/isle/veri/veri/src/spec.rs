@@ -1,9 +1,10 @@
+use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
     ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
     sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::types::{Compound, Const};
 
@@ -17,11 +18,11 @@ pub enum Expr {
     // Terminal nodes
     Var(Ident),
     Const(Const),
-    // TODO(mbm): Enum identifier should be mapped to TermId
-    Enum(Ident),
+    Constructor(Constructor),
     //True,
     //False,
     Field(Ident, Box<Expr>),
+    Discriminator(Ident, Box<Expr>),
 
     // Get the width of a bitvector
     WidthOf(Box<Expr>),
@@ -103,6 +104,8 @@ pub enum Expr {
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
     // Switch
     Switch(Box<Expr>, Vec<(Expr, Expr)>),
+    // Match
+    Match(Box<Expr>, Vec<Arm>),
     // Let bindings
     Let(Vec<(Ident, Expr)>, Box<Expr>),
     // With scope.
@@ -183,6 +186,9 @@ impl Expr {
             ast::SpecExpr::Var { var, pos: _ } => Expr::Var(var.clone()),
             ast::SpecExpr::Field { field, x, pos: _ } => {
                 Expr::Field(field.clone(), Box::new(Expr::from_ast(x)))
+            }
+            ast::SpecExpr::Discriminator { variant, x, pos: _ } => {
+                Expr::Discriminator(variant.clone(), Box::new(Expr::from_ast(x)))
             }
             ast::SpecExpr::Op { op, args, pos } => match op {
                 // Unary
@@ -299,6 +305,18 @@ impl Expr {
                 }
                 _ => todo!("ast spec op: {op:?}"),
             },
+            ast::SpecExpr::Match { x, arms, pos: _ } => {
+                let x = Box::new(Expr::from_ast(x));
+                let arms = arms
+                    .iter()
+                    .map(|arm| Arm {
+                        variant: arm.variant.clone(),
+                        args: arm.args.clone(),
+                        body: Expr::from_ast(&arm.body),
+                    })
+                    .collect();
+                Expr::Match(x, arms)
+            }
             ast::SpecExpr::Let { defs, body, pos: _ } => {
                 let defs = defs
                     .iter()
@@ -323,7 +341,16 @@ impl Expr {
                     l, r
                 )
             }
-            ast::SpecExpr::Enum { name, pos: _ } => Expr::Enum(name.clone()),
+            ast::SpecExpr::Enum {
+                name,
+                variant,
+                args,
+                pos: _,
+            } => Expr::Constructor(Constructor::Enum {
+                name: name.clone(),
+                variant: variant.clone(),
+                args: args.iter().map(Expr::from_ast).collect(),
+            }),
         }
     }
 }
@@ -338,6 +365,23 @@ fn spec_expr_to_usize(expr: &ast::SpecExpr) -> Option<usize> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Constructor {
+    Enum {
+        // TODO(mbm): Enum identifiers should be mapped to TermId?
+        name: Ident,
+        variant: Ident,
+        args: Vec<Expr>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct Arm {
+    pub variant: Ident,
+    pub args: Vec<Ident>,
+    pub body: Expr,
+}
+
 // QUESTION(mbm): should we make the result explicit in the spec syntax?
 static RESULT: &str = "result";
 
@@ -346,6 +390,7 @@ pub struct Spec {
     pub ret: Ident,
     pub provides: Vec<Expr>,
     pub requires: Vec<Expr>,
+    pub modifies: Vec<Ident>,
     pub pos: Pos,
 }
 
@@ -356,6 +401,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: Vec::new(),
             requires: Vec::new(),
+            modifies: Vec::new(),
             pos: Pos::default(),
         }
     }
@@ -366,6 +412,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: spec.provides.iter().map(Expr::from_ast).collect(),
             requires: spec.requires.iter().map(Expr::from_ast).collect(),
+            modifies: spec.modifies.clone(),
             pos: spec.pos,
         }
     }
@@ -373,6 +420,13 @@ impl Spec {
     fn result_ident() -> Ident {
         Ident(RESULT.to_string(), Pos::default())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct State {
+    pub name: Ident,
+    pub ty: Compound,
+    pub default: Expr,
 }
 
 #[derive(Debug, Clone)]
@@ -410,8 +464,14 @@ pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
 
+    /// State elements.
+    pub state: Vec<State>,
+
     /// Terms that should be chained.
     pub chain: HashSet<TermId>,
+
+    /// Tags applied to each term.
+    pub tags: HashMap<TermId, HashSet<String>>,
 
     // Type instantiations for the given term.
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
@@ -421,32 +481,33 @@ pub struct SpecEnv {
 
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
-
-    /// Value for enum variant.
-    pub enum_value: HashMap<TermId, Expr>,
 }
 
 impl SpecEnv {
-    pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Self {
+    pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<Self> {
         let mut env = Self {
             term_spec: HashMap::new(),
+            state: Vec::new(),
             chain: HashSet::new(),
+            tags: HashMap::new(),
             term_instantiations: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
-            enum_value: HashMap::new(),
         };
 
-        env.collect_models(defs, termenv, tyenv);
+        env.collect_models(defs, tyenv);
+        env.derive_type_models(tyenv)?;
+        env.derive_enum_variant_specs(termenv, tyenv)?;
+        env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
-        env.collect_specs(defs, termenv, tyenv);
+        env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv);
         env.check_for_chained_terms_with_spec();
 
-        env
+        Ok(env)
     }
 
-    fn collect_models(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_models(&mut self, defs: &[Def], tyenv: &TypeEnv) {
         for def in defs {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
@@ -460,38 +521,66 @@ impl SpecEnv {
                         // TODO(mbm): ensure the type of the expression matches the type of the
                         self.const_value.insert(sym, Expr::from_ast(val));
                     }
-                    ast::ModelValue::EnumValues(model_type, vals) => {
-                        self.set_model_type(name, model_type, tyenv);
-
-                        // TODO(mbm): validate enum variants against the type definition
-                        // TODO(mbm): ensure the enum doesn't have non-unit variants
-                        // TODO(mbm): enforce that the enum values are distinct
-                        for (variant, expr) in vals {
-                            let ident = ast::Variant::full_name(name, variant);
-                            // TODO(mbm): error on missing variant rather than panic
-                            let term_id = termenv
-                                .get_term_by_name(tyenv, &ident)
-                                .expect("enum variant should exist");
-                            // TODO(mbm): enforce that the enum value expression is constant
-                            let val = Expr::from_ast(expr);
-                            self.enum_value.insert(term_id, val.clone());
-
-                            // Synthesize spec.
-                            //
-                            // Enum values are sugar for term specs of the form
-                            // `(provide (= result <value>))`.
-                            let mut spec = Spec::new();
-                            spec.pos = expr.pos();
-                            spec.provides.push(Expr::Eq(
-                                Box::new(Expr::Var(spec.ret.clone())),
-                                Box::new(val.clone()),
-                            ));
-                            self.term_spec.insert(term_id, spec);
-                        }
-                    }
                 }
             }
         }
+    }
+
+    fn derive_type_models(&mut self, tyenv: &TypeEnv) -> Result<()> {
+        for ty in &tyenv.types {
+            // Has an explicit model already been specified?
+            if self.has_model(ty.id()) {
+                continue;
+            }
+
+            // Derive a model from ISLE type, if possible.
+            let Some(derived_type) = Compound::from_isle(ty, tyenv) else {
+                continue;
+            };
+
+            // Register derived.
+            self.type_model.insert(ty.id(), derived_type);
+        }
+        Ok(())
+    }
+
+    fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
+        for (type_id, model) in &self.type_model {
+            if let Compound::Enum(variants) = model {
+                let ty = &tyenv.types[type_id.index()];
+                let name = Ident(ty.name(tyenv).to_string(), ty.pos());
+
+                for variant in variants {
+                    // Lookup the corresponding term.
+                    let full_name = ast::Variant::full_name(&name, &variant.name);
+                    let term_id =
+                        termenv
+                            .get_term_by_name(tyenv, &full_name)
+                            .ok_or(format_err!(
+                                "could not find variant term {name}",
+                                name = full_name.0
+                            ))?;
+
+                    // Synthesize spec.
+                    let args: Vec<Ident> = variant.fields.iter().map(|f| f.name.clone()).collect();
+
+                    let constructor = Constructor::Enum {
+                        name: name.clone(),
+                        variant: variant.name.clone(),
+                        args: args.iter().map(|arg| Expr::Var(arg.clone())).collect(),
+                    };
+
+                    let mut spec = Spec::new();
+                    spec.args = args;
+                    spec.provides.push(Expr::Eq(
+                        Box::new(Expr::Var(spec.ret.clone())),
+                        Box::new(Expr::Constructor(constructor)),
+                    ));
+                    self.term_spec.insert(term_id, spec);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn set_model_type(&mut self, name: &Ident, model_type: &ModelType, tyenv: &TypeEnv) {
@@ -507,6 +596,39 @@ impl SpecEnv {
         );
         self.type_model
             .insert(type_id, Compound::from_ast(model_type));
+    }
+
+    fn collect_state(&mut self, defs: &[Def]) -> Result<()> {
+        // Collect states.
+        for def in defs {
+            if let ast::Def::State(ast::State {
+                name,
+                ty,
+                default,
+                pos: _,
+            }) = def
+            {
+                let ty = Compound::from_ast(ty);
+                let default = Expr::from_ast(default);
+                self.state.push(State {
+                    name: name.clone(),
+                    ty,
+                    default,
+                });
+            }
+        }
+
+        // Check for duplicates.
+        let mut names = HashSet::new();
+        for state in &self.state {
+            let name = &state.name.0;
+            if names.contains(name) {
+                bail!("duplicate state {name}");
+            }
+            names.insert(name);
+        }
+
+        Ok(())
     }
 
     fn collect_instantiations(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
@@ -532,15 +654,26 @@ impl SpecEnv {
         }
     }
 
-    fn collect_specs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_specs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for def in defs {
             if let ast::Def::Spec(spec) = def {
                 let term_id = termenv
                     .get_term_by_name(tyenv, &spec.term)
-                    .expect("spec term should exist");
-                self.term_spec.insert(term_id, Spec::from_ast(spec));
+                    .ok_or(format_err!(
+                        "spec for unknown term {name}",
+                        name = spec.term.0
+                    ))?;
+                match self.term_spec.entry(term_id) {
+                    Entry::Occupied(_) => {
+                        bail!("duplicate spec for term {name}", name = spec.term.0)
+                    }
+                    Entry::Vacant(e) => {
+                        e.insert(Spec::from_ast(spec));
+                    }
+                }
             }
         }
+        Ok(())
     }
 
     fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
@@ -553,6 +686,9 @@ impl SpecEnv {
                     match attr_kind {
                         AttrKind::Chain => {
                             self.chain.insert(term_id);
+                        }
+                        AttrKind::Tag(tag) => {
+                            self.tags.entry(term_id).or_default().insert(tag.0.clone());
                         }
                     }
                 }
@@ -570,8 +706,53 @@ impl SpecEnv {
         }
     }
 
+    /// Resolve any named types in the given compound type.
+    pub fn resolve_type(&self, ty: &Compound, tyenv: &TypeEnv) -> Result<Compound> {
+        ty.resolve(&mut |name| {
+            let type_id = tyenv
+                .get_type_by_name(name)
+                .ok_or(format_err!("unknown type {}", name.0))?;
+            let ty = self
+                .type_model
+                .get(&type_id)
+                .ok_or(format_err!("unspecified model for type {}", name.0))?;
+            Ok(ty.clone())
+        })
+    }
+
+    /// Resolve any named types in the given term signature.
+    pub fn resolve_signature(&self, sig: &Signature, tyenv: &TypeEnv) -> Result<Signature> {
+        Ok(Signature {
+            args: sig
+                .args
+                .iter()
+                .map(|arg| self.resolve_type(arg, tyenv))
+                .collect::<Result<_>>()?,
+            ret: self.resolve_type(&sig.ret, tyenv)?,
+        })
+    }
+
+    /// Lookup instantiations for the given term, with any named types resolved.
+    pub fn resolve_term_instantiations(
+        &self,
+        term_id: &TermId,
+        tyenv: &TypeEnv,
+    ) -> Result<Vec<Signature>> {
+        let Some(sigs) = self.term_instantiations.get(term_id) else {
+            return Ok(Vec::new());
+        };
+
+        sigs.iter()
+            .map(|sig| self.resolve_signature(sig, tyenv))
+            .collect::<Result<_>>()
+    }
+
     /// Report whether the given term has a specification.
     pub fn has_spec(&self, term_id: TermId) -> bool {
         self.term_spec.contains_key(&term_id)
+    }
+
+    pub fn has_model(&self, type_id: TypeId) -> bool {
+        self.type_model.contains_key(&type_id)
     }
 }

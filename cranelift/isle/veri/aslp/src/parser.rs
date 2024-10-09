@@ -1,3 +1,4 @@
+use anyhow::Result;
 use enquote::unquote;
 use pest::{
     iterators::{Pair, Pairs},
@@ -12,17 +13,17 @@ use crate::ast::{Block, Expr, Func, LExpr, Slice, Stmt, Type};
 #[grammar = "aslt.pest"]
 struct ASLTParser;
 
-pub fn parse(src: &str) -> anyhow::Result<Block> {
+pub fn parse(src: &str) -> Result<Block> {
     let pairs = ASLTParser::parse(Rule::aslt, src)?;
     parse_block(pairs)
 }
 
-fn parse_block(pairs: Pairs<Rule>) -> anyhow::Result<Block> {
+fn parse_block(pairs: Pairs<Rule>) -> Result<Block> {
     let stmts = parse_stmts(pairs)?;
     Ok(Block { stmts })
 }
 
-fn parse_stmts(pairs: Pairs<Rule>) -> anyhow::Result<Vec<Stmt>> {
+fn parse_stmts(pairs: Pairs<Rule>) -> Result<Vec<Stmt>> {
     let mut stmts = Vec::new();
     for pair in pairs {
         let rule = pair.as_rule();
@@ -36,7 +37,7 @@ fn parse_stmts(pairs: Pairs<Rule>) -> anyhow::Result<Vec<Stmt>> {
     Ok(stmts)
 }
 
-fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
+fn parse_stmt(pair: Pair<Rule>) -> Result<Stmt> {
     let rule = pair.as_rule();
     debug!(?rule, "parse stmt");
     match rule {
@@ -90,7 +91,7 @@ fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
     }
 }
 
-fn parse_lexpr(pair: Pair<Rule>) -> anyhow::Result<LExpr> {
+fn parse_lexpr(pair: Pair<Rule>) -> Result<LExpr> {
     let rule = pair.as_rule();
     debug!(?rule, "parse lexpr");
     match rule {
@@ -115,7 +116,7 @@ fn parse_lexpr(pair: Pair<Rule>) -> anyhow::Result<LExpr> {
     }
 }
 
-fn parse_expr(pair: Pair<Rule>) -> anyhow::Result<Expr> {
+fn parse_expr(pair: Pair<Rule>) -> Result<Expr> {
     let rule = pair.as_rule();
     debug!(?rule, "parse expr");
     match rule {
@@ -161,7 +162,7 @@ fn parse_expr(pair: Pair<Rule>) -> anyhow::Result<Expr> {
     }
 }
 
-fn parse_exprs(pairs: Pairs<Rule>) -> anyhow::Result<Vec<Expr>> {
+fn parse_exprs(pairs: Pairs<Rule>) -> Result<Vec<Expr>> {
     let mut exprs = Vec::new();
     for pair in pairs {
         let rule = pair.as_rule();
@@ -174,7 +175,7 @@ fn parse_exprs(pairs: Pairs<Rule>) -> anyhow::Result<Vec<Expr>> {
     Ok(exprs)
 }
 
-fn parse_slice(pair: Pair<Rule>) -> anyhow::Result<Slice> {
+fn parse_slice(pair: Pair<Rule>) -> Result<Slice> {
     let rule = pair.as_rule();
     debug!(?rule, "parse slice");
     match rule {
@@ -189,7 +190,7 @@ fn parse_slice(pair: Pair<Rule>) -> anyhow::Result<Slice> {
     }
 }
 
-fn parse_slices(pairs: Pairs<Rule>) -> anyhow::Result<Vec<Slice>> {
+fn parse_slices(pairs: Pairs<Rule>) -> Result<Vec<Slice>> {
     let mut slices = Vec::new();
     for pair in pairs {
         let rule = pair.as_rule();
@@ -202,7 +203,7 @@ fn parse_slices(pairs: Pairs<Rule>) -> anyhow::Result<Vec<Slice>> {
     Ok(slices)
 }
 
-fn parse_type(pair: Pair<Rule>) -> anyhow::Result<Type> {
+fn parse_type(pair: Pair<Rule>) -> Result<Type> {
     let rule = pair.as_rule();
     debug!(?rule, "parse type");
     match rule {
@@ -216,7 +217,7 @@ fn parse_type(pair: Pair<Rule>) -> anyhow::Result<Type> {
     }
 }
 
-fn parse_var(pair: Pair<Rule>) -> anyhow::Result<String> {
+fn parse_var(pair: Pair<Rule>) -> Result<String> {
     let rule = pair.as_rule();
     debug!(?rule, "parse var");
     match rule {
@@ -226,7 +227,7 @@ fn parse_var(pair: Pair<Rule>) -> anyhow::Result<String> {
     }
 }
 
-fn parse_vars(pairs: Pairs<Rule>) -> anyhow::Result<Vec<String>> {
+fn parse_vars(pairs: Pairs<Rule>) -> Result<Vec<String>> {
     let mut vars = Vec::new();
     for pair in pairs {
         let rule = pair.as_rule();
@@ -239,7 +240,7 @@ fn parse_vars(pairs: Pairs<Rule>) -> anyhow::Result<Vec<String>> {
     Ok(vars)
 }
 
-fn parse_func_ident(pair: Pair<Rule>) -> anyhow::Result<Func> {
+fn parse_func_ident(pair: Pair<Rule>) -> Result<Func> {
     let rule = pair.as_rule();
     debug!(?rule, "parse func ident");
     match rule {
@@ -253,11 +254,11 @@ fn parse_func_ident(pair: Pair<Rule>) -> anyhow::Result<Func> {
     }
 }
 
-fn parse_ident(pair: Pair<Rule>) -> anyhow::Result<String> {
+fn parse_ident(pair: Pair<Rule>) -> Result<String> {
     Ok(unquote(pair.as_str())?)
 }
 
-fn parse_literal(pair: Pair<Rule>) -> anyhow::Result<String> {
+fn parse_literal(pair: Pair<Rule>) -> Result<String> {
     let rule = pair.as_rule();
     debug!(?rule, "parse literal");
     match rule {

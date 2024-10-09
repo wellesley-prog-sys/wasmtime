@@ -1,14 +1,16 @@
 //! Translation of ASLp semantics to constraints.
 
-use core::fmt;
+use core::{fmt, panic};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
-use anyhow::format_err;
+use anyhow::{bail, format_err, Result};
 use cranelift_isle::ast::{SpecExpr, SpecOp};
 use cranelift_isle_veri_aslp::ast::{Block, Expr, Func, LExpr, Slice, Stmt};
 use tracing::debug;
 
+use crate::memory::ReadEffect;
 use crate::spec::*;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
@@ -31,7 +33,7 @@ impl fmt::Display for Target {
 impl TryFrom<&LExpr> for Target {
     type Error = anyhow::Error;
 
-    fn try_from(lexpr: &LExpr) -> anyhow::Result<Self> {
+    fn try_from(lexpr: &LExpr) -> Result<Self> {
         match lexpr {
             LExpr::Var(v) => Ok(Target::Var(v.clone())),
             LExpr::ArrayIndex { array, index } => {
@@ -53,7 +55,7 @@ impl TryFrom<&LExpr> for Target {
 impl TryFrom<&Expr> for Target {
     type Error = anyhow::Error;
 
-    fn try_from(expr: &Expr) -> anyhow::Result<Self> {
+    fn try_from(expr: &Expr) -> Result<Self> {
         match expr {
             Expr::Var(v) => Ok(Target::Var(v.clone())),
             Expr::ArrayIndex { array, index } => {
@@ -89,7 +91,7 @@ impl Binding {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Scope {
     constraints: Vec<SpecExpr>,
     vars: HashSet<String>,
@@ -257,13 +259,13 @@ impl Translator {
         self.scope_mut().write(target.clone(), v.to_string());
     }
 
-    fn read(&mut self, target: &Target) -> anyhow::Result<String> {
+    fn read(&mut self, target: &Target) -> Result<String> {
         // Read from innermost scope.
         for scope in self.stack.iter_mut().rev() {
             match scope.read(target) {
                 None => continue,
                 Some(Binding::Var(v)) => return Ok(v.clone()),
-                Some(Binding::Uninitialized) => anyhow::bail!("uninitialized read: {target}"),
+                Some(Binding::Uninitialized) => bail!("uninitialized read: {target}"),
                 Some(Binding::Global) => {
                     let v = self.vars.alloc();
                     scope.init_var(target.clone(), v.clone());
@@ -273,24 +275,24 @@ impl Translator {
         }
         let scope = self.scope_mut();
         debug!(?scope, "scope");
-        anyhow::bail!("undefined read: {target}")
+        bail!("undefined read: {target}")
     }
 
-    pub fn translate(&mut self, block: &Block) -> anyhow::Result<()> {
+    pub fn translate(&mut self, block: &Block) -> Result<()> {
         self.enter();
         self.block(block)?;
         self.exit();
         Ok(())
     }
 
-    fn block(&mut self, block: &Block) -> anyhow::Result<()> {
+    fn block(&mut self, block: &Block) -> Result<()> {
         for stmt in &block.stmts {
             self.stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn stmt(&mut self, stmt: &Stmt) -> anyhow::Result<()> {
+    fn stmt(&mut self, stmt: &Stmt) -> Result<()> {
         match stmt {
             Stmt::Assign { lhs, rhs } => {
                 let target = lhs.try_into()?;
@@ -391,7 +393,7 @@ impl Translator {
         }
     }
 
-    fn assign(&mut self, target: &Target, rhs: SpecExpr) -> anyhow::Result<()> {
+    fn assign(&mut self, target: &Target, rhs: SpecExpr) -> Result<()> {
         // Bind the expression to a variable.
         let v = self.bind(rhs)?;
 
@@ -402,7 +404,7 @@ impl Translator {
     }
 
     // Bind expression to a variable and return it.
-    fn bind(&mut self, expr: SpecExpr) -> anyhow::Result<String> {
+    fn bind(&mut self, expr: SpecExpr) -> Result<String> {
         let v = self.vars.alloc();
         self.scope_mut().add_var(v.clone());
         let lhs = spec_var(v.clone());
@@ -410,13 +412,9 @@ impl Translator {
         Ok(v)
     }
 
-    fn expr(&mut self, expr: &Expr) -> anyhow::Result<SpecExpr> {
+    fn expr(&mut self, expr: &Expr) -> Result<SpecExpr> {
         match expr {
-            Expr::Apply {
-                func,
-                types: _,
-                args,
-            } => self.func(func, args),
+            Expr::Apply { func, types, args } => self.func(func, types, args),
             Expr::Var(..) | Expr::ArrayIndex { .. } | Expr::Field { .. } => {
                 let target: Target = expr.try_into()?;
                 Ok(spec_var(self.read(&target)?))
@@ -434,19 +432,19 @@ impl Translator {
         }
     }
 
-    fn func(&mut self, func: &Func, args: &[Expr]) -> anyhow::Result<SpecExpr> {
+    fn func(&mut self, func: &Func, types: &[Expr], args: &[Expr]) -> Result<SpecExpr> {
         match func.name.as_str() {
             "ZeroExtend" => {
                 let (x, w) = expect_binary(args)?;
                 let x = self.expr(x)?;
-                let w = spec_const_int(expect_size(w)?.try_into()?);
-                Ok(spec_binary(SpecOp::ZeroExt, w, x))
+                let w = expect_lit_int_as_usize(w)?;
+                Ok(spec_zero_ext(w, x))
             }
             "SignExtend" => {
                 let (x, w) = expect_binary(args)?;
                 let x = self.expr(x)?;
-                let w = spec_const_int(expect_size(w)?.try_into()?);
-                Ok(spec_binary(SpecOp::SignExt, w, x))
+                let w = expect_lit_int_as_usize(w)?;
+                Ok(spec_sign_ext(w, x))
             }
             "not_bool" => {
                 let x = expect_unary(args)?;
@@ -549,30 +547,9 @@ impl Translator {
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVSdiv, lhs, rhs))
             }
-            "lsr_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): ensure correct bitwidth of shift value
-                let (x, s) = expect_binary(args)?;
-                let x = self.expr(x)?;
-                let s = self.expr(s)?;
-                Ok(spec_binary(SpecOp::BVLshr, x, s))
-            }
-            "asr_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): ensure correct bitwidth of shift value
-                let (x, s) = expect_binary(args)?;
-                let x = self.expr(x)?;
-                let s = self.expr(s)?;
-                Ok(spec_binary(SpecOp::BVAshr, x, s))
-            }
-            "lsl_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): ensure correct bitwidth of shift value
-                let (x, s) = expect_binary(args)?;
-                let x = self.expr(x)?;
-                let s = self.expr(s)?;
-                Ok(spec_binary(SpecOp::BVShl, x, s))
-            }
+            "lsr_bits" => self.shift(SpecOp::BVLshr, types, args),
+            "asr_bits" => self.shift(SpecOp::BVAshr, types, args),
+            "lsl_bits" => self.shift(SpecOp::BVShl, types, args),
             "sle_bits" => {
                 // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
@@ -587,52 +564,100 @@ impl Translator {
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVSlt, lhs, rhs))
             }
+            "Mem.read" => {
+                let (addr, size, access) = expect_ternary(args)?;
+                self.mem_read(addr, size, access)
+            }
             unexpected => todo!("func: {unexpected}"),
         }
     }
 
-    fn slice(&mut self, x: &Expr, slice: &Slice) -> anyhow::Result<SpecExpr> {
+    fn slice(&mut self, x: &Expr, slice: &Slice) -> Result<SpecExpr> {
         match slice {
             Slice::LowWidth(l, w) => {
-                let l = expect_size(l)?;
-                let w = expect_size(w)?;
+                let l = expect_lit_int_as_usize(l)?;
+                let w = expect_lit_int_as_usize(w)?;
                 let h = l + w - 1;
                 let x = self.expr(x)?;
-                Ok(spec_ternary(
-                    SpecOp::Extract,
-                    spec_const_int(h.try_into()?),
-                    spec_const_int(l.try_into()?),
-                    x,
-                ))
+                Ok(spec_extract(h, l, x))
             }
         }
     }
+
+    fn shift(&mut self, op: SpecOp, types: &[Expr], args: &[Expr]) -> Result<SpecExpr> {
+        // Map input and shift to spec expressions.
+        let (x, s) = expect_binary(args)?;
+        let x = self.expr(x)?;
+        let mut s = self.expr(s)?;
+
+        // ASLp maps the shift amount to a bit vector in an integer conversion
+        // pass, which can result in the shift argument being a different width
+        // than the input. If so, extend the shift to match.
+        let (xw, sw) = expect_binary_types(types)?;
+        match xw.cmp(&sw) {
+            Ordering::Greater => s = spec_zero_ext(xw, s),
+            Ordering::Equal => {}
+            Ordering::Less => panic!("shift argument wider than input"),
+        }
+
+        Ok(spec_binary(op, x, s))
+    }
+
+    fn mem_read(&mut self, addr: &Expr, size: &Expr, access: &Expr) -> Result<SpecExpr> {
+        // Map parameters to spec expressions.
+        let addr = self.expr(addr)?;
+        let size_bytes = expect_lit_int_as_usize(size)?;
+        let size_bits = 8 * size_bytes;
+
+        // Access flags not implemented: error on unexpected non-zero value.
+        let access = expect_lit_int_as_usize(access)?;
+        if access != 0 {
+            bail!("non-zero memory read access flags");
+        }
+
+        // Memory read operation modifies read effect variables.
+        let read_effect = ReadEffect::new();
+        self.assign(&read_effect.active, spec_true())?;
+        self.assign(
+            &read_effect.size_bits,
+            spec_const_int(size_bits.try_into()?),
+        )?;
+        self.assign(&read_effect.addr, addr)?;
+
+        let value = self.read(&read_effect.value)?;
+        Ok(spec_var(value))
+    }
 }
 
-fn expect_unary<T>(xs: &[T]) -> anyhow::Result<&T> {
+fn expect_unary<T>(xs: &[T]) -> Result<&T> {
     if xs.len() != 1 {
-        anyhow::bail!("expected unary");
+        bail!("expected unary");
     }
     Ok(&xs[0])
 }
 
-fn expect_binary<T>(xs: &[T]) -> anyhow::Result<(&T, &T)> {
+fn expect_binary<T>(xs: &[T]) -> Result<(&T, &T)> {
     if xs.len() != 2 {
-        anyhow::bail!("expected binary");
+        bail!("expected binary");
     }
     Ok((&xs[0], &xs[1]))
 }
 
-fn expect_ternary<T>(xs: &[T]) -> anyhow::Result<(&T, &T, &T)> {
+fn expect_ternary<T>(xs: &[T]) -> Result<(&T, &T, &T)> {
     if xs.len() != 3 {
-        anyhow::bail!("expected ternary");
+        bail!("expected ternary");
     }
     Ok((&xs[0], &xs[1], &xs[2]))
 }
 
-fn expect_size(expr: &Expr) -> anyhow::Result<usize> {
+fn expect_binary_types(types: &[Expr]) -> Result<(usize, usize)> {
+    let (t1, t2) = expect_binary(types)?;
+    Ok((expect_lit_int_as_usize(t1)?, expect_lit_int_as_usize(t2)?))
+}
+
+fn expect_lit_int_as_usize(expr: &Expr) -> Result<usize> {
     Ok(expr
         .as_lit_int()
-        .ok_or(format_err!("epected literal integer"))?
+        .ok_or(format_err!("expected literal integer"))?
         .parse()?)
 }

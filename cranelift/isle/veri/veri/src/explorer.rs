@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use cranelift_isle::{
     lexer::Pos,
     sema::{RuleId, TermId, TypeId},
@@ -49,7 +50,7 @@ impl<'a> ExplorerWriter<'a> {
         self.graphs = true;
     }
 
-    pub fn write(&mut self) -> anyhow::Result<()> {
+    pub fn write(&mut self) -> Result<()> {
         self.init()?;
         self.write_assets()?;
         self.write_index()?;
@@ -61,12 +62,12 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn init(&self) -> anyhow::Result<()> {
+    fn init(&self) -> Result<()> {
         std::fs::create_dir_all(&self.root)?;
         Ok(())
     }
 
-    fn write_assets(&mut self) -> anyhow::Result<()> {
+    fn write_assets(&mut self) -> Result<()> {
         // In development mode, setup a symlink.
         if self.dev {
             let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -85,7 +86,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_index(&mut self) -> anyhow::Result<()> {
+    fn write_index(&mut self) -> Result<()> {
         let mut output = self.create(&PathBuf::from("index.html"))?;
         self.header(&mut output, "ISLE Explorer")?;
         writeln!(
@@ -109,7 +110,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_files(&mut self) -> anyhow::Result<()> {
+    fn write_files(&mut self) -> Result<()> {
         self.write_files_index()?;
         for id in 0..self.prog.files.file_names.len() {
             self.write_file(id)?;
@@ -117,7 +118,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_files_index(&mut self) -> anyhow::Result<()> {
+    fn write_files_index(&mut self) -> Result<()> {
         let mut output = self.create(&self.file_dir().join("index.html"))?;
         self.header(&mut output, "Files")?;
 
@@ -136,7 +137,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_file(&mut self, id: usize) -> anyhow::Result<()> {
+    fn write_file(&mut self, id: usize) -> Result<()> {
         let mut output = self.create(&self.file_path(id))?;
 
         // Header.
@@ -164,7 +165,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_types(&mut self) -> anyhow::Result<()> {
+    fn write_types(&mut self) -> Result<()> {
         let mut output = self.create(&self.types_dir().join("index.html"))?;
         self.header(&mut output, "Types")?;
 
@@ -216,7 +217,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_terms(&mut self) -> anyhow::Result<()> {
+    fn write_terms(&mut self) -> Result<()> {
         let mut output = self.create(&self.terms_dir().join("index.html"))?;
         self.header(&mut output, "Terms")?;
 
@@ -232,7 +233,7 @@ impl<'a> ExplorerWriter<'a> {
         &self,
         output: &mut dyn Write,
         term_ids: impl Iterator<Item = TermId>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         writeln!(
             output,
             r#"
@@ -285,7 +286,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_rules(&mut self) -> anyhow::Result<()> {
+    fn write_rules(&mut self) -> Result<()> {
         let mut output = self.create(&self.rules_dir().join("index.html"))?;
         self.header(&mut output, "Rules")?;
 
@@ -301,7 +302,7 @@ impl<'a> ExplorerWriter<'a> {
         &self,
         output: &mut dyn Write,
         rule_ids: impl Iterator<Item = RuleId>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         writeln!(
             output,
             r#"
@@ -337,7 +338,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansions(&mut self) -> anyhow::Result<()> {
+    fn write_expansions(&mut self) -> Result<()> {
         self.write_expansions_index()?;
         for (id, expansion) in self.expansions.iter().enumerate() {
             self.write_expansion(id, expansion)?;
@@ -345,7 +346,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansions_index(&mut self) -> anyhow::Result<()> {
+    fn write_expansions_index(&mut self) -> Result<()> {
         let mut output = self.create(&self.expansions_dir().join("index.html"))?;
         self.header(&mut output, "Expansions")?;
 
@@ -359,6 +360,7 @@ impl<'a> ExplorerWriter<'a> {
                     <th>&num;</th>
                     <th>Root</th>
                     <th>First Rule</th>
+                    <th>Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -392,6 +394,11 @@ impl<'a> ExplorerWriter<'a> {
                 rule_ref = self.rule_ref(*rule_id)
             )?;
 
+            // Tags
+            let mut tags: Vec<String> = expansion.term_tags(self.prog).iter().cloned().collect();
+            tags.sort();
+            writeln!(output, "<td>{tags}</td>", tags = tags.join(", "))?;
+
             writeln!(output, "</tr>")?;
         }
         writeln!(
@@ -406,7 +413,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansion(&mut self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+    fn write_expansion(&mut self, id: usize, expansion: &Expansion) -> Result<()> {
         self.write_expansion_index(id, expansion)?;
         if self.graphs {
             self.write_expansion_graph(id, expansion)?;
@@ -414,7 +421,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansion_index(&mut self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+    fn write_expansion_index(&mut self, id: usize, expansion: &Expansion) -> Result<()> {
         let mut output = self.create(&self.expansion_path(id))?;
 
         // Header.
@@ -535,17 +542,13 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn write_expansion_graph(&mut self, id: usize, expansion: &Expansion) -> anyhow::Result<()> {
+    fn write_expansion_graph(&mut self, id: usize, expansion: &Expansion) -> Result<()> {
         self.write_expansion_graph_dot(id, expansion)?;
         self.generate_expansion_graph_svg(id)?;
         Ok(())
     }
 
-    fn write_expansion_graph_dot(
-        &mut self,
-        id: usize,
-        expansion: &Expansion,
-    ) -> anyhow::Result<()> {
+    fn write_expansion_graph_dot(&mut self, id: usize, expansion: &Expansion) -> Result<()> {
         let mut output = self.create(&self.expansion_graph_dot_path(id))?;
 
         // Header.
@@ -579,7 +582,7 @@ impl<'a> ExplorerWriter<'a> {
         Ok(())
     }
 
-    fn generate_expansion_graph_svg(&self, id: usize) -> anyhow::Result<()> {
+    fn generate_expansion_graph_svg(&self, id: usize) -> Result<()> {
         let dot_path = self.expansion_graph_dot_path(id);
         let svg_path = self.expansion_graph_svg_path(id);
 
@@ -593,7 +596,7 @@ impl<'a> ExplorerWriter<'a> {
             .status()?;
 
         if !status.success() {
-            anyhow::bail!("dot exit status: {status}");
+            bail!("dot exit status: {status}");
         }
 
         Ok(())

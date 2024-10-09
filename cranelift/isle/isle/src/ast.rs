@@ -16,6 +16,7 @@ pub enum Def {
     Attr(Attr),
     Spec(Spec),
     Model(Model),
+    State(State),
     Form(Form),
     Instantiation(Instantiation),
     Extern(Extern),
@@ -110,6 +111,9 @@ pub enum AttrKind {
     /// possible applications of rules to this term will be generated and
     /// verified.
     Chain,
+
+    /// Tag allows for categorizing terms.
+    Tag(Ident),
 }
 
 /// An expression used to specify term semantics, similar to SMT-LIB syntax.
@@ -142,10 +146,22 @@ pub enum SpecExpr {
         x: Box<SpecExpr>,
         pos: Pos,
     },
+    /// Discriminator is a predicate that tests the variant of an enum value.
+    Discriminator {
+        variant: Ident,
+        x: Box<SpecExpr>,
+        pos: Pos,
+    },
     /// An application of a type variant or term.
     Op {
         op: SpecOp,
         args: Vec<SpecExpr>,
+        pos: Pos,
+    },
+    /// Enum pattern matching.
+    Match {
+        x: Box<SpecExpr>,
+        arms: Vec<Arm>,
         pos: Pos,
     },
     /// Let bindings.
@@ -166,9 +182,11 @@ pub enum SpecExpr {
         r: Box<SpecExpr>,
         pos: Pos,
     },
-    /// Enums variant values (enums defined by model)
+    /// Construct enum variant.
     Enum {
         name: Ident,
+        variant: Ident,
+        args: Vec<SpecExpr>,
         pos: Pos,
     },
 }
@@ -181,7 +199,9 @@ impl SpecExpr {
             | &Self::ConstBool { pos, .. }
             | &Self::Var { pos, .. }
             | &Self::Field { pos, .. }
+            | &Self::Discriminator { pos, .. }
             | &Self::Op { pos, .. }
+            | &Self::Match { pos, .. }
             | &Self::Let { pos, .. }
             | &Self::With { pos, .. }
             | &Self::Pair { pos, .. }
@@ -264,6 +284,15 @@ pub enum SpecOp {
     Switch,
 }
 
+/// Arm of a spec match expression.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Arm {
+    pub variant: Ident,
+    pub args: Vec<Ident>,
+    pub body: SpecExpr,
+    pub pos: Pos,
+}
+
 /// A specification of the semantics of a term.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Spec {
@@ -275,13 +304,22 @@ pub struct Spec {
     pub provides: Vec<SpecExpr>,
     /// Require statements, which express preconditions on the term
     pub requires: Vec<SpecExpr>,
+    /// State variables modified by the term.
+    pub modifies: Vec<Ident>,
     pub pos: Pos,
 }
 
 /// A model of an SMT-LIB type.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ModelType {
-    /// Unspecified primitive type, left to type-inference to determine
+    /// Unspecified type.
+    ///
+    /// Unlike an auto-derived type, unspecified is a concrete type. However,
+    /// values of this type cannot be used for anything non-trivial. It is
+    /// intended to be used as a placeholder for a type that is not yet known,
+    /// but only appears in rules that are not yet covered by verification.
+    Unspecified,
+    /// Automatically deduced primitive type, left to type-inference to determine.
     Auto,
     /// SMT-LIB Int
     Int,
@@ -306,8 +344,6 @@ pub struct ModelField {
 pub enum ModelValue {
     /// Correspond to ISLE types
     TypeValue(ModelType),
-    /// Correspond to ISLE enums, identifier is the enum variant name
-    EnumValues(ModelType, Vec<(Ident, SpecExpr)>),
     /// Corresponds to ISLE external constants.
     ConstValue(SpecExpr),
 }
@@ -319,6 +355,18 @@ pub struct Model {
     pub name: Ident,
     /// The value of the type or enum (potentially multiple values)
     pub val: ModelValue,
+}
+
+/// Declare an element of global state accessible by verification specs.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct State {
+    /// Name of the state element.
+    pub name: Ident,
+    /// Type of the state element.
+    pub ty: ModelType,
+    /// Default specification, applied if the state is not modified.
+    pub default: SpecExpr,
+    pub pos: Pos,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

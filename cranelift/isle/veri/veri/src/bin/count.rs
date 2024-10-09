@@ -1,5 +1,6 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+use anyhow::{format_err, Result};
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::{
@@ -43,7 +44,7 @@ struct Opts {
 }
 
 impl Opts {
-    fn isle_input_files(&self) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    fn isle_input_files(&self) -> Result<Vec<std::path::PathBuf>> {
         // Generate ISLE files.
         let gen_dir = &self.work_dir;
         generate_isle(gen_dir)?;
@@ -54,15 +55,12 @@ impl Opts {
         // Return inputs from the matching compilation, if any.
         Ok(compilations
             .lookup(&self.name)
-            .ok_or(anyhow::format_err!(
-                "unknown ISLE compilation: {}",
-                self.name
-            ))?
+            .ok_or(format_err!("unknown ISLE compilation: {}", self.name))?
             .paths()?)
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let opts = Opts::parse();
 
     // Read ISLE inputs.
@@ -75,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     // Lookup term to count.
     let root_term_id = prog
         .get_term_by_name(opts.term_name.as_str())
-        .ok_or(anyhow::format_err!("unknown term {}", opts.term_name))?;
+        .ok_or(format_err!("unknown term {}", opts.term_name))?;
     println!("term = {}", opts.term_name);
     println!("id = {}", root_term_id.index());
 
@@ -88,7 +86,7 @@ fn main() -> anyhow::Result<()> {
     for exclude_term_name in &opts.exclude_chain {
         let exclude_term_id = prog
             .get_term_by_name(exclude_term_name)
-            .ok_or(anyhow::format_err!("unknown term {exclude_term_name}"))?;
+            .ok_or(format_err!("unknown term {exclude_term_name}"))?;
         expansion_counter.disable_expansion(exclude_term_id);
     }
 

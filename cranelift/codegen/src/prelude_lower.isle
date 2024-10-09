@@ -41,7 +41,6 @@
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Reg (primitive Reg))
-(model Reg (type (bv)))
 
 (type WritableReg (primitive WritableReg))
 (model WritableReg (type (bv)))
@@ -212,7 +211,7 @@
 ;; Convert a MultiReg with three registers into an InstOutput containing
 ;; one ValueRegs containing the first two regs and one containing the third reg
 (decl multi_reg_to_pair_and_single (MultiReg) InstOutput)
-(attr multi_reg_to_pair_and_single chain)
+(attr multi_reg_to_pair_and_single (veri chain))
 (rule (multi_reg_to_pair_and_single (MultiReg.Three a b c))
       (output_pair (value_regs a b) c))
 
@@ -229,6 +228,7 @@
 ;; Add a range fact to a register, when compiling with
 ;; proof-carrying-code enabled.
 (decl add_range_fact (Reg u16 u64 u64) Reg)
+(spec (add_range_fact reg bit_width min max) (provide (= result reg)))
 (extern constructor add_range_fact add_range_fact)
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -413,6 +413,7 @@
 ;; Constant pool emission.
 
 (type VCodeConstant (primitive VCodeConstant))
+(model VCodeConstant (type !))
 
 ;; Add a u64 little-endian constant to the in-memory constant pool and
 ;; return a VCodeConstant index that refers to it. This is
@@ -505,7 +506,7 @@
 
 ;; Chain another producer to a `ProducesFlags`.
 (decl produces_flags_concat (ProducesFlags ProducesFlags) ProducesFlags)
-(attr produces_flags_concat chain)
+(attr produces_flags_concat (veri chain))
 (rule (produces_flags_concat (ProducesFlags.ProducesFlagsSideEffect inst1) (ProducesFlags.ProducesFlagsSideEffect inst2))
       (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2))
 

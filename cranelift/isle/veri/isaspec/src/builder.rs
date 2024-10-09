@@ -1,22 +1,50 @@
 //! Construction of VeriISLE specifications from ASLp semantics.
 
 use std::collections::{HashMap, HashSet};
+use std::vec;
 
-use anyhow::bail;
-use cranelift_codegen::isa::aarch64::inst::Inst;
-use cranelift_isle::ast::{Def, Spec, SpecExpr};
-use cranelift_isle::lexer::Pos;
-use cranelift_isle_veri_aslp::client::Client;
+use anyhow::{bail, Result};
 use itertools::Itertools;
 
-use crate::constraints::{Binding, Target, Translator};
-use crate::semantics::inst_semantics;
-use crate::{aarch64, spec::*};
+use cranelift_codegen::isa::aarch64::inst::Inst;
+use cranelift_isle::ast::{self, Def, Spec, SpecExpr};
+use cranelift_isle::lexer::Pos;
+use cranelift_isle_veri_aslp::client::Client;
+
+use crate::bits::Bits;
+use crate::constraints::{Binding, Scope, Target, Translator};
+use crate::spec::spec_field;
+use crate::{
+    aarch64,
+    spec::{spec_all, spec_ident, spec_idents, spec_var, spec_with, substitute, Conditions},
+};
 
 pub struct SpecConfig {
     pub term: String,
     pub args: Vec<String>,
-    pub cases: Vec<InstConfig>,
+    pub cases: Cases,
+}
+
+pub enum Cases {
+    Instruction(InstConfig),
+    Cases(Vec<Case>),
+    Match(Match),
+}
+
+pub struct Case {
+    pub conds: Vec<SpecExpr>,
+    pub cases: Cases,
+}
+
+pub struct Match {
+    pub on: SpecExpr,
+    pub arms: Vec<Arm>,
+}
+
+pub struct Arm {
+    pub variant: String,
+    pub args: Vec<String>,
+    pub body: Cases,
 }
 
 #[derive(Clone)]
@@ -29,11 +57,16 @@ pub enum Expectation {
 pub struct Mapping {
     expr: SpecExpr,
     expect: Expectation,
+    modifies: Vec<String>,
 }
 
 impl Mapping {
     pub fn new(expr: SpecExpr, expect: Expectation) -> Self {
-        Self { expr, expect }
+        Self {
+            expr,
+            expect,
+            modifies: Vec::new(),
+        }
     }
 
     pub fn require(expr: SpecExpr) -> Self {
@@ -42,6 +75,42 @@ impl Mapping {
 
     pub fn allow(expr: SpecExpr) -> Self {
         Self::new(expr, Expectation::Allow)
+    }
+}
+
+#[derive(Clone)]
+pub struct MappingBuilder(Mapping);
+
+impl MappingBuilder {
+    pub fn new(expr: SpecExpr) -> Self {
+        Self(Mapping::new(expr, Expectation::Require))
+    }
+
+    pub fn var(name: &str) -> Self {
+        Self::new(spec_var(name.to_string()))
+    }
+
+    pub fn state(name: &str) -> Self {
+        Self::new(spec_var(name.to_string())).modifies(name)
+    }
+
+    pub fn field(mut self, field: &str) -> Self {
+        self.0.expr = spec_field(field.to_string(), self.0.expr);
+        self
+    }
+
+    pub fn allow(mut self) -> Self {
+        self.0.expect = Expectation::Allow;
+        self
+    }
+
+    pub fn modifies(mut self, state: &str) -> Self {
+        self.0.modifies.push(state.to_string());
+        self
+    }
+
+    pub fn build(self) -> Mapping {
+        self.0
     }
 }
 
@@ -71,9 +140,26 @@ impl Mappings {
     }
 }
 
+pub enum Opcodes {
+    Instruction(Inst),
+    Template(Bits),
+}
+
+impl Opcodes {
+    pub fn bits(&self) -> Bits {
+        match self {
+            Opcodes::Instruction(inst) => {
+                let opcode = aarch64::opcode(inst);
+                Bits::from_u32(opcode)
+            }
+            Opcodes::Template(bits) => bits.clone(),
+        }
+    }
+}
+
 pub struct InstConfig {
-    pub inst: Inst,
-    pub require: Vec<SpecExpr>,
+    pub opcodes: Opcodes,
+    pub scope: Scope,
     pub mappings: Mappings,
 }
 
@@ -87,51 +173,105 @@ impl<'a> Builder<'a> {
         Self { cfg, client }
     }
 
-    pub fn build(&self) -> anyhow::Result<Def> {
-        let spec = self.spec(&self.cfg)?;
+    pub fn build(&self) -> Result<Def> {
+        let spec = self.spec()?;
         let def = Def::Spec(spec);
         Ok(def)
     }
 
-    fn spec(&self, cfg: &SpecConfig) -> anyhow::Result<Spec> {
-        // Derive conditions for each case.
-        let conds: Vec<Conditions> = cfg
-            .cases
-            .iter()
-            .enumerate()
-            .map(|(i, c)| self.case(i, c))
-            .collect::<Result<_, _>>()?;
-        let cond = Conditions::merge(conds);
+    fn spec(&self) -> Result<Spec> {
+        let cond = self.cases(&self.cfg.cases)?;
         let spec = Spec {
-            term: spec_ident(cfg.term.clone()),
-            args: spec_idents(&cfg.args),
+            term: spec_ident(self.cfg.term.clone()),
+            args: spec_idents(&self.cfg.args),
             requires: cond.requires,
             provides: cond.provides,
+            modifies: spec_idents(&cond.modifies.iter().sorted().cloned().collect::<Vec<_>>()),
             pos: Pos::default(),
         };
-
         Ok(spec)
     }
 
-    fn case(&self, i: usize, case: &InstConfig) -> anyhow::Result<Conditions> {
+    fn cases(&self, cases: &Cases) -> Result<Conditions> {
+        match cases {
+            Cases::Instruction(case) => self.case(case),
+            Cases::Cases(cases) => {
+                let conds = cases
+                    .iter()
+                    .map(|case| {
+                        let mut cond = self.cases(&case.cases)?;
+                        cond.requires.extend(case.conds.clone());
+                        Ok(cond)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Conditions::merge(conds))
+            }
+            Cases::Match(m) => {
+                let mut require_arms = Vec::new();
+                let mut arms = Vec::new();
+                let mut modifies = HashSet::new();
+                for arm in &m.arms {
+                    // Build conditions for the arm body.
+                    let cond = self.cases(&arm.body)?;
+
+                    // Provides form the body of the arm.
+                    arms.push(ast::Arm {
+                        variant: spec_ident(arm.variant.clone()),
+                        args: spec_idents(&arm.args),
+                        body: spec_all(cond.provides),
+                        pos: Pos::default(),
+                    });
+
+                    // This arm requires a match on the variant, as well as
+                    // requirements from the body.
+                    require_arms.push(ast::Arm {
+                        variant: spec_ident(arm.variant.clone()),
+                        args: spec_idents(&arm.args),
+                        body: spec_all(cond.requires),
+                        pos: Pos::default(),
+                    });
+
+                    // Merge modifies.
+                    modifies.extend(cond.modifies);
+                }
+
+                Ok(Conditions {
+                    requires: vec![SpecExpr::Match {
+                        x: Box::new(m.on.clone()),
+                        arms: require_arms,
+                        pos: Pos::default(),
+                    }],
+                    provides: vec![SpecExpr::Match {
+                        x: Box::new(m.on.clone()),
+                        arms,
+                        pos: Pos::default(),
+                    }],
+                    modifies,
+                })
+            }
+        }
+    }
+
+    fn case(&self, case: &InstConfig) -> Result<Conditions> {
         // Semantics.
-        let block = inst_semantics(&case.inst, self.client)?;
+        let opcode_bits = case.opcodes.bits();
+        let block = self.client.opcode(opcode_bits.into())?;
 
         // Translation.
-        let prefix = format!("v{i}_");
-        let mut translator = Translator::new(aarch64::state(), prefix);
+        let mut translator = Translator::new(case.scope.clone(), "t".to_string());
         translator.translate(&block)?;
 
         let global = translator.global();
 
         // Reads mapping.
         let mut substitutions = HashMap::new();
+        let mut modifies = HashSet::new();
         let reads = global.reads();
         let init = global.init();
         for target in reads.iter().sorted() {
             // Expect mapping for the read.
             let Some(mapping) = case.mappings.reads.get(target) else {
-                anyhow::bail!("read of {target} is unmapped");
+                bail!("read of {target} is unmapped");
             };
 
             // Lookup variable holding the initial read value.
@@ -139,10 +279,15 @@ impl<'a> Builder<'a> {
 
             // Substitute variable for mapped expression.
             substitutions.insert(v.clone(), mapping.expr.clone());
+
+            // Read operations should not modify state.
+            if !mapping.modifies.is_empty() {
+                bail!("read of {target} should not modify state");
+            }
         }
 
         if let Some(target) = case.mappings.required_reads().difference(reads).next() {
-            anyhow::bail!("{target} should have been read");
+            bail!("{target} should have been read");
         }
 
         // Writes mapping.
@@ -151,20 +296,23 @@ impl<'a> Builder<'a> {
         for target in writes.iter().sorted() {
             // Expect mapping for the write.
             let Some(mapping) = case.mappings.writes.get(target) else {
-                anyhow::bail!("write to {target} is unmapped");
+                bail!("write to {target} is unmapped");
             };
 
             // Lookup bound variable.
             let Some(Binding::Var(v)) = bindings.get(target) else {
-                anyhow::bail!("{target} not bound to variable");
+                bail!("{target} not bound to variable");
             };
 
             // Substitute variable for mapped expression.
             substitutions.insert(v.clone(), mapping.expr.clone());
+
+            // Update modifies list.
+            modifies.extend(mapping.modifies.clone());
         }
 
         if let Some(target) = case.mappings.required_writes().difference(writes).next() {
-            anyhow::bail!("{target} should have been written");
+            bail!("{target} should have been written");
         }
 
         // Finalize provided constraints.
@@ -188,77 +336,9 @@ impl<'a> Builder<'a> {
 
         // Conditions.
         Ok(Conditions {
-            requires: case.require.clone(),
+            requires: Vec::new(),
             provides,
+            modifies,
         })
     }
-}
-
-fn substitute(
-    expr: SpecExpr,
-    substitutions: &HashMap<String, SpecExpr>,
-) -> anyhow::Result<SpecExpr> {
-    Ok(match expr {
-        // Variable
-        SpecExpr::Var { ref var, pos: _ } => {
-            if let Some(substitution) = substitutions.get(&var.0) {
-                substitution.clone()
-            } else {
-                expr
-            }
-        }
-
-        // Constants are unchanged.
-        SpecExpr::ConstInt { .. }
-        | SpecExpr::ConstBitVec { .. }
-        | SpecExpr::ConstBool { .. }
-        | SpecExpr::Enum { .. } => expr,
-
-        // Scopes require care to ensure we are not replacing introduced variables.
-        SpecExpr::Let { defs, body, pos } => SpecExpr::Let {
-            defs: defs
-                .into_iter()
-                .map(|(var, expr)| {
-                    if substitutions.contains_key(&var.0) {
-                        bail!("substituted variable collides with let binding");
-                    }
-                    Ok((var, substitute(expr, substitutions)?))
-                })
-                .collect::<anyhow::Result<_>>()?,
-            body: Box::new(substitute(*body, substitutions)?),
-            pos,
-        },
-        SpecExpr::With { decls, body, pos } => {
-            for decl in &decls {
-                if substitutions.contains_key(&decl.0) {
-                    bail!("substituted variable collides with with scope");
-                }
-            }
-            SpecExpr::With {
-                decls,
-                body: Box::new(substitute(*body, substitutions)?),
-                pos,
-            }
-        }
-
-        // Recurse into child expressions.
-        SpecExpr::Field { field, x, pos } => SpecExpr::Field {
-            field,
-            x: Box::new(substitute(*x, substitutions)?),
-            pos,
-        },
-        SpecExpr::Op { op, args, pos } => SpecExpr::Op {
-            op,
-            args: args
-                .into_iter()
-                .map(|arg| substitute(arg, substitutions))
-                .collect::<anyhow::Result<_>>()?,
-            pos,
-        },
-        SpecExpr::Pair { l, r, pos } => SpecExpr::Pair {
-            l: Box::new(substitute(*l, substitutions)?),
-            r: Box::new(substitute(*r, substitutions)?),
-            pos,
-        },
-    })
 }

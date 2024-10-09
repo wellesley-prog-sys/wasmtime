@@ -7,30 +7,30 @@ on:
     paths:
       - '.github/workflows/aslp.yml'
       - '**/aslp/**'
+      - '**/isaspec/**'
+      - 'cranelift/codegen/src/isa/aarch64/spec/*.isle'
   pull_request:
     branches:
       - veriisle
     paths:
       - '.github/workflows/aslp.yml'
       - '**/aslp/**'
+      - '**/isaspec/**'
+      - 'cranelift/codegen/src/isa/aarch64/spec/*.isle'
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      ASLP_DIR: ${{ github.workspace }}/aslp
+      ASLP_PATH: ${{ github.workspace }}/tools/aslp
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: main
-      - name: Checkout ASLp
-        uses: actions/checkout@v3
-        with:
-          repository: mmcloughlin/aslp
-          ref: 9ec746d519394bf0d54f109dac091db771b23258
-          path: aslp
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Install LLVM
         env:
           LLVM_VERSION: 18
@@ -39,17 +39,32 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh "${LLVM_VERSION}"
           echo "/usr/lib/llvm-${LLVM_VERSION}/bin" >> "${GITHUB_PATH}"
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
+      - name: Install OPAM
+        run: sudo apt-get install -y opam
+      - name: Cache ASLp
+        id: cache-aslp
+        uses: actions/cache@v4
         with:
-          ocaml-compiler: 4.14.2
-          dune-cache: true
-      - name: Install ASLp Dependencies
-        working-directory: aslp
-        run: opam install . --deps-only --with-test
-      - name: Build ASLp
-        working-directory: aslp
-        run: opam exec -- dune build
+          path: ${{ env.ASLP_PATH }}
+          key: aslp-${{ runner.os }}-${{ hashFiles('main/cranelift/isle/veri/veri/script/install/aslp.sh') }}
+      - name: Install ASLp
+        if: steps.cache-aslp.outputs.cache-hit != 'true'
+        working-directory: main/cranelift/isle/veri/veri
+        run: |
+          mkdir -p "${ASLP_PATH}"
+          ./script/install/aslp.sh -i "${ASLP_PATH}" -t "${RUNNER_TEMP}"
+      - name: Configure ASLp
+        run: echo "${ASLP_PATH}/bin" >> $GITHUB_PATH
+
+      - name: Generate ISA Specifications
+        working-directory: main/cranelift/isle/veri/isaspec
+        run: ./script/generate.sh -l
+      - name: Git Status
+        working-directory: main
+        run: |
+          git diff
+          test -z "$(git status --porcelain)"
+
       - name: Generate ASLp Test Data
         working-directory: main/cranelift/isle/veri/aslp/tests/data
         run: ./generate.sh

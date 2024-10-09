@@ -1,3 +1,4 @@
+use anyhow::{bail, format_err, Result};
 use clap::{Parser, ValueEnum};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::sema::Rule;
@@ -29,6 +30,10 @@ struct Opts {
     #[arg(long)]
     rule: Option<String>,
 
+    /// Skip expansions containing terms with this tag.
+    #[arg(long = "skip-tag", value_name = "TAG")]
+    skip_tags: Vec<String>,
+
     /// Path to SMT2 replay file.
     #[arg(long, required = true)]
     smt2_replay_path: std::path::PathBuf,
@@ -51,7 +56,7 @@ struct Opts {
 }
 
 impl Opts {
-    fn isle_input_files(&self) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    fn isle_input_files(&self) -> Result<Vec<std::path::PathBuf>> {
         // Generate ISLE files.
         let gen_dir = &self.work_dir;
         generate_isle(gen_dir)?;
@@ -62,10 +67,7 @@ impl Opts {
         // Return inputs from the matching compilation, if any.
         Ok(compilations
             .lookup(&self.name)
-            .ok_or(anyhow::format_err!(
-                "unknown ISLE compilation: {}",
-                self.name
-            ))?
+            .ok_or(format_err!("unknown ISLE compilation: {}", self.name))?
             .paths()?)
     }
 }
@@ -101,7 +103,7 @@ impl SolverBackend {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let _ = env_logger::try_init();
     let opts = Opts::parse();
 
@@ -115,7 +117,7 @@ fn main() -> anyhow::Result<()> {
     let target = if let Some(id) = opts.rule {
         Some(
             prog.get_rule_by_identifier(&id)
-                .ok_or(anyhow::format_err!("unknown rule {id}"))?,
+                .ok_or(format_err!("unknown rule {id}"))?,
         )
     } else {
         None
@@ -132,7 +134,7 @@ fn main() -> anyhow::Result<()> {
     // Process expansions.
     let expansions = expander.expansions();
     for (i, expansion) in expansions.iter().enumerate() {
-        if !should_verify(expansion, target, &prog) {
+        if !should_verify(expansion, target, &opts.skip_tags, &prog) {
             continue;
         }
 
@@ -157,8 +159,17 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// Heuristic to select which expansions we attempt verification for.
-/// Specifically, verify all expansions where the first rule is named.
-fn should_verify(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -> bool {
+fn should_verify(
+    expansion: &Expansion,
+    target: Option<&Rule>,
+    skip_tags: &[String],
+    prog: &Program,
+) -> bool {
+    verify_include(expansion, target, prog) && !verify_exclude(expansion, skip_tags, prog)
+}
+
+/// Is the expansion in the set of expansions to verify?
+fn verify_include(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -> bool {
     // If an explicit target rule is specified, limit to expansions containing it.
     if let Some(target) = target {
         return expansion.rules.contains(&target.id);
@@ -171,6 +182,19 @@ fn should_verify(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -
         .expect("expansion should have at least one rule");
     let rule = prog.rule(*rule_id);
     rule.name.is_some()
+}
+
+/// Is the expansion excluded from verification?
+fn verify_exclude(expansion: &Expansion, skip_tags: &[String], prog: &Program) -> bool {
+    // Skip if the expansion involves skipped tags.
+    let tags = expansion.term_tags(prog);
+    for skip_tag in skip_tags {
+        if tags.contains(skip_tag) {
+            log::info!("skip expansion with tag: {}", skip_tag);
+            return true;
+        }
+    }
+    return false;
 }
 
 fn expansion_description(expansion: &Expansion, prog: &Program) -> String {
@@ -190,7 +214,7 @@ fn verify_expansion(
     timeout_seconds: u32,
     skip_solver: bool,
     debug: bool,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     // Verification conditions.
     let conditions = Conditions::from_expansion(expansion, prog)?;
     if debug {
@@ -222,7 +246,7 @@ fn verify_expansion(
             type_inference::Status::Solved => (),
             type_inference::Status::Inapplicable => continue,
             type_inference::Status::Underconstrained => {
-                anyhow::bail!("underconstrained type inference")
+                bail!("underconstrained type inference")
             }
         }
 
@@ -252,7 +276,7 @@ fn verify_expansion_type_instantiation(
     solver_backend: &SolverBackend,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     // Solve.
     let replay_file = std::fs::File::create(replay_path)?;
     let binary = solver_backend.prog();
@@ -270,7 +294,7 @@ fn verify_expansion_type_instantiation(
     match applicability {
         Applicability::Applicable => (),
         Applicability::Inapplicable => return Ok(()),
-        Applicability::Unknown => anyhow::bail!("could not prove applicability"),
+        Applicability::Unknown => bail!("could not prove applicability"),
     };
 
     let verification = solver.check_verification_condition()?;
@@ -279,7 +303,7 @@ fn verify_expansion_type_instantiation(
         Verification::Failure(model) => {
             println!("model:");
             conditions.print_model(&model, prog)?;
-            anyhow::bail!("verification failed");
+            bail!("verification failed");
         }
         Verification::Success | Verification::Unknown => (),
     };
