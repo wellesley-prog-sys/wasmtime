@@ -123,6 +123,14 @@
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)
 
+(spec (cls x) (provide (= result (cls x))))
+(instantiate cls
+    ((args (bv 8)) (ret (bv 8)))
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 64)) (ret (bv 64)))
+)
+
 (spec (load flags p offset)
     (modifies clif_load loaded_value)
     (provide
@@ -141,6 +149,7 @@
         (= result (conv_to (widthof result) loaded_value))
     )
 )
+
 (instantiate load
     ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 64)))
 )

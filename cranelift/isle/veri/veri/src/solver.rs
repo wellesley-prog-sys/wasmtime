@@ -9,6 +9,8 @@ use crate::{
     veri::{Conditions, Expr, ExprId, Model},
 };
 
+use crate::encoded::cls::*;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Applicability {
     Applicable,
@@ -186,6 +188,21 @@ impl<'a> Solver<'a> {
                 self.expr_atom(y),
             ])),
             Expr::BVNot(x) => Ok(self.smt.bvnot(self.expr_atom(x))),
+            Expr::Cls(x) => {
+                let width = self
+                    .assignment
+                    .try_bit_vector_width(x)
+                    .context("cls semantics require known width")?;
+                let xe = self.expr_atom(x);
+                match width {
+                    8 => Ok(cls8(&mut self.smt, xe, 0)),
+                    16 => Ok(cls16(&mut self.smt, xe, 0)),
+                    32 => Ok(cls32(&mut self.smt, xe, 0)),
+                    64 => Ok(cls64(&mut self.smt, xe, 0)),
+                    _ => unimplemented!("Unexpected CLS width")
+                }
+            }
+
             Expr::BVNeg(x) => Ok(self.smt.bvneg(self.expr_atom(x))),
             Expr::BVAdd(x, y) => Ok(self.smt.bvadd(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVOr(x, y) => Ok(self.smt.bvor(self.expr_atom(x), self.expr_atom(y))),

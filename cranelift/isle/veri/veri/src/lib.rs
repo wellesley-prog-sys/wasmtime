@@ -18,6 +18,7 @@ macro_rules! declare_id {
 
 pub mod debug;
 pub mod expand;
+pub mod encoded;
 pub mod explorer;
 pub mod program;
 pub mod reachability;
