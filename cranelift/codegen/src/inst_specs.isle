@@ -50,11 +50,19 @@
 )
 
 (form
-  bv_ternary_8_to_64
-  ((args (bv  8) (bv  8) (bv  8)) (ret (bv  8)))
-  ((args (bv 16) (bv 16) (bv 16)) (ret (bv 16)))
-  ((args (bv 32) (bv 32) (bv 32)) (ret (bv 32)))
-  ((args (bv 64) (bv 64) (bv 64)) (ret (bv 64)))
+    bv_binary_8_to_64
+    ((args (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (bv 64) (bv 64)) (ret (bv 64)))
+)
+
+(form
+    bv_ternary_8_to_64
+    ((args (bv  8) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (bv 16) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (bv 32) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (bv 64) (bv 64) (bv 64)) (ret (bv 64)))
 )
 
 ;;;; CLIF Instruction Specifications ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -71,10 +79,7 @@
 
 (spec (isub x y)
     (provide (= result (bvsub x y))))
-(instantiate isub
-    ((args (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (bv 64) (bv 64)) (ret (bv 64)))
-)
+(instantiate isub bv_binary_8_to_64)
 
 (spec (ineg x)
     (provide (= result (bvneg x))))
@@ -82,10 +87,7 @@
 
 (spec (imul x y)
     (provide (= result (bvmul x y))))
-(instantiate imul
-    ((args (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (bv 64) (bv 64)) (ret (bv 64)))
-)
+(instantiate imul bv_binary_8_to_64)
 
 (spec (iconst arg)
     (provide (= arg (zero_ext 64 result))))
@@ -103,36 +105,19 @@
         )
     )
 )
-(instantiate ishl
-    ((args (bv 64) (bv 64)) (ret (bv 64)))
-)
+(instantiate ishl bv_binary_8_to_64)
 
 (spec (band x y)
     (provide (= result (bvand x y))))
-(instantiate band
-    ((args (bv 8) (bv 8)) (ret (bv 8)))
-    ((args (bv 16) (bv 16)) (ret (bv 16)))
-    ((args (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (bv 64) (bv 64)) (ret (bv 64)))
-)
+(instantiate band bv_binary_8_to_64)
 
 (spec (bor x y)
     (provide (= result (bvor x y))))
-(instantiate bor
-    ((args (bv 8) (bv 8)) (ret (bv 8)))
-    ((args (bv 16) (bv 16)) (ret (bv 16)))
-    ((args (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (bv 64) (bv 64)) (ret (bv 64)))
-)
+(instantiate bor bv_binary_8_to_64)
 
 (spec (bnot x)
     (provide (= result (bvnot x))))
-(instantiate bnot
-    ((args (bv 8)) (ret (bv 8)))
-    ((args (bv 16)) (ret (bv 16)))
-    ((args (bv 32)) (ret (bv 32)))
-    ((args (bv 64)) (ret (bv 64)))
-)
+(instantiate bnot bv_unary_8_to_64)
 
 (spec (bitselect c x y)
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))

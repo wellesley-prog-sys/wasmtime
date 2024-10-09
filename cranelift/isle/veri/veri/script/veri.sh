@@ -43,7 +43,7 @@ cargo run --bin veri --profile "${profile}" -- \
     --work-dir "${tmp_dir}" \
     --name "${arch}" \
     --smt2-replay-path /dev/null \
-    --timeout 60 \
+    --timeout 10 \
     --skip-tag TODO \
     "$@" \
     | tee "${output_dir}/${arch}.veri"
