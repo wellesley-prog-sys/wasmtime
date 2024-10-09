@@ -1816,8 +1816,15 @@
                            (csel (Cond.Eq) lo_sign_bits (zero_reg)))))
         (value_regs (add $I64 maybe_lo hi_cls) (imm $I64 (ImmExtend.Zero) 0))))
 
-(rule cls_32_64 -1 (lower (has_type ty (cls x)))
-      (a64_cls ty x))
+;; TODO: rule priorities https://github.com/mmcloughlin/veriisle-wasmtime/issues/128
+;; (rule cls_32_64 -1 (lower (has_type ty (cls x)))
+;;       (a64_cls ty x))
+
+(rule cls_32 -1 (lower (has_type $I32 (cls x)))
+      (a64_cls $I32 x))
+
+(rule cls_64 -1 (lower (has_type $I64 (cls x)))
+      (a64_cls $I64 x))
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
