@@ -1001,8 +1001,6 @@
                        (end Reg)
                        (step Imm12))))
 
-(attr MInst.MovWide (tag TODO))
-
 (attr MInst.FpuMove32 (tag float))
 (attr MInst.FpuMove64 (tag float))
 (attr MInst.FpuMove128 (tag float))
@@ -1219,6 +1217,14 @@
 )
 
 (type MoveWideConst (primitive MoveWideConst))
+(model MoveWideConst
+      (type
+            (struct
+                  (shift (bv 2))
+                  (bits (bv 16))
+            )
+      )
+)
 
 (type NZCV (primitive NZCV))
 (model NZCV
@@ -1909,9 +1915,73 @@
 
 (decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)
 (extern constructor move_wide_const_from_u64 move_wide_const_from_u64)
+(spec (move_wide_const_from_u64 ty n)
+      (provide
+            (let
+                  (
+                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
+                        (nlow (bvand n tymask))
+                  )
+                  (= nlow
+                        ; bits << (16 * shift)
+                        (bvshl
+                              (zero_ext 64 (:bits result))
+                              (bvmul (int2bv 64 16) (zero_ext 64 (:shift result)))
+                        )
+                  )
+            )
+      )
+      (require
+            (let
+                  (
+                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
+                        (nlow (bvand n tymask))
+                  )
+                  (or
+                        (= nlow (bvand nlow #x000000000000ffff))
+                        (= nlow (bvand nlow #x00000000ffff0000))
+                        (= nlow (bvand nlow #x0000ffff00000000))
+                        (= nlow (bvand nlow #xffff000000000000))
+                  )
+            )
+      )
+)
 
 (decl pure partial move_wide_const_from_inverted_u64 (Type u64) MoveWideConst)
 (extern constructor move_wide_const_from_inverted_u64 move_wide_const_from_inverted_u64)
+(spec (move_wide_const_from_inverted_u64 ty n_inverted)
+      (provide
+            (let
+                  (
+                        (n (bvnot n_inverted))
+                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
+                        (nlow (bvand n tymask))
+                  )
+                  (= nlow
+                        ; bits << (16 * shift)
+                        (bvshl
+                              (zero_ext 64 (:bits result))
+                              (bvmul (int2bv 64 16) (zero_ext 64 (:shift result)))
+                        )
+                  )
+            )
+      )
+      (require
+            (let
+                  (
+                        (n (bvnot n_inverted))
+                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
+                        (nlow (bvand n tymask))
+                  )
+                  (or
+                        (= nlow (bvand nlow #x000000000000ffff))
+                        (= nlow (bvand nlow #x00000000ffff0000))
+                        (= nlow (bvand nlow #x0000ffff00000000))
+                        (= nlow (bvand nlow #xffff000000000000))
+                  )
+            )
+      )
+)
 
 (decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
 (attr imm_logic_from_u64 (tag TODO))
