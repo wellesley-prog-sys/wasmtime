@@ -1,14 +1,14 @@
 use std::collections::HashMap;
-use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::{io, vec};
 
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
 use cranelift_codegen::{
     ir::MemFlags,
     isa::aarch64::inst::{
-        writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, ExtendOp, Imm12, Inst, OperandSize,
+        writable_xreg, xreg, ALUOp, ALUOp3, AMode, BitOp, Cond, ExtendOp, Imm12, Inst, OperandSize,
         ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm,
     },
     Reg, Writable,
@@ -147,6 +147,10 @@ fn define() -> Result<Vec<FileConfig>> {
         FileConfig {
             name: "extend.isle".into(),
             specs: vec![define_extend()],
+        },
+        FileConfig {
+            name: "conds.isle".into(),
+            specs: define_conds(),
         },
     ])
 }
@@ -1110,6 +1114,91 @@ where
         cases: Cases::Match(Match {
             on: spec_var("mem".to_string()),
             arms: vec![reg_reg, reg_scaled, reg_scaled_extended, reg_extended],
+        }),
+    }
+}
+
+fn define_conds() -> Vec<SpecConfig> {
+    // CSel
+    let csel = define_csel("MInst.CSel", |rd, cond, rn, rm| Inst::CSel {
+        rd,
+        cond,
+        rn,
+        rm,
+    });
+
+    // CSNeg
+    let csneg = define_csel("MInst.CSNeg", |rd, cond, rn, rm| Inst::CSNeg {
+        rd,
+        cond,
+        rn,
+        rm,
+    });
+
+    vec![csel, csneg]
+}
+
+fn define_csel<F>(term: &str, inst: F) -> SpecConfig
+where
+    F: Fn(Writable<Reg>, Cond, Reg, Reg) -> Inst,
+{
+    // Cond
+    let conds = [
+        Cond::Eq,
+        Cond::Ne,
+        Cond::Hs,
+        Cond::Lo,
+        Cond::Mi,
+        Cond::Pl,
+        Cond::Vs,
+        Cond::Vc,
+        Cond::Hi,
+        Cond::Ls,
+        Cond::Ge,
+        Cond::Lt,
+        Cond::Gt,
+        Cond::Le,
+    ];
+
+    // Flags and register mappings.
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+
+    SpecConfig {
+        term: term.to_string(),
+        args: ["rd", "cond", "rn", "rm"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("cond".to_string()),
+            arms: conds
+                .iter()
+                .rev()
+                .map(|cond| Arm {
+                    variant: format!("{cond:?}"),
+                    args: Vec::new(),
+                    body: Cases::Instruction(InstConfig {
+                        opcodes: Opcodes::Instruction(inst(
+                            writable_xreg(4),
+                            *cond,
+                            xreg(5),
+                            xreg(6),
+                        )),
+                        scope: aarch64::state(),
+                        mappings: mappings.clone(),
+                    }),
+                })
+                .collect(),
         }),
     }
 }
