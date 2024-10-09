@@ -5,6 +5,7 @@ use std::{io, vec};
 
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
+use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp};
 use cranelift_codegen::{
     ir::MemFlags,
     isa::aarch64::inst::{
@@ -143,6 +144,10 @@ fn define() -> Result<Vec<FileConfig>> {
         FileConfig {
             name: "loads.isle".into(),
             specs: define_loads(),
+        },
+        FileConfig {
+            name: "mov_wide.isle".into(),
+            specs: vec![define_mov_wide()?],
         },
         FileConfig {
             name: "extend.isle".into(),
@@ -819,6 +824,124 @@ fn define_bit_rr() -> SpecConfig {
                 .collect(),
         }),
     }
+}
+
+// MInst.MovWide specification configuration.
+fn define_mov_wide() -> Result<SpecConfig> {
+    // MovWideOps
+    let mov_wide_ops = [MoveWideOp::MovZ, MoveWideOp::MovN];
+
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    // Execution scope: define opcode template fields.
+    let mut scope = aarch64::state();
+    let mov_wide_const_bits = Target::Var("bits".to_string());
+    scope.global(mov_wide_const_bits.clone());
+
+    // Mappings
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        mov_wide_const_bits.clone(),
+        MappingBuilder::var("imm").field("bits").build(),
+    );
+
+    Ok(SpecConfig {
+        term: "MInst.MovWide".to_string(),
+        args: ["op", "rd", "imm", "size"].map(String::from).to_vec(),
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| {
+                    let max_shift = size.bits() / 16;
+                    Ok(Arm {
+                        variant: format!("{size:?}"),
+                        args: Vec::new(),
+                        body: Cases::Match(Match {
+                            on: spec_var("op".to_string()),
+                            arms: mov_wide_ops
+                                .iter()
+                                .map(|mov_wide_op| {
+                                    Ok(Arm {
+                                        variant: format!("{mov_wide_op:?}"),
+                                        args: Vec::new(),
+                                        body: Cases::Cases(
+                                            (0..max_shift)
+                                                .map(|shift| {
+                                                    let template = mov_wide_template(
+                                                        *mov_wide_op,
+                                                        writable_xreg(4),
+                                                        shift,
+                                                        *size,
+                                                    )?;
+                                                    Ok(Case {
+                                                        conds: vec![spec_eq(
+                                                            spec_field(
+                                                                "shift".to_string(),
+                                                                spec_var("imm".to_string()),
+                                                            ),
+                                                            spec_const_bit_vector(shift.into(), 2),
+                                                        )],
+                                                        cases: Cases::Instruction(InstConfig {
+                                                            opcodes: Opcodes::Template(template),
+                                                            scope: scope.clone(),
+                                                            mappings: mappings.clone(),
+                                                        }),
+                                                    })
+                                                })
+                                                .collect::<Result<_>>()?,
+                                        ),
+                                    })
+                                })
+                                .collect::<Result<_>>()?,
+                        }),
+                    })
+                })
+                .collect::<Result<_>>()?,
+        }),
+    })
+}
+
+fn mov_wide_template(
+    op: MoveWideOp,
+    rd: Writable<Reg>,
+    shift: u8,
+    size: OperandSize,
+) -> Result<Bits> {
+    // Assemble a base instruction with a placeholder for the immediate bits field.
+    let placeholder = MoveWideConst { bits: 0, shift };
+    let base = Inst::MovWide {
+        op,
+        rd,
+        imm: placeholder,
+        size,
+    };
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic immediate fields.
+    let imm = Bits {
+        segments: vec![Segment::Symbolic("bits".to_string(), 16)],
+    };
+    let template = Bits::splice(&bits, &imm, 5)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let bits = assignment.get("bits").unwrap();
+        let imm = MoveWideConst {
+            bits: (*bits).try_into().unwrap(),
+            shift,
+        };
+        Ok(Inst::MovWide { op, rd, imm, size })
+    })?;
+
+    Ok(template)
 }
 
 fn define_extend() -> SpecConfig {

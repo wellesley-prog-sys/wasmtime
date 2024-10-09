@@ -3,7 +3,8 @@ use clap::Parser as ClapParser;
 use cranelift_codegen::ir::types::I64;
 use cranelift_codegen::isa::aarch64::inst::{
     vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Imm12, ImmLogic,
-    ImmShift, Inst, OperandSize, ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm, VecALUOp, VectorSize,
+    ImmShift, Inst, MoveWideConst, MoveWideOp, OperandSize, ShiftOp, ShiftOpAndAmt,
+    ShiftOpShiftImm, VecALUOp, VectorSize,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::ast::Block;
@@ -67,6 +68,9 @@ fn main() -> Result<()> {
 // Define instructions to test.
 fn define_insts() -> Vec<Inst> {
     let mut insts = Vec::new();
+
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
 
     // AluRRR
     let alu_ops = vec![
@@ -201,6 +205,22 @@ fn define_insts() -> Vec<Inst> {
             rd: writable_xreg(2),
             rn: xreg(1),
         });
+    }
+
+    // MovWide
+    let mov_wide_ops = [MoveWideOp::MovN, MoveWideOp::MovZ];
+    let values = [0x00001234u64, 0x12340000u64];
+    for mov_wide_op in mov_wide_ops {
+        for size in sizes {
+            for value in values {
+                insts.push(Inst::MovWide {
+                    op: mov_wide_op,
+                    rd: writable_xreg(4),
+                    imm: MoveWideConst::maybe_from_u64(value).unwrap(),
+                    size,
+                });
+            }
+        }
     }
 
     // CSel
