@@ -159,21 +159,17 @@ fn main() -> Result<()> {
 }
 
 /// Heuristic to select which expansions we attempt verification for.
-/// Specifically, verify all expansions where the first rule is named.
 fn should_verify(
     expansion: &Expansion,
     target: Option<&Rule>,
     skip_tags: &[String],
     prog: &Program,
 ) -> bool {
-    // Skip if the expansion involves skipped tags.
-    let tags = expansion.term_tags(prog);
-    for skip_tag in skip_tags {
-        if tags.contains(skip_tag) {
-            return false;
-        }
-    }
+    verify_include(expansion, target, prog) && !verify_exclude(expansion, skip_tags, prog)
+}
 
+/// Is the expansion in the set of expansions to verify?
+fn verify_include(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -> bool {
     // If an explicit target rule is specified, limit to expansions containing it.
     if let Some(target) = target {
         return expansion.rules.contains(&target.id);
@@ -186,6 +182,19 @@ fn should_verify(
         .expect("expansion should have at least one rule");
     let rule = prog.rule(*rule_id);
     rule.name.is_some()
+}
+
+/// Is the expansion excluded from verification?
+fn verify_exclude(expansion: &Expansion, skip_tags: &[String], prog: &Program) -> bool {
+    // Skip if the expansion involves skipped tags.
+    let tags = expansion.term_tags(prog);
+    for skip_tag in skip_tags {
+        if tags.contains(skip_tag) {
+            log::info!("skip expansion with tag: {}", skip_tag);
+            return true;
+        }
+    }
+    return false;
 }
 
 fn expansion_description(expansion: &Expansion, prog: &Program) -> String {
