@@ -1102,7 +1102,11 @@ impl<'a> ConditionsBuilder<'a> {
             Constraint::Some => self.constraint_some(binding_id),
             Constraint::ConstPrim { val } => self.const_prim(binding_id, *val),
             Constraint::ConstInt { val, ty } => self.const_int(binding_id, *val, *ty),
-            _ => todo!("constraint: {constraint:?}"),
+            Constraint::Variant {
+                ty,
+                variant,
+                fields: _,
+            } => self.constraint_variant(binding_id, *ty, *variant),
         }
     }
 
@@ -1115,6 +1119,34 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Assumption: option is Some.
         self.conditions.assumptions.push(opt.some);
+
+        Ok(())
+    }
+
+    fn constraint_variant(
+        &mut self,
+        binding_id: BindingId,
+        ty: TypeId,
+        variant: VariantId,
+    ) -> Result<()> {
+        // Constrained binding should be an enum.
+        let e = self.binding_value[&binding_id]
+            .as_enum()
+            .ok_or(format_err!(
+                "target of variant constraint should be an enum"
+            ))?
+            .clone();
+
+        // TODO(mbm): check the enum type is correct?
+
+        // Lookup variant.
+        let variant_type = self.prog.tyenv.get_variant(ty, variant);
+        let variant_name = self.prog.tyenv.syms[variant_type.name.index()].as_str();
+
+        // Assumption: discriminant equals variant.
+        let variant = e.try_variant_by_name(variant_name)?;
+        let discriminator = self.discriminator(&e, variant);
+        self.conditions.assumptions.push(discriminator);
 
         Ok(())
     }
