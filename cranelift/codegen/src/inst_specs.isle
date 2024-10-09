@@ -42,6 +42,14 @@
 ;;;; Common Term Forms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (form
+    bv_unary_8_to_64
+    ((args (bv  8)) (ret (bv  8)))
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 64)) (ret (bv 64)))
+)
+
+(form
   bv_ternary_8_to_64
   ((args (bv  8) (bv  8) (bv  8)) (ret (bv  8)))
   ((args (bv 16) (bv 16) (bv 16)) (ret (bv 16)))
@@ -67,6 +75,10 @@
     ((args (bv 32) (bv 32)) (ret (bv 32)))
     ((args (bv 64) (bv 64)) (ret (bv 64)))
 )
+
+(spec (ineg x)
+    (provide (= result (bvneg x))))
+(instantiate ineg bv_unary_8_to_64)
 
 (spec (imul x y)
     (provide (= result (bvmul x y))))

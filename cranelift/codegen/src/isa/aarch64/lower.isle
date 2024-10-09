@@ -792,7 +792,7 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
+(rule ineg_base_case 1 (lower (has_type (fits_in_64 ty) (ineg x)))
       (sub ty (zero_reg) x))
 
 ;; `i128`
