@@ -95,7 +95,7 @@ pub enum Expr {
     BVConcat(Box<Expr>, Box<Expr>),
 
     // Convert integer to bitvector.
-    Int2BV(usize, Box<Expr>),
+    Int2BV(Box<Expr>, Box<Expr>),
 
     //// Convert bitvector to integer
     //BVToInt(Box<Expr>),
@@ -258,18 +258,7 @@ impl Expr {
                         Box::new(Expr::from_ast(&args[2])),
                     )
                 }
-                SpecOp::Int2BV => {
-                    // TODO(mbm): return error instead of assert
-                    assert_eq!(
-                        args.len(),
-                        2,
-                        "Unexpected number of args for int2bv operator at {pos:?}",
-                    );
-                    Expr::Int2BV(
-                        spec_expr_to_usize(&args[0]).unwrap(),
-                        Box::new(Expr::from_ast(&args[1])),
-                    )
-                }
+                SpecOp::Int2BV => binary_expr!(Expr::Int2BV, args, pos),
                 //SpecOp::Subs => {
                 //    assert_eq!(
                 //        args.len(),

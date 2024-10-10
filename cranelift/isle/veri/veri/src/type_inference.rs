@@ -391,8 +391,10 @@ impl<'a> SystemBuilder<'a> {
                 self.concat(x, *y, *z);
             }
             Expr::Int2BV(w, y) => {
-                self.bit_vector_of_width(x, *w);
+                self.bit_vector(x);
+                self.integer(*w);
                 self.integer(*y);
+                self.width_of(x, *w);
             }
             Expr::WidthOf(y) => {
                 self.integer(x);

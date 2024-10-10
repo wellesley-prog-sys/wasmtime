@@ -211,7 +211,7 @@ impl<'a> Solver<'a> {
             Expr::BVConvTo(w, x) => self.bv_conv_to(w, x),
             Expr::BVExtract(h, l, x) => Ok(self.extract(h, l, self.expr_atom(x))),
             Expr::BVConcat(x, y) => Ok(self.smt.concat(self.expr_atom(x), self.expr_atom(y))),
-            Expr::Int2BV(w, x) => Ok(self.int2bv(w, self.expr_atom(x))),
+            Expr::Int2BV(w, x) => self.int_to_bv(w, x),
             Expr::WidthOf(x) => self.width_of(x),
         }
     }
@@ -301,6 +301,19 @@ impl<'a> Solver<'a> {
             }
             Ordering::Equal => Ok(self.expr_atom(x)),
         }
+    }
+
+    fn int_to_bv(&self, w: ExprId, x: ExprId) -> Result<SExpr> {
+        // Destination width expression should have known integer value.
+        let width: usize = self
+            .assignment
+            .try_int_value(w)
+            .context("destination width of int2bv expression should have known integer value")?
+            .try_into()
+            .expect("width should be representable as usize");
+
+        // Build int2bv expression.
+        Ok(self.int2bv(width, self.expr_atom(x)))
     }
 
     fn width_of(&self, x: ExprId) -> Result<SExpr> {

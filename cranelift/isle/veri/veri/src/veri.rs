@@ -80,7 +80,7 @@ pub enum Expr {
     BVConcat(ExprId, ExprId),
 
     // Integer conversion.
-    Int2BV(usize, ExprId),
+    Int2BV(ExprId, ExprId),
 
     // Bitwidth.
     WidthOf(ExprId),
@@ -172,7 +172,7 @@ impl std::fmt::Display for Expr {
             Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
             Self::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
             Self::BVConcat(x, y) => write!(f, "bv_concat({}, {})", x.index(), y.index()),
-            Self::Int2BV(w, x) => write!(f, "int2bv({w}, {})", x.index()),
+            Self::Int2BV(w, x) => write!(f, "int2bv({}, {})", w.index(), x.index()),
             Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
         }
     }
@@ -1361,8 +1361,9 @@ impl<'a> ConditionsBuilder<'a> {
             }
 
             spec::Expr::Int2BV(w, x) => {
+                let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
-                Ok(self.scalar(Expr::Int2BV(*w, x)))
+                Ok(self.scalar(Expr::Int2BV(w, x)))
             }
 
             spec::Expr::WidthOf(x) => {
