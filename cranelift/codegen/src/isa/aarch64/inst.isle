@@ -3594,7 +3594,15 @@
 
 (decl pure partial simm9_from_i64 (i64) SImm9)
 (extern constructor simm9_from_i64 simm9_from_i64)
-(attr simm9_from_i64 (tag TODO))
+(spec (simm9_from_i64 value)
+      (provide (= value (sign_ext 64 result)))
+      (require
+            ; value >= -256
+            (bvsge value (bvneg (int2bv 64 256)))
+            ; value <= 255
+            (bvsle value (int2bv 64 255))
+      )
+)
 
 (decl sink_load_into_addr (Type Inst) Reg)
 (attr sink_load_into_addr (veri chain))

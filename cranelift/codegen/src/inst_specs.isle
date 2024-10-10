@@ -142,8 +142,29 @@
     )
 )
 (instantiate load
+    ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv  8)))
+    ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 16)))
+    ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 32)))
     ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 64)))
 )
 
-(attr uextend (tag TODO))
-(attr sextend (tag TODO))
+(form extend
+    ((args (bv  8)) (ret (bv  8)))
+    ((args (bv  8)) (ret (bv 16)))
+    ((args (bv  8)) (ret (bv 32)))
+    ((args (bv  8)) (ret (bv 64)))
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 16)) (ret (bv 32)))
+    ((args (bv 16)) (ret (bv 64)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 32)) (ret (bv 64)))
+    ((args (bv 64)) (ret (bv 64)))
+)
+
+(spec (uextend x)
+    (provide (= result (zero_ext (widthof result) x))))
+(instantiate uextend extend)
+
+(spec (sextend x)
+    (provide (= result (sign_ext (widthof result) x))))
+(instantiate sextend extend)

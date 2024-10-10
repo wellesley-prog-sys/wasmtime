@@ -58,6 +58,7 @@
 ;; Extract the type of a `Value`.
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
+(spec (value_type arg) (provide (= arg (widthof result))))
 
 ;; Extractor that matches a `u32` only if non-negative.
 (decl u32_nonnegative (u32) u32)

@@ -2331,13 +2331,13 @@
 
 ;;;; Rules for loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower
+(rule load_i8 (lower
        (has_type $I8 (load flags address offset)))
       (aarch64_uload8 (amode $I8 address offset) flags))
-(rule (lower
+(rule load_i16 (lower
        (has_type $I16 (load flags address offset)))
       (aarch64_uload16 (amode $I16 address offset) flags))
-(rule (lower
+(rule load_i32 (lower
        (has_type $I32 (load flags address offset)))
       (aarch64_uload32 (amode $I32 address offset) flags))
 (rule load_i64 (lower
