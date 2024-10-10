@@ -1329,7 +1329,7 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::With(decls, body) => self.spec_with(decls, body, vars),
 
-            spec::Expr::Macro(ident, args) => self.spec_macro(ident, args),
+            spec::Expr::Macro(ident, args) => self.spec_macro(ident, args, vars),
 
             spec::Expr::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
@@ -1611,7 +1611,12 @@ impl<'a> ConditionsBuilder<'a> {
         self.spec_expr(body, &with_vars)
     }
 
-    fn spec_macro(&mut self, name: &Ident, args: &[spec::Expr]) -> Result<Symbolic> {
+    fn spec_macro(
+        &mut self,
+        name: &Ident,
+        args: &[spec::Expr],
+        vars: &Variables,
+    ) -> Result<Symbolic> {
         // Lookup macro.
         let macro_defn = self
             .prog
@@ -1630,7 +1635,7 @@ impl<'a> ConditionsBuilder<'a> {
             );
         }
         for (param, arg) in zip(&macro_defn.params, args) {
-            let arg = self.spec_expr(arg, &macro_vars)?;
+            let arg = self.spec_expr(arg, vars)?;
             macro_vars.set(param.0.clone(), arg)?;
         }
 

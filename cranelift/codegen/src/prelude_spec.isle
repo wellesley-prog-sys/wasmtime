@@ -1,4 +1,10 @@
 ;; Common spec macros ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; n-bit bitvector with value zero.
 (macro (bvzero n) (zero_ext n #b0))
+
+; n-bit bitvector with value one.
 (macro (bvone n) (zero_ext n #b1))
+
+; n-bit bitvector with low m bits set.
+(macro (low_bits_mask n m) (bvsub (bvshl (bvone! n) (int2bv n m)) (bvone! n)))

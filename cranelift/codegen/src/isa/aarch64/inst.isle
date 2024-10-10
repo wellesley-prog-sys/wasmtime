@@ -1918,8 +1918,7 @@
       (provide
             (let
                   (
-                        (tymask (bvsub (bvshl (bvone! 64) (int2bv 64 ty)) (bvone! 64)))
-                        (nlow (bvand n tymask))
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
                   )
                   (= nlow
                         ; bits << (16 * shift)
@@ -1933,8 +1932,7 @@
       (require
             (let
                   (
-                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
-                        (nlow (bvand n tymask))
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
                   )
                   (or
                         (= nlow (bvand nlow #x000000000000ffff))
@@ -1953,8 +1951,7 @@
             (let
                   (
                         (n (bvnot n_inverted))
-                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
-                        (nlow (bvand n tymask))
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
                   )
                   (= nlow
                         ; bits << (16 * shift)
@@ -1969,8 +1966,7 @@
             (let
                   (
                         (n (bvnot n_inverted))
-                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
-                        (nlow (bvand n tymask))
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
                   )
                   (or
                         (= nlow (bvand nlow #x000000000000ffff))
