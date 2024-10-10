@@ -15,6 +15,7 @@ pub enum Def {
     Decl(Decl),
     Attr(Attr),
     Spec(Spec),
+    SpecMacro(SpecMacro),
     Model(Model),
     State(State),
     Form(Form),
@@ -176,6 +177,12 @@ pub enum SpecExpr {
         body: Box<SpecExpr>,
         pos: Pos,
     },
+    /// Macro expansion.
+    Macro {
+        name: Ident,
+        args: Vec<SpecExpr>,
+        pos: Pos,
+    },
     /// Pairs, currently used for switch statements.
     Pair {
         l: Box<SpecExpr>,
@@ -204,6 +211,7 @@ impl SpecExpr {
             | &Self::Match { pos, .. }
             | &Self::Let { pos, .. }
             | &Self::With { pos, .. }
+            | &Self::Macro { pos, .. }
             | &Self::Pair { pos, .. }
             | &Self::Enum { pos, .. } => pos,
         }
@@ -289,6 +297,17 @@ pub enum SpecOp {
 pub struct Arm {
     pub variant: Ident,
     pub args: Vec<Ident>,
+    pub body: SpecExpr,
+    pub pos: Pos,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SpecMacro {
+    /// Macro name.
+    pub name: Ident,
+    /// Parameter names.
+    pub params: Vec<Ident>,
+    /// Macro expansion.
     pub body: SpecExpr,
     pub pos: Pos,
 }

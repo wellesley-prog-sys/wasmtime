@@ -1918,7 +1918,7 @@
       (provide
             (let
                   (
-                        (tymask (bvsub (bvshl (zero_ext 64 #b1) (int2bv 64 ty)) (zero_ext 64 #b1)))
+                        (tymask (bvsub (bvshl (bvone! 64) (int2bv 64 ty)) (bvone! 64)))
                         (nlow (bvand n tymask))
                   )
                   (= nlow

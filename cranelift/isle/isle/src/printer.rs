@@ -93,6 +93,7 @@ impl Printable for Def {
             }
             Def::Attr(ref a) => a.to_doc(),
             Def::Spec(ref s) => s.to_doc(),
+            Def::SpecMacro(ref m) => m.to_doc(),
             Def::State(ref s) => s.to_doc(),
             Def::Model(ref m) => sexp(vec![RcDoc::text("model"), m.name.to_doc(), m.val.to_doc()]),
             Def::Form(ref f) => {
@@ -278,6 +279,11 @@ impl Printable for SpecExpr {
                 sexp(decls.iter().map(Printable::to_doc)),
                 body.to_doc(),
             ]),
+            SpecExpr::Macro { name, args, pos: _ } => sexp(
+                Vec::from([RcDoc::text(format!("{}!", name.0))])
+                    .into_iter()
+                    .chain(args.iter().map(Printable::to_doc)),
+            ),
         }
     }
 }
@@ -349,6 +355,19 @@ impl Printable for Arm {
             ),
             self.body.to_doc(),
         ])
+    }
+}
+
+impl Printable for SpecMacro {
+    fn to_doc(&self) -> RcDoc<()> {
+        let mut parts = vec![RcDoc::text("macro")];
+        parts.push(sexp(
+            Vec::from([self.name.to_doc()])
+                .into_iter()
+                .chain(self.params.iter().map(|a| a.to_doc())),
+        ));
+        parts.push(self.body.to_doc());
+        sexp(parts)
     }
 }
 

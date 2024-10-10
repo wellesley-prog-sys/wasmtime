@@ -185,6 +185,7 @@ impl<'a> Parser<'a> {
             "decl" => Def::Decl(self.parse_decl()?),
             "attr" => Def::Attr(self.parse_attr()?),
             "spec" => Def::Spec(self.parse_spec()?),
+            "macro" => Def::SpecMacro(self.parse_spec_macro()?),
             "state" => Def::State(self.parse_state()?),
             "model" => Def::Model(self.parse_model()?),
             "form" => Def::Form(self.parse_form()?),
@@ -442,6 +443,29 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_spec_macro(&mut self) -> Result<SpecMacro> {
+        let pos = self.pos();
+
+        // Signature.
+        self.expect_lparen()?;
+        let name = self.parse_ident()?;
+        let mut params = vec![];
+        while !self.is_rparen() {
+            params.push(self.parse_ident()?);
+        }
+        self.expect_rparen()?;
+
+        // Body.
+        let body = self.parse_spec_expr()?;
+
+        Ok(SpecMacro {
+            name,
+            params,
+            body,
+            pos,
+        })
+    }
+
     fn parse_spec_expr(&mut self) -> Result<SpecExpr> {
         let pos = self.pos();
         if self.is_spec_bit_vector() {
@@ -519,6 +543,14 @@ impl<'a> Parser<'a> {
                     let x = Box::new(self.parse_spec_expr()?);
                     self.expect_rparen()?;
                     Ok(SpecExpr::Discriminator { variant, x, pos })
+                } else if let Some(name) = sym.strip_suffix('!') {
+                    let name = self.str_to_ident(sym_pos, name)?;
+                    let mut args: Vec<SpecExpr> = vec![];
+                    while !self.is_rparen() {
+                        args.push(self.parse_spec_expr()?);
+                    }
+                    self.expect_rparen()?;
+                    Ok(SpecExpr::Macro { name, args, pos })
                 } else if let Ok(op) = self.parse_spec_op(sym.as_str()) {
                     let mut args: Vec<SpecExpr> = vec![];
                     while !self.is_rparen() {

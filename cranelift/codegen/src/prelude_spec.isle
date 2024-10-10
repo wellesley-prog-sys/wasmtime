@@ -1,0 +1,4 @@
+;; Common spec macros ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(macro (bvzero n) (zero_ext n #b0))
+(macro (bvone n) (zero_ext n #b1))

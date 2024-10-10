@@ -1329,6 +1329,8 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::With(decls, body) => self.spec_with(decls, body, vars),
 
+            spec::Expr::Macro(ident, args) => self.spec_macro(ident, args),
+
             spec::Expr::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
@@ -1606,6 +1608,33 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Evaluate body in new scope.
         self.spec_expr(body, &with_vars)
+    }
+
+    fn spec_macro(&mut self, name: &Ident, args: &[spec::Expr]) -> Result<Symbolic> {
+        // Lookup macro.
+        let macro_defn = self
+            .prog
+            .specenv
+            .macros
+            .get(&name.0)
+            .ok_or(format_err!("unknown macro {name}", name = name.0))?;
+
+        // Build macro expansion scope.
+        // QUESTION(mbm): should macros be able to access global state?
+        let mut macro_vars = Variables::new();
+        if macro_defn.params.len() != args.len() {
+            bail!(
+                "incorrect number of arguments for macro {name}",
+                name = name.0
+            );
+        }
+        for (param, arg) in zip(&macro_defn.params, args) {
+            let arg = self.spec_expr(arg, &macro_vars)?;
+            macro_vars.set(param.0.clone(), arg)?;
+        }
+
+        // Evaluate macro body.
+        self.spec_expr(&macro_defn.body, &macro_vars)
     }
 
     fn conditional(&mut self, c: ExprId, t: Symbolic, e: Symbolic) -> Result<Symbolic> {

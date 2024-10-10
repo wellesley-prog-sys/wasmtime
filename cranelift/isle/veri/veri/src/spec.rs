@@ -110,6 +110,8 @@ pub enum Expr {
     Let(Vec<(Ident, Expr)>, Box<Expr>),
     // With scope.
     With(Vec<Ident>, Box<Expr>),
+    // Macro expansion.
+    Macro(Ident, Vec<Expr>),
 }
 
 macro_rules! unary_expr {
@@ -349,6 +351,9 @@ impl Expr {
                 variant: variant.clone(),
                 args: args.iter().map(Expr::from_ast).collect(),
             }),
+            ast::SpecExpr::Macro { name, args, pos: _ } => {
+                Expr::Macro(name.clone(), args.iter().map(Expr::from_ast).collect())
+            }
         }
     }
 }
@@ -458,6 +463,12 @@ impl std::fmt::Display for Signature {
     }
 }
 
+pub struct Macro {
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub body: Expr,
+}
+
 pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
@@ -479,6 +490,9 @@ pub struct SpecEnv {
 
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
+
+    /// Macro definitions.
+    pub macros: HashMap<String, Macro>,
 }
 
 impl SpecEnv {
@@ -491,6 +505,7 @@ impl SpecEnv {
             term_instantiations: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
+            macros: HashMap::new(),
         };
 
         env.collect_models(defs, tyenv);
@@ -500,6 +515,7 @@ impl SpecEnv {
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv);
+        env.collect_macros(defs);
         env.check_for_chained_terms_with_spec();
 
         Ok(env)
@@ -690,6 +706,22 @@ impl SpecEnv {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    fn collect_macros(&mut self, defs: &[Def]) {
+        for def in defs {
+            if let ast::Def::SpecMacro(spec_macro) = def {
+                let body = Expr::from_ast(&spec_macro.body);
+                self.macros.insert(
+                    spec_macro.name.0.clone(),
+                    Macro {
+                        name: spec_macro.name.clone(),
+                        params: spec_macro.params.clone(),
+                        body,
+                    },
+                );
             }
         }
     }
