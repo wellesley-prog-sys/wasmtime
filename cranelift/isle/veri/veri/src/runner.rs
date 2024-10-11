@@ -11,7 +11,7 @@ use crate::{
     expand::{Chaining, Expander, Expansion},
     program::Program,
     solver::{Applicability, Solver, Verification},
-    type_inference::{self, type_constraint_system, Assignment},
+    type_inference::{self, type_constraint_system, Assignment, Choice},
     veri::Conditions,
 };
 
@@ -219,7 +219,11 @@ impl Runner {
         for solution in &solutions {
             // Show type assignment.
             for choice in &solution.choices {
-                println!("\tchoice = {}", choice);
+                match choice {
+                    Choice::TermInstantiation(term_id, sig) => {
+                        println!("\t{term}{sig}", term = self.prog.term_name(*term_id));
+                    }
+                }
             }
             println!("\t\ttype solution status = {}", solution.status);
             if self.debug {
