@@ -74,6 +74,7 @@ pub struct Runner {
     prog: Program,
     term_rule_sets: HashMap<TermId, RuleSet>,
 
+    root_term: String,
     expansion_predicates: Vec<ExpansionPredicate>,
     solver_backend: SolverBackend,
     timeout: Duration,
@@ -89,12 +90,17 @@ impl Runner {
         Ok(Self {
             prog,
             term_rule_sets,
+            root_term: "lower".to_string(),
             expansion_predicates: Vec::new(),
             solver_backend: SolverBackend::CVC5,
             timeout: Duration::from_secs(5),
             skip_solver: false,
             debug: false,
         })
+    }
+
+    pub fn set_root_term(&mut self, term: &str) {
+        self.root_term = term.to_string();
     }
 
     pub fn include_first_rule_named(&mut self) {
@@ -138,7 +144,7 @@ impl Runner {
         // TODO(mbm): don't hardcode the expansion configuration
         let chaining = Chaining::new(&self.prog, &self.term_rule_sets)?;
         let mut expander = Expander::new(&self.prog, &self.term_rule_sets, chaining);
-        expander.add_root_term_name("lower")?;
+        expander.add_root_term_name(&self.root_term)?;
         expander.set_prune_infeasible(true);
         expander.expand();
 
