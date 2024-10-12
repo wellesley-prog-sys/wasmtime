@@ -194,6 +194,7 @@ impl Printable for ModelType {
         match self {
             ModelType::Unspecified => RcDoc::text("!"),
             ModelType::Auto => RcDoc::text("_"),
+            ModelType::Unit => RcDoc::text("Unit"),
             ModelType::Int => RcDoc::text("Int"),
             ModelType::Bool => RcDoc::text("Bool"),
             ModelType::BitVec(Some(size)) => sexp(vec![RcDoc::text("bv"), RcDoc::as_string(size)]),

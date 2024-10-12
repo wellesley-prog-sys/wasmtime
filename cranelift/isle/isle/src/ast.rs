@@ -344,6 +344,8 @@ pub enum ModelType {
     Int,
     /// SMT-LIB Int
     Bool,
+    /// Unit type.
+    Unit,
     /// SMT-LIB bitvector, but with a potentially-polymorphic width
     BitVec(Option<usize>),
     /// Structured type.

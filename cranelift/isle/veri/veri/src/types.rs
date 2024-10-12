@@ -42,6 +42,7 @@ pub enum Type {
     BitVector(Width),
     Int,
     Bool,
+    Unit,
 }
 
 impl Type {
@@ -49,7 +50,7 @@ impl Type {
         match self {
             Self::Unspecified => true,
             Self::Unknown | Self::BitVector(Width::Unknown) => false,
-            Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool => true,
+            Self::BitVector(Width::Bits(_)) | Self::Int | Self::Bool | Self::Unit => true,
         }
     }
 
@@ -70,6 +71,7 @@ impl std::fmt::Display for Type {
             Self::BitVector(Width::Unknown) => write!(f, "bv _"),
             Self::Int => write!(f, "int"),
             Self::Bool => write!(f, "bool"),
+            Self::Unit => write!(f, "unit"),
         }
     }
 }
@@ -87,6 +89,7 @@ impl PartialOrd for Type {
             (Type::BitVector(l), Type::BitVector(r)) => l.partial_cmp(r),
             (Type::Int, Type::Int) => Some(Ordering::Equal),
             (Type::Bool, Type::Bool) => Some(Ordering::Equal),
+            (Type::Unit, Type::Unit) => Some(Ordering::Equal),
             (_, _) => None,
         }
     }
@@ -191,6 +194,7 @@ impl Compound {
             ModelType::Auto => Self::Primitive(Type::Unknown),
             ModelType::Int => Self::Primitive(Type::Int),
             ModelType::Bool => Self::Primitive(Type::Bool),
+            ModelType::Unit => Self::Primitive(Type::Unit),
             ModelType::BitVec(None) => Self::Primitive(Type::BitVector(Width::Unknown)),
             ModelType::BitVec(Some(bits)) => Self::Primitive(Type::BitVector(Width::Bits(*bits))),
             ModelType::Struct(fields) => Self::Struct(
@@ -378,6 +382,7 @@ mod tests {
             Type::BitVector(Width::Bits(64)),
             Type::Int,
             Type::Bool,
+            Type::Unit,
         ]);
     }
 }

@@ -43,6 +43,9 @@ impl std::fmt::Display for Verification {
     }
 }
 
+static UNSPECIFIED_SORT: &str = "Unspecified";
+static UNIT_SORT: &str = "Unit";
+
 pub struct Solver<'a> {
     smt: Context,
     conditions: &'a Conditions,
@@ -62,8 +65,19 @@ impl<'a> Solver<'a> {
             assignment,
             fresh_idx: 0,
         };
-        solver.smt.set_logic("ALL")?;
+        solver.prelude()?;
         Ok(solver)
+    }
+
+    fn prelude(&mut self) -> Result<()> {
+        // Set logic. Required for some SMT solvers.
+        self.smt.set_logic("ALL")?;
+
+        // Declare sorts for special-case types.
+        self.smt.declare_sort(UNSPECIFIED_SORT, 0)?;
+        self.smt.declare_sort(UNIT_SORT, 0)?;
+
+        Ok(())
     }
 
     pub fn encode(&mut self) -> Result<()> {
@@ -151,8 +165,8 @@ impl<'a> Solver<'a> {
             }
             Type::Int => Ok(self.smt.int_sort()),
             Type::Bool => Ok(self.smt.bool_sort()),
-            // Model unspecified variables as an unconstrained boolean.
-            Type::Unspecified => Ok(self.smt.bool_sort()),
+            Type::Unspecified => Ok(self.smt.atom(UNSPECIFIED_SORT)),
+            Type::Unit => Ok(self.smt.atom(UNIT_SORT)),
             Type::Unknown | Type::BitVector(Width::Unknown) => {
                 bail!("no smt2 sort for non-concrete type {ty}")
             }
