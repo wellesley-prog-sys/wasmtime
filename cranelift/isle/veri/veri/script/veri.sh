@@ -43,6 +43,7 @@ cargo run --bin veri --profile "${profile}" -- \
     --work-dir "${tmp_dir}" \
     --name "${arch}" \
     --timeout 10 \
+    --log-dir "${output_dir}/log" \
     --skip-tag TODO \
     "$@" \
     | tee "${output_dir}/${arch}.veri"

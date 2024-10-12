@@ -1,4 +1,10 @@
-use std::{cmp::max, collections::HashMap, path::PathBuf, time::Duration};
+use std::{
+    cmp::max,
+    collections::HashMap,
+    fs::File,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{bail, format_err, Result};
 use cranelift_isle::{
@@ -14,6 +20,8 @@ use crate::{
     type_inference::{self, type_constraint_system, Assignment, Choice},
     veri::Conditions,
 };
+
+const LOG_DIR: &str = ".veriisle";
 
 pub enum SolverBackend {
     Z3,
@@ -78,6 +86,7 @@ pub struct Runner {
     expansion_predicates: Vec<ExpansionPredicate>,
     solver_backend: SolverBackend,
     timeout: Duration,
+    log_dir: PathBuf,
     skip_solver: bool,
     debug: bool,
 }
@@ -94,6 +103,7 @@ impl Runner {
             expansion_predicates: Vec::new(),
             solver_backend: SolverBackend::CVC5,
             timeout: Duration::from_secs(5),
+            log_dir: PathBuf::from(LOG_DIR),
             skip_solver: false,
             debug: false,
         })
@@ -131,6 +141,10 @@ impl Runner {
         self.timeout = timeout;
     }
 
+    pub fn set_log_dir(&mut self, path: PathBuf) {
+        self.log_dir = path;
+    }
+
     pub fn skip_solver(&mut self, skip: bool) {
         self.skip_solver = skip;
     }
@@ -140,6 +154,11 @@ impl Runner {
     }
 
     pub fn run(&self) -> Result<()> {
+        // Clean log directory.
+        if self.log_dir.exists() {
+            std::fs::remove_dir_all(&self.log_dir)?;
+        }
+
         // Generate expansions.
         // TODO(mbm): don't hardcode the expansion configuration
         let chaining = Chaining::new(&self.prog, &self.term_rule_sets)?;
@@ -162,7 +181,8 @@ impl Runner {
                 print_expansion(&self.prog, expansion);
             }
 
-            self.verify_expansion(expansion)?;
+            let expansion_log_dir = self.log_dir.join(format!("{:05}", i));
+            self.verify_expansion(expansion, expansion_log_dir)?;
         }
 
         Ok(())
@@ -205,7 +225,7 @@ impl Runner {
         }
     }
 
-    fn verify_expansion(&self, expansion: &Expansion) -> Result<()> {
+    fn verify_expansion(&self, expansion: &Expansion, log_dir: std::path::PathBuf) -> Result<()> {
         // Verification conditions.
         let conditions = Conditions::from_expansion(expansion, &self.prog)?;
         if self.debug {
@@ -222,7 +242,7 @@ impl Runner {
         let type_solver = type_inference::Solver::new();
         let solutions = type_solver.solve(&system);
 
-        for solution in &solutions {
+        for (i, solution) in solutions.iter().enumerate() {
             // Show type assignment.
             for choice in &solution.choices {
                 match choice {
@@ -251,7 +271,12 @@ impl Runner {
                 continue;
             }
 
-            self.verify_expansion_type_instantiation(&conditions, &solution.assignment)?;
+            let solution_log_dir = log_dir.join(format!("{:03}", i));
+            self.verify_expansion_type_instantiation(
+                &conditions,
+                &solution.assignment,
+                solution_log_dir,
+            )?;
         }
 
         Ok(())
@@ -261,12 +286,15 @@ impl Runner {
         &self,
         conditions: &Conditions,
         assignment: &Assignment,
+        log_dir: std::path::PathBuf,
     ) -> Result<()> {
         // Solve.
         let binary = self.solver_backend.prog();
         let args = self.solver_backend.args(self.timeout);
+        let replay_file = Self::open_log_file(log_dir, "solver.smt2")?;
         let smt = easy_smt::ContextBuilder::new()
             .solver(binary, &args)
+            .replay_file(Some(replay_file))
             .build()?;
 
         let mut solver = Solver::new(smt, conditions, assignment)?;
@@ -302,5 +330,12 @@ impl Runner {
             .ok_or(format_err!("expansion should have at least one rule"))?;
         let rule = self.prog.rule(*rule_id);
         Ok(rule.identifier(&self.prog.tyenv, &self.prog.files))
+    }
+
+    fn open_log_file<P: AsRef<Path>>(log_dir: std::path::PathBuf, name: P) -> Result<File> {
+        std::fs::create_dir_all(&log_dir)?;
+        let path = log_dir.join(name);
+        let file = File::create(&path)?;
+        Ok(file)
     }
 }

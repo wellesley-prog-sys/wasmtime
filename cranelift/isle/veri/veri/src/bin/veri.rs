@@ -35,6 +35,10 @@ struct Opts {
     #[arg(long, default_value = "10")]
     timeout: u64,
 
+    /// Log directory.
+    #[arg(long)]
+    log_dir: Option<std::path::PathBuf>,
+
     /// Skip solver.
     #[arg(long, env = "ISLE_VERI_SKIP_SOLVER")]
     skip_solver: bool,
@@ -97,9 +101,11 @@ fn main() -> Result<()> {
 
     runner.set_solver_backend(opts.solver_backend.into());
     runner.set_timeout(Duration::from_secs(opts.timeout));
+    if let Some(log_dir) = opts.log_dir {
+        runner.set_log_dir(log_dir);
+    }
     runner.skip_solver(opts.skip_solver);
     runner.debug(opts.debug);
-    // TODO: smt2_replay_path: std::path::PathBuf,
 
     // Run.
     runner.run()
