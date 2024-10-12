@@ -239,6 +239,7 @@ impl<'a> Solver<'a> {
             Const::Bool(false) => self.smt.false_(),
             Const::Int(v) => self.smt.numeral(v),
             Const::BitVector(w, v) => self.smt.binary(w, v),
+            Const::Unspecified => unimplemented!("constant of unspecified type"),
         }
     }
 
@@ -404,13 +405,16 @@ impl<'a> Solver<'a> {
         ])
     }
 
-    /// Parse a constant SMT literal.
+    /// Parse a constant SMT expression.
     fn const_from_sexpr(&self, sexpr: SExpr) -> Result<Const> {
-        let atom = match self.smt.get(sexpr) {
-            SExprData::Atom(a) => a,
-            SExprData::List(_) => bail!("non-atomic smt expression is not a constant"),
-        };
+        match self.smt.get(sexpr) {
+            SExprData::Atom(a) => Self::const_from_literal(a),
+            SExprData::List(exprs) => self.const_from_qualified_abstract_value(exprs),
+        }
+    }
 
+    /// Parse a constant from an SMT literal.
+    fn const_from_literal(atom: &str) -> Result<Const> {
         if atom == "true" {
             Ok(Const::Bool(true))
         } else if atom == "false" {
@@ -422,7 +426,42 @@ impl<'a> Solver<'a> {
         } else if atom.starts_with(|c: char| c.is_ascii_digit()) {
             Ok(Const::Int(atom.parse()?))
         } else {
-            bail!("unsupported smt constant: {atom}")
+            bail!("unsupported smt literal: {atom}")
+        }
+    }
+
+    /// Parse a constant value of a declared sort from an SMT qualified abstract value.
+    fn const_from_qualified_abstract_value(&self, exprs: &[SExpr]) -> Result<Const> {
+        // This logic is specific to CVC5's representation of declared sort
+        // abstract values. Z3 uses a different format.  This function is
+        // therefore careful to check for the exact format it expects from CVC5.
+
+        // Expect a list of atoms.
+        let atoms = exprs
+            .iter()
+            .map(|e| match self.smt.get(*e) {
+                SExprData::Atom(a) => Ok(a),
+                SExprData::List(_) => bail!("expected atom in qualified identifier"),
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        // Expect the list to be of the form (as @<abstract_value> <sort>).
+        let ["as", value, sort] = atoms.as_slice() else {
+            bail!("unsupported qualified identifier: {atoms:?}");
+        };
+
+        // Expect an abstract value.
+        if !value.starts_with('@') {
+            bail!("expected qualified identifier constant to have abstract value");
+        }
+
+        // Construct constant based on the sort.
+        if sort == &UNSPECIFIED_SORT {
+            Ok(Const::Unspecified)
+        } else if sort == &UNIT_SORT {
+            todo!("unit sort")
+        } else {
+            bail!("unknown sort: '{sort}'");
         }
     }
 

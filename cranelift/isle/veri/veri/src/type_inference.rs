@@ -1030,6 +1030,14 @@ mod tests {
     }
 
     #[test]
+    fn test_type_value_partial_order_unspecified() {
+        assert_strictly_increasing(&[
+            TypeValue::Type(Type::Unspecified),
+            TypeValue::Value(Const::Unspecified),
+        ]);
+    }
+
+    #[test]
     fn test_type_value_partial_order_properties() {
         assert_partial_order_properties(&[
             // Unknown
@@ -1050,6 +1058,9 @@ mod tests {
             TypeValue::Type(Type::Bool),
             TypeValue::Value(Const::Bool(false)),
             TypeValue::Value(Const::Bool(true)),
+            // Unspecified
+            TypeValue::Type(Type::Unspecified),
+            TypeValue::Value(Const::Unspecified),
         ]);
     }
 }

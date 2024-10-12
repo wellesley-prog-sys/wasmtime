@@ -307,6 +307,7 @@ pub enum Const {
     Bool(bool),
     Int(i128),
     BitVector(usize, u128),
+    Unspecified,
 }
 
 impl Const {
@@ -315,6 +316,7 @@ impl Const {
             Self::Bool(_) => Type::Bool,
             Self::Int(_) => Type::Int,
             Self::BitVector(w, _) => Type::BitVector(Width::Bits(*w)),
+            Self::Unspecified => Type::Unspecified,
         }
     }
 
@@ -345,6 +347,7 @@ impl std::fmt::Display for Const {
                     write!(f, "#b{v:0>bits$b}")
                 }
             }
+            Self::Unspecified => write!(f, "\u{2a33}"),
         }
     }
 }
