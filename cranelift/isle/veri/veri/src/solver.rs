@@ -176,7 +176,10 @@ impl<'a> Solver<'a> {
     fn assign_expr(&mut self, x: ExprId, expr: &Expr) -> Result<()> {
         let lhs = self.smt.atom(self.expr_name(x));
         let rhs = self.expr_to_smt(expr)?;
-        Ok(self.smt.assert(self.smt.eq(lhs, rhs))?)
+        Ok(self.smt.assert(
+            self.smt
+                .named(format!("expr{}", x.index()), self.smt.eq(lhs, rhs)),
+        )?)
     }
 
     fn expr_to_smt(&mut self, expr: &Expr) -> Result<SExpr> {
