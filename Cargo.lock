@@ -756,6 +756,7 @@ dependencies = [
  "easy-smt",
  "env_logger",
  "log",
+ "tempfile",
 ]
 
 [[package]]
