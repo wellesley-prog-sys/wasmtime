@@ -11,3 +11,18 @@
         (not (:active isa_load))
     )
 )
+
+; Parameters of a store operation.
+(state isa_store
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+            (value (bv 64))
+        )
+    )
+    (default
+        (not (:active isa_store))
+    )
+)

@@ -8,7 +8,7 @@ use cranelift_codegen::{
 
 use crate::{
     constraints::{Scope, Target},
-    memory::ReadEffect,
+    memory::{ReadEffect, SetEffect},
 };
 
 pub fn gpreg(i: usize) -> Target {
@@ -35,6 +35,11 @@ pub fn state() -> Scope {
     // Memory effects.
     let read_effect = ReadEffect::new();
     for target in read_effect.targets() {
+        scope.global(target.clone());
+    }
+
+    let set_effect = SetEffect::new();
+    for target in set_effect.targets() {
         scope.global(target.clone());
     }
 
