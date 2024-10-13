@@ -74,6 +74,7 @@
 ;; Construct an empty `InstOutput`.
 (decl output_none () InstOutput)
 (extern constructor output_none output_none)
+(spec (output_none) (provide (= result #b1)))
 
 ;; Construct a single-element `InstOutput`.
 (decl output (ValueRegs) InstOutput)
@@ -443,6 +444,7 @@
 
 ;; Emit given side-effectful instruction.
 (decl emit_side_effect (SideEffectNoResult) Unit)
+(spec (emit_side_effect arg) (provide true))
 (rule (emit_side_effect (SideEffectNoResult.Inst inst))
       (emit inst))
 (rule (emit_side_effect (SideEffectNoResult.Inst2 inst1 inst2))

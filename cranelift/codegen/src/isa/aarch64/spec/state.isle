@@ -23,6 +23,13 @@
         )
     )
     (default
-        (not (:active isa_store))
+        (and
+            ; Store is not active.
+            (not (:active isa_store))
+
+            ; Must provide a fixed size in the default case, otherwise type
+            ; inference is underconstrained.
+            (= (:size_bits isa_store) 1)
+        )
     )
 )
