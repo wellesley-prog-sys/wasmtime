@@ -980,11 +980,11 @@ fn define_extend() -> SpecConfig {
                         spec_eq_bool(spec_var("signed".to_string()), *signed),
                         spec_eq(
                             spec_var("from_bits".to_string()),
-                            spec_const_int((*from_bits).into()),
+                            spec_const_bit_vector((*from_bits).into(), 8),
                         ),
                         spec_eq(
                             spec_var("to_bits".to_string()),
-                            spec_const_int((*to_bits).into()),
+                            spec_const_bit_vector((*to_bits).into(), 8),
                         ),
                     ],
                     cases: Cases::Instruction(InstConfig {
