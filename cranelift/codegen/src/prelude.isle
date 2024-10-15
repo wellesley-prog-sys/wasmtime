@@ -59,7 +59,6 @@
 (type ValueSlice (primitive ValueSlice))
 
 ;; Extract the type of a `Value`.
-(spec (value_type arg) (provide (= arg (widthof result))))
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 (spec (value_type arg) (provide (= arg (widthof result))))
@@ -572,7 +571,7 @@
 ;; An extractor that only matches types that can fit in 32 bits.
 (spec (fits_in_32 arg)
       (provide (= result arg))
-      (require (<= arg 32)))
+      (match (<= arg 32)))
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)
 

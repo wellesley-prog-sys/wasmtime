@@ -841,7 +841,10 @@ impl Solver {
 
         // If we do, merge this type value with the existing one.
         let existing = &self.assignment.expr_type_value[&x];
-        let merged = TypeValue::merge(existing, &tv).ok_or(Status::Inapplicable)?;
+        let merged = TypeValue::merge(existing, &tv).ok_or({
+            // log::debug!("inapplicable set type value: {existing:?} = {tv:?}");
+            Status::Inapplicable
+        })?;
         if merged != *existing {
             self.assignment.expr_type_value.insert(x, merged);
             return Ok(true);
@@ -919,11 +922,17 @@ impl Solver {
             }
             (Some(xw), None, Some(rw)) => {
                 // Width equation: |l| = |x| - |r|
-                self.set_bit_vector_width(l, xw.checked_sub(rw).ok_or(Status::Inapplicable)?)
+                self.set_bit_vector_width(l, xw.checked_sub(rw).ok_or({
+                    log::debug!("inapplicable concat xw - rw: {l:?} = {r:?}");
+                    Status::Inapplicable
+                })?)
             }
             (Some(xw), Some(lw), None) => {
                 // Width equation: |r| = |x| - |l|
-                self.set_bit_vector_width(r, xw.checked_sub(lw).ok_or(Status::Inapplicable)?)
+                self.set_bit_vector_width(r, xw.checked_sub(lw).ok_or({
+                    log::debug!("inapplicable concat xw - lw: {l:?} = {r:?}");
+                    Status::Inapplicable
+                })?)
             }
 
             // Zero or one known: cannot deduce anything.
@@ -935,6 +944,7 @@ impl Solver {
             // All known: verify correctness.
             (Some(x), Some(y), Some(z)) => {
                 if x != y + z {
+                    log::debug!("inapplicable concat known: {l:?} = {r:?}");
                     Err(Status::Inapplicable)
                 } else {
                     Ok(false)
