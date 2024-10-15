@@ -22,6 +22,7 @@ pub mod expand;
 pub mod explorer;
 pub mod program;
 pub mod reachability;
+pub mod runner;
 pub mod solver;
 pub mod spec;
 pub mod trie_again;

@@ -31,6 +31,10 @@ jobs:
           path: main
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: main
       - name: Install LLVM
         env:
           LLVM_VERSION: 18

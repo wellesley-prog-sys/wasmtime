@@ -74,6 +74,7 @@
 ;; Construct an empty `InstOutput`.
 (decl output_none () InstOutput)
 (extern constructor output_none output_none)
+(spec (output_none) (provide (= result #b1)))
 
 ;; Construct a single-element `InstOutput`.
 (decl output (ValueRegs) InstOutput)
@@ -322,7 +323,7 @@
 (decl has_type (Type Inst) Inst)
 (spec (has_type ty arg)
       (provide (= result arg))
-      (require (= ty (widthof arg))))
+      (match (= ty (widthof arg))))
 (extractor (has_type ty inst)
            (and (result_type ty)
                 inst))
@@ -331,7 +332,7 @@
 (decl def_inst (Inst) Value)
 (spec (def_inst arg)
       (provide true)
-      (require (= result arg)))
+      (match (= result arg)))
 (extern extractor def_inst def_inst)
 
 ;; Extract a constant `u64` from a value defined by an `iconst`.
@@ -344,7 +345,7 @@
 (decl i32_from_iconst (i32) Value)
 (spec (i32_from_iconst arg)
       (provide (= arg (extract 31 0 (sign_ext 64 result))))
-      (require
+      (match
             ; result <= i32::MAX
             (bvsle (sign_ext 64 result) #x000000007fffffff)
             ; i32::MIN <= result
@@ -384,7 +385,7 @@
 (decl uimm8 (u8) Imm64)
 (spec (uimm8 arg)
       (provide (= result (zero_ext 64 arg)))
-      (require
+      (match
             (bvsge result #x0000000000000000) ; >= 0
             (bvslt result #x0000000000000100) ; < 256
       )
@@ -443,6 +444,7 @@
 
 ;; Emit given side-effectful instruction.
 (decl emit_side_effect (SideEffectNoResult) Unit)
+(spec (emit_side_effect arg) (provide true))
 (rule (emit_side_effect (SideEffectNoResult.Inst inst))
       (emit inst))
 (rule (emit_side_effect (SideEffectNoResult.Inst2 inst1 inst2))

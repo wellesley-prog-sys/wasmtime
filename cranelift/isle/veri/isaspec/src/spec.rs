@@ -339,5 +339,13 @@ pub fn substitute(expr: SpecExpr, substitutions: &HashMap<String, SpecExpr>) -> 
                 .collect::<Result<_>>()?,
             pos,
         },
+        SpecExpr::Macro { name, args, pos } => SpecExpr::Macro {
+            name,
+            args: args
+                .into_iter()
+                .map(|arg| substitute(arg, substitutions))
+                .collect::<Result<_>>()?,
+            pos,
+        },
     })
 }

@@ -752,9 +752,11 @@ dependencies = [
  "clap",
  "cranelift-codegen-meta",
  "cranelift-isle",
+ "cranelift-isle-veri-test-macros",
  "easy-smt",
  "env_logger",
  "log",
+ "tempfile",
 ]
 
 [[package]]

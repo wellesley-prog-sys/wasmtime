@@ -93,6 +93,7 @@ impl Printable for Def {
             }
             Def::Attr(ref a) => a.to_doc(),
             Def::Spec(ref s) => s.to_doc(),
+            Def::SpecMacro(ref m) => m.to_doc(),
             Def::State(ref s) => s.to_doc(),
             Def::Model(ref m) => sexp(vec![RcDoc::text("model"), m.name.to_doc(), m.val.to_doc()]),
             Def::Form(ref f) => {
@@ -193,6 +194,7 @@ impl Printable for ModelType {
         match self {
             ModelType::Unspecified => RcDoc::text("!"),
             ModelType::Auto => RcDoc::text("_"),
+            ModelType::Unit => RcDoc::text("Unit"),
             ModelType::Int => RcDoc::text("Int"),
             ModelType::Bool => RcDoc::text("Bool"),
             ModelType::BitVec(Some(size)) => sexp(vec![RcDoc::text("bv"), RcDoc::as_string(size)]),
@@ -278,6 +280,11 @@ impl Printable for SpecExpr {
                 sexp(decls.iter().map(Printable::to_doc)),
                 body.to_doc(),
             ]),
+            SpecExpr::Macro { name, args, pos: _ } => sexp(
+                Vec::from([RcDoc::text(format!("{}!", name.0))])
+                    .into_iter()
+                    .chain(args.iter().map(Printable::to_doc)),
+            ),
         }
     }
 }
@@ -352,6 +359,19 @@ impl Printable for Arm {
     }
 }
 
+impl Printable for SpecMacro {
+    fn to_doc(&self) -> RcDoc<()> {
+        let mut parts = vec![RcDoc::text("macro")];
+        parts.push(sexp(
+            Vec::from([self.name.to_doc()])
+                .into_iter()
+                .chain(self.params.iter().map(|a| a.to_doc())),
+        ));
+        parts.push(self.body.to_doc());
+        sexp(parts)
+    }
+}
+
 impl Printable for Spec {
     fn to_doc(&self) -> RcDoc<()> {
         let mut parts = vec![RcDoc::text("spec")];
@@ -379,6 +399,13 @@ impl Printable for Spec {
                 Vec::from([RcDoc::text("require")])
                     .into_iter()
                     .chain(self.requires.iter().map(|e| e.to_doc())),
+            ));
+        }
+        if !self.matches.is_empty() {
+            parts.push(sexp(
+                Vec::from([RcDoc::text("match")])
+                    .into_iter()
+                    .chain(self.matches.iter().map(|e| e.to_doc())),
             ));
         }
         sexp(parts)

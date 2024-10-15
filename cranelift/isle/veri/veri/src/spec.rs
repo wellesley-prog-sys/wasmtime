@@ -2,7 +2,7 @@ use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
     ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
-    sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
+    sema::{ReturnKind, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
@@ -94,7 +94,7 @@ pub enum Expr {
     BVConcat(Box<Expr>, Box<Expr>),
 
     // Convert integer to bitvector.
-    Int2BV(usize, Box<Expr>),
+    Int2BV(Box<Expr>, Box<Expr>),
 
     //// Convert bitvector to integer
     //BVToInt(Box<Expr>),
@@ -109,6 +109,8 @@ pub enum Expr {
     Let(Vec<(Ident, Expr)>, Box<Expr>),
     // With scope.
     With(Vec<Ident>, Box<Expr>),
+    // Macro expansion.
+    Macro(Ident, Vec<Expr>),
 }
 
 macro_rules! unary_expr {
@@ -255,18 +257,7 @@ impl Expr {
                         Box::new(Expr::from_ast(&args[2])),
                     )
                 }
-                SpecOp::Int2BV => {
-                    // TODO(mbm): return error instead of assert
-                    assert_eq!(
-                        args.len(),
-                        2,
-                        "Unexpected number of args for int2bv operator at {pos:?}",
-                    );
-                    Expr::Int2BV(
-                        spec_expr_to_usize(&args[0]).unwrap(),
-                        Box::new(Expr::from_ast(&args[1])),
-                    )
-                }
+                SpecOp::Int2BV => binary_expr!(Expr::Int2BV, args, pos),
                 //SpecOp::Subs => {
                 //    assert_eq!(
                 //        args.len(),
@@ -348,6 +339,9 @@ impl Expr {
                 variant: variant.clone(),
                 args: args.iter().map(Expr::from_ast).collect(),
             }),
+            ast::SpecExpr::Macro { name, args, pos: _ } => {
+                Expr::Macro(name.clone(), args.iter().map(Expr::from_ast).collect())
+            }
         }
     }
 }
@@ -387,6 +381,7 @@ pub struct Spec {
     pub ret: Ident,
     pub provides: Vec<Expr>,
     pub requires: Vec<Expr>,
+    pub matches: Vec<Expr>,
     pub modifies: Vec<Ident>,
     pub pos: Pos,
 }
@@ -398,6 +393,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: Vec::new(),
             requires: Vec::new(),
+            matches: Vec::new(),
             modifies: Vec::new(),
             pos: Pos::default(),
         }
@@ -409,6 +405,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: spec.provides.iter().map(Expr::from_ast).collect(),
             requires: spec.requires.iter().map(Expr::from_ast).collect(),
+            matches: spec.matches.iter().map(Expr::from_ast).collect(),
             modifies: spec.modifies.clone(),
             pos: spec.pos,
         }
@@ -457,6 +454,12 @@ impl std::fmt::Display for Signature {
     }
 }
 
+pub struct Macro {
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub body: Expr,
+}
+
 pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
@@ -478,6 +481,9 @@ pub struct SpecEnv {
 
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
+
+    /// Macro definitions.
+    pub macros: HashMap<String, Macro>,
 }
 
 impl SpecEnv {
@@ -490,6 +496,7 @@ impl SpecEnv {
             term_instantiations: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
+            macros: HashMap::new(),
         };
 
         env.collect_models(defs, tyenv);
@@ -499,6 +506,8 @@ impl SpecEnv {
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv);
+        env.collect_macros(defs);
+        env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
         env.check_for_chained_terms_with_spec();
 
         Ok(env)
@@ -691,6 +700,61 @@ impl SpecEnv {
                 }
             }
         }
+    }
+
+    fn collect_macros(&mut self, defs: &[Def]) {
+        for def in defs {
+            if let ast::Def::SpecMacro(spec_macro) = def {
+                let body = Expr::from_ast(&spec_macro.body);
+                self.macros.insert(
+                    spec_macro.name.0.clone(),
+                    Macro {
+                        name: spec_macro.name.clone(),
+                        params: spec_macro.params.clone(),
+                        body,
+                    },
+                );
+            }
+        }
+    }
+
+    fn check_option_return_term_specs_uses_matches(
+        &self,
+        termenv: &TermEnv,
+        tyenv: &TypeEnv,
+    ) -> Result<()> {
+        for (term_id, spec) in &self.term_spec {
+            let term = &termenv.terms[term_id.index()];
+            if !Self::term_returns_option(term, tyenv) {
+                continue;
+            }
+            if !spec.requires.is_empty() {
+                bail!(
+                    "term '{name}' requires should be match",
+                    name = tyenv.syms[term.name.index()],
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn term_returns_option(term: &Term, tyenv: &TypeEnv) -> bool {
+        // Constructor
+        if term.has_constructor() {
+            return term.is_partial();
+        }
+
+        // External extractor
+        if let Some(sig) = term.extractor_sig(&tyenv) {
+            return sig.ret_kind == ReturnKind::Option;
+        }
+
+        // Extractor
+        if term.has_extractor() {
+            return true;
+        }
+
+        false
     }
 
     fn check_for_chained_terms_with_spec(&self) {

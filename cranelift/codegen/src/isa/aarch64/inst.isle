@@ -1001,8 +1001,6 @@
                        (end Reg)
                        (step Imm12))))
 
-(attr MInst.MovWide (tag TODO))
-
 (attr MInst.FpuMove32 (tag float))
 (attr MInst.FpuMove64 (tag float))
 (attr MInst.FpuMove128 (tag float))
@@ -1219,6 +1217,14 @@
 )
 
 (type MoveWideConst (primitive MoveWideConst))
+(model MoveWideConst
+      (type
+            (struct
+                  (shift (bv 2))
+                  (bits (bv 16))
+            )
+      )
+)
 
 (type NZCV (primitive NZCV))
 (model NZCV
@@ -1274,7 +1280,7 @@
 (type MemLabel extern (enum))
 (model MemLabel (type !))
 (type SImm9 extern (enum))
-(model SImm9 (type !))
+(model SImm9 (type (bv 9)))
 (type UImm12Scaled extern (enum))
 (model UImm12Scaled (type !))
 
@@ -1380,7 +1386,6 @@
         (SlotOffset
          (off i64))))
 
-(attr AMode.Unscaled (tag TODO))
 (attr AMode.UnsignedOffset (tag TODO))
 
 ;; A memory argument to a load/store-pair.
@@ -1909,9 +1914,69 @@
 
 (decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)
 (extern constructor move_wide_const_from_u64 move_wide_const_from_u64)
+(spec (move_wide_const_from_u64 ty n)
+      (provide
+            (let
+                  (
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
+                  )
+                  (= nlow
+                        ; bits << (16 * shift)
+                        (bvshl
+                              (zero_ext 64 (:bits result))
+                              (bvmul (int2bv 64 16) (zero_ext 64 (:shift result)))
+                        )
+                  )
+            )
+      )
+      (match
+            (let
+                  (
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
+                  )
+                  (or
+                        (= nlow (bvand nlow #x000000000000ffff))
+                        (= nlow (bvand nlow #x00000000ffff0000))
+                        (= nlow (bvand nlow #x0000ffff00000000))
+                        (= nlow (bvand nlow #xffff000000000000))
+                  )
+            )
+      )
+)
 
 (decl pure partial move_wide_const_from_inverted_u64 (Type u64) MoveWideConst)
 (extern constructor move_wide_const_from_inverted_u64 move_wide_const_from_inverted_u64)
+(spec (move_wide_const_from_inverted_u64 ty n_inverted)
+      (provide
+            (let
+                  (
+                        (n (bvnot n_inverted))
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
+                  )
+                  (= nlow
+                        ; bits << (16 * shift)
+                        (bvshl
+                              (zero_ext 64 (:bits result))
+                              (bvmul (int2bv 64 16) (zero_ext 64 (:shift result)))
+                        )
+                  )
+            )
+      )
+      (match
+            (let
+                  (
+                        (n (bvnot n_inverted))
+                        (nlow (bvand n (low_bits_mask! 64 ty)))
+                  )
+                  (or
+                        (= nlow (bvand nlow #x000000000000ffff))
+                        (= nlow (bvand nlow #x00000000ffff0000))
+                        (= nlow (bvand nlow #x0000ffff00000000))
+                        (= nlow (bvand nlow #xffff000000000000))
+                  )
+            )
+      )
+)
 
 (decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
 (attr imm_logic_from_u64 (tag TODO))
@@ -1925,7 +1990,7 @@
 ; REVIEW(mbm): actually specify the requirements of logical immediates?
 (spec (imm_logic_from_imm64 ty imm64)
       (provide (= result imm64))
-      (require (or (= ty 32) (= ty 64))))
+      (match (or (= ty 32) (= ty 64))))
 
 (decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
@@ -1946,7 +2011,7 @@
                   )
             )
       )
-      (require
+      (match
             (or
                   (= result (bvand result (zero_ext 64 #x000fff)))
                   (= result (bvand result (zero_ext 64 #xfff000)))
@@ -2017,7 +2082,7 @@
                   )
             )
       )
-      (require
+      (match
             ; imm < 64
             (bvult imm #x0000000000000040)
             ; ty <= 255
@@ -2036,7 +2101,7 @@
 (extern extractor integral_ty integral_ty)
 (spec (integral_ty ty)
       (provide (= result ty))
-      (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+      (match (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
@@ -2060,7 +2125,7 @@
                   )
             )
       )
-      (require
+      (match
             (let
                   (
                         (width 128)
@@ -3532,7 +3597,15 @@
 
 (decl pure partial simm9_from_i64 (i64) SImm9)
 (extern constructor simm9_from_i64 simm9_from_i64)
-
+(spec (simm9_from_i64 value)
+      (provide (= value (sign_ext 64 result)))
+      (match
+            ; value >= -256
+            (bvsge value (bvneg (int2bv 64 256)))
+            ; value <= 255
+            (bvsle value (int2bv 64 255))
+      )
+)
 
 (decl sink_load_into_addr (Type Inst) Reg)
 (attr sink_load_into_addr (veri chain))

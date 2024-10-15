@@ -397,8 +397,10 @@ impl<'a> SystemBuilder<'a> {
                 self.concat(x, *y, *z);
             }
             Expr::Int2BV(w, y) => {
-                self.bit_vector_of_width(x, *w);
+                self.bit_vector(x);
+                self.integer(*w);
                 self.integer(*y);
+                self.width_of(x, *w);
             }
             Expr::WidthOf(y) => {
                 self.integer(x);
@@ -1034,6 +1036,14 @@ mod tests {
     }
 
     #[test]
+    fn test_type_value_partial_order_unspecified() {
+        assert_strictly_increasing(&[
+            TypeValue::Type(Type::Unspecified),
+            TypeValue::Value(Const::Unspecified),
+        ]);
+    }
+
+    #[test]
     fn test_type_value_partial_order_properties() {
         assert_partial_order_properties(&[
             // Unknown
@@ -1054,6 +1064,9 @@ mod tests {
             TypeValue::Type(Type::Bool),
             TypeValue::Value(Const::Bool(false)),
             TypeValue::Value(Const::Bool(true)),
+            // Unspecified
+            TypeValue::Type(Type::Unspecified),
+            TypeValue::Value(Const::Unspecified),
         ]);
     }
 }

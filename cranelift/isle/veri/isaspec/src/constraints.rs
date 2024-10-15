@@ -10,7 +10,7 @@ use cranelift_isle::ast::{SpecExpr, SpecOp};
 use cranelift_isle_veri_aslp::ast::{Block, Expr, Func, LExpr, Slice, Stmt};
 use tracing::debug;
 
-use crate::memory::ReadEffect;
+use crate::memory::{ReadEffect, SetEffect};
 use crate::spec::*;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
@@ -389,7 +389,11 @@ impl Translator {
 
                 Ok(())
             }
-            _ => todo!("statement: {stmt:?}"),
+            Stmt::Call {
+                func,
+                types: _,
+                args,
+            } => self.call(func, args),
         }
     }
 
@@ -572,6 +576,16 @@ impl Translator {
         }
     }
 
+    fn call(&mut self, func: &Func, args: &[Expr]) -> Result<()> {
+        match func.name.as_str() {
+            "Mem.set" => {
+                let (addr, size, access, value) = expect_quaternary(args)?;
+                self.mem_set(addr, size, access, value)
+            }
+            unexpected => todo!("call: {unexpected}"),
+        }
+    }
+
     fn slice(&mut self, x: &Expr, slice: &Slice) -> Result<SpecExpr> {
         match slice {
             Slice::LowWidth(l, w) => {
@@ -627,6 +641,29 @@ impl Translator {
         let value = self.read(&read_effect.value)?;
         Ok(spec_var(value))
     }
+
+    fn mem_set(&mut self, addr: &Expr, size: &Expr, access: &Expr, value: &Expr) -> Result<()> {
+        // Map parameters to spec expressions.
+        let addr = self.expr(addr)?;
+        let size_bytes = expect_lit_int_as_usize(size)?;
+        let size_bits = 8 * size_bytes;
+        let value = self.expr(value)?;
+
+        // Access flags not implemented: error on unexpected non-zero value.
+        let access = expect_lit_int_as_usize(access)?;
+        if access != 0 {
+            bail!("non-zero memory set access flags");
+        }
+
+        // Memory set operation modifies set effect variables.
+        let set_effect = SetEffect::new();
+        self.assign(&set_effect.active, spec_true())?;
+        self.assign(&set_effect.size_bits, spec_const_int(size_bits.try_into()?))?;
+        self.assign(&set_effect.addr, addr)?;
+        self.assign(&set_effect.value, value)?;
+
+        Ok(())
+    }
 }
 
 fn expect_unary<T>(xs: &[T]) -> Result<&T> {
@@ -648,6 +685,13 @@ fn expect_ternary<T>(xs: &[T]) -> Result<(&T, &T, &T)> {
         bail!("expected ternary");
     }
     Ok((&xs[0], &xs[1], &xs[2]))
+}
+
+fn expect_quaternary<T>(xs: &[T]) -> Result<(&T, &T, &T, &T)> {
+    if xs.len() != 4 {
+        bail!("expected quaternary");
+    }
+    Ok((&xs[0], &xs[1], &xs[2], &xs[3]))
 }
 
 fn expect_binary_types(types: &[Expr]) -> Result<(usize, usize)> {

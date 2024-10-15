@@ -185,6 +185,7 @@ impl<'a> Parser<'a> {
             "decl" => Def::Decl(self.parse_decl()?),
             "attr" => Def::Attr(self.parse_attr()?),
             "spec" => Def::Spec(self.parse_spec()?),
+            "macro" => Def::SpecMacro(self.parse_spec_macro()?),
             "state" => Def::State(self.parse_state()?),
             "model" => Def::Model(self.parse_model()?),
             "form" => Def::Form(self.parse_form()?),
@@ -403,6 +404,7 @@ impl<'a> Parser<'a> {
 
         let mut provides = Vec::new();
         let mut requires = Vec::new();
+        let mut matches = Vec::new();
         let mut modifies = Vec::new();
         while self.is_lparen() {
             self.expect_lparen()?;
@@ -417,6 +419,11 @@ impl<'a> Parser<'a> {
                         requires.push(self.parse_spec_expr()?);
                     }
                 }
+                "match" => {
+                    while !self.is_rparen() {
+                        matches.push(self.parse_spec_expr()?);
+                    }
+                }
                 "modifies" => {
                     while !self.is_rparen() {
                         modifies.push(self.parse_ident()?);
@@ -425,7 +432,7 @@ impl<'a> Parser<'a> {
                 field => {
                     return Err(self.error(
                         pos,
-                        format!("Invalid spec: unexpected field {field}. Expect (provide ...) or (require ...)"),
+                        format!("Invalid spec: unexpected field {field}. Expect (provide ...), (require ...) or (match ...)"),
                     ));
                 }
             }
@@ -437,7 +444,31 @@ impl<'a> Parser<'a> {
             args,
             provides,
             requires,
+            matches,
             modifies,
+            pos,
+        })
+    }
+
+    fn parse_spec_macro(&mut self) -> Result<SpecMacro> {
+        let pos = self.pos();
+
+        // Signature.
+        self.expect_lparen()?;
+        let name = self.parse_ident()?;
+        let mut params = vec![];
+        while !self.is_rparen() {
+            params.push(self.parse_ident()?);
+        }
+        self.expect_rparen()?;
+
+        // Body.
+        let body = self.parse_spec_expr()?;
+
+        Ok(SpecMacro {
+            name,
+            params,
+            body,
             pos,
         })
     }
@@ -519,6 +550,14 @@ impl<'a> Parser<'a> {
                     let x = Box::new(self.parse_spec_expr()?);
                     self.expect_rparen()?;
                     Ok(SpecExpr::Discriminator { variant, x, pos })
+                } else if let Some(name) = sym.strip_suffix('!') {
+                    let name = self.str_to_ident(sym_pos, name)?;
+                    let mut args: Vec<SpecExpr> = vec![];
+                    while !self.is_rparen() {
+                        args.push(self.parse_spec_expr()?);
+                    }
+                    self.expect_rparen()?;
+                    Ok(SpecExpr::Macro { name, args, pos })
                 } else if let Ok(op) = self.parse_spec_op(sym.as_str()) {
                     let mut args: Vec<SpecExpr> = vec![];
                     while !self.is_rparen() {
@@ -690,6 +729,8 @@ impl<'a> Parser<'a> {
             Ok(ModelType::Bool)
         } else if self.eat_sym_str("Int")? {
             Ok(ModelType::Int)
+        } else if self.eat_sym_str("Unit")? {
+            Ok(ModelType::Unit)
         } else if self.is_lparen() {
             self.expect_lparen()?;
             if self.eat_sym_str("bv")? {

@@ -15,6 +15,7 @@ pub enum Def {
     Decl(Decl),
     Attr(Attr),
     Spec(Spec),
+    SpecMacro(SpecMacro),
     Model(Model),
     State(State),
     Form(Form),
@@ -176,6 +177,12 @@ pub enum SpecExpr {
         body: Box<SpecExpr>,
         pos: Pos,
     },
+    /// Macro expansion.
+    Macro {
+        name: Ident,
+        args: Vec<SpecExpr>,
+        pos: Pos,
+    },
     /// Pairs, currently used for switch statements.
     Pair {
         l: Box<SpecExpr>,
@@ -204,6 +211,7 @@ impl SpecExpr {
             | &Self::Match { pos, .. }
             | &Self::Let { pos, .. }
             | &Self::With { pos, .. }
+            | &Self::Macro { pos, .. }
             | &Self::Pair { pos, .. }
             | &Self::Enum { pos, .. } => pos,
         }
@@ -293,6 +301,17 @@ pub struct Arm {
     pub pos: Pos,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SpecMacro {
+    /// Macro name.
+    pub name: Ident,
+    /// Parameter names.
+    pub params: Vec<Ident>,
+    /// Macro expansion.
+    pub body: SpecExpr,
+    pub pos: Pos,
+}
+
 /// A specification of the semantics of a term.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Spec {
@@ -304,6 +323,8 @@ pub struct Spec {
     pub provides: Vec<SpecExpr>,
     /// Require statements, which express preconditions on the term
     pub requires: Vec<SpecExpr>,
+    /// Match conditions, which specify when a partial term returns a value.
+    pub matches: Vec<SpecExpr>,
     /// State variables modified by the term.
     pub modifies: Vec<Ident>,
     pub pos: Pos,
@@ -325,6 +346,8 @@ pub enum ModelType {
     Int,
     /// SMT-LIB Int
     Bool,
+    /// Unit type.
+    Unit,
     /// SMT-LIB bitvector, but with a potentially-polymorphic width
     BitVec(Option<usize>),
     /// Structured type.

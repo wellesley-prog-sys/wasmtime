@@ -82,6 +82,7 @@ pub fn get_isle_compilations(
     let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
     let prelude_opt_isle = codegen_crate_dir.join("src").join("prelude_opt.isle");
     let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");
+    let prelude_spec_isle = codegen_crate_dir.join("src").join("prelude_spec.isle");
     let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
 
     // Directory for mid-end optimizations.
@@ -119,6 +120,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_opt_isle,
+                    prelude_spec_isle.clone(),
                     inst_specs_isle.clone(),
                     src_opts.join("arithmetic.isle"),
                     src_opts.join("bitops.isle"),
@@ -141,6 +143,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    prelude_spec_isle.clone(),
                     inst_specs_isle.clone(),
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
@@ -154,6 +157,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    prelude_spec_isle.clone(),
                     inst_specs_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("inst_neon.isle"),
@@ -170,6 +174,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    prelude_spec_isle.clone(),
                     inst_specs_isle.clone(),
                     src_isa_s390x.join("inst.isle"),
                     src_isa_s390x.join("lower.isle"),
@@ -183,6 +188,7 @@ pub fn get_isle_compilations(
                 tracked_inputs: vec![
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
+                    prelude_spec_isle.clone(),
                     inst_specs_isle.clone(),
                     src_isa_risc_v.join("inst.isle"),
                     src_isa_risc_v.join("inst_vector.isle"),

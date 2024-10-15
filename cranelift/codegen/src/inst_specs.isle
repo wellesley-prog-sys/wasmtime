@@ -39,6 +39,28 @@
     )
 )
 
+; Parameters of a CLIF store operation.
+(state clif_store
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+            (value (bv 64))
+        )
+    )
+    (default
+        (and
+            ; Store is not active.
+            (not (:active clif_store))
+
+            ; Must provide a fixed size in the default case, otherwise type
+            ; inference is underconstrained.
+            (= (:size_bits clif_store) 1)
+        )
+    )
+)
+
 ;;;; Common Term Forms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (form
@@ -150,8 +172,55 @@
     )
 )
 (instantiate load
+    ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv  8)))
+    ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 16)))
+    ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 32)))
     ((args (named MemFlags) (named Value) (named Offset32)) (ret (bv 64)))
 )
 
-(attr uextend (tag TODO))
-(attr sextend (tag TODO))
+(spec (store flags value p offset)
+    (modifies clif_store)
+    (provide
+        ; Activate the CLIF store effect
+        (:active clif_store)
+
+        ; TODO(mbm): store flags
+
+        ; Store size is the width of the stored value.
+        (= (:size_bits clif_store) (widthof value))
+
+        ; Address calculation.
+        (= (:addr clif_store) (bvadd p (sign_ext 64 offset)))
+
+        ; Stored value is set to the low bits of the CLIF store value.
+        (= (conv_to (widthof value) (:value clif_store)) value)
+
+        ; HACK: Result of the store is a 1-bit vector.
+        (= result #b1)
+    )
+)
+(instantiate store
+    ((args (named MemFlags) (bv 32) (named Value) (named Offset32)) (ret (bv 1)))
+    ((args (named MemFlags) (bv 64) (named Value) (named Offset32)) (ret (bv 1)))
+)
+
+(form extend
+    ((args (bv  8)) (ret (bv  8)))
+    ((args (bv  8)) (ret (bv 16)))
+    ((args (bv  8)) (ret (bv 32)))
+    ((args (bv  8)) (ret (bv 64)))
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 16)) (ret (bv 32)))
+    ((args (bv 16)) (ret (bv 64)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 32)) (ret (bv 64)))
+    ((args (bv 64)) (ret (bv 64)))
+)
+
+(spec (uextend x)
+    (provide (= result (zero_ext (widthof result) x))))
+(instantiate uextend extend)
+
+(spec (sextend x)
+    (provide (= result (sign_ext (widthof result) x))))
+(instantiate sextend extend)

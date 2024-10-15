@@ -11,3 +11,7 @@ env_logger = { workspace = true }
 anyhow = { workspace = true, features = ['std'] }
 clap = { workspace = true, features = ['default', 'env'] }
 easy-smt = "0.2"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+cranelift-isle-veri-test-macros = { path = "../test-macros" }

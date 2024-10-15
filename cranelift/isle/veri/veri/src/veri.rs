@@ -81,7 +81,7 @@ pub enum Expr {
     BVConcat(ExprId, ExprId),
 
     // Integer conversion.
-    Int2BV(usize, ExprId),
+    Int2BV(ExprId, ExprId),
 
     // Bitwidth.
     WidthOf(ExprId),
@@ -175,7 +175,7 @@ impl std::fmt::Display for Expr {
             Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
             Self::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
             Self::BVConcat(x, y) => write!(f, "bv_concat({}, {})", x.index(), y.index()),
-            Self::Int2BV(w, x) => write!(f, "int2bv({w}, {})", x.index()),
+            Self::Int2BV(w, x) => write!(f, "int2bv({}, {})", w.index(), x.index()),
             Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
         }
     }
@@ -986,12 +986,21 @@ impl<'a> ConditionsBuilder<'a> {
             provides.push(provide);
         }
 
+        // Matches.
+        let mut matches: Vec<ExprId> = Vec::new();
+        for m in &term_spec.matches {
+            let m = self.spec_expr(m, &vars)?.try_into()?;
+            matches.push(m);
+        }
+
         // Partial function.
         // REVIEW(mbm): pin down semantics for partial function specifications.
         if let Domain::Partial(p) = domain {
-            let all_requires = self.all(requires.clone());
-            let eq = self.exprs_equal(p, all_requires);
+            let all_matches = self.all(matches);
+            let eq = self.exprs_equal(p, all_matches);
             self.conditions.assumptions.push(eq);
+        } else if !matches.is_empty() {
+            bail!("spec matches on non-partial function");
         }
 
         // Assert/assume depending on caller or callee.
@@ -1105,7 +1114,11 @@ impl<'a> ConditionsBuilder<'a> {
             Constraint::Some => self.constraint_some(binding_id),
             Constraint::ConstPrim { val } => self.const_prim(binding_id, *val),
             Constraint::ConstInt { val, ty } => self.const_int(binding_id, *val, *ty),
-            _ => todo!("constraint: {constraint:?}"),
+            Constraint::Variant {
+                ty,
+                variant,
+                fields: _,
+            } => self.constraint_variant(binding_id, *ty, *variant),
         }
     }
 
@@ -1118,6 +1131,34 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Assumption: option is Some.
         self.conditions.assumptions.push(opt.some);
+
+        Ok(())
+    }
+
+    fn constraint_variant(
+        &mut self,
+        binding_id: BindingId,
+        ty: TypeId,
+        variant: VariantId,
+    ) -> Result<()> {
+        // Constrained binding should be an enum.
+        let e = self.binding_value[&binding_id]
+            .as_enum()
+            .ok_or(format_err!(
+                "target of variant constraint should be an enum"
+            ))?
+            .clone();
+
+        // TODO(mbm): check the enum type is correct?
+
+        // Lookup variant.
+        let variant_type = self.prog.tyenv.get_variant(ty, variant);
+        let variant_name = self.prog.tyenv.syms[variant_type.name.index()].as_str();
+
+        // Assumption: discriminant equals variant.
+        let variant = e.try_variant_by_name(variant_name)?;
+        let discriminator = self.discriminator(&e, variant);
+        self.conditions.assumptions.push(discriminator);
 
         Ok(())
     }
@@ -1305,6 +1346,8 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::Expr::With(decls, body) => self.spec_with(decls, body, vars),
 
+            spec::Expr::Macro(ident, args) => self.spec_macro(ident, args, vars),
+
             spec::Expr::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
@@ -1335,8 +1378,9 @@ impl<'a> ConditionsBuilder<'a> {
             }
 
             spec::Expr::Int2BV(w, x) => {
+                let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
-                Ok(self.scalar(Expr::Int2BV(*w, x)))
+                Ok(self.scalar(Expr::Int2BV(w, x)))
             }
 
             spec::Expr::WidthOf(x) => {
@@ -1582,6 +1626,38 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Evaluate body in new scope.
         self.spec_expr(body, &with_vars)
+    }
+
+    fn spec_macro(
+        &mut self,
+        name: &Ident,
+        args: &[spec::Expr],
+        vars: &Variables,
+    ) -> Result<Symbolic> {
+        // Lookup macro.
+        let macro_defn = self
+            .prog
+            .specenv
+            .macros
+            .get(&name.0)
+            .ok_or(format_err!("unknown macro {name}", name = name.0))?;
+
+        // Build macro expansion scope.
+        // QUESTION(mbm): should macros be able to access global state?
+        let mut macro_vars = Variables::new();
+        if macro_defn.params.len() != args.len() {
+            bail!(
+                "incorrect number of arguments for macro {name}",
+                name = name.0
+            );
+        }
+        for (param, arg) in zip(&macro_defn.params, args) {
+            let arg = self.spec_expr(arg, vars)?;
+            macro_vars.set(param.0.clone(), arg)?;
+        }
+
+        // Evaluate macro body.
+        self.spec_expr(&macro_defn.body, &macro_vars)
     }
 
     fn conditional(&mut self, c: ExprId, t: Symbolic, e: Symbolic) -> Result<Symbolic> {

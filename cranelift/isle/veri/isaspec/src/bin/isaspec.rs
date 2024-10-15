@@ -5,7 +5,7 @@ use std::{io, vec};
 
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
-use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp};
+use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp, SImm9};
 use cranelift_codegen::{
     ir::MemFlags,
     isa::aarch64::inst::{
@@ -19,6 +19,7 @@ use cranelift_isle::{
     printer,
 };
 use cranelift_isle_veri_aslp::client::Client;
+use cranelift_isle_veri_isaspec::memory::SetEffect;
 use cranelift_isle_veri_isaspec::{
     aarch64::{self, pstate_field},
     bits::{Bits, Segment},
@@ -143,7 +144,11 @@ fn define() -> Result<Vec<FileConfig>> {
         },
         FileConfig {
             name: "loads.isle".into(),
-            specs: define_loads(),
+            specs: define_loads()?,
+        },
+        FileConfig {
+            name: "stores.isle".into(),
+            specs: define_stores()?,
         },
         FileConfig {
             name: "mov_wide.isle".into(),
@@ -1000,60 +1005,62 @@ fn define_extend() -> SpecConfig {
     }
 }
 
-fn define_loads() -> Vec<SpecConfig> {
+fn define_loads() -> Result<Vec<SpecConfig>> {
     // ULoad8
     let uload8 = define_load("MInst.ULoad8", 8, |rd, mem, flags| Inst::ULoad8 {
         rd,
         mem,
         flags,
-    });
+    })?;
 
     // SLoad8
     let sload8 = define_load("MInst.SLoad8", 8, |rd, mem, flags| Inst::SLoad8 {
         rd,
         mem,
         flags,
-    });
+    })?;
 
     // ULoad16
     let uload16 = define_load("MInst.ULoad16", 16, |rd, mem, flags| Inst::ULoad16 {
         rd,
         mem,
         flags,
-    });
+    })?;
 
     // SLoad16
     let sload16 = define_load("MInst.SLoad16", 16, |rd, mem, flags| Inst::SLoad16 {
         rd,
         mem,
         flags,
-    });
+    })?;
 
     // ULoad32
     let uload32 = define_load("MInst.ULoad32", 32, |rd, mem, flags| Inst::ULoad32 {
         rd,
         mem,
         flags,
-    });
+    })?;
 
     // SLoad32
     let sload32 = define_load("MInst.SLoad32", 32, |rd, mem, flags| Inst::SLoad32 {
         rd,
         mem,
         flags,
-    });
+    })?;
 
     // ULoad64
     let uload64 = define_load("MInst.ULoad64", 64, |rd, mem, flags| Inst::ULoad64 {
         rd,
         mem,
         flags,
-    });
+    })?;
 
-    vec![uload8, sload8, uload16, sload16, uload32, sload32, uload64]
+    Ok(vec![
+        uload8, sload8, uload16, sload16, uload32, sload32, uload64,
+    ])
 }
 
-fn define_load<F>(term: &str, size_bits: usize, inst: F) -> SpecConfig
+fn define_load<F>(term: &str, size_bits: usize, inst: F) -> Result<SpecConfig>
 where
     F: Fn(Writable<Reg>, AMode, MemFlags) -> Inst,
 {
@@ -1091,6 +1098,107 @@ where
         )),
     );
 
+    // Enumerate AModes.
+    let arms = amode_cases(&mappings, |mem, flags| inst(writable_xreg(4), mem, flags))?;
+
+    Ok(SpecConfig {
+        term: term.to_string(),
+        args: ["rd", "mem", "flags"].map(String::from).to_vec(),
+        cases: Cases::Match(Match {
+            on: spec_var("mem".to_string()),
+            arms,
+        }),
+    })
+}
+
+fn define_stores() -> Result<Vec<SpecConfig>> {
+    // Store8
+    let store8 = define_store("MInst.Store8", 8, |rd, mem, flags| Inst::Store8 {
+        rd,
+        mem,
+        flags,
+    })?;
+
+    // Store16
+    let store16 = define_store("MInst.Store16", 16, |rd, mem, flags| Inst::Store16 {
+        rd,
+        mem,
+        flags,
+    })?;
+
+    // Store32
+    let store32 = define_store("MInst.Store32", 32, |rd, mem, flags| Inst::Store32 {
+        rd,
+        mem,
+        flags,
+    })?;
+
+    // Store64
+    let store64 = define_store("MInst.Store64", 64, |rd, mem, flags| Inst::Store64 {
+        rd,
+        mem,
+        flags,
+    })?;
+
+    Ok(vec![store8, store16, store32, store64])
+}
+
+fn define_store<F>(term: &str, size_bits: usize, inst: F) -> Result<SpecConfig>
+where
+    F: Fn(Reg, AMode, MemFlags) -> Inst,
+{
+    // Mappings.
+    let mut mappings = Mappings::default();
+
+    // Source register.
+    mappings.reads.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+
+    // ISA store state mapped to memory set effect.
+    let set_effect = SetEffect::new();
+    static ISA_STORE: &str = "isa_store";
+    mappings.writes.insert(
+        set_effect.active,
+        MappingBuilder::state(ISA_STORE).field("active").build(),
+    );
+    mappings.writes.insert(
+        set_effect.addr,
+        MappingBuilder::state(ISA_STORE).field("addr").build(),
+    );
+    mappings.writes.insert(
+        set_effect.size_bits,
+        MappingBuilder::state(ISA_STORE).field("size_bits").build(),
+    );
+    mappings.writes.insert(
+        set_effect.value,
+        MappingBuilder::new(spec_binary(
+            SpecOp::ConvTo,
+            spec_const_int(size_bits.try_into().unwrap()),
+            spec_field("value".to_string(), spec_var(ISA_STORE.to_string())),
+        ))
+        .modifies(ISA_STORE)
+        .build(),
+    );
+
+    // Enumerate AModes.
+    let arms = amode_cases(&mappings, |mem, flags| inst(xreg(4), mem, flags))?;
+
+    Ok(SpecConfig {
+        term: term.to_string(),
+        args: ["rd", "mem", "flags"].map(String::from).to_vec(),
+        cases: Cases::Match(Match {
+            on: spec_var("mem".to_string()),
+            arms,
+        }),
+    })
+}
+
+fn amode_cases<F>(mappings: &Mappings, inst: F) -> Result<Vec<Arm>>
+where
+    F: Fn(AMode, MemFlags) -> Inst,
+{
     // RegReg
     let mut reg_reg_mappings = mappings.clone();
     reg_reg_mappings.reads.insert(
@@ -1107,7 +1215,6 @@ where
         args: ["rn", "rm"].map(String::from).to_vec(),
         body: Cases::Instruction(InstConfig {
             opcodes: Opcodes::Instruction(inst(
-                writable_xreg(4),
                 AMode::RegReg {
                     rn: xreg(5),
                     rm: xreg(6),
@@ -1135,7 +1242,6 @@ where
         args: ["rn", "rm"].map(String::from).to_vec(),
         body: Cases::Instruction(InstConfig {
             opcodes: Opcodes::Instruction(inst(
-                writable_xreg(4),
                 AMode::RegScaled {
                     rn: xreg(5),
                     rm: xreg(6),
@@ -1176,7 +1282,6 @@ where
                     args: Vec::new(),
                     body: Cases::Instruction(InstConfig {
                         opcodes: Opcodes::Instruction(inst(
-                            writable_xreg(4),
                             AMode::RegScaledExtended {
                                 rn: xreg(5),
                                 rm: xreg(6),
@@ -1215,7 +1320,6 @@ where
                     args: Vec::new(),
                     body: Cases::Instruction(InstConfig {
                         opcodes: Opcodes::Instruction(inst(
-                            writable_xreg(4),
                             AMode::RegExtended {
                                 rn: xreg(5),
                                 rm: xreg(6),
@@ -1231,14 +1335,70 @@ where
         }),
     };
 
-    SpecConfig {
-        term: term.to_string(),
-        args: ["rd", "mem", "flags"].map(String::from).to_vec(),
-        cases: Cases::Match(Match {
-            on: spec_var("mem".to_string()),
-            arms: vec![reg_reg, reg_scaled, reg_scaled_extended, reg_extended],
+    // Unscaled
+    let mut unscaled_scope = aarch64::state();
+    let simm9 = Target::Var("simm9".to_string());
+    unscaled_scope.global(simm9.clone());
+
+    let mut unscaled_mappings = mappings.clone();
+    unscaled_mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    unscaled_mappings
+        .reads
+        .insert(simm9, Mapping::require(spec_var("simm9".to_string())));
+
+    let unscaled_template = amode_unscaled_template(xreg(5), |amode| inst(amode, MemFlags::new()))?;
+
+    let unscaled = Arm {
+        variant: "Unscaled".to_string(),
+        args: ["rn", "simm9"].map(String::from).to_vec(),
+        body: Cases::Instruction(InstConfig {
+            opcodes: Opcodes::Template(unscaled_template),
+            scope: unscaled_scope,
+            mappings: unscaled_mappings.clone(),
         }),
-    }
+    };
+
+    Ok(vec![
+        reg_reg,
+        reg_scaled,
+        reg_scaled_extended,
+        reg_extended,
+        unscaled,
+    ])
+}
+
+fn amode_unscaled_template<F>(rn: Reg, inst: F) -> Result<Bits>
+where
+    F: Fn(AMode) -> Inst,
+{
+    // Assemble a base instruction with a placeholder for the immediate bits field.
+    let placeholder = SImm9::maybe_from_i64(0).unwrap();
+    let base = inst(AMode::Unscaled {
+        rn,
+        simm9: placeholder,
+    });
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic immediate fields.
+    let imm = Bits {
+        segments: vec![Segment::Symbolic("simm9".to_string(), 9)],
+    };
+    let template = Bits::splice(&bits, &imm, 12)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let bits = assignment.get("simm9").unwrap();
+        let imm = SImm9 {
+            value: (*bits).try_into().unwrap(),
+        };
+        Ok(inst(AMode::Unscaled { rn, simm9: imm }))
+    })?;
+
+    Ok(template)
 }
 
 fn define_conds() -> Vec<SpecConfig> {

@@ -45,6 +45,9 @@ impl std::fmt::Display for Verification {
     }
 }
 
+static UNSPECIFIED_SORT: &str = "Unspecified";
+static UNIT_SORT: &str = "Unit";
+
 pub struct Solver<'a> {
     smt: Context,
     conditions: &'a Conditions,
@@ -64,8 +67,19 @@ impl<'a> Solver<'a> {
             assignment,
             fresh_idx: 0,
         };
-        solver.smt.set_logic("ALL")?;
+        solver.prelude()?;
         Ok(solver)
+    }
+
+    fn prelude(&mut self) -> Result<()> {
+        // Set logic. Required for some SMT solvers.
+        self.smt.set_logic("ALL")?;
+
+        // Declare sorts for special-case types.
+        self.smt.declare_sort(UNSPECIFIED_SORT, 0)?;
+        self.smt.declare_sort(UNIT_SORT, 0)?;
+
+        Ok(())
     }
 
     pub fn encode(&mut self) -> Result<()> {
@@ -153,8 +167,8 @@ impl<'a> Solver<'a> {
             }
             Type::Int => Ok(self.smt.int_sort()),
             Type::Bool => Ok(self.smt.bool_sort()),
-            // Model unspecified variables as an unconstrained boolean.
-            Type::Unspecified => Ok(self.smt.bool_sort()),
+            Type::Unspecified => Ok(self.smt.atom(UNSPECIFIED_SORT)),
+            Type::Unit => Ok(self.smt.atom(UNIT_SORT)),
             Type::Unknown | Type::BitVector(Width::Unknown) => {
                 bail!("no smt2 sort for non-concrete type {ty}")
             }
@@ -164,7 +178,10 @@ impl<'a> Solver<'a> {
     fn assign_expr(&mut self, x: ExprId, expr: &Expr) -> Result<()> {
         let lhs = self.smt.atom(self.expr_name(x));
         let rhs = self.expr_to_smt(expr)?;
-        Ok(self.smt.assert(self.smt.eq(lhs, rhs))?)
+        Ok(self.smt.assert(
+            self.smt
+                .named(format!("expr{}", x.index()), self.smt.eq(lhs, rhs)),
+        )?)
     }
 
     fn expr_to_smt(&mut self, expr: &Expr) -> Result<SExpr> {
@@ -228,7 +245,7 @@ impl<'a> Solver<'a> {
             Expr::BVConvTo(w, x) => self.bv_conv_to(w, x),
             Expr::BVExtract(h, l, x) => Ok(self.extract(h, l, self.expr_atom(x))),
             Expr::BVConcat(x, y) => Ok(self.smt.concat(self.expr_atom(x), self.expr_atom(y))),
-            Expr::Int2BV(w, x) => Ok(self.int2bv(w, self.expr_atom(x))),
+            Expr::Int2BV(w, x) => self.int_to_bv(w, x),
             Expr::WidthOf(x) => self.width_of(x),
         }
     }
@@ -239,6 +256,7 @@ impl<'a> Solver<'a> {
             Const::Bool(false) => self.smt.false_(),
             Const::Int(v) => self.smt.numeral(v),
             Const::BitVector(w, v) => self.smt.binary(w, v),
+            Const::Unspecified => unimplemented!("constant of unspecified type"),
         }
     }
 
@@ -320,6 +338,19 @@ impl<'a> Solver<'a> {
         }
     }
 
+    fn int_to_bv(&self, w: ExprId, x: ExprId) -> Result<SExpr> {
+        // Destination width expression should have known integer value.
+        let width: usize = self
+            .assignment
+            .try_int_value(w)
+            .context("destination width of int2bv expression should have known integer value")?
+            .try_into()
+            .expect("width should be representable as usize");
+
+        // Build int2bv expression.
+        Ok(self.int2bv(width, self.expr_atom(x)))
+    }
+
     fn width_of(&self, x: ExprId) -> Result<SExpr> {
         // QUESTION(mbm): should width_of expressions be elided or replaced after type inference?
 
@@ -391,13 +422,16 @@ impl<'a> Solver<'a> {
         ])
     }
 
-    /// Parse a constant SMT literal.
+    /// Parse a constant SMT expression.
     fn const_from_sexpr(&self, sexpr: SExpr) -> Result<Const> {
-        let atom = match self.smt.get(sexpr) {
-            SExprData::Atom(a) => a,
-            SExprData::List(_) => bail!("non-atomic smt expression is not a constant"),
-        };
+        match self.smt.get(sexpr) {
+            SExprData::Atom(a) => Self::const_from_literal(a),
+            SExprData::List(exprs) => self.const_from_qualified_abstract_value(exprs),
+        }
+    }
 
+    /// Parse a constant from an SMT literal.
+    fn const_from_literal(atom: &str) -> Result<Const> {
         if atom == "true" {
             Ok(Const::Bool(true))
         } else if atom == "false" {
@@ -409,7 +443,42 @@ impl<'a> Solver<'a> {
         } else if atom.starts_with(|c: char| c.is_ascii_digit()) {
             Ok(Const::Int(atom.parse()?))
         } else {
-            bail!("unsupported smt constant: {atom}")
+            bail!("unsupported smt literal: {atom}")
+        }
+    }
+
+    /// Parse a constant value of a declared sort from an SMT qualified abstract value.
+    fn const_from_qualified_abstract_value(&self, exprs: &[SExpr]) -> Result<Const> {
+        // This logic is specific to CVC5's representation of declared sort
+        // abstract values. Z3 uses a different format.  This function is
+        // therefore careful to check for the exact format it expects from CVC5.
+
+        // Expect a list of atoms.
+        let atoms = exprs
+            .iter()
+            .map(|e| match self.smt.get(*e) {
+                SExprData::Atom(a) => Ok(a),
+                SExprData::List(_) => bail!("expected atom in qualified identifier"),
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        // Expect the list to be of the form (as @<abstract_value> <sort>).
+        let ["as", value, sort] = atoms.as_slice() else {
+            bail!("unsupported qualified identifier: {atoms:?}");
+        };
+
+        // Expect an abstract value.
+        if !value.starts_with('@') {
+            bail!("expected qualified identifier constant to have abstract value");
+        }
+
+        // Construct constant based on the sort.
+        if sort == &UNSPECIFIED_SORT {
+            Ok(Const::Unspecified)
+        } else if sort == &UNIT_SORT {
+            todo!("unit sort")
+        } else {
+            bail!("unknown sort: '{sort}'");
         }
     }
 
