@@ -74,7 +74,7 @@
 (decl pure partial u32_lteq (u32 u32) Unit)
 (spec (u32_lteq a b)
       (provide (= result #b1))
-      (require
+      (match
             (bvule a b)
             (= (widthof a) 32)
             (= (widthof b) 32)
@@ -211,7 +211,7 @@
 (decl pure partial s32_add_fallible (i32 i32) i32)
 (spec (s32_add_fallible x y)
       (provide (= result (bvadd x y)))
-      (require (not (bvsaddo x y))))
+      (match (not (bvsaddo x y))))
 (extern constructor s32_add_fallible s32_add_fallible)
 
 (decl pure u64_add (u64 u64) u64)
@@ -561,7 +561,7 @@
 (decl fits_in_16 (Type) Type)
 (spec (fits_in_16 arg)
       (provide (= result arg))
-      (require (<= arg 16)))
+      (match (<= arg 16)))
 (extern extractor fits_in_16 fits_in_16)
 
 ;; An extractor that only matches types that can fit in 32 bits.
@@ -576,7 +576,7 @@
 (decl fits_in_64 (Type) Type)
 (spec (fits_in_64 arg)
       (provide (= result arg))
-      (require (<= arg 64)))
+      (match (<= arg 64)))
 (extern extractor fits_in_64 fits_in_64)
 
 ;; An extractor that only matches types that fit in exactly 32 bits.
@@ -591,7 +591,7 @@
 ;; references that can fit in 64 bits.
 (spec (ty_int_ref_scalar_64 ty)
       (provide (= result ty))
-      (require
+      (match
             (or
                   (= ty 8)
                   (= ty 16)
@@ -605,7 +605,7 @@
 (decl ty_32_or_64 (Type) Type)
 (spec (ty_32_or_64 arg)
       (provide (= result arg))
-      (require (or (= arg 32) (= arg 64))))
+      (match (or (= arg 32) (= arg 64))))
 (extern extractor ty_32_or_64 ty_32_or_64)
 
 ;; An extractor that matches 8- and 16-bit types only.

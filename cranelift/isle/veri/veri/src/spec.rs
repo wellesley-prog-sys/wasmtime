@@ -2,7 +2,7 @@ use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
     ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
-    sema::{Sym, TermEnv, TermId, TypeEnv, TypeId},
+    sema::{ReturnKind, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
@@ -382,6 +382,7 @@ pub struct Spec {
     pub ret: Ident,
     pub provides: Vec<Expr>,
     pub requires: Vec<Expr>,
+    pub matches: Vec<Expr>,
     pub modifies: Vec<Ident>,
     pub pos: Pos,
 }
@@ -393,6 +394,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: Vec::new(),
             requires: Vec::new(),
+            matches: Vec::new(),
             modifies: Vec::new(),
             pos: Pos::default(),
         }
@@ -404,6 +406,7 @@ impl Spec {
             ret: Self::result_ident(),
             provides: spec.provides.iter().map(Expr::from_ast).collect(),
             requires: spec.requires.iter().map(Expr::from_ast).collect(),
+            matches: spec.matches.iter().map(Expr::from_ast).collect(),
             modifies: spec.modifies.clone(),
             pos: spec.pos,
         }
@@ -505,6 +508,7 @@ impl SpecEnv {
         env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv);
         env.collect_macros(defs);
+        env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
         env.check_for_chained_terms_with_spec();
 
         Ok(env)
@@ -713,6 +717,45 @@ impl SpecEnv {
                 );
             }
         }
+    }
+
+    fn check_option_return_term_specs_uses_matches(
+        &self,
+        termenv: &TermEnv,
+        tyenv: &TypeEnv,
+    ) -> Result<()> {
+        for (term_id, spec) in &self.term_spec {
+            let term = &termenv.terms[term_id.index()];
+            if !Self::term_returns_option(term, tyenv) {
+                continue;
+            }
+            if !spec.requires.is_empty() {
+                bail!(
+                    "term '{name}' requires should be match",
+                    name = tyenv.syms[term.name.index()],
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn term_returns_option(term: &Term, tyenv: &TypeEnv) -> bool {
+        // Constructor
+        if term.has_constructor() {
+            return term.is_partial();
+        }
+
+        // External extractor
+        if let Some(sig) = term.extractor_sig(&tyenv) {
+            return sig.ret_kind == ReturnKind::Option;
+        }
+
+        // Extractor
+        if term.has_extractor() {
+            return true;
+        }
+
+        false
     }
 
     fn check_for_chained_terms_with_spec(&self) {

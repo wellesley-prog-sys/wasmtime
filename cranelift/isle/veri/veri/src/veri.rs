@@ -983,12 +983,21 @@ impl<'a> ConditionsBuilder<'a> {
             provides.push(provide);
         }
 
+        // Matches.
+        let mut matches: Vec<ExprId> = Vec::new();
+        for m in &term_spec.matches {
+            let m = self.spec_expr(m, &vars)?.try_into()?;
+            matches.push(m);
+        }
+
         // Partial function.
         // REVIEW(mbm): pin down semantics for partial function specifications.
         if let Domain::Partial(p) = domain {
-            let all_requires = self.all(requires.clone());
-            let eq = self.exprs_equal(p, all_requires);
+            let all_matches = self.all(matches);
+            let eq = self.exprs_equal(p, all_matches);
             self.conditions.assumptions.push(eq);
+        } else if !matches.is_empty() {
+            bail!("spec matches on non-partial function");
         }
 
         // Assert/assume depending on caller or callee.

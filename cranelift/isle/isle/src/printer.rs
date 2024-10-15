@@ -401,6 +401,13 @@ impl Printable for Spec {
                     .chain(self.requires.iter().map(|e| e.to_doc())),
             ));
         }
+        if !self.matches.is_empty() {
+            parts.push(sexp(
+                Vec::from([RcDoc::text("match")])
+                    .into_iter()
+                    .chain(self.matches.iter().map(|e| e.to_doc())),
+            ));
+        }
         sexp(parts)
     }
 }

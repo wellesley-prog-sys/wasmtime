@@ -323,6 +323,8 @@ pub struct Spec {
     pub provides: Vec<SpecExpr>,
     /// Require statements, which express preconditions on the term
     pub requires: Vec<SpecExpr>,
+    /// Match conditions, which specify when a partial term returns a value.
+    pub matches: Vec<SpecExpr>,
     /// State variables modified by the term.
     pub modifies: Vec<Ident>,
     pub pos: Pos,

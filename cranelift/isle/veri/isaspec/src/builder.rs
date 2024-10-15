@@ -186,6 +186,7 @@ impl<'a> Builder<'a> {
             args: spec_idents(&self.cfg.args),
             requires: cond.requires,
             provides: cond.provides,
+            matches: Vec::new(),
             modifies: spec_idents(&cond.modifies.iter().sorted().cloned().collect::<Vec<_>>()),
             pos: Pos::default(),
         };

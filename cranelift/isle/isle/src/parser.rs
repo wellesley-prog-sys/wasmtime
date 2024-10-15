@@ -404,6 +404,7 @@ impl<'a> Parser<'a> {
 
         let mut provides = Vec::new();
         let mut requires = Vec::new();
+        let mut matches = Vec::new();
         let mut modifies = Vec::new();
         while self.is_lparen() {
             self.expect_lparen()?;
@@ -418,6 +419,11 @@ impl<'a> Parser<'a> {
                         requires.push(self.parse_spec_expr()?);
                     }
                 }
+                "match" => {
+                    while !self.is_rparen() {
+                        matches.push(self.parse_spec_expr()?);
+                    }
+                }
                 "modifies" => {
                     while !self.is_rparen() {
                         modifies.push(self.parse_ident()?);
@@ -426,7 +432,7 @@ impl<'a> Parser<'a> {
                 field => {
                     return Err(self.error(
                         pos,
-                        format!("Invalid spec: unexpected field {field}. Expect (provide ...) or (require ...)"),
+                        format!("Invalid spec: unexpected field {field}. Expect (provide ...), (require ...) or (match ...)"),
                     ));
                 }
             }
@@ -438,6 +444,7 @@ impl<'a> Parser<'a> {
             args,
             provides,
             requires,
+            matches,
             modifies,
             pos,
         })

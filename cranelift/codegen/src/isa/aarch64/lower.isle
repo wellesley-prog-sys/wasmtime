@@ -5,6 +5,7 @@
 ; QUESTION(mbm): can we capture the "equality on lower bits only" constraint in the lower spec?
 (decl partial lower (Inst) InstOutput)
 (spec (lower arg)
+      (match true)
       (provide
             ; Computation results match.
             (= result arg)
