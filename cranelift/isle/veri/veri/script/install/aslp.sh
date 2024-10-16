@@ -4,7 +4,7 @@ set -euxo pipefail
 
 # Defaults.
 repo="mmcloughlin/aslp"
-version="e5190a099d5885fb486ddc150dd426a8d0c11948"
+version="8ca39c0f1b7f4b588fc840aa1a9fbbc5b9085ad0"
 ocaml_compiler="4.14.2"
 
 # Options

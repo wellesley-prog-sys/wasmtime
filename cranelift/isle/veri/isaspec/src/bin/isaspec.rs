@@ -344,12 +344,7 @@ fn is_alu3_op_size_supported(alu3_op: ALUOp3, size: OperandSize) -> bool {
 // MInst.AluRRImm12 specification configuration.
 fn define_alu_rr_imm12() -> Result<SpecConfig> {
     // ALUOps supported by AluRRImm12.
-    let alu_ops = [
-        ALUOp::Add,
-        ALUOp::Sub,
-        // ALUOp::AddS,
-        // ALUOp::SubS,
-    ];
+    let alu_ops = [ALUOp::Add, ALUOp::Sub, ALUOp::AddS, ALUOp::SubS];
 
     // OperandSize
     let sizes = [OperandSize::Size32, OperandSize::Size64];
