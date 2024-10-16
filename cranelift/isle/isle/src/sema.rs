@@ -196,6 +196,9 @@ pub struct TermEnv {
     /// This is indexed by `RuleId`.
     pub rules: Vec<Rule>,
 
+    /// A map from an interned `Rule`'s name to its `RuleId`.
+    pub rule_map: StableMap<Sym, RuleId>,
+
     /// Map from (inner_ty, outer_ty) pairs to term IDs, giving the
     /// defined implicit type-converter terms we can try to use to fit
     /// types together.
@@ -1223,6 +1226,7 @@ impl TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
             rules: vec![],
+            rule_map: StableMap::new(),
             converters: StableMap::new(),
             expand_internal_extractors,
         };
@@ -1241,7 +1245,6 @@ impl TermEnv {
         env.collect_rules(tyenv, defs);
         env.check_for_undefined_decls(tyenv, defs);
         env.check_for_expr_terms_without_constructors(tyenv, defs);
-        env.check_for_duplicate_rule_names(tyenv);
         tyenv.return_errors()?;
 
         Ok(env)
@@ -1853,6 +1856,22 @@ impl TermEnv {
                 rule.name = Some(term.name);
             }
         }
+
+        // Populate rule name map.
+        for rule in &self.rules {
+            let Some(name) = rule.name else { continue };
+            match self.rule_map.entry(name) {
+                Entry::Vacant(e) => {
+                    e.insert(rule.id);
+                }
+                Entry::Occupied(_) => {
+                    tyenv.report_error(
+                        rule.pos,
+                        format!("Duplicate rule name: '{}'", tyenv.syms[name.index()]),
+                    );
+                }
+            }
+        }
     }
 
     fn check_for_undefined_decls(&self, tyenv: &mut TypeEnv, defs: &[ast::Def]) {
@@ -1897,23 +1916,6 @@ impl TermEnv {
                     }
                 });
             }
-        }
-    }
-
-    fn check_for_duplicate_rule_names(&self, tyenv: &mut TypeEnv) {
-        let mut rules_by_name = HashMap::new();
-        for rule in &self.rules {
-            let Some(name) = rule.name else {
-                continue;
-            };
-            match rules_by_name.entry(name) {
-                Entry::Occupied(_) => {
-                    tyenv.report_error(rule.pos, "duplicate rule name");
-                }
-                Entry::Vacant(e) => {
-                    e.insert(rule);
-                }
-            };
         }
     }
 
