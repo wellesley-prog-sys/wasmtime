@@ -364,12 +364,12 @@ impl<'a> Parser<'a> {
 
     fn parse_attr(&mut self) -> Result<Attr> {
         let pos = self.pos();
-        let term = self.parse_ident()?;
+        let name = self.parse_ident()?;
         let mut kinds = Vec::new();
         while !self.is_rparen() {
             kinds.push(self.parse_attr_kind()?);
         }
-        Ok(Attr { term, kinds, pos })
+        Ok(Attr { name, kinds, pos })
     }
 
     fn parse_attr_kind(&mut self) -> Result<AttrKind> {
@@ -388,6 +388,7 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         match &self.expect_symbol()?[..] {
             "chain" => Ok(AttrKind::Chain),
+            "priority" => Ok(AttrKind::Priority),
             x => Err(self.error(pos, format!("Not a valid verification attribute: {x}"))),
         }
     }

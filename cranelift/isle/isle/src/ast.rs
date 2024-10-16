@@ -98,12 +98,12 @@ pub struct Decl {
 /// An attribute applied to a declaration.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Attr {
-    pub term: Ident,
+    pub name: Ident,
     pub kinds: Vec<AttrKind>,
     pub pos: Pos,
 }
 
-/// A kind of attribute that can be applied to a declaration.
+/// A kind of attribute that can be applied to a term declaration or rule.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum AttrKind {
     /// In verification, apply rule chaining to this term.
@@ -112,6 +112,14 @@ pub enum AttrKind {
     /// possible applications of rules to this term will be generated and
     /// verified.
     Chain,
+
+    /// In verification, declare that the correctness of the rule is dependent
+    /// upon priorities.
+    ///
+    /// The effect of this attribute on a rule is that during rule expansion,
+    /// the negations of higher-priority rules are added to the verification
+    /// conditions.
+    Priority,
 
     /// Tag allows for categorizing terms.
     Tag(Ident),

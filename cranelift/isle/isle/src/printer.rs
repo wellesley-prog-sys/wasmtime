@@ -164,7 +164,7 @@ impl Printable for Field {
 impl Printable for Attr {
     fn to_doc(&self) -> RcDoc<()> {
         sexp(
-            vec![RcDoc::text("attr"), self.term.to_doc()]
+            vec![RcDoc::text("attr"), self.name.to_doc()]
                 .into_iter()
                 .chain(self.kinds.iter().map(|k| k.to_doc())),
         )
@@ -175,6 +175,7 @@ impl Printable for AttrKind {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             AttrKind::Chain => sexp(vec![RcDoc::text("veri"), RcDoc::text("chain")]),
+            AttrKind::Priority => sexp(vec![RcDoc::text("veri"), RcDoc::text("priority")]),
             AttrKind::Tag(tag) => sexp(vec![RcDoc::text("tag"), tag.to_doc()]),
         }
     }

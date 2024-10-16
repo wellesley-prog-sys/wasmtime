@@ -2,7 +2,7 @@ use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
     ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
-    sema::{ReturnKind, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
+    sema::{ReturnKind, RuleId, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
@@ -477,6 +477,9 @@ pub struct SpecEnv {
     // Type instantiations for the given term.
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
 
+    /// Rules for which priority is significant.
+    pub priority: HashSet<RuleId>,
+
     /// Model for the given type.
     pub type_model: HashMap<TypeId, Compound>,
 
@@ -495,6 +498,7 @@ impl SpecEnv {
             chain: HashSet::new(),
             tags: HashMap::new(),
             term_instantiations: HashMap::new(),
+            priority: HashSet::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
             macros: HashMap::new(),
@@ -506,7 +510,7 @@ impl SpecEnv {
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv)?;
-        env.collect_attrs(defs, termenv, tyenv);
+        env.collect_attrs(defs, termenv, tyenv)?;
         env.collect_macros(defs);
         env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
         env.check_for_chained_terms_with_spec();
@@ -683,24 +687,34 @@ impl SpecEnv {
         Ok(())
     }
 
-    fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for def in defs {
             if let ast::Def::Attr(attr) = def {
-                let term_id = termenv
-                    .get_term_by_name(tyenv, &attr.term)
-                    .expect("attr term should exist");
                 for attr_kind in &attr.kinds {
                     match attr_kind {
                         AttrKind::Chain => {
+                            let term_id = termenv
+                                .get_term_by_name(tyenv, &attr.name)
+                                .ok_or(format_err!("attr term should exist"))?;
                             self.chain.insert(term_id);
                         }
+                        AttrKind::Priority => {
+                            let rule_id = termenv
+                                .get_rule_by_name(tyenv, &attr.name)
+                                .ok_or(format_err!("attr rule '{}' does not exist", attr.name.0))?;
+                            self.priority.insert(rule_id);
+                        }
                         AttrKind::Tag(tag) => {
+                            let term_id = termenv
+                                .get_term_by_name(tyenv, &attr.name)
+                                .ok_or(format_err!("attr term should exist"))?;
                             self.tags.entry(term_id).or_default().insert(tag.0.clone());
                         }
                     }
                 }
             }
         }
+        Ok(())
     }
 
     fn collect_macros(&mut self, defs: &[Def]) {

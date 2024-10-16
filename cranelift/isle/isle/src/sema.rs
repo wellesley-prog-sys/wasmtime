@@ -2492,6 +2492,14 @@ impl TermEnv {
             .copied()
     }
 
+    /// Lookup rule by name.
+    pub fn get_rule_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<RuleId> {
+        tyenv
+            .intern(sym)
+            .and_then(|sym| self.rule_map.get(&sym))
+            .copied()
+    }
+
     /// Lookup the term corresponding to the given enum variant.
     pub fn get_variant_term(&self, tyenv: &TypeEnv, ty: TypeId, variant: VariantId) -> TermId {
         let variant = tyenv.get_variant(ty, variant);

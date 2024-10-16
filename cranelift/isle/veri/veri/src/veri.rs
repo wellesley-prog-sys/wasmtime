@@ -1,8 +1,8 @@
 use crate::{
-    expand::Expansion,
+    expand::{Constrain, Expansion},
     program::Program,
     spec::{self, Arm, Constructor, Signature, State},
-    trie_again::{binding_type, BindingType},
+    trie::{binding_type, BindingType},
     types::{Compound, Const, Type, Variant, Width},
 };
 use anyhow::{bail, format_err, Result};
@@ -761,10 +761,9 @@ impl<'a> ConditionsBuilder<'a> {
         )?;
 
         // Constraints.
-        for (binding_id, constraints) in &self.expansion.constraints {
-            for constraint in constraints {
-                self.add_constraint(*binding_id, constraint)?;
-            }
+        for constrain in &self.expansion.constraints {
+            let holds = self.constrain(constrain)?;
+            self.conditions.assumptions.push(holds);
         }
 
         // Equals.
@@ -864,6 +863,12 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn const_int(&mut self, id: BindingId, val: i128, ty: TypeId) -> Result<()> {
+        let eq = self.equals_const_int(id, val, ty)?;
+        self.conditions.assumptions.push(eq);
+        Ok(())
+    }
+
+    fn equals_const_int(&mut self, id: BindingId, val: i128, ty: TypeId) -> Result<ExprId> {
         // Determine modeled type.
         let ty_name = self.prog.type_name(ty);
         let ty = self
@@ -878,14 +883,18 @@ impl<'a> ConditionsBuilder<'a> {
         // Construct value of the determined type.
         let value = self.spec_typed_value(val, ty)?.into();
 
-        // Assumption: destination binding equals constant value.
+        // Destination binding equals constant value.
         let eq = self.values_equal(self.binding_value[&id].clone(), value);
-        self.conditions.assumptions.push(eq);
-
-        Ok(())
+        Ok(eq)
     }
 
     fn const_prim(&mut self, id: BindingId, val: Sym) -> Result<()> {
+        let eq = self.equals_const_prim(id, val)?;
+        self.conditions.assumptions.push(eq);
+        Ok(())
+    }
+
+    fn equals_const_prim(&mut self, id: BindingId, val: Sym) -> Result<ExprId> {
         // Lookup value.
         let spec_value = self.prog.specenv.const_value.get(&val).ok_or(format_err!(
             "value of constant {const_name} is unspecified",
@@ -893,11 +902,9 @@ impl<'a> ConditionsBuilder<'a> {
         ))?;
         let value = self.spec_expr_no_vars(spec_value)?;
 
-        // Assumption: destination binding equals constant value.
+        // Destination binding equals constant value.
         let eq = self.values_equal(self.binding_value[&id].clone(), value);
-        self.conditions.assumptions.push(eq);
-
-        Ok(())
+        Ok(eq)
     }
 
     fn extractor(&mut self, id: BindingId, term: TermId, parameter: BindingId) -> Result<()> {
@@ -1106,11 +1113,26 @@ impl<'a> ConditionsBuilder<'a> {
         Ok(())
     }
 
-    fn add_constraint(&mut self, binding_id: BindingId, constraint: &Constraint) -> Result<()> {
+    fn constrain(&mut self, constrain: &Constrain) -> Result<ExprId> {
+        match constrain {
+            Constrain::Match(binding_id, constraint) => self.constraint(*binding_id, constraint),
+            Constrain::NotAll(constrains) => {
+                let cs = constrains
+                    .iter()
+                    .map(|c| self.constrain(c))
+                    .collect::<Result<_>>()?;
+                let all = self.all(cs);
+                let not_all = self.dedup_expr(Expr::Not(all));
+                Ok(not_all)
+            }
+        }
+    }
+
+    fn constraint(&mut self, binding_id: BindingId, constraint: &Constraint) -> Result<ExprId> {
         match constraint {
             Constraint::Some => self.constraint_some(binding_id),
-            Constraint::ConstPrim { val } => self.const_prim(binding_id, *val),
-            Constraint::ConstInt { val, ty } => self.const_int(binding_id, *val, *ty),
+            Constraint::ConstPrim { val } => self.equals_const_prim(binding_id, *val),
+            Constraint::ConstInt { val, ty } => self.equals_const_int(binding_id, *val, *ty),
             Constraint::Variant {
                 ty,
                 variant,
@@ -1119,17 +1141,15 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
-    fn constraint_some(&mut self, binding_id: BindingId) -> Result<()> {
+    fn constraint_some(&mut self, binding_id: BindingId) -> Result<ExprId> {
         // Constrained binding should be an option.
         let opt = self.binding_value[&binding_id]
             .as_option()
             .expect("target of some constraint should be an option")
             .clone();
 
-        // Assumption: option is Some.
-        self.conditions.assumptions.push(opt.some);
-
-        Ok(())
+        // Constraint: option is Some.
+        Ok(opt.some)
     }
 
     fn constraint_variant(
@@ -1137,7 +1157,7 @@ impl<'a> ConditionsBuilder<'a> {
         binding_id: BindingId,
         ty: TypeId,
         variant: VariantId,
-    ) -> Result<()> {
+    ) -> Result<ExprId> {
         // Constrained binding should be an enum.
         let e = self.binding_value[&binding_id]
             .as_enum()
@@ -1155,9 +1175,7 @@ impl<'a> ConditionsBuilder<'a> {
         // Assumption: discriminant equals variant.
         let variant = e.try_variant_by_name(variant_name)?;
         let discriminator = self.discriminator(&e, variant);
-        self.conditions.assumptions.push(discriminator);
-
-        Ok(())
+        Ok(discriminator)
     }
 
     fn spec_expr(&mut self, expr: &spec::Expr, vars: &Variables) -> Result<Symbolic> {

@@ -90,7 +90,7 @@
 ;;;; CLIF Instruction Specifications ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (spec (iadd x y)
-    (provide (= result (bvadd x y))))
+    (match (= result (bvadd x y))))
 (instantiate iadd
     ((args (bv 8) (bv 8)) (ret (bv 8)))
     ((args (bv 16) (bv 16)) (ret (bv 16)))
@@ -100,25 +100,25 @@
 )
 
 (spec (isub x y)
-    (provide (= result (bvsub x y))))
+    (match (= result (bvsub x y))))
 (instantiate isub bv_binary_8_to_64)
 
 (spec (ineg x)
-    (provide (= result (bvneg x))))
+    (match (= result (bvneg x))))
 (instantiate ineg bv_unary_8_to_64)
 
 (spec (imul x y)
-    (provide (= result (bvmul x y))))
+    (match (= result (bvmul x y))))
 (instantiate imul bv_binary_8_to_64)
 
 (spec (iconst arg)
-    (provide (= arg (zero_ext 64 result))))
+    (match (= arg (zero_ext 64 result))))
 (instantiate iconst
     ((args (bv 64)) (ret (bv 64)))
 )
 
 (spec (ishl x y)
-    (provide
+    (match
         (= result
             (bvshl
                 x
@@ -130,24 +130,24 @@
 (instantiate ishl bv_binary_8_to_64)
 
 (spec (band x y)
-    (provide (= result (bvand x y))))
+    (match (= result (bvand x y))))
 (instantiate band bv_binary_8_to_64)
 
 (spec (bor x y)
-    (provide (= result (bvor x y))))
+    (match (= result (bvor x y))))
 (instantiate bor bv_binary_8_to_64)
 
 (spec (bnot x)
-    (provide (= result (bvnot x))))
+    (match (= result (bvnot x))))
 (instantiate bnot bv_unary_8_to_64)
 
 (spec (bitselect c x y)
-    (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
+    (match (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)
 
 (spec (load flags p offset)
     (modifies clif_load loaded_value)
-    (provide
+    (match
         ; Activate the CLIF load effect
         (:active clif_load)
 
@@ -172,7 +172,7 @@
 
 (spec (store flags value p offset)
     (modifies clif_store)
-    (provide
+    (match
         ; Activate the CLIF store effect
         (:active clif_store)
 
@@ -210,9 +210,9 @@
 )
 
 (spec (uextend x)
-    (provide (= result (zero_ext (widthof result) x))))
+    (match (= result (zero_ext (widthof result) x))))
 (instantiate uextend extend)
 
 (spec (sextend x)
-    (provide (= result (sign_ext (widthof result) x))))
+    (match (= result (sign_ext (widthof result) x))))
 (instantiate sextend extend)
