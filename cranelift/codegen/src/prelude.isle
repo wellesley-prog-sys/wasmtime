@@ -14,8 +14,11 @@
 (decl pure unit () Unit)
 (extern constructor unit unit)
 
+(model bool (type Bool))
 (type bool (primitive bool))
+(model true (const true))
 (extern const $true bool)
+(model false (const false))
 (extern const $false bool)
 
 (type u8 (primitive u8))
@@ -440,6 +443,7 @@
 (extern constructor ty_smax ty_smax)
 
 ;; Get the bit width of a given type.
+(spec (ty_bits x) (provide (= result (int2bv 8 x))))
 (decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
 
@@ -567,6 +571,9 @@
 ;; An extractor that only matches types that can fit in 32 bits.
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)
+(spec (fits_in_32 arg)
+      (provide (= result arg))
+      (match (<= arg 32)))
 
 ;; An extractor that only matches types that can fit in 32 bits.
 (decl lane_fits_in_32 (Type) Type)

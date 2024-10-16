@@ -2024,6 +2024,12 @@
 
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
+(spec (u8_into_imm12 n)
+      (provide
+            (not (:shift12 result))
+            (= (:bits result) (zero_ext 12 n))
+      )
+)
 
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
@@ -2186,6 +2192,7 @@
 (extern constructor writable_link_reg writable_link_reg)
 
 (decl writable_zero_reg () WritableReg)
+(spec (writable_zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
 (extern constructor writable_zero_reg writable_zero_reg)
 
 (decl value_regs_zero () ValueRegs)
@@ -3325,6 +3332,7 @@
 
 ;; Place a `Value` into a register, sign extending it to 32-bits
 (decl put_in_reg_sext32 (Value) Reg)
+(attr put_in_reg_sext32 (veri chain))
 (rule -1 (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
       (extend val $true (ty_bits ty) 32))
 

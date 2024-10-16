@@ -379,10 +379,10 @@
 (rule -1 (lower (has_type ty @ (multi_lane _ _) (iabs x)))
       (vec_abs x (vector_size ty)))
 
-(rule 2 (lower (has_type $I64 (iabs x)))
+(rule iabs_64 2 (lower (has_type $I64 (iabs x)))
       (abs (OperandSize.Size64) x))
 
-(rule 1 (lower (has_type (fits_in_32 ty) (iabs x)))
+(rule iabs_8_16_32 1 (lower (has_type (fits_in_32 ty) (iabs x)))
       (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
 
 ; `rustc` implementation.

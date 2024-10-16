@@ -107,6 +107,10 @@
     (match (= result (bvneg x))))
 (instantiate ineg bv_unary_8_to_64)
 
+(spec (iabs x)
+    (provide (= result (if (bvsge x (zero_ext (widthof x) #b0)) x (bvneg x)))))
+(instantiate iabs bv_unary_8_to_64)
+
 (spec (imul x y)
     (match (= result (bvmul x y))))
 (instantiate imul bv_binary_8_to_64)

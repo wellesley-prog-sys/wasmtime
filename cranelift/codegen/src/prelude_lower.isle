@@ -495,6 +495,7 @@
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
+                  (has_result Bool)
             )
       )
 )
@@ -503,6 +504,14 @@
       (provide
             (= (:flags result) (:flags_out inst))
             (= (:result result) reg)
+            (:has_result result)
+      )
+)
+
+(spec (ProducesFlags.ProducesFlagsSideEffect inst)
+      (provide
+            (= (:flags result) (:flags_out inst))
+            (not (:has_result result))
       )
 )
 
@@ -540,6 +549,7 @@
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
+                  (has_result Bool)
             )
       )
 )
@@ -548,6 +558,15 @@
       (provide
             (= (:flags result) (:flags_in inst))
             (= (:result result) reg)
+            (:has_result result)
+      )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsReturnsReg inst reg)
+      (provide
+            (= (:flags result) (:flags_in inst))
+            (= (:result result) reg)
+            (:has_result result)
       )
 )
 
@@ -595,8 +614,15 @@
             ; Transfer flags from producer to consumer.
             (= (:flags producer) (:flags consumer))
             ; Construct resulting value registers.
-            (= (:lo result) (:result producer))
-            (= (:hi result) (:result consumer))
+            (=> (and (:has_result producer) (:has_result consumer))
+                  (and
+                        (= (:lo result) (:result producer))
+                        (= (:hi result) (:result consumer))
+                  )
+            )
+            (=> (and (not (:has_result producer)) (:has_result consumer))
+                  (= (:lo result) (:result consumer))
+            )
       )
 )
 

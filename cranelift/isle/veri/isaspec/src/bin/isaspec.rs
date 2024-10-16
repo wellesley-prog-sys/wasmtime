@@ -968,7 +968,7 @@ fn define_extend() -> SpecConfig {
         cases: Cases::Cases(
             bits.iter()
                 .cartesian_product(&bits)
-                .filter(|(from_bits, to_bits)| from_bits < to_bits)
+                .filter(|(from_bits, to_bits)| from_bits <= to_bits && **from_bits < 64)
                 .cartesian_product(&signed)
                 .map(|((from_bits, to_bits), signed)| Case {
                     conds: vec![
