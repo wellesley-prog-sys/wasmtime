@@ -268,6 +268,17 @@ pub struct SymbolicVariant {
     value: Symbolic,
 }
 
+impl SymbolicVariant {
+    fn try_field_by_name(&self, name: &str) -> Result<&SymbolicField> {
+        self.value
+            .as_struct()
+            .ok_or(format_err!("variant value is not a struct"))?
+            .iter()
+            .find(|f| f.name == name)
+            .ok_or(format_err!("no field with name {name}"))
+    }
+}
+
 impl std::fmt::Display for SymbolicVariant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{name} {value}", name = self.name, value = self.value)
@@ -883,7 +894,11 @@ impl<'a> ConditionsBuilder<'a> {
                 fields,
             } => self.make_variant(id, *ty, *variant, fields),
 
-            Binding::MatchVariant { .. } => todo!("binding: match_variant"),
+            Binding::MatchVariant {
+                source,
+                variant,
+                field,
+            } => self.match_variant(id, *source, *variant, *field),
 
             Binding::MakeSome { inner } => self.make_some(id, *inner),
 
@@ -1076,14 +1091,68 @@ impl<'a> ConditionsBuilder<'a> {
         variant: VariantId,
         fields: &[BindingId],
     ) -> Result<()> {
-        // TODO(mbm): make_variant binding conditions generation must account for enum type models
-        log::warn!("make_variant binding partially implemented");
-
         // Lookup term corresponding to variant.
         let variant_term_id = self.prog.get_variant_term(ty, variant);
 
         // Invoke as a constructor.
         self.constructor(id, variant_term_id, fields, Invocation::Caller)?;
+
+        Ok(())
+    }
+
+    fn match_variant(
+        &mut self,
+        id: BindingId,
+        source: BindingId,
+        variant: VariantId,
+        field: TupleIndex,
+    ) -> Result<()> {
+        // Source binding should be an enum.
+        let e = self.binding_value[&source]
+            .as_enum()
+            .ok_or(format_err!(
+                "target of variant constraint should be an enum"
+            ))?
+            .clone();
+
+        // Lookup enum type via corresponding constriant,
+        let tys: Vec<_> = self
+            .expansion
+            .constraints
+            .iter()
+            .flat_map(|c| match c {
+                Constrain::Match(id, Constraint::Variant { ty, variant: v, .. })
+                    if *id == source && *v == variant =>
+                {
+                    Some(ty)
+                }
+                _ => None,
+            })
+            .collect();
+        if tys.len() != 1 {
+            bail!("expected exactly one variant constraint for match variant binding");
+        }
+        let ty = tys[0];
+
+        // Lookup variant and field.
+        let variant_type = self.prog.tyenv.get_variant(*ty, variant);
+        let variant_name = self.prog.tyenv.syms[variant_type.name.index()].as_str();
+
+        let field_sym = variant_type.fields[field.index()].name;
+        let field_name = &self.prog.tyenv.syms[field_sym.index()];
+
+        // Destination binding.
+        let v = self.binding_value[&id].clone();
+
+        // Assumption: if the variant matches then the destination binding
+        // equals the projected field.
+        let variant = e.try_variant_by_name(variant_name)?;
+        let field = variant.try_field_by_name(field_name)?;
+
+        let discriminator = self.discriminator(&e, variant);
+        let eq = self.values_equal(v, field.value.clone());
+        let constraint = self.dedup_expr(Expr::Imp(discriminator, eq));
+        self.conditions.assumptions.push(constraint);
 
         Ok(())
     }
