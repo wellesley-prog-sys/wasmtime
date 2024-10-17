@@ -110,7 +110,6 @@ impl Expr {
             | Expr::BVNot(x)
             | Expr::BVNeg(x)
             | Expr::BVExtract(_, _, x)
-            | Expr::Int2BV(_, x)
             | Expr::BV2Nat(x)
             | Expr::WidthOf(x) => vec![*x],
 
@@ -148,6 +147,7 @@ impl Expr {
             | Expr::BVZeroExt(x, y)
             | Expr::BVSignExt(x, y)
             | Expr::BVConvTo(x, y)
+            | Expr::Int2BV(x, y)
             | Expr::BVConcat(x, y) => vec![*x, *y],
 
             // Ternary

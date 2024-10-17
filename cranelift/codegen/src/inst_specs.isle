@@ -115,6 +115,40 @@
     (match (= result (bvmul x y))))
 (instantiate imul bv_binary_8_to_64)
 
+(spec (smulhi x y)
+    (match
+        (let
+            (
+                (double (concat x x))
+                (double_width (widthof double))
+                (xwide (sign_ext double_width x))
+                (ywide (sign_ext double_width y))
+            )
+            (with (low)
+                (= (concat result low) (bvmul xwide ywide))
+            )
+        )
+    )
+)
+(instantiate smulhi bv_binary_8_to_64)
+
+(spec (umulhi x y)
+    (match
+        (let
+            (
+                (double (concat x x))
+                (double_width (widthof double))
+                (xwide (zero_ext double_width x))
+                (ywide (zero_ext double_width y))
+            )
+            (with (low)
+                (= (concat result low) (bvmul xwide ywide))
+            )
+        )
+    )
+)
+(instantiate umulhi bv_binary_8_to_64)
+
 (spec (iconst arg)
     (match (= arg (zero_ext 64 result))))
 (instantiate iconst
