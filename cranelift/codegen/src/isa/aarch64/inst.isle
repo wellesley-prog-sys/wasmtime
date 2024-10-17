@@ -2192,7 +2192,7 @@
 (extern constructor writable_link_reg writable_link_reg)
 
 (decl writable_zero_reg () WritableReg)
-(spec (writable_zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
+(spec (writable_zero_reg) (provide true)) ; zero register is just a write sink
 (extern constructor writable_zero_reg writable_zero_reg)
 
 (decl value_regs_zero () ValueRegs)
