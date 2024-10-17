@@ -283,7 +283,6 @@ pub enum SpecOp {
     Concat,
 
     // Custom encodings
-    Subs,
     Popcnt,
     Clz,
     Cls,
@@ -292,7 +291,7 @@ pub enum SpecOp {
     // Conversion operations
     ConvTo,
     Int2BV,
-    BV2Int,
+    BV2Nat,
     WidthOf,
 
     // Control operations

@@ -326,13 +326,16 @@ impl<'a> SystemBuilder<'a> {
                     then: Box::new(Constraint::Identical { x: *y, y: *z }),
                 });
             }
-            Expr::Lte(y, z) => {
+            Expr::Lt(y, z) | Expr::Lte(y, z) => {
                 self.boolean(x);
                 self.integer(*y);
                 self.integer(*z);
             }
-            Expr::BVUlt(y, z)
+            Expr::BVUgt(y, z)
+            | Expr::BVUge(y, z)
+            | Expr::BVUlt(y, z)
             | Expr::BVUle(y, z)
+            | Expr::BVSgt(y, z)
             | Expr::BVSge(y, z)
             | Expr::BVSlt(y, z)
             | Expr::BVSle(y, z)
@@ -353,12 +356,17 @@ impl<'a> SystemBuilder<'a> {
             | Expr::BVSub(y, z)
             | Expr::BVMul(y, z)
             | Expr::BVSDiv(y, z)
+            | Expr::BVUDiv(y, z)
+            | Expr::BVSRem(y, z)
+            | Expr::BVURem(y, z)
             | Expr::BVAnd(y, z)
             | Expr::BVOr(y, z)
             | Expr::BVXor(y, z)
             | Expr::BVShl(y, z)
             | Expr::BVLShr(y, z)
-            | Expr::BVAShr(y, z) => {
+            | Expr::BVAShr(y, z)
+            | Expr::BVRotl(y, z)
+            | Expr::BVRotr(y, z) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
@@ -395,6 +403,10 @@ impl<'a> SystemBuilder<'a> {
                 self.integer(*w);
                 self.integer(*y);
                 self.width_of(x, *w);
+            }
+            Expr::BV2Nat(y) => {
+                self.integer(x);
+                self.bit_vector(*y);
             }
             Expr::WidthOf(y) => {
                 self.integer(x);

@@ -39,10 +39,15 @@ pub enum Expr {
     Or(ExprId, ExprId),
     Imp(ExprId, ExprId),
     Eq(ExprId, ExprId),
+    Lt(ExprId, ExprId),
     Lte(ExprId, ExprId),
 
+    BVUgt(ExprId, ExprId),
+    BVUge(ExprId, ExprId),
     BVUlt(ExprId, ExprId),
     BVUle(ExprId, ExprId),
+
+    BVSgt(ExprId, ExprId),
     BVSge(ExprId, ExprId),
     BVSlt(ExprId, ExprId),
     BVSle(ExprId, ExprId),
@@ -58,12 +63,17 @@ pub enum Expr {
     BVSub(ExprId, ExprId),
     BVMul(ExprId, ExprId),
     BVSDiv(ExprId, ExprId),
+    BVUDiv(ExprId, ExprId),
+    BVSRem(ExprId, ExprId),
+    BVURem(ExprId, ExprId),
     BVAnd(ExprId, ExprId),
     BVOr(ExprId, ExprId),
     BVXor(ExprId, ExprId),
     BVShl(ExprId, ExprId),
     BVLShr(ExprId, ExprId),
     BVAShr(ExprId, ExprId),
+    BVRotl(ExprId, ExprId),
+    BVRotr(ExprId, ExprId),
 
     // ITE
     Conditional(ExprId, ExprId, ExprId),
@@ -81,6 +91,7 @@ pub enum Expr {
 
     // Integer conversion.
     Int2BV(ExprId, ExprId),
+    BV2Nat(ExprId),
 
     // Bitwidth.
     WidthOf(ExprId),
@@ -93,44 +104,54 @@ impl Expr {
 
     pub fn sources(&self) -> Vec<ExprId> {
         match self {
-            Self::Const(_) | Self::Variable(_) => Vec::new(),
+            Expr::Const(_) | Expr::Variable(_) => Vec::new(),
             // Unary
-            &Self::Not(x)
-            | &Self::BVNot(x)
-            | &Self::BVNeg(x)
-            | &Self::BVExtract(_, _, x)
-            | &Self::Int2BV(_, x)
-            | &Self::WidthOf(x) => vec![x],
+            Expr::Not(x)
+            | Expr::BVNot(x)
+            | Expr::BVNeg(x)
+            | Expr::BVExtract(_, _, x)
+            | Expr::Int2BV(_, x)
+            | Expr::BV2Nat(x)
+            | Expr::WidthOf(x) => vec![*x],
 
             // Binary
-            &Self::And(x, y)
-            | &Self::Or(x, y)
-            | &Self::Imp(x, y)
-            | &Self::Eq(x, y)
-            | &Self::Lte(x, y)
-            | &Self::BVUlt(x, y)
-            | &Self::BVUle(x, y)
-            | &Self::BVSge(x, y)
-            | &Self::BVSlt(x, y)
-            | &Self::BVSle(x, y)
-            | &Self::BVSaddo(x, y)
-            | &Self::BVAdd(x, y)
-            | &Self::BVSub(x, y)
-            | &Self::BVMul(x, y)
-            | &Self::BVSDiv(x, y)
-            | &Self::BVAnd(x, y)
-            | &Self::BVOr(x, y)
-            | &Self::BVXor(x, y)
-            | &Self::BVShl(x, y)
-            | &Self::BVLShr(x, y)
-            | &Self::BVAShr(x, y)
-            | &Self::BVZeroExt(x, y)
-            | &Self::BVSignExt(x, y)
-            | &Self::BVConvTo(x, y)
-            | &Self::BVConcat(x, y) => vec![x, y],
+            Expr::And(x, y)
+            | Expr::Or(x, y)
+            | Expr::Imp(x, y)
+            | Expr::Eq(x, y)
+            | Expr::Lt(x, y)
+            | Expr::Lte(x, y)
+            | Expr::BVUgt(x, y)
+            | Expr::BVUge(x, y)
+            | Expr::BVUlt(x, y)
+            | Expr::BVUle(x, y)
+            | Expr::BVSgt(x, y)
+            | Expr::BVSge(x, y)
+            | Expr::BVSlt(x, y)
+            | Expr::BVSle(x, y)
+            | Expr::BVSaddo(x, y)
+            | Expr::BVAdd(x, y)
+            | Expr::BVSub(x, y)
+            | Expr::BVMul(x, y)
+            | Expr::BVSDiv(x, y)
+            | Expr::BVUDiv(x, y)
+            | Expr::BVSRem(x, y)
+            | Expr::BVURem(x, y)
+            | Expr::BVAnd(x, y)
+            | Expr::BVOr(x, y)
+            | Expr::BVXor(x, y)
+            | Expr::BVShl(x, y)
+            | Expr::BVLShr(x, y)
+            | Expr::BVAShr(x, y)
+            | Expr::BVRotl(x, y)
+            | Expr::BVRotr(x, y)
+            | Expr::BVZeroExt(x, y)
+            | Expr::BVSignExt(x, y)
+            | Expr::BVConvTo(x, y)
+            | Expr::BVConcat(x, y) => vec![*x, *y],
 
             // Ternary
-            &Self::Conditional(c, t, e) => vec![c, t, e],
+            Expr::Conditional(c, t, e) => vec![*c, *t, *e],
         }
     }
 }
@@ -138,42 +159,52 @@ impl Expr {
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Const(c) => write!(f, "const({c})"),
-            Self::Variable(v) => write!(f, "var({})", v.index()),
-            Self::Not(x) => write!(f, "!{}", x.index()),
-            Self::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
-            Self::Or(x, y) => write!(f, "{} || {}", x.index(), y.index()),
-            Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
-            Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
-            Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
-            Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
-            Self::BVUle(x, y) => write!(f, "bvule({}, {})", x.index(), y.index()),
-            Self::BVSge(x, y) => write!(f, "bvsge({}, {})", x.index(), y.index()),
-            Self::BVSlt(x, y) => write!(f, "bvslt({}, {})", x.index(), y.index()),
-            Self::BVSle(x, y) => write!(f, "bvsle({}, {})", x.index(), y.index()),
-            Self::BVSaddo(x, y) => write!(f, "bvsaddo({}, {})", x.index(), y.index()),
-            Self::BVNot(x) => write!(f, "bvnot({})", x.index()),
-            Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
-            Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
-            Self::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
-            Self::BVMul(x, y) => write!(f, "bvmul({}, {})", x.index(), y.index()),
-            Self::BVSDiv(x, y) => write!(f, "bvsdiv({}, {})", x.index(), y.index()),
-            Self::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
-            Self::BVOr(x, y) => write!(f, "bvor({}, {})", x.index(), y.index()),
-            Self::BVXor(x, y) => write!(f, "bvxor({}, {})", x.index(), y.index()),
-            Self::BVShl(x, y) => write!(f, "bvshl({}, {})", x.index(), y.index()),
-            Self::BVLShr(x, y) => write!(f, "bvlshr({}, {})", x.index(), y.index()),
-            Self::BVAShr(x, y) => write!(f, "bvashr({}, {})", x.index(), y.index()),
-            Self::Conditional(c, t, e) => {
+            Expr::Const(c) => write!(f, "const({c})"),
+            Expr::Variable(v) => write!(f, "var({})", v.index()),
+            Expr::Not(x) => write!(f, "!{}", x.index()),
+            Expr::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
+            Expr::Or(x, y) => write!(f, "{} || {}", x.index(), y.index()),
+            Expr::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
+            Expr::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
+            Expr::Lt(x, y) => write!(f, "{} < {}", x.index(), y.index()),
+            Expr::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
+            Expr::BVUgt(x, y) => write!(f, "bvugt({}, {})", x.index(), y.index()),
+            Expr::BVUge(x, y) => write!(f, "bvuge({}, {})", x.index(), y.index()),
+            Expr::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
+            Expr::BVUle(x, y) => write!(f, "bvule({}, {})", x.index(), y.index()),
+            Expr::BVSgt(x, y) => write!(f, "bvsgt({}, {})", x.index(), y.index()),
+            Expr::BVSge(x, y) => write!(f, "bvsge({}, {})", x.index(), y.index()),
+            Expr::BVSlt(x, y) => write!(f, "bvslt({}, {})", x.index(), y.index()),
+            Expr::BVSle(x, y) => write!(f, "bvsle({}, {})", x.index(), y.index()),
+            Expr::BVSaddo(x, y) => write!(f, "bvsaddo({}, {})", x.index(), y.index()),
+            Expr::BVNot(x) => write!(f, "bvnot({})", x.index()),
+            Expr::BVNeg(x) => write!(f, "bvneg({})", x.index()),
+            Expr::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
+            Expr::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
+            Expr::BVMul(x, y) => write!(f, "bvmul({}, {})", x.index(), y.index()),
+            Expr::BVSDiv(x, y) => write!(f, "bvsdiv({}, {})", x.index(), y.index()),
+            Expr::BVUDiv(x, y) => write!(f, "bvudiv({}, {})", x.index(), y.index()),
+            Expr::BVSRem(x, y) => write!(f, "bvsrem({}, {})", x.index(), y.index()),
+            Expr::BVURem(x, y) => write!(f, "bvurem({}, {})", x.index(), y.index()),
+            Expr::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
+            Expr::BVOr(x, y) => write!(f, "bvor({}, {})", x.index(), y.index()),
+            Expr::BVXor(x, y) => write!(f, "bvxor({}, {})", x.index(), y.index()),
+            Expr::BVShl(x, y) => write!(f, "bvshl({}, {})", x.index(), y.index()),
+            Expr::BVLShr(x, y) => write!(f, "bvlshr({}, {})", x.index(), y.index()),
+            Expr::BVAShr(x, y) => write!(f, "bvashr({}, {})", x.index(), y.index()),
+            Expr::BVRotl(x, y) => write!(f, "bvrotl({}, {})", x.index(), y.index()),
+            Expr::BVRotr(x, y) => write!(f, "bvrotr({}, {})", x.index(), y.index()),
+            Expr::Conditional(c, t, e) => {
                 write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
             }
-            Self::BVZeroExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
-            Self::BVSignExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
-            Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
-            Self::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
-            Self::BVConcat(x, y) => write!(f, "bv_concat({}, {})", x.index(), y.index()),
-            Self::Int2BV(w, x) => write!(f, "int2bv({}, {})", w.index(), x.index()),
-            Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
+            Expr::BVZeroExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
+            Expr::BVSignExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
+            Expr::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
+            Expr::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
+            Expr::BVConcat(x, y) => write!(f, "bv_concat({}, {})", x.index(), y.index()),
+            Expr::Int2BV(w, x) => write!(f, "int2bv({}, {})", w.index(), x.index()),
+            Expr::BV2Nat(x) => write!(f, "bv2nat({})", x.index()),
+            Expr::WidthOf(x) => write!(f, "width_of({})", x.index()),
         }
     }
 }
@@ -1229,10 +1260,28 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.values_equal(x, y).into())
             }
 
+            spec::Expr::Lt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Lt(x, y)))
+            }
+
             spec::Expr::Lte(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Lte(x, y)))
+            }
+
+            spec::Expr::Gt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Lt(y, x)))
+            }
+
+            spec::Expr::Gte(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Lte(y, x)))
             }
 
             spec::Expr::BVUlt(x, y) => {
@@ -1263,6 +1312,24 @@ impl<'a> ConditionsBuilder<'a> {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSle(x, y)))
+            }
+
+            spec::Expr::BVSgt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSgt(x, y)))
+            }
+
+            spec::Expr::BVUgt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUgt(x, y)))
+            }
+
+            spec::Expr::BVUge(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUge(x, y)))
             }
 
             spec::Expr::BVSaddo(x, y) => {
@@ -1341,6 +1408,36 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.scalar(Expr::BVAShr(x, y)))
             }
 
+            spec::Expr::BVUDiv(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUDiv(x, y)))
+            }
+
+            spec::Expr::BVURem(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVURem(x, y)))
+            }
+
+            spec::Expr::BVSRem(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSRem(x, y)))
+            }
+
+            spec::Expr::BVRotl(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVRotl(x, y)))
+            }
+
+            spec::Expr::BVRotr(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVRotr(x, y)))
+            }
+
             spec::Expr::Conditional(c, t, e) => {
                 let c = self.spec_expr(c, vars)?.try_into()?;
                 let t = self.spec_expr(t, vars)?;
@@ -1391,6 +1488,11 @@ impl<'a> ConditionsBuilder<'a> {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Int2BV(w, x)))
+            }
+
+            spec::Expr::BV2Nat(x) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BV2Nat(x)))
             }
 
             spec::Expr::WidthOf(x) => {

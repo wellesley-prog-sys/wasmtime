@@ -19,8 +19,6 @@ pub enum Expr {
     Var(Ident),
     Const(Const),
     Constructor(Constructor),
-    //True,
-    //False,
     Field(Ident, Box<Expr>),
     Discriminator(Ident, Box<Expr>),
 
@@ -34,53 +32,44 @@ pub enum Expr {
     Or(Box<Expr>, Box<Expr>),
     Imp(Box<Expr>, Box<Expr>),
     Eq(Box<Expr>, Box<Expr>),
+    Lt(Box<Expr>, Box<Expr>),
     Lte(Box<Expr>, Box<Expr>),
-    //Lt(Box<Expr>, Box<Expr>),
+    Gt(Box<Expr>, Box<Expr>),
+    Gte(Box<Expr>, Box<Expr>),
 
-    //BVSgt(Box<Expr>, Box<Expr>),
+    BVSgt(Box<Expr>, Box<Expr>),
     BVSge(Box<Expr>, Box<Expr>),
     BVSlt(Box<Expr>, Box<Expr>),
     BVSle(Box<Expr>, Box<Expr>),
-    //BVUgt(Box<Expr>, Box<Expr>),
-    //BVUgte(Box<Expr>, Box<Expr>),
+    BVUgt(Box<Expr>, Box<Expr>),
+    BVUge(Box<Expr>, Box<Expr>),
     BVUlt(Box<Expr>, Box<Expr>),
     BVUle(Box<Expr>, Box<Expr>),
 
     BVSaddo(Box<Expr>, Box<Expr>),
 
-    //// Bitvector operations
-    ////      Note: these follow the naming conventions of the SMT theory of bitvectors:
-    ////      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
+    // Bitvector operations
+
     // Unary operators
     BVNeg(Box<Expr>),
     BVNot(Box<Expr>),
-    //CLZ(Box<Expr>),
-    //A64CLZ(Box<Expr>, Box<Expr>),
-    //CLS(Box<Expr>),
-    //A64CLS(Box<Expr>, Box<Expr>),
-    //Rev(Box<Expr>),
-    //A64Rev(Box<Expr>, Box<Expr>),
-    //BVPopcnt(Box<Expr>),
 
-    //// Binary operators
-    //BVUDiv(Box<Expr>, Box<Expr>),
-    BVSDiv(Box<Expr>, Box<Expr>),
+    // Binary operators
     BVAdd(Box<Expr>, Box<Expr>),
     BVSub(Box<Expr>, Box<Expr>),
     BVMul(Box<Expr>, Box<Expr>),
-    //BVUrem(Box<Expr>, Box<Expr>),
-    //BVSrem(Box<Expr>, Box<Expr>),
+    BVUDiv(Box<Expr>, Box<Expr>),
+    BVSDiv(Box<Expr>, Box<Expr>),
+    BVURem(Box<Expr>, Box<Expr>),
+    BVSRem(Box<Expr>, Box<Expr>),
     BVAnd(Box<Expr>, Box<Expr>),
     BVOr(Box<Expr>, Box<Expr>),
     BVXor(Box<Expr>, Box<Expr>),
-    //BVRotl(Box<Expr>, Box<Expr>),
-    //BVRotr(Box<Expr>, Box<Expr>),
+    BVRotl(Box<Expr>, Box<Expr>),
+    BVRotr(Box<Expr>, Box<Expr>),
     BVShl(Box<Expr>, Box<Expr>),
     BVLShr(Box<Expr>, Box<Expr>),
     BVAShr(Box<Expr>, Box<Expr>),
-
-    //// Includes type
-    //BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
 
     // Conversions
     BVZeroExt(Box<Expr>, Box<Expr>),
@@ -94,11 +83,9 @@ pub enum Expr {
     // Concatenate bitvectors.
     BVConcat(Box<Expr>, Box<Expr>),
 
-    // Convert integer to bitvector.
+    // Convert between integers and bitvector.
     Int2BV(Box<Expr>, Box<Expr>),
-
-    //// Convert bitvector to integer
-    //BVToInt(Box<Expr>),
+    BV2Nat(Box<Expr>),
 
     // Conditional if-then-else
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
@@ -197,11 +184,10 @@ impl Expr {
                 SpecOp::Not => unary_expr!(Expr::Not, args, pos),
                 SpecOp::BVNot => unary_expr!(Expr::BVNot, args, pos),
                 SpecOp::BVNeg => unary_expr!(Expr::BVNeg, args, pos),
-                //SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
-                //SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
-                //SpecOp::Cls => unop(|x| Expr::CLS(x), args, pos, env),
-                //SpecOp::Popcnt => unop(|x| Expr::BVPopcnt(x), args, pos, env),
-                //SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
+                SpecOp::Rev => todo!(),
+                SpecOp::Clz => todo!(),
+                SpecOp::Cls => todo!(),
+                SpecOp::Popcnt => todo!(),
 
                 // Variadic binops
                 SpecOp::And => variadic_binary_expr!(Expr::And, args, pos),
@@ -209,38 +195,35 @@ impl Expr {
 
                 // Binary
                 SpecOp::Eq => binary_expr!(Expr::Eq, args, pos),
-                //SpecOp::Lt => binop(|x, y| Expr::Lt(x, y), args, pos, env),
+                SpecOp::Lt => binary_expr!(Expr::Lt, args, pos),
                 SpecOp::Lte => binary_expr!(Expr::Lte, args, pos),
-                //SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
-                //SpecOp::Gte => binop(|x, y| Expr::Lte(y, x), args, pos, env),
+                SpecOp::Gt => binary_expr!(Expr::Gt, args, pos),
+                SpecOp::Gte => binary_expr!(Expr::Gte, args, pos),
                 SpecOp::Imp => binary_expr!(Expr::Imp, args, pos),
-                //SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
                 SpecOp::BVAnd => binary_expr!(Expr::BVAnd, args, pos),
                 SpecOp::BVOr => binary_expr!(Expr::BVOr, args, pos),
                 SpecOp::BVXor => binary_expr!(Expr::BVXor, args, pos),
                 SpecOp::BVAdd => binary_expr!(Expr::BVAdd, args, pos),
                 SpecOp::BVSub => binary_expr!(Expr::BVSub, args, pos),
-                //SpecOp::BVSub => binop(|x, y| Expr::BVSub(x, y), args, pos, env),
                 SpecOp::BVMul => binary_expr!(Expr::BVMul, args, pos),
                 SpecOp::BVSdiv => binary_expr!(Expr::BVSDiv, args, pos),
-                //SpecOp::BVUdiv => binop(|x, y| Expr::BVUDiv(x, y), args, pos, env),
-                //SpecOp::BVUrem => binop(|x, y| Expr::BVUrem(x, y), args, pos, env),
-                //SpecOp::BVSrem => binop(|x, y| Expr::BVSrem(x, y), args, pos, env),
+                SpecOp::BVUdiv => binary_expr!(Expr::BVUDiv, args, pos),
+                SpecOp::BVUrem => binary_expr!(Expr::BVURem, args, pos),
+                SpecOp::BVSrem => binary_expr!(Expr::BVSRem, args, pos),
                 SpecOp::BVShl => binary_expr!(Expr::BVShl, args, pos),
                 SpecOp::BVLshr => binary_expr!(Expr::BVLShr, args, pos),
                 SpecOp::BVAshr => binary_expr!(Expr::BVAShr, args, pos),
                 SpecOp::BVUle => binary_expr!(Expr::BVUle, args, pos),
-                //SpecOp::BVUlt => binop(|x, y| Expr::BVUlt(x, y), args, pos, env),
                 SpecOp::BVUlt => binary_expr!(Expr::BVUlt, args, pos),
-                //SpecOp::BVUgt => binop(|x, y| Expr::BVUgt(x, y), args, pos, env),
-                //SpecOp::BVUge => binop(|x, y| Expr::BVUgte(x, y), args, pos, env),
+                SpecOp::BVUgt => binary_expr!(Expr::BVUgt, args, pos),
+                SpecOp::BVUge => binary_expr!(Expr::BVUge, args, pos),
                 SpecOp::BVSlt => binary_expr!(Expr::BVSlt, args, pos),
                 SpecOp::BVSle => binary_expr!(Expr::BVSle, args, pos),
-                //SpecOp::BVSgt => binop(|x, y| Expr::BVSgt(x, y), args, pos, env),
+                SpecOp::BVSgt => binary_expr!(Expr::BVSgt, args, pos),
                 SpecOp::BVSge => binary_expr!(Expr::BVSge, args, pos),
                 SpecOp::BVSaddo => binary_expr!(Expr::BVSaddo, args, pos),
-                //SpecOp::Rotr => binop(|x, y| Expr::BVRotr(x, y), args, pos, env),
-                //SpecOp::Rotl => binop(|x, y| Expr::BVRotl(x, y), args, pos, env),
+                SpecOp::Rotr => binary_expr!(Expr::BVRotr, args, pos),
+                SpecOp::Rotl => binary_expr!(Expr::BVRotl, args, pos),
                 SpecOp::ZeroExt => binary_expr!(Expr::BVZeroExt, args, pos),
                 SpecOp::SignExt => binary_expr!(Expr::BVSignExt, args, pos),
                 SpecOp::ConvTo => binary_expr!(Expr::BVConvTo, args, pos),
@@ -259,19 +242,7 @@ impl Expr {
                     )
                 }
                 SpecOp::Int2BV => binary_expr!(Expr::Int2BV, args, pos),
-                //SpecOp::Subs => {
-                //    assert_eq!(
-                //        args.len(),
-                //        3,
-                //        "Unexpected number of args for subs operator {:?}",
-                //        pos
-                //    );
-                //    Expr::BVSubs(
-                //        Box::new(spec_to_expr(&args[0], env)),
-                //        Box::new(spec_to_expr(&args[1], env)),
-                //        Box::new(spec_to_expr(&args[2], env)),
-                //    )
-                //}
+                SpecOp::BV2Nat => unary_expr!(Expr::BV2Nat, args, pos),
                 SpecOp::WidthOf => unary_expr!(Expr::WidthOf, args, pos),
                 SpecOp::If => ternary_expr!(Expr::Conditional, args, pos),
                 SpecOp::Switch => {
@@ -292,7 +263,6 @@ impl Expr {
                         .collect();
                     Expr::Switch(Box::new(on), arms)
                 }
-                _ => todo!("ast spec op: {op:?}"),
             },
             ast::SpecExpr::Match { x, arms, pos: _ } => {
                 let x = Box::new(Expr::from_ast(x));

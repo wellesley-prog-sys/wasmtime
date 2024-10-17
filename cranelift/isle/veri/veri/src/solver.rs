@@ -191,9 +191,13 @@ impl<'a> Solver<'a> {
             Expr::Or(x, y) => Ok(self.smt.or(self.expr_atom(x), self.expr_atom(y))),
             Expr::Imp(x, y) => Ok(self.smt.imp(self.expr_atom(x), self.expr_atom(y))),
             Expr::Eq(x, y) => Ok(self.smt.eq(self.expr_atom(x), self.expr_atom(y))),
+            Expr::Lt(x, y) => Ok(self.smt.lt(self.expr_atom(x), self.expr_atom(y))),
             Expr::Lte(x, y) => Ok(self.smt.lte(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVUgt(x, y) => Ok(self.smt.bvugt(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVUge(x, y) => Ok(self.smt.bvuge(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVUlt(x, y) => Ok(self.smt.bvult(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVUle(x, y) => Ok(self.smt.bvule(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSgt(x, y) => Ok(self.smt.bvsgt(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVSge(x, y) => Ok(self.smt.bvsge(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVSlt(x, y) => Ok(self.smt.bvslt(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVSle(x, y) => Ok(self.smt.bvsle(self.expr_atom(x), self.expr_atom(y))),
@@ -214,10 +218,15 @@ impl<'a> Solver<'a> {
                 self.expr_atom(x),
                 self.expr_atom(y),
             ])),
+            Expr::BVUDiv(x, y) => Ok(self.smt.bvudiv(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVSRem(x, y) => Ok(self.smt.bvsrem(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVURem(x, y) => Ok(self.smt.bvurem(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVAnd(x, y) => Ok(self.smt.bvand(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVShl(x, y) => Ok(self.smt.bvshl(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVLShr(x, y) => Ok(self.smt.bvlshr(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVAShr(x, y) => Ok(self.smt.bvashr(self.expr_atom(x), self.expr_atom(y))),
+            Expr::BVRotl(..) => todo!("bvrotl"),
+            Expr::BVRotr(..) => todo!("bvrotr"),
             Expr::Conditional(c, t, e) => {
                 Ok(self
                     .smt
@@ -229,6 +238,9 @@ impl<'a> Solver<'a> {
             Expr::BVExtract(h, l, x) => Ok(self.extract(h, l, self.expr_atom(x))),
             Expr::BVConcat(x, y) => Ok(self.smt.concat(self.expr_atom(x), self.expr_atom(y))),
             Expr::Int2BV(w, x) => self.int_to_bv(w, x),
+            Expr::BV2Nat(x) => Ok(self
+                .smt
+                .list(vec![self.smt.atom("bv2nat"), self.expr_atom(x)])),
             Expr::WidthOf(x) => self.width_of(x),
         }
     }
