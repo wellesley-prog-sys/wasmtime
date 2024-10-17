@@ -1566,35 +1566,35 @@ impl<'a> ConditionsBuilder<'a> {
                 // Discriminant: constant value since we are constructing a known variant.
                 let discriminant = self.constant(Const::Int(variant.id.index().try_into()?));
 
-                Ok(Symbolic::Enum(SymbolicEnum {
-                    discriminant,
-                    variants: variants
-                        .iter()
-                        .map(|v| {
-                            // For all except the variant under construction, allocate an undefined variant.
-                            if v.id != variant.id {
-                                // QUESTION(mbm): use undef variant or IfThen and fresh bits in solver?
-                                return self.alloc_variant(v, "undef".to_string());
-                            }
+                // Variants: undefined except for the variant under construction.
+                let variants = variants
+                    .iter()
+                    .map(|v| {
+                        // For all except the variant under construction, allocate an undefined variant.
+                        if v.id != variant.id {
+                            // QUESTION(mbm): use undef variant or IfThen and fresh bits in solver?
+                            return self.alloc_variant(v, "undef".to_string());
+                        }
 
-                            // Construct a variant provided arguments.
-                            assert_eq!(args.len(), v.fields.len());
-                            let fields = zip(&v.fields, args)
-                                .map(|(f, a)| {
-                                    Ok(SymbolicField {
-                                        name: f.name.0.clone(),
-                                        value: self.spec_expr(a, vars)?,
-                                    })
+                        // Construct a variant provided arguments.
+                        assert_eq!(args.len(), v.fields.len());
+                        let fields = zip(&v.fields, args)
+                            .map(|(f, a)| {
+                                Ok(SymbolicField {
+                                    name: f.name.0.clone(),
+                                    value: self.spec_expr(a, vars)?,
                                 })
-                                .collect::<Result<_>>()?;
-                            Ok(SymbolicVariant {
-                                name: v.name.0.clone(),
-                                discriminant: v.id.index(),
-                                value: Symbolic::Struct(fields),
                             })
+                            .collect::<Result<_>>()?;
+                        Ok(SymbolicVariant {
+                            name: v.name.0.clone(),
+                            discriminant: v.id.index(),
+                            value: Symbolic::Struct(fields),
                         })
-                        .collect::<Result<_>>()?,
-                }))
+                    })
+                    .collect::<Result<_>>()?;
+
+                Ok(Symbolic::Enum(self.new_enum(discriminant, variants)?))
             }
         }
     }
@@ -1908,19 +1908,44 @@ impl<'a> ConditionsBuilder<'a> {
                     })
                     .collect::<Result<_>>()?,
             )),
-            Compound::Enum(variants) => Ok(Symbolic::Enum(SymbolicEnum {
-                discriminant: self
-                    .alloc_variable(Type::Int, Variable::component_name(&name, "discriminant")),
-                variants: variants
+            Compound::Enum(variants) => {
+                let discriminant =
+                    self.alloc_variable(Type::Int, Variable::component_name(&name, "discriminant"));
+                let variants = variants
                     .iter()
                     .map(|v| self.alloc_variant(v, name.clone()))
-                    .collect::<Result<_>>()?,
-            })),
+                    .collect::<Result<_>>()?;
+                Ok(Symbolic::Enum(self.new_enum(discriminant, variants)?))
+            }
             Compound::Named(_) => {
                 let ty = self.prog.specenv.resolve_type(ty, &self.prog.tyenv)?;
                 self.alloc_value(&ty, name)
             }
         }
+    }
+
+    fn new_enum(
+        &mut self,
+        discriminant: ExprId,
+        variants: Vec<SymbolicVariant>,
+    ) -> Result<SymbolicEnum> {
+        // Assume discriminant invariant: positive integer less than number of
+        // variants.
+        let zero = self.constant(Const::Int(0));
+        let num_variants = self.constant(Const::Int(variants.len().try_into()?));
+        let discriminant_positive = self.dedup_expr(Expr::Lte(zero, discriminant));
+        let discriminant_less_than_num_variants =
+            self.dedup_expr(Expr::Lt(discriminant, num_variants));
+        let discriminant_in_range = self.dedup_expr(Expr::And(
+            discriminant_positive,
+            discriminant_less_than_num_variants,
+        ));
+        self.conditions.assumptions.push(discriminant_in_range);
+
+        Ok(SymbolicEnum {
+            discriminant,
+            variants,
+        })
     }
 
     fn alloc_variant(&mut self, variant: &Variant, name: String) -> Result<SymbolicVariant> {
