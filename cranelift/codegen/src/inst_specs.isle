@@ -171,6 +171,10 @@
     (match (= result (bvand x y))))
 (instantiate band bv_binary_8_to_64)
 
+(spec (bxor x y)
+    (match (= result (bvxor x y))))
+(instantiate bxor bv_binary_8_to_64)
+
 (spec (bor x y)
     (match (= result (bvor x y))))
 (instantiate bor bv_binary_8_to_64)

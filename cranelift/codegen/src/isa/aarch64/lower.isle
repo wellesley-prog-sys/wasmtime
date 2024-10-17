@@ -1308,7 +1308,7 @@
       (not x (vector_size ty)))
 
 ;; Special-cases for fusing a bnot with bxor
-(rule 2 (lower (has_type (fits_in_64 ty) (bnot (bxor x y))))
+(rule bnot_bxor 2 (lower (has_type (fits_in_64 ty) (bnot (bxor x y))))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
 (rule 3 (lower (has_type $I128 (bnot (bxor x y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
 
@@ -1363,7 +1363,7 @@
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule -1 (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule bxor -1 (lower (has_type (fits_in_64 ty) (bxor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y))
 
 (rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
@@ -1375,9 +1375,9 @@
 ;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 1 (lower (has_type (fits_in_64 ty) (bxor x (bnot y))))
+(rule bxor_not_right 1 (lower (has_type (fits_in_64 ty) (bxor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
-(rule 2 (lower (has_type (fits_in_64 ty) (bxor (bnot y) x)))
+(rule bxor_not_left 2 (lower (has_type (fits_in_64 ty) (bxor (bnot y) x)))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
 
 (rule 3 (lower (has_type $I128 (bxor x (bnot y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))

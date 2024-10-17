@@ -1087,7 +1087,7 @@
             )
             (=>
                   (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
+                        (= rd (zero_ext 64 (bvor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
             )
 
             (=>
@@ -1096,7 +1096,7 @@
             )
             (=>
                   (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvand (extract 31 0 rn) (extract 31 0 imml))))
+                        (= rd (zero_ext 64 (bvand (extract 31 0 rn) (extract 31 0 imml))))
             )
 
             (=>
@@ -1105,7 +1105,25 @@
             )
             (=>
                   (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
-                        (= rd (conv_to 64 (bvand (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
+                        (= rd (zero_ext 64 (bvand (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
+            )
+
+            (=>
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
+                        (= rd (bvxor rn imml))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvxor (extract 31 0 rn) (extract 31 0 imml))))
+            )
+
+            (=>
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvxor rn (bvnot imml)))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvxor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
             )
       )
       (require
@@ -1122,6 +1140,12 @@
 
                   (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
             )
             ; REVIEW(mbm): require properties for logical immediates?
       )
