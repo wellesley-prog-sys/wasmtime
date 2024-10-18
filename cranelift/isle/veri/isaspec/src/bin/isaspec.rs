@@ -5,7 +5,7 @@ use std::{io, vec};
 
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
-use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp, SImm9};
+use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp, SImm9, NZCV};
 use cranelift_codegen::{
     ir::MemFlags,
     isa::aarch64::inst::{
@@ -160,7 +160,7 @@ fn define() -> Result<Vec<FileConfig>> {
         },
         FileConfig {
             name: "conds.isle".into(),
-            specs: define_conds(),
+            specs: define_conds()?,
         },
     ])
 }
@@ -1396,7 +1396,7 @@ where
     Ok(template)
 }
 
-fn define_conds() -> Vec<SpecConfig> {
+fn define_conds() -> Result<Vec<SpecConfig>> {
     // CSel
     let csel = define_csel("MInst.CSel", |rd, cond, rn, rm| Inst::CSel {
         rd,
@@ -1419,7 +1419,10 @@ fn define_conds() -> Vec<SpecConfig> {
     // CSetm
     let csetm = define_cset("MInst.CSetm", |rd, cond| Inst::CSetm { rd, cond });
 
-    vec![csel, csneg, cset, csetm]
+    // CCmp
+    let ccmp = define_ccmp()?;
+
+    Ok(vec![csel, csneg, cset, csetm, ccmp])
 }
 
 fn define_csel<F>(term: &str, inst: F) -> SpecConfig
@@ -1503,6 +1506,120 @@ where
     }
 }
 
+fn define_ccmp() -> Result<SpecConfig> {
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    // Execution scope: define opcode template fields.
+    let mut scope = aarch64::state();
+    for flag in &["n", "z", "c", "v"] {
+        scope.global(Target::Var(flag.to_string()));
+    }
+
+    // Flags and register mappings.
+    let mut mappings = flags_mappings();
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+    for flag in &["n", "z", "c", "v"] {
+        mappings.reads.insert(
+            Target::Var(flag.to_string()),
+            MappingBuilder::var("nzcv")
+                .field(&flag.to_uppercase())
+                .build(),
+        );
+    }
+
+    Ok(SpecConfig {
+        term: "MInst.CCmp".to_string(),
+        args: ["size", "rn", "rm", "nzcv", "cond"]
+            .map(String::from)
+            .to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| {
+                    Ok(Arm {
+                        variant: format!("{size:?}"),
+                        args: Vec::new(),
+                        body: Cases::Match(Match {
+                            on: spec_var("cond".to_string()),
+                            arms: conds()
+                                .iter()
+                                .rev()
+                                .map(|cond| {
+                                    let template = ccmp_template(*size, xreg(5), xreg(6), *cond)?;
+                                    Ok(Arm {
+                                        variant: format!("{cond:?}"),
+                                        args: Vec::new(),
+                                        body: Cases::Instruction(InstConfig {
+                                            opcodes: Opcodes::Template(template),
+                                            scope: scope.clone(),
+                                            mappings: mappings.clone(),
+                                        }),
+                                    })
+                                })
+                                .collect::<Result<_>>()?,
+                        }),
+                    })
+                })
+                .collect::<Result<_>>()?,
+        }),
+    })
+}
+
+fn ccmp_template(size: OperandSize, rn: Reg, rm: Reg, cond: Cond) -> Result<Bits> {
+    // Assemble a base instruction with a placeholder for the NZCV field.
+    let placeholder = NZCV::new(false, false, false, false);
+    let base = Inst::CCmp {
+        size,
+        rn,
+        rm,
+        nzcv: placeholder,
+        cond,
+    };
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic immediate fields.
+    let nzcv = Bits {
+        segments: vec![
+            Segment::Symbolic("v".to_string(), 1),
+            Segment::Symbolic("c".to_string(), 1),
+            Segment::Symbolic("z".to_string(), 1),
+            Segment::Symbolic("n".to_string(), 1),
+        ],
+    };
+    let template = Bits::splice(&bits, &nzcv, 0)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let nzcv = NZCV::new(
+            assignment["n"] != 0,
+            assignment["z"] != 0,
+            assignment["c"] != 0,
+            assignment["v"] != 0,
+        );
+        Ok(Inst::CCmp {
+            size,
+            rn,
+            rm,
+            nzcv,
+            cond,
+        })
+    })?;
+
+    Ok(template)
+}
+
 /// All condition codes.
 fn conds() -> Vec<Cond> {
     vec![
@@ -1559,7 +1676,11 @@ where
         let opcode = aarch64::opcode(&inst);
         let got = concrete.eval()?;
         if got != opcode {
-            bail!("template mismatch");
+            bail!(
+                "template mismatch: opcode {:#x}, template {:#x}",
+                opcode,
+                got,
+            );
         }
     }
     Ok(())

@@ -2,7 +2,7 @@
 
 use core::{fmt, panic};
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::vec;
 
 use anyhow::{bail, format_err, Result};
@@ -96,7 +96,7 @@ pub struct Scope {
     constraints: Vec<SpecExpr>,
     vars: HashSet<String>,
     decls: HashSet<Target>,
-    bindings: HashMap<Target, Binding>,
+    bindings: BTreeMap<Target, Binding>,
     init: HashMap<Target, String>,
     reads: HashSet<Target>,
     writes: HashSet<Target>,
@@ -108,7 +108,7 @@ impl Scope {
             constraints: Vec::new(),
             vars: HashSet::new(),
             decls: HashSet::new(),
-            bindings: HashMap::new(),
+            bindings: BTreeMap::new(),
             init: HashMap::new(),
             reads: HashSet::new(),
             writes: HashSet::new(),
@@ -139,7 +139,7 @@ impl Scope {
         &self.init
     }
 
-    pub fn bindings(&self) -> &HashMap<Target, Binding> {
+    pub fn bindings(&self) -> &BTreeMap<Target, Binding> {
         &self.bindings
     }
 

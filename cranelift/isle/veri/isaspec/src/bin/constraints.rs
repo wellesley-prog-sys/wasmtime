@@ -4,7 +4,7 @@ use cranelift_codegen::ir::types::I64;
 use cranelift_codegen::isa::aarch64::inst::{
     vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Imm12, ImmLogic,
     ImmShift, Inst, MoveWideConst, MoveWideOp, OperandSize, ShiftOp, ShiftOpAndAmt,
-    ShiftOpShiftImm, VecALUOp, VectorSize,
+    ShiftOpShiftImm, VecALUOp, VectorSize, NZCV,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::ast::Block;
@@ -258,6 +258,17 @@ fn define_insts() -> Vec<Inst> {
             cond,
             rn: xreg(1),
             rm: xreg(2),
+        });
+    }
+
+    // CCmp
+    for cond in conds.clone() {
+        insts.push(Inst::CCmp {
+            size: OperandSize::Size64,
+            rn: xreg(1),
+            rm: xreg(2),
+            nzcv: NZCV::new(true, false, true, false),
+            cond,
         });
     }
 
