@@ -22,7 +22,7 @@ pub fn popcnt(smt: &mut Context, ty: usize, x: SExpr, id: u32) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assume(smt.eq(result, r));
+    smt.assert(smt.eq(result, r));
     result
 }
 

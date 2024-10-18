@@ -355,6 +355,12 @@ impl<'a> SystemBuilder<'a> {
 
                 self.same_type(x, *y);
             }
+            Expr::Popcnt(y) => {
+                self.bit_vector(x);
+                self.bit_vector(*y);
+
+                self.same_type(x, *y);
+            }
             Expr::BVAdd(y, z)
             | Expr::BVSub(y, z)
             | Expr::BVMul(y, z)

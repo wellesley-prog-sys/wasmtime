@@ -59,7 +59,7 @@ pub enum Expr {
     //A64CLZ(Box<Expr>, Box<Expr>),
     //Rev(Box<Expr>),
     //A64Rev(Box<Expr>, Box<Expr>),
-    //BVPopcnt(Box<Expr>),
+    Popcnt(Box<Expr>), // or is it BVPopcnt?
 
     //// Binary operators
     //BVUDiv(Box<Expr>, Box<Expr>),
@@ -199,7 +199,7 @@ impl Expr {
                 SpecOp::Cls => unary_expr!(Expr::Cls, args, pos),
                 //SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
                 //SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
-                //SpecOp::Popcnt => unop(|x| Expr::BVPopcnt(x), args, pos, env),
+                SpecOp::Popcnt => unary_expr!(Expr::Popcnt, args, pos),
                 //SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
 
                 // Variadic binops

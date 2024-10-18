@@ -10,6 +10,7 @@ use crate::{
 };
 
 use crate::encoded::cls::*;
+use crate::encoded::popcnt::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Applicability {
@@ -217,6 +218,20 @@ impl<'a> Solver<'a> {
                     32 => Ok(cls32(&mut self.smt, xe, 0)),
                     64 => Ok(cls64(&mut self.smt, xe, 0)),
                     _ => unimplemented!("Unexpected CLS width"),
+                }
+            }
+            Expr::Popcnt(x) => {
+                let width = self
+                    .assignment
+                    .try_bit_vector_width(x)
+                    .context("popcnt semantics require known width")?;
+                let xe = self.expr_atom(x);
+                match width {
+                    8 => Ok(popcnt(&mut self.smt, 8, xe, 0)),
+                    16 => Ok(popcnt(&mut self.smt, 16, xe, 0)),
+                    32 => Ok(popcnt(&mut self.smt, 32, xe, 0)),
+                    64 => Ok(popcnt(&mut self.smt, 64, xe, 0)),
+                    _ => unimplemented!("Unexpected Popcnt width"),
                 }
             }
 

@@ -53,6 +53,7 @@ pub enum Expr {
     BVNot(ExprId),
     BVNeg(ExprId),
     Cls(ExprId),
+    Popcnt(ExprId),
 
     // Binary.
     BVAdd(ExprId, ExprId),
@@ -102,6 +103,7 @@ impl Expr {
             | &Self::BVExtract(_, _, x)
             | &Self::Int2BV(_, x)
             | &Self::Cls(x)
+            | &Self::Popcnt(x)
             | &Self::WidthOf(x) => vec![x],
 
             // Binary
@@ -157,6 +159,7 @@ impl std::fmt::Display for Expr {
             Self::BVNot(x) => write!(f, "bvnot({})", x.index()),
             Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
             Self::Cls(x) => write!(f, "cls({})", x.index()),
+            Self::Popcnt(x) => write!(f, "popcnt({})", x.index()),
             Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
             Self::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
             Self::BVMul(x, y) => write!(f, "bvmul({}, {})", x.index(), y.index()),
@@ -1269,6 +1272,11 @@ impl<'a> ConditionsBuilder<'a> {
             spec::Expr::Cls(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Cls(x)))
+            }
+
+            spec::Expr::Popcnt(x) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Popcnt(x)))
             }
 
             spec::Expr::BVAdd(x, y) => {

@@ -1904,7 +1904,7 @@
 
 (rule popcnt_64 (lower (has_type $I64 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size64)))
-            (nbits Resg (vec_cnt tmp (VectorSize.Size8x8)))
+            (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
         (mov_from_vec added 0 (ScalarSize.Size8))))
 
