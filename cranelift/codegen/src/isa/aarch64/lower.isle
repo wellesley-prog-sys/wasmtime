@@ -1613,7 +1613,7 @@
 ;; amount.
 
 ;; General 32-bit case.
-(rule (lower (has_type $I32 (rotl x y)))
+(rule rotl_32_base_case (lower (has_type $I32 (rotl x y)))
       (let ((amt Reg (value_regs_get y 0))
             (neg_shift Reg (sub $I32 (zero_reg) amt)))
         (a64_rotr $I32 x neg_shift)))
