@@ -1884,31 +1884,31 @@
 ;;     if ty == i128:
 ;;         mov out_hi, 0
 
-(rule (lower (has_type $I8 (popcnt x)))
+(rule popcnt_8 (lower (has_type $I8 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8))))
         (mov_from_vec nbits 0 (ScalarSize.Size8))))
 
 ;; Note that this uses `addp` instead of `addv` as it's usually cheaper.
-(rule (lower (has_type $I16 (popcnt x)))
+(rule popcnt_16 (lower (has_type $I16 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addp nbits nbits (VectorSize.Size8x8))))
         (mov_from_vec added 0 (ScalarSize.Size8))))
 
-(rule (lower (has_type $I32 (popcnt x)))
+(rule popcnt_32 (lower (has_type $I32 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
         (mov_from_vec added 0 (ScalarSize.Size8))))
 
-(rule (lower (has_type $I64 (popcnt x)))
+(rule popcnt_64 (lower (has_type $I64 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size64)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
         (mov_from_vec added 0 (ScalarSize.Size8))))
 
-(rule (lower (has_type $I128 (popcnt x)))
+(rule popcnt_128 (lower (has_type $I128 (popcnt x)))
       (let ((val ValueRegs x)
             (tmp_half Reg (mov_to_fpu (value_regs_get val 0) (ScalarSize.Size64)))
             (tmp Reg (mov_to_vec tmp_half (value_regs_get val 1) 1 (VectorSize.Size64x2)))
