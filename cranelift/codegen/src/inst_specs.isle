@@ -274,3 +274,7 @@
 (spec (umax x y)
     (provide (= result (if (bvuge x y) x y))))
 (instantiate umax bv_binary_8_to_64)
+
+(spec (rotl x y)
+    (provide (= result (rotl x y))))
+(instantiate rotl bv_binary_8_to_64)
