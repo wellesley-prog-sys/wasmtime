@@ -183,6 +183,10 @@
     (match (= result (bvnot x))))
 (instantiate bnot bv_unary_8_to_64)
 
+(spec (rotl x y)
+    (provide (= result (rotl x y))))
+(instantiate rotl bv_binary_8_to_64)
+
 (spec (bitselect c x y)
     (match (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)
@@ -274,7 +278,3 @@
 (spec (umax x y)
     (provide (= result (if (bvuge x y) x y))))
 (instantiate umax bv_binary_8_to_64)
-
-(spec (rotl x y)
-    (provide (= result (rotl x y))))
-(instantiate rotl bv_binary_8_to_64)
