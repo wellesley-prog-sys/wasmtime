@@ -1,6 +1,9 @@
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle::sema::Rule;
+use cranelift_isle::{
+    sema::{self, Rule},
+    trie_again::RuleSet,
+};
 use cranelift_isle_veri::{
     debug::print_expansion,
     expand::{Chaining, Expander, Expansion},
@@ -61,7 +64,6 @@ impl Opts {
             .inputs())
     }
 }
-
 fn main() -> anyhow::Result<()> {
     let _ = env_logger::try_init();
     let opts = Opts::parse();
@@ -100,6 +102,7 @@ fn main() -> anyhow::Result<()> {
         print_expansion(&prog, expansion);
         verify_expansion(
             expansion,
+            &term_rule_sets,
             &prog,
             &opts.smt2_replay_path,
             opts.timeout,
@@ -129,6 +132,7 @@ fn should_verify(expansion: &Expansion, target: Option<&Rule>, prog: &Program) -
 
 fn verify_expansion(
     expansion: &Expansion,
+    term_rule_set: &HashMap<sema::TermId, RuleSet>,
     prog: &Program,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
@@ -172,6 +176,7 @@ fn verify_expansion(
         verify_expansion_type_instantiation(
             prog,
             &conditions,
+            &term_rule_set,
             &solution.assignment,
             replay_path,
             timeout_seconds,
@@ -184,6 +189,7 @@ fn verify_expansion(
 fn verify_expansion_type_instantiation(
     prog: &Program,
     conditions: &Conditions,
+    term_rule_set: &HashMap<sema::TermId, RuleSet>,
     assignment: &Assignment,
     replay_path: &std::path::Path,
     timeout_seconds: u32,
@@ -218,6 +224,16 @@ fn verify_expansion_type_instantiation(
             conditions.print_model(&model, prog)?;
             // TODO(ashley): Still modifying this
             println!("rule:");
+            for sexpr in conditions.testing_print_with_trie(
+                &conditions.expansion,
+                &term_rule_set,
+                &model,
+                prog,
+                &solver.smt,
+            ) {
+                println!("{}", solver.smt.display(sexpr));
+            }
+
             for sexpr in conditions.print_rule(&conditions.expansion, &model, prog, &solver.smt) {
                 println!("{}", solver.smt.display(sexpr));
             }

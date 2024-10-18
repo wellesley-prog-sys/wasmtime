@@ -7,8 +7,8 @@ use crate::{
 };
 use cranelift_isle::{
     ast::Ident,
-    sema::{Sym, TermId, TypeId, VariantId},
-    trie_again::{Binding, BindingId, Constraint, TupleIndex},
+    sema::{self, Sym, TermId, TypeId, VariantId},
+    trie_again::{Binding, BindingId, Constraint, RuleSet, TupleIndex},
 };
 use easy_smt::{Context, SExpr};
 use std::{
@@ -544,7 +544,33 @@ impl Conditions {
                 ret: call.ret.eval(model).ok(),
             })
             .collect();
-        return prog.display_rule(expansion, model, &unsat_result_map, smt);
+        return prog.display_rule(expansion, model, unsat_result_map, smt);
+    }
+
+    pub fn testing_print_with_trie(
+        &self,
+        expansion: &Expansion,
+        term_rule_set: &HashMap<sema::TermId, RuleSet>,
+        model: &Model,
+        prog: &Program,
+        smt: &Context,
+    ) -> Vec<SExpr> {
+        let unsat_result_map: Vec<UnsatResult> = self
+            .calls
+            .iter()
+            .map(|call| UnsatResult {
+                term: call.term.clone(),
+                args: call.args.iter().map(|a| a.eval(model).ok()).collect(),
+                ret: call.ret.eval(model).ok(),
+            })
+            .collect();
+        return prog.recover_pattern_display(
+            expansion,
+            term_rule_set,
+            model,
+            unsat_result_map,
+            smt,
+        );
     }
 }
 

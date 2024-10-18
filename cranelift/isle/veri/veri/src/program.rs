@@ -110,27 +110,16 @@ impl Program {
         &self,
         expansion: &Expansion,
         model: &Model,
-        calls: &Vec<UnsatResult>,
+        calls: Vec<UnsatResult>,
         smt: &Context,
     ) -> Vec<SExpr> {
         // SExpr
         let mut rules_sexpr: Vec<SExpr> = Vec::new();
 
-        // // All TermIds from Calls./script/veri.sh > output/veri-bad.out
-        // let term_ids: Vec<TermId> = calls.iter().map(|call| call.term.clone()).collect();
-
-        // // Keep only Rules that involve Calls
-        // let term_to_rules: HashMap<TermId, Vec<RuleId>> = self
-        //     .rules_by_term()
-        //     .iter()
-        //     .filter(|(term_id, rule_ids)| term_ids.contains(*term_id) && !rule_ids.is_empty())
-        //     .map(|(term_id, rule_ids)| (term_id.clone(), rule_ids.clone()))
-        //     .collect();
-
         for rule_id in expansion.rules.clone() {
             let rule = self.rule(rule_id);
             let sexpr = self.to_sexpr(
-                calls,
+                calls.clone(),
                 model,
                 rule,
                 smt,
@@ -139,6 +128,7 @@ impl Program {
                     rule.root_term,
                     rule.args.clone(),
                 ),
+                &TermId(0),
             );
             rules_sexpr.push(sexpr);
         }
@@ -146,12 +136,67 @@ impl Program {
         return rules_sexpr;
     }
 
-    pub fn get_result_from_term_id(&self, calls: &Vec<UnsatResult>, term_id: &TermId) -> String {
-        for call in calls {
-            if &call.term == term_id {
-                match &call.ret {
+    pub fn recover_pattern_display(
+        &self,
+        expansion: &Expansion,
+        term_rule_set: &HashMap<sema::TermId, RuleSet>,
+        model: &Model,
+        calls: Vec<UnsatResult>,
+        smt: &Context,
+    ) -> Vec<SExpr> {
+        // SExpr
+        let mut rules_sexpr: Vec<SExpr> = Vec::new();
+
+        for rule_id in expansion.rules.clone() {
+            let rule = self.rule(rule_id);
+            if let Some(subrule) = term_rule_set
+                .iter()
+                .find(|(term_id, _)| **term_id == rule.root_term.clone())
+            {
+                for subrule in &subrule.1.rules {
+                    let subrule_sema = self.rule(subrule.id);
+
+                    let root_pattern = Pattern::Term(
+                        cranelift_isle::sema::TypeId(0),
+                        subrule_sema.root_term,
+                        subrule_sema.args.clone(),
+                    );
+
+                    let sexpr = self.to_sexpr(
+                        calls.clone(),
+                        model,
+                        subrule_sema,
+                        smt,
+                        &root_pattern,
+                        &TermId(0),
+                    );
+                    rules_sexpr.push(sexpr);
+                }
+            } else {
+                // Handle the case where subrule is not found
+                println!("Subrule for term {:?} not found.", rule.root_term);
+            }
+        }
+
+        rules_sexpr
+    }
+
+    pub fn get_result_from_term_id(&self, calls: Vec<UnsatResult>, term_id: &TermId) -> String {
+        for mut call in calls {
+            if call.term == *term_id {
+                match call.ret {
                     Some(value) => return value.to_string(),
-                    None => return "None".to_string(),
+                    None => {
+                        if call.args.len() > 0 {
+                            return call
+                                .args
+                                .pop()
+                                .expect("Should not be null")
+                                .expect("")
+                                .to_string();
+                        }
+                        return "None".to_string();
+                    }
                 };
             }
         }
@@ -160,28 +205,28 @@ impl Program {
 
     pub fn to_sexpr(
         &self,
-        calls: &Vec<UnsatResult>,
+        calls: Vec<UnsatResult>,
         model: &Model,
         rule: &Rule,
         smt: &Context,
         pat: &Pattern,
+        parent_term: &TermId,
     ) -> SExpr {
         match pat {
             sema::Pattern::Term(_, term_id, args) => {
                 let sym = self.termenv.terms[term_id.index()].name;
                 let name = self.tyenv.syms[sym.index()].clone();
 
-                let mut var = format!(
+                let var = format!(
                     "[{}|{}]",
                     name,
-                    self.get_result_from_term_id(calls, term_id)
+                    self.get_result_from_term_id(calls.clone(), term_id)
                 );
 
                 let mut sexprs: Vec<SExpr> = args
                     .iter()
-                    .map(|a| self.to_sexpr(calls, model, rule, smt, a))
-                    .collect::<Vec<SExpr>>();
-
+                    .map(|a| self.to_sexpr(calls.clone(), model, rule, smt, a, term_id))
+                    .collect();
                 sexprs.insert(0, smt.atom(var));
                 smt.list(sexprs)
             }
@@ -190,22 +235,31 @@ impl Program {
                 let sym = rule.vars[var_id.index()].name;
                 let ident = self.tyenv.syms[sym.index()].clone();
 
-                let mut var = " ".to_string();
-
+                let var = format!(
+                    "[{}|{}]",
+                    ident,
+                    self.get_result_from_term_id(calls, parent_term)
+                );
+                print!("{}", &var);
                 smt.atom(var)
             }
             sema::Pattern::BindPattern(_, var_id, subpat) => {
                 let sym = rule.vars[var_id.index()].name;
                 let ident = &self.tyenv.syms[sym.index()];
-                let subpat_node = self.to_sexpr(calls, model, rule, smt, subpat);
+                let subpat_node =
+                    self.to_sexpr(calls.clone(), model, rule, smt, subpat, parent_term);
 
-                let mut var = " ".to_string();
+                let var = format!(
+                    "[{}|{}]",
+                    ident,
+                    self.get_result_from_term_id(calls.clone(), parent_term)
+                );
 
                 // Special case: elide bind patterns to wildcars
                 if matches!(**subpat, sema::Pattern::Wildcard(_)) {
-                    smt.atom(&var)
+                    smt.atom(var)
                 } else {
-                    smt.list(vec![smt.atom(&var), smt.atom("@"), subpat_node])
+                    smt.list(vec![smt.atom(ident), smt.atom("@"), subpat_node])
                 }
             }
             sema::Pattern::Wildcard(_) => smt.list(vec![smt.atom("_")]),
@@ -221,7 +275,7 @@ impl Program {
             sema::Pattern::And(_, subpats) => {
                 let mut sexprs = subpats
                     .iter()
-                    .map(|a| self.to_sexpr(calls, model, rule, smt, a))
+                    .map(|a| self.to_sexpr(calls.clone(), model, rule, smt, a, parent_term))
                     .collect::<Vec<SExpr>>();
 
                 sexprs.insert(0, smt.atom("and"));
