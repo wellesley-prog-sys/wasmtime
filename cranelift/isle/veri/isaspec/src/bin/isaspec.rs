@@ -1413,31 +1413,19 @@ fn define_conds() -> Vec<SpecConfig> {
         rm,
     });
 
-    vec![csel, csneg]
+    // CSet
+    let cset = define_cset("MInst.CSet", |rd, cond| Inst::CSet { rd, cond });
+
+    // CSetm
+    let csetm = define_cset("MInst.CSetm", |rd, cond| Inst::CSetm { rd, cond });
+
+    vec![csel, csneg, cset, csetm]
 }
 
 fn define_csel<F>(term: &str, inst: F) -> SpecConfig
 where
     F: Fn(Writable<Reg>, Cond, Reg, Reg) -> Inst,
 {
-    // Cond
-    let conds = [
-        Cond::Eq,
-        Cond::Ne,
-        Cond::Hs,
-        Cond::Lo,
-        Cond::Mi,
-        Cond::Pl,
-        Cond::Vs,
-        Cond::Vc,
-        Cond::Hi,
-        Cond::Ls,
-        Cond::Ge,
-        Cond::Lt,
-        Cond::Gt,
-        Cond::Le,
-    ];
-
     // Flags and register mappings.
     let mut mappings = flags_mappings();
     mappings.writes.insert(
@@ -1459,7 +1447,7 @@ where
 
         cases: Cases::Match(Match {
             on: spec_var("cond".to_string()),
-            arms: conds
+            arms: conds()
                 .iter()
                 .rev()
                 .map(|cond| Arm {
@@ -1479,6 +1467,60 @@ where
                 .collect(),
         }),
     }
+}
+
+fn define_cset<F>(term: &str, inst: F) -> SpecConfig
+where
+    F: Fn(Writable<Reg>, Cond) -> Inst,
+{
+    // Flags and register mappings.
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+
+    SpecConfig {
+        term: term.to_string(),
+        args: ["rd", "cond"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("cond".to_string()),
+            arms: conds()
+                .iter()
+                .rev()
+                .map(|cond| Arm {
+                    variant: format!("{cond:?}"),
+                    args: Vec::new(),
+                    body: Cases::Instruction(InstConfig {
+                        opcodes: Opcodes::Instruction(inst(writable_xreg(4), *cond)),
+                        scope: aarch64::state(),
+                        mappings: mappings.clone(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
+}
+
+/// All condition codes.
+fn conds() -> Vec<Cond> {
+    vec![
+        Cond::Eq,
+        Cond::Ne,
+        Cond::Hs,
+        Cond::Lo,
+        Cond::Mi,
+        Cond::Pl,
+        Cond::Vs,
+        Cond::Vc,
+        Cond::Hi,
+        Cond::Ls,
+        Cond::Ge,
+        Cond::Lt,
+        Cond::Gt,
+        Cond::Le,
+    ]
 }
 
 fn flags_mappings() -> Mappings {

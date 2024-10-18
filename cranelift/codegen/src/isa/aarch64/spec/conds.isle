@@ -239,3 +239,255 @@
             ((Hs) true)
             ((Ne) true)
             ((Eq) true))))
+
+(spec
+    (MInst.CSet rd cond)
+    (provide
+        (match
+            cond
+            ((Le)
+                (with
+                    (t3 t4 t5)
+                    (and
+                        (= t3 (and (= (:N (:flags_in result)) (:V (:flags_in result))) (= (:Z (:flags_in result)) #b0)))
+                        (if t3 (= t4 #x0000000000000000) (= t5 #x0000000000000001))
+                        (= rd (if t3 t4 t5)))))
+            ((Gt)
+                (with
+                    (t3 t4 t5)
+                    (and
+                        (=
+                            t3
+                            (not
+                                (and
+                                    (= (:N (:flags_in result)) (:V (:flags_in result)))
+                                    (= (:Z (:flags_in result)) #b0))))
+                        (if t3 (= t4 #x0000000000000000) (= t5 #x0000000000000001))
+                        (= rd (if t3 t4 t5)))))
+            ((Lt)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (= (:N (:flags_in result)) (:V (:flags_in result))))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #x0000000000000001))
+                        (= rd (if t2 t3 t4)))))
+            ((Ge)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (not (= (:N (:flags_in result)) (:V (:flags_in result)))))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #x0000000000000001))
+                        (= rd (if t2 t3 t4)))))
+            ((Ls)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (and (= (:C (:flags_in result)) #b1) (= (:Z (:flags_in result)) #b0)))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #x0000000000000001))
+                        (= rd (if t2 t3 t4)))))
+            ((Hi)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (not (and (= (:C (:flags_in result)) #b1) (= (:Z (:flags_in result)) #b0))))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #x0000000000000001))
+                        (= rd (if t2 t3 t4)))))
+            ((Vc)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:V (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))
+            ((Vs)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:V (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))
+            ((Pl)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:N (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))
+            ((Mi)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:N (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))
+            ((Lo)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:C (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))
+            ((Hs)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:C (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))
+            ((Ne)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:Z (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))
+            ((Eq)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:Z (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #x0000000000000001))
+                        (= rd (if t1 t2 t3)))))))
+    (require
+        (match
+            cond
+            ((Le) true)
+            ((Gt) true)
+            ((Lt) true)
+            ((Ge) true)
+            ((Ls) true)
+            ((Hi) true)
+            ((Vc) true)
+            ((Vs) true)
+            ((Pl) true)
+            ((Mi) true)
+            ((Lo) true)
+            ((Hs) true)
+            ((Ne) true)
+            ((Eq) true))))
+
+(spec
+    (MInst.CSetm rd cond)
+    (provide
+        (match
+            cond
+            ((Le)
+                (with
+                    (t3 t4 t5)
+                    (and
+                        (= t3 (and (= (:N (:flags_in result)) (:V (:flags_in result))) (= (:Z (:flags_in result)) #b0)))
+                        (if t3 (= t4 #x0000000000000000) (= t5 #xffffffffffffffff))
+                        (= rd (if t3 t4 t5)))))
+            ((Gt)
+                (with
+                    (t3 t4 t5)
+                    (and
+                        (=
+                            t3
+                            (not
+                                (and
+                                    (= (:N (:flags_in result)) (:V (:flags_in result)))
+                                    (= (:Z (:flags_in result)) #b0))))
+                        (if t3 (= t4 #x0000000000000000) (= t5 #xffffffffffffffff))
+                        (= rd (if t3 t4 t5)))))
+            ((Lt)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (= (:N (:flags_in result)) (:V (:flags_in result))))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #xffffffffffffffff))
+                        (= rd (if t2 t3 t4)))))
+            ((Ge)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (not (= (:N (:flags_in result)) (:V (:flags_in result)))))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #xffffffffffffffff))
+                        (= rd (if t2 t3 t4)))))
+            ((Ls)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (and (= (:C (:flags_in result)) #b1) (= (:Z (:flags_in result)) #b0)))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #xffffffffffffffff))
+                        (= rd (if t2 t3 t4)))))
+            ((Hi)
+                (with
+                    (t2 t3 t4)
+                    (and
+                        (= t2 (not (and (= (:C (:flags_in result)) #b1) (= (:Z (:flags_in result)) #b0))))
+                        (if t2 (= t3 #x0000000000000000) (= t4 #xffffffffffffffff))
+                        (= rd (if t2 t3 t4)))))
+            ((Vc)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:V (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))
+            ((Vs)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:V (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))
+            ((Pl)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:N (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))
+            ((Mi)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:N (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))
+            ((Lo)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:C (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))
+            ((Hs)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:C (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))
+            ((Ne)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (= (:Z (:flags_in result)) #b1))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))
+            ((Eq)
+                (with
+                    (t1 t2 t3)
+                    (and
+                        (= t1 (not (= (:Z (:flags_in result)) #b1)))
+                        (if t1 (= t2 #x0000000000000000) (= t3 #xffffffffffffffff))
+                        (= rd (if t1 t2 t3)))))))
+    (require
+        (match
+            cond
+            ((Le) true)
+            ((Gt) true)
+            ((Lt) true)
+            ((Ge) true)
+            ((Ls) true)
+            ((Hi) true)
+            ((Vc) true)
+            ((Vs) true)
+            ((Pl) true)
+            ((Mi) true)
+            ((Lo) true)
+            ((Hs) true)
+            ((Ne) true)
+            ((Eq) true))))
