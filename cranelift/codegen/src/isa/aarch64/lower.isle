@@ -1904,11 +1904,11 @@
 
 (rule popcnt_64 (lower (has_type $I64 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size64)))
-            (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+            (nbits Resg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
         (mov_from_vec added 0 (ScalarSize.Size8))))
 
-(rule popcnt_128 (lower (has_type $I128 (popcnt x)))
+(rule (lower (has_type $I128 (popcnt x)))
       (let ((val ValueRegs x)
             (tmp_half Reg (mov_to_fpu (value_regs_get val 0) (ScalarSize.Size64)))
             (tmp Reg (mov_to_vec tmp_half (value_regs_get val 1) 1 (VectorSize.Size64x2)))
