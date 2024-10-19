@@ -187,6 +187,9 @@
     (match (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)
 
+(spec (cls x) (provide (= result (cls x))))
+(instantiate cls bv_unary_8_to_64)
+
 (spec (load flags p offset)
     (modifies clif_load loaded_value)
     (match

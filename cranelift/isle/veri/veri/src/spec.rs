@@ -53,6 +53,10 @@ pub enum Expr {
     // Unary operators
     BVNeg(Box<Expr>),
     BVNot(Box<Expr>),
+    Cls(Box<Expr>),
+    //CLZ(Box<Expr>),
+    //Rev(Box<Expr>),
+    //BVPopcnt(Box<Expr>),
 
     // Binary operators
     BVAdd(Box<Expr>, Box<Expr>),
@@ -184,9 +188,9 @@ impl Expr {
                 SpecOp::Not => unary_expr!(Expr::Not, args, pos),
                 SpecOp::BVNot => unary_expr!(Expr::BVNot, args, pos),
                 SpecOp::BVNeg => unary_expr!(Expr::BVNeg, args, pos),
+                SpecOp::Cls => unary_expr!(Expr::Cls, args, pos),
                 SpecOp::Rev => todo!(),
                 SpecOp::Clz => todo!(),
-                SpecOp::Cls => todo!(),
                 SpecOp::Popcnt => todo!(),
 
                 // Variadic binops
