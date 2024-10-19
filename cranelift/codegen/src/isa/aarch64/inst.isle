@@ -3388,6 +3388,7 @@
 ;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Place a `Value` into a register, sign extending it to 32-bits
+(attr put_in_reg_sext32 (veri chain))
 (decl put_in_reg_sext32 (Value) Reg)
 (attr put_in_reg_sext32 (veri chain))
 (rule -1 (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))

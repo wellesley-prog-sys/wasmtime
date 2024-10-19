@@ -1807,10 +1807,10 @@
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I8 (cls x)))
+(rule cls_8 (lower (has_type $I8 (cls x)))
       (sub_imm $I32 (a64_cls $I32 (put_in_reg_sext32 x)) (u8_into_imm12 24)))
 
-(rule (lower (has_type $I16 (cls x)))
+(rule cls_16 (lower (has_type $I16 (cls x)))
       (sub_imm $I32 (a64_cls $I32 (put_in_reg_sext32 x)) (u8_into_imm12 16)))
 
 ;; cls lo_cls, lo
@@ -1836,7 +1836,8 @@
                            (csel (Cond.Eq) lo_sign_bits (zero_reg)))))
         (value_regs (add $I64 maybe_lo hi_cls) (imm $I64 (ImmExtend.Zero) 0))))
 
-(rule -1 (lower (has_type ty (cls x)))
+(attr cls_32_64 (veri priority))
+(rule cls_32_64 -1 (lower (has_type ty (cls x)))
       (a64_cls ty x))
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
