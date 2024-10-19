@@ -5,7 +5,8 @@ use std::{io, vec};
 
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
-use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp, SImm9, NZCV};
+use cranelift_codegen::ir::types::I8;
+use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp, SImm9, UImm12Scaled, NZCV};
 use cranelift_codegen::{
     ir::MemFlags,
     isa::aarch64::inst::{
@@ -1356,12 +1357,40 @@ where
         }),
     };
 
+    // UnsignedOffset
+    let mut unsigned_offset_scope = aarch64::state();
+    let uimm12 = Target::Var("uimm12".to_string());
+    unsigned_offset_scope.global(uimm12.clone());
+
+    let mut unsigned_offset_mappings = mappings.clone();
+    unsigned_offset_mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    unsigned_offset_mappings
+        .reads
+        .insert(uimm12, Mapping::require(spec_var("uimm12".to_string())));
+
+    let unsigned_offset_template =
+        amode_unsigned_offset_template(xreg(5), |amode| inst(amode, MemFlags::new()))?;
+
+    let unsigned_offset = Arm {
+        variant: "UnsignedOffset".to_string(),
+        args: ["rn", "uimm12"].map(String::from).to_vec(),
+        body: Cases::Instruction(InstConfig {
+            opcodes: Opcodes::Template(unsigned_offset_template),
+            scope: unsigned_offset_scope,
+            mappings: unsigned_offset_mappings,
+        }),
+    };
+
     Ok(vec![
         reg_reg,
         reg_scaled,
         reg_scaled_extended,
         reg_extended,
         unscaled,
+        unsigned_offset,
     ])
 }
 
@@ -1391,6 +1420,35 @@ where
             value: (*bits).try_into().unwrap(),
         };
         Ok(inst(AMode::Unscaled { rn, simm9: imm }))
+    })?;
+
+    Ok(template)
+}
+
+fn amode_unsigned_offset_template<F>(rn: Reg, inst: F) -> Result<Bits>
+where
+    F: Fn(AMode) -> Inst,
+{
+    // Assemble a base instruction with a placeholder for the immediate bits field.
+    let placeholder = UImm12Scaled::zero(I8);
+    let base = inst(AMode::UnsignedOffset {
+        rn,
+        uimm12: placeholder,
+    });
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic immediate fields.
+    let imm = Bits {
+        segments: vec![Segment::Symbolic("uimm12".to_string(), 12)],
+    };
+    let template = Bits::splice(&bits, &imm, 10)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let bits = assignment.get("uimm12").unwrap();
+        let uimm12 = UImm12Scaled::maybe_from_i64((*bits).try_into().unwrap(), I8).unwrap();
+        Ok(inst(AMode::UnsignedOffset { rn, uimm12 }))
     })?;
 
     Ok(template)
