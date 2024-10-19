@@ -461,7 +461,17 @@ impl<'a> SystemBuilder<'a> {
                     self.symbolic(&field.value, field_ty.ty);
                 }
             }
-            (Symbolic::Enum(_), Compound::Enum(_)) => todo!("enum type constraints"),
+            (Symbolic::Enum(e), Compound::Enum(enum_ty)) => {
+                assert_eq!(e.ty, enum_ty.id);
+                // Discriminant is an integer.
+                self.integer(e.discriminant);
+                // Variant types.
+                assert_eq!(e.variants.len(), enum_ty.variants.len());
+                for (variant, variant_ty) in zip(&e.variants, &enum_ty.variants) {
+                    assert_eq!(variant.id, variant_ty.id);
+                    self.symbolic(&variant.value, variant_ty.ty());
+                }
+            }
             // QUESTION(mbm): should Option and Tuple be in a different enum so they don't appear in type inference?
             (Symbolic::Option(_), _) => unimplemented!("option types unsupported"),
             (Symbolic::Tuple(_), _) => unimplemented!("tuple types unsupported"),

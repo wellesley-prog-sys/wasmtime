@@ -530,14 +530,11 @@ impl SpecEnv {
     }
 
     fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
-        for (type_id, model) in &self.type_model {
-            if let Compound::Enum(variants) = model {
-                let ty = &tyenv.types[type_id.index()];
-                let name = Ident(ty.name(tyenv).to_string(), ty.pos());
-
-                for variant in variants {
+        for model in self.type_model.values() {
+            if let Compound::Enum(e) = model {
+                for variant in &e.variants {
                     // Lookup the corresponding term.
-                    let full_name = ast::Variant::full_name(&name, &variant.name);
+                    let full_name = ast::Variant::full_name(&e.name, &variant.name);
                     let term_id =
                         termenv
                             .get_term_by_name(tyenv, &full_name)
@@ -550,7 +547,7 @@ impl SpecEnv {
                     let args: Vec<Ident> = variant.fields.iter().map(|f| f.name.clone()).collect();
 
                     let constructor = Constructor::Enum {
-                        name: name.clone(),
+                        name: e.name.clone(),
                         variant: variant.name.clone(),
                         args: args.iter().map(|arg| Expr::Var(arg.clone())).collect(),
                     };

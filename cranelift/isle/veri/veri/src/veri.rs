@@ -251,8 +251,9 @@ impl SymbolicField {
 
 #[derive(Debug, Clone)]
 pub struct SymbolicEnum {
-    discriminant: ExprId,
-    variants: Vec<SymbolicVariant>,
+    pub ty: TypeId,
+    pub discriminant: ExprId,
+    pub variants: Vec<SymbolicVariant>,
 }
 
 impl SymbolicEnum {
@@ -262,23 +263,45 @@ impl SymbolicEnum {
             .find(|v| v.name == name)
             .ok_or(format_err!("no variant with name {name}"))
     }
+
+    fn validate(&self) -> Result<()> {
+        // Expect the variants to have distinct discriminants in the range [0, num_variants).
+        for (expect, variant) in self.variants.iter().enumerate() {
+            if variant.discriminant != expect {
+                bail!(
+                    "variant '{name}' has unexpected discriminant",
+                    name = variant.name
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct SymbolicVariant {
-    name: String,
-    discriminant: usize,
-    value: Symbolic,
+    pub name: String,
+    pub id: VariantId,
+    pub discriminant: usize,
+    pub value: Symbolic,
 }
 
 impl SymbolicVariant {
     fn try_field_by_name(&self, name: &str) -> Result<&SymbolicField> {
-        self.value
-            .as_struct()
-            .ok_or(format_err!("variant value is not a struct"))?
+        self.fields()?
             .iter()
             .find(|f| f.name == name)
             .ok_or(format_err!("no field with name {name}"))
+    }
+
+    fn field_values(&self) -> Result<Vec<Symbolic>> {
+        Ok(self.fields()?.iter().map(|f| f.value.clone()).collect())
+    }
+
+    fn fields(&self) -> Result<&Vec<SymbolicField>> {
+        self.value
+            .as_struct()
+            .ok_or(format_err!("variant value is not a struct"))
     }
 }
 
@@ -437,20 +460,25 @@ impl Symbolic {
                 ))
             }
             (Symbolic::Enum(a), Symbolic::Enum(b)) => {
+                assert_eq!(a.ty, b.ty);
+                let ty = a.ty;
                 let discriminant = merge(a.discriminant, b.discriminant);
                 assert_eq!(a.variants.len(), b.variants.len());
                 let variants = zip(&a.variants, &b.variants)
                     .map(|(a, b)| {
                         assert_eq!(a.name, b.name);
+                        assert_eq!(a.id, b.id);
                         assert_eq!(a.discriminant, b.discriminant);
                         Ok(SymbolicVariant {
                             name: a.name.clone(),
+                            id: a.id,
                             discriminant: a.discriminant,
                             value: Symbolic::merge(&a.value, &b.value, merge)?,
                         })
                     })
                     .collect::<Result<_>>()?;
                 Ok(Symbolic::Enum(SymbolicEnum {
+                    ty,
                     discriminant,
                     variants,
                 }))
@@ -1073,17 +1101,27 @@ impl<'a> ConditionsBuilder<'a> {
             .extend(term_spec.modifies.iter().map(|v| v.0.clone()));
 
         // Record callsite.
+        self.record_term_instantiation(term, args.to_vec(), ret)?;
+
+        Ok(())
+    }
+
+    fn record_term_instantiation(
+        &mut self,
+        term: TermId,
+        args: Vec<Symbolic>,
+        ret: Symbolic,
+    ) -> Result<()> {
         let signatures = self
             .prog
             .specenv
             .resolve_term_instantiations(&term, &self.prog.tyenv)?;
         self.conditions.calls.push(Call {
             term,
-            args: args.to_vec(),
+            args,
             ret,
             signatures,
         });
-
         Ok(())
     }
 
@@ -1625,14 +1663,14 @@ impl<'a> ConditionsBuilder<'a> {
                     ))?;
 
                 // Should be an enum.
-                let variants = model.as_enum().ok_or(format_err!(
+                let e = model.as_enum().ok_or(format_err!(
                     "{name} expected to have enum type",
                     name = name.0
                 ))?;
 
                 // Lookup variant.
                 let variant =
-                    variants
+                    e.variants
                         .iter()
                         .find(|v| v.name.0 == variant.0)
                         .ok_or(format_err!(
@@ -1644,7 +1682,8 @@ impl<'a> ConditionsBuilder<'a> {
                 let discriminant = self.constant(Const::Int(variant.id.index().try_into()?));
 
                 // Variants: undefined except for the variant under construction.
-                let variants = variants
+                let variants = e
+                    .variants
                     .iter()
                     .map(|v| {
                         // For all except the variant under construction, allocate an undefined variant.
@@ -1665,13 +1704,14 @@ impl<'a> ConditionsBuilder<'a> {
                             .collect::<Result<_>>()?;
                         Ok(SymbolicVariant {
                             name: v.name.0.clone(),
+                            id: v.id,
                             discriminant: v.id.index(),
                             value: Symbolic::Struct(fields),
                         })
                     })
                     .collect::<Result<_>>()?;
 
-                Ok(Symbolic::Enum(self.new_enum(discriminant, variants)?))
+                Ok(self.new_enum(type_id, discriminant, variants)?)
             }
         }
     }
@@ -1985,14 +2025,15 @@ impl<'a> ConditionsBuilder<'a> {
                     })
                     .collect::<Result<_>>()?,
             )),
-            Compound::Enum(variants) => {
+            Compound::Enum(e) => {
                 let discriminant =
                     self.alloc_variable(Type::Int, Variable::component_name(&name, "discriminant"));
-                let variants = variants
+                let variants = e
+                    .variants
                     .iter()
                     .map(|v| self.alloc_variant(v, name.clone()))
                     .collect::<Result<_>>()?;
-                Ok(Symbolic::Enum(self.new_enum(discriminant, variants)?))
+                Ok(self.new_enum(e.id, discriminant, variants)?)
             }
             Compound::Named(_) => {
                 let ty = self.prog.specenv.resolve_type(ty, &self.prog.tyenv)?;
@@ -2003,13 +2044,22 @@ impl<'a> ConditionsBuilder<'a> {
 
     fn new_enum(
         &mut self,
+        ty: TypeId,
         discriminant: ExprId,
         variants: Vec<SymbolicVariant>,
-    ) -> Result<SymbolicEnum> {
+    ) -> Result<Symbolic> {
+        // Construct symbolic enum and ensure it's valid.
+        let e = SymbolicEnum {
+            ty,
+            discriminant,
+            variants,
+        };
+        e.validate()?;
+
         // Assume discriminant invariant: positive integer less than number of
         // variants.
         let zero = self.constant(Const::Int(0));
-        let num_variants = self.constant(Const::Int(variants.len().try_into()?));
+        let num_variants = self.constant(Const::Int(e.variants.len().try_into()?));
         let discriminant_positive = self.dedup_expr(Expr::Lte(zero, discriminant));
         let discriminant_less_than_num_variants =
             self.dedup_expr(Expr::Lt(discriminant, num_variants));
@@ -2019,16 +2069,22 @@ impl<'a> ConditionsBuilder<'a> {
         ));
         self.conditions.assumptions.push(discriminant_in_range);
 
-        Ok(SymbolicEnum {
-            discriminant,
-            variants,
-        })
+        // Variant term instantiations.
+        let ret = Symbolic::Enum(e.clone());
+        for variant in &e.variants {
+            let term = self.prog.get_variant_term(e.ty, variant.id);
+            let args = variant.field_values()?;
+            self.record_term_instantiation(term, args, ret.clone())?;
+        }
+
+        Ok(ret)
     }
 
     fn alloc_variant(&mut self, variant: &Variant, name: String) -> Result<SymbolicVariant> {
         let name = Variable::component_name(&name, &variant.name.0);
         Ok(SymbolicVariant {
             name: variant.name.0.clone(),
+            id: variant.id,
             discriminant: variant.id.index(),
             value: self.alloc_value(&variant.ty(), name)?,
         })
