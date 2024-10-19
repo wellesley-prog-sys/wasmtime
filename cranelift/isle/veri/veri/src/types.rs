@@ -4,7 +4,7 @@ use anyhow::Result;
 use cranelift_isle::{
     ast::{Ident, ModelType},
     lexer::Pos,
-    sema::{self, TypeEnv, VariantId},
+    sema::{self, Sym, TypeEnv, TypeId, VariantId},
 };
 
 /// Width of a bit vector.
@@ -99,7 +99,7 @@ impl PartialOrd for Type {
 pub enum Compound {
     Primitive(Type),
     Struct(Vec<Field>),
-    Enum(Vec<Variant>),
+    Enum(Enum),
     // TODO(mbm): intern name identifier
     Named(Ident),
 }
@@ -187,6 +187,48 @@ impl std::fmt::Display for Variant {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: Ident,
+    pub id: TypeId,
+    pub variants: Vec<Variant>,
+}
+
+impl Enum {
+    pub fn from_isle(
+        name: Sym,
+        id: TypeId,
+        variants: &[sema::Variant],
+        pos: Pos,
+        tyenv: &TypeEnv,
+    ) -> Self {
+        Self {
+            name: Ident(tyenv.syms[name.index()].clone(), pos),
+            id,
+            variants: variants
+                .iter()
+                .map(|v| Variant::from_isle(v, tyenv))
+                .collect(),
+        }
+    }
+
+    /// Resolve any named types.
+    pub fn resolve<F>(&self, lookup: &mut F) -> Result<Self>
+    where
+        F: FnMut(&Ident) -> Result<Compound>,
+    {
+        Ok(Self {
+            name: self.name.clone(),
+            id: self.id,
+            variants: self
+                .variants
+                .iter()
+                .map(|v| v.resolve(lookup))
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
 impl Compound {
     pub fn from_ast(model: &ModelType) -> Self {
         match model {
@@ -215,12 +257,15 @@ impl Compound {
     /// enum representation.
     pub fn from_isle(ty: &sema::Type, tyenv: &TypeEnv) -> Option<Self> {
         match ty {
-            sema::Type::Enum { variants, .. } if !variants.is_empty() => Some(Self::Enum(
-                variants
-                    .iter()
-                    .map(|v| Variant::from_isle(v, tyenv))
-                    .collect(),
-            )),
+            sema::Type::Enum {
+                name,
+                id,
+                variants,
+                pos,
+                ..
+            } if !variants.is_empty() => Some(Self::Enum(Enum::from_isle(
+                *name, *id, variants, *pos, tyenv,
+            ))),
             _ => None,
         }
     }
@@ -237,9 +282,9 @@ impl Compound {
         }
     }
 
-    pub fn as_enum(&self) -> Option<&Vec<Variant>> {
+    pub fn as_enum(&self) -> Option<&Enum> {
         match self {
-            Compound::Enum(variants) => Some(variants),
+            Compound::Enum(e) => Some(e),
             _ => None,
         }
     }
@@ -257,12 +302,7 @@ impl Compound {
                     .map(|f| f.resolve(lookup))
                     .collect::<Result<_>>()?,
             )),
-            Compound::Enum(variants) => Ok(Compound::Enum(
-                variants
-                    .iter()
-                    .map(|v| v.resolve(lookup))
-                    .collect::<Result<_>>()?,
-            )),
+            Compound::Enum(e) => Ok(Compound::Enum(e.resolve(lookup)?)),
             Compound::Named(name) => {
                 // TODO(mbm): named type model cycle detection
                 let ty = lookup(name)?;
@@ -285,16 +325,8 @@ impl std::fmt::Display for Compound {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Compound::Enum(variants) => {
-                write!(
-                    f,
-                    "enum{{{variants}}}",
-                    variants = variants
-                        .iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+            Compound::Enum(e) => {
+                write!(f, "enum({name})", name = e.name.0,)
             }
             Compound::Named(name) => write!(f, "{}", name.0),
         }
