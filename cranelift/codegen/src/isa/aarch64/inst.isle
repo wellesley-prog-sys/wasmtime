@@ -1335,7 +1335,7 @@
 (type SImm9 extern (enum))
 (model SImm9 (type (bv 9)))
 (type UImm12Scaled extern (enum))
-(model UImm12Scaled (type !))
+(model UImm12Scaled (type (bv 12)))
 
 ;; An addressing mode specified for a load/store operation.
 (type AMode
@@ -1438,8 +1438,6 @@
         ;; for [crate::isa::aarch64::abi](the ABI module) for more details.
         (SlotOffset
          (off i64))))
-
-(attr AMode.UnsignedOffset (tag TODO))
 
 ;; A memory argument to a load/store-pair.
 (type PairAMode (enum
@@ -3655,6 +3653,7 @@
 
 (decl pure partial uimm12_scaled_from_i64 (i64 Type) UImm12Scaled)
 (extern constructor uimm12_scaled_from_i64 uimm12_scaled_from_i64)
+(attr uimm12_scaled_from_i64 (tag TODO))
 
 (decl pure partial simm9_from_i64 (i64) SImm9)
 (extern constructor simm9_from_i64 simm9_from_i64)
