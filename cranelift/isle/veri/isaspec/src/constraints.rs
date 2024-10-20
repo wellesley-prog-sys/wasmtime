@@ -2,7 +2,7 @@
 
 use core::{fmt, panic};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::vec;
 
 use anyhow::{bail, format_err, Result};
@@ -346,31 +346,22 @@ impl Translator {
                     spec_all(else_scope.constraints),
                 ));
 
-                // Merge bindings. Expect both sides to have the same bindings.
-                if then_scope.bindings.len() != else_scope.bindings.len() {
-                    // TODO(mbm): handle distinct bindings at joins.
-                    todo!("joining distinct bindings");
-                }
-                for (target, then_binding) in then_scope.bindings {
-                    // Lookup binding on the else branch.
-                    let else_binding = match else_scope.bindings.get(&target) {
-                        Some(b) => b,
-                        None => todo!("joining distinct bindings"),
+                // Merge target bindings.
+                let mut targets = BTreeSet::new();
+                targets.extend(then_scope.bindings.keys());
+                targets.extend(else_scope.bindings.keys());
+                for target in targets {
+                    let (t, e) = match (
+                        then_scope.bindings.get(target),
+                        else_scope.bindings.get(target),
+                    ) {
+                        (Some(Binding::Var(t)), Some(Binding::Var(e))) => (t.clone(), e.clone()),
+                        (Some(Binding::Var(t)), None) => (t.clone(), self.read(target)?),
+                        (None, Some(Binding::Var(e))) => (self.read(target)?, e.clone()),
+                        _ => bail!("unable to merge conditional scopes"),
                     };
-
-                    // Joined "phi node" expression.
-                    let then_var = then_binding
-                        .as_var()
-                        .ok_or(format_err!("expected variable"))?;
-                    let else_var = else_binding
-                        .as_var()
-                        .ok_or(format_err!("expected variable"))?;
-                    let phi = spec_if(
-                        cond.clone(),
-                        spec_var(then_var.clone()),
-                        spec_var(else_var.clone()),
-                    );
-                    self.assign(&target, phi)?;
+                    let phi = spec_if(cond.clone(), spec_var(t.clone()), spec_var(e.clone()));
+                    self.assign(target, phi)?;
                 }
 
                 // Merge additional scope metadata.
