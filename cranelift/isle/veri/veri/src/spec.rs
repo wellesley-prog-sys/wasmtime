@@ -45,6 +45,7 @@ pub enum ExprKind {
     // Terminal nodes
     Var(Ident),
     Const(Const),
+    As(Expr, Compound),
     Constructor(Constructor),
     Field(Ident, Expr),
     Discriminator(Ident, Expr),
@@ -213,6 +214,9 @@ impl ExprKind {
                 ExprKind::Const(Const::BitVector(*width, *val))
             }
             ast::SpecExpr::Var { var, pos: _ } => ExprKind::Var(var.clone()),
+            ast::SpecExpr::As { x, ty, pos: _ } => {
+                ExprKind::As(expr_from_ast(x), Compound::from_ast(ty))
+            }
             ast::SpecExpr::Field { field, x, pos: _ } => {
                 ExprKind::Field(field.clone(), expr_from_ast(x))
             }

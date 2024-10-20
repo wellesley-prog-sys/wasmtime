@@ -11,7 +11,7 @@ use cranelift_isle::sema::TermId;
 use crate::{
     spec::Signature,
     types::{Compound, Const, Type, Width},
-    veri::{Call, Conditions, Expr, ExprId, Symbolic},
+    veri::{Call, Conditions, Expr, ExprId, Qualifier, Symbolic},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -260,6 +260,11 @@ impl<'a> SystemBuilder<'a> {
             self.call(call);
         }
 
+        // Qualifiers.
+        for qualifier in &self.conditions.qualifiers {
+            self.qualifier(qualifier);
+        }
+
         self.system
     }
 
@@ -449,6 +454,10 @@ impl<'a> SystemBuilder<'a> {
             // Pop branch arm.
             self.pop();
         }
+    }
+
+    fn qualifier(&mut self, qualifier: &Qualifier) {
+        self.symbolic(&qualifier.value, qualifier.ty.clone());
     }
 
     fn symbolic(&mut self, v: &Symbolic, ty: Compound) {

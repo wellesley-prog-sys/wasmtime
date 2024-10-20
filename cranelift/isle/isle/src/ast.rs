@@ -149,6 +149,13 @@ pub enum SpecExpr {
         var: Ident,
         pos: Pos,
     },
+    // As expression specifies the intended type of the expression. Functionally
+    // it is the identity. Analogous to qualified identifiers in SMT-LIB.
+    As {
+        x: Box<SpecExpr>,
+        ty: ModelType,
+        pos: Pos,
+    },
     /// Struct field access.
     Field {
         field: Ident,
@@ -213,6 +220,7 @@ impl SpecExpr {
             | &Self::ConstBitVec { pos, .. }
             | &Self::ConstBool { pos, .. }
             | &Self::Var { pos, .. }
+            | &Self::As { pos, .. }
             | &Self::Field { pos, .. }
             | &Self::Discriminator { pos, .. }
             | &Self::Op { pos, .. }

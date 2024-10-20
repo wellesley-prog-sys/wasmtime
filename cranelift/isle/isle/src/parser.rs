@@ -543,6 +543,11 @@ impl<'a> Parser<'a> {
                 }
                 self.expect_rparen()?;
                 Ok(SpecExpr::Match { x, arms, pos })
+            } else if self.eat_sym_str("as")? {
+                let x = Box::new(self.parse_spec_expr()?);
+                let ty = self.parse_model_type()?;
+                self.expect_rparen()?;
+                Ok(SpecExpr::As { x, ty, pos })
             } else if self.is_sym() && !self.is_spec_bit_vector() {
                 let sym_pos = self.pos();
                 let sym = self.expect_symbol()?;
