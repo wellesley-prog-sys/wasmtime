@@ -8,7 +8,7 @@ use clap::Parser as ClapParser;
 use cranelift_codegen::ir::types::I8;
 use cranelift_codegen::isa::aarch64::inst::{
     vreg, writable_vreg, MoveWideConst, MoveWideOp, SImm9, ScalarSize, UImm12Scaled, VecLanesOp,
-    VectorSize, NZCV,
+    VecMisc2, VectorSize, NZCV,
 };
 use cranelift_codegen::{
     ir::MemFlags,
@@ -169,6 +169,10 @@ fn define() -> Result<Vec<FileConfig>> {
         FileConfig {
             name: "mov_to_fpu.isle".into(),
             specs: vec![define_mov_to_fpu()],
+        },
+        FileConfig {
+            name: "vec_misc.isle".into(),
+            specs: vec![define_vec_misc()],
         },
         FileConfig {
             name: "vec_lanes.isle".into(),
@@ -1739,7 +1743,7 @@ fn define_mov_to_fpu() -> SpecConfig {
     // ScalarSize
     let sizes = [ScalarSize::Size16, ScalarSize::Size32, ScalarSize::Size64];
 
-    // VecLanes
+    // MovToFpu
     let mut mappings = Mappings::default();
     mappings.writes.insert(
         aarch64::vreg(4),
@@ -1770,6 +1774,63 @@ fn define_mov_to_fpu() -> SpecConfig {
                         }),
                         scope: aarch64::state(),
                         mappings: mappings.clone(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
+}
+
+// MInst.VecMisc specification configuration.
+fn define_vec_misc() -> SpecConfig {
+    // VecMisc2
+    let ops = [VecMisc2::Cnt];
+
+    // VectorSize
+    let sizes = [VectorSize::Size8x8, VectorSize::Size8x16];
+
+    // VecMisc
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::vreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::vreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+
+    SpecConfig {
+        term: "MInst.VecMisc".to_string(),
+        args: ["op", "rd", "rn", "size"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: spec_var("op".to_string()),
+                        arms: ops
+                            .iter()
+                            .map(|op| Arm {
+                                variant: format!("{op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Instruction(InstConfig {
+                                    opcodes: Opcodes::Instruction(Inst::VecMisc {
+                                        op: *op,
+                                        rd: writable_vreg(4),
+                                        rn: vreg(5),
+                                        size: *size,
+                                    }),
+                                    scope: aarch64::state(),
+                                    mappings: mappings.clone(),
+                                }),
+                            })
+                            .collect(),
                     }),
                 })
                 .collect(),
