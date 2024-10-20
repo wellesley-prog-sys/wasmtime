@@ -6,7 +6,10 @@ use std::{io, vec};
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
 use cranelift_codegen::ir::types::I8;
-use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp, SImm9, UImm12Scaled, NZCV};
+use cranelift_codegen::isa::aarch64::inst::{
+    vreg, writable_vreg, MoveWideConst, MoveWideOp, SImm9, UImm12Scaled, VecLanesOp, VectorSize,
+    NZCV,
+};
 use cranelift_codegen::{
     ir::MemFlags,
     isa::aarch64::inst::{
@@ -162,6 +165,10 @@ fn define() -> Result<Vec<FileConfig>> {
         FileConfig {
             name: "conds.isle".into(),
             specs: define_conds()?,
+        },
+        FileConfig {
+            name: "vec_lanes.isle".into(),
+            specs: vec![define_vec_lanes()],
         },
     ])
 }
@@ -1721,6 +1728,69 @@ fn flags_mappings() -> Mappings {
     }
 
     mappings
+}
+
+// MInst.VecLanes specification configuration.
+fn define_vec_lanes() -> SpecConfig {
+    // VecLanesOp
+    let vec_lanes_ops = [VecLanesOp::Uminv, VecLanesOp::Addv];
+
+    // VectorSize
+    let sizes = [
+        VectorSize::Size8x8,
+        VectorSize::Size8x16,
+        VectorSize::Size16x4,
+        VectorSize::Size16x8,
+        VectorSize::Size32x4,
+    ];
+
+    // VecLanes
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::vreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::vreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+
+    SpecConfig {
+        term: "MInst.VecLanes".to_string(),
+        args: ["op", "rd", "rn", "size"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: spec_var("op".to_string()),
+                        arms: vec_lanes_ops
+                            .iter()
+                            .map(|op| Arm {
+                                variant: format!("{op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Instruction(InstConfig {
+                                    opcodes: Opcodes::Instruction(Inst::VecLanes {
+                                        op: *op,
+                                        rd: writable_vreg(4),
+                                        rn: vreg(5),
+                                        size: *size,
+                                    }),
+                                    scope: aarch64::state(),
+                                    mappings: mappings.clone(),
+                                }),
+                            })
+                            .collect(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
 }
 
 // Compare an opcode template against the instruction we expect it to represent.
