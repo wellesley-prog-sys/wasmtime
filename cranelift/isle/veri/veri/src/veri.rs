@@ -1320,297 +1320,297 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn spec_expr(&mut self, expr: &spec::Expr, vars: &Variables) -> Result<Symbolic> {
-        match expr {
-            spec::Expr::Var(v) => {
+        match &expr.x {
+            spec::ExprKind::Var(v) => {
                 let v = vars.get(&v.0)?;
                 Ok(v.clone())
             }
 
-            spec::Expr::Const(c) => Ok(self.constant(c.clone()).into()),
+            spec::ExprKind::Const(c) => Ok(self.constant(c.clone()).into()),
 
-            spec::Expr::Constructor(constructor) => self.construct(constructor, vars),
+            spec::ExprKind::Constructor(constructor) => self.construct(constructor, vars),
 
-            spec::Expr::Field(name, x) => {
+            spec::ExprKind::Field(name, x) => {
                 let x = self.spec_expr(x, vars)?;
                 self.spec_field(name, x)
             }
 
-            spec::Expr::Discriminator(variant, x) => {
+            spec::ExprKind::Discriminator(variant, x) => {
                 let x = self.spec_expr(x, vars)?;
                 self.spec_discriminator(variant, x)
             }
 
             // TODO(mbm): fix boilerplate for common expressions
-            spec::Expr::Not(x) => {
+            spec::ExprKind::Not(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Not(x)))
             }
 
-            spec::Expr::And(x, y) => {
+            spec::ExprKind::And(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::And(x, y)))
             }
 
-            spec::Expr::Or(x, y) => {
+            spec::ExprKind::Or(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Or(x, y)))
             }
 
-            spec::Expr::Imp(x, y) => {
+            spec::ExprKind::Imp(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Imp(x, y)))
             }
 
-            spec::Expr::Eq(x, y) => {
+            spec::ExprKind::Eq(x, y) => {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
                 Ok(self.values_equal(x, y).into())
             }
 
-            spec::Expr::Lt(x, y) => {
+            spec::ExprKind::Lt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Lt(x, y)))
             }
 
-            spec::Expr::Lte(x, y) => {
+            spec::ExprKind::Lte(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Lte(x, y)))
             }
 
-            spec::Expr::Gt(x, y) => {
+            spec::ExprKind::Gt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Lt(y, x)))
             }
 
-            spec::Expr::Gte(x, y) => {
+            spec::ExprKind::Gte(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Lte(y, x)))
             }
 
-            spec::Expr::BVUlt(x, y) => {
+            spec::ExprKind::BVUlt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUlt(x, y)))
             }
 
-            spec::Expr::BVUle(x, y) => {
+            spec::ExprKind::BVUle(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUle(x, y)))
             }
 
-            spec::Expr::BVSge(x, y) => {
+            spec::ExprKind::BVSge(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSge(x, y)))
             }
 
-            spec::Expr::BVSlt(x, y) => {
+            spec::ExprKind::BVSlt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSlt(x, y)))
             }
 
-            spec::Expr::BVSle(x, y) => {
+            spec::ExprKind::BVSle(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSle(x, y)))
             }
 
-            spec::Expr::BVSgt(x, y) => {
+            spec::ExprKind::BVSgt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSgt(x, y)))
             }
 
-            spec::Expr::BVUgt(x, y) => {
+            spec::ExprKind::BVUgt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUgt(x, y)))
             }
 
-            spec::Expr::BVUge(x, y) => {
+            spec::ExprKind::BVUge(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUge(x, y)))
             }
 
-            spec::Expr::BVSaddo(x, y) => {
+            spec::ExprKind::BVSaddo(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSaddo(x, y)))
             }
 
-            spec::Expr::BVNot(x) => {
+            spec::ExprKind::BVNot(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVNot(x)))
             }
 
-            spec::Expr::BVNeg(x) => {
+            spec::ExprKind::BVNeg(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVNeg(x)))
             }
 
-            spec::Expr::Cls(x) => {
+            spec::ExprKind::Cls(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Cls(x)))
             }
 
-            spec::Expr::BVAdd(x, y) => {
+            spec::ExprKind::BVAdd(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVAdd(x, y)))
             }
 
-            spec::Expr::BVSub(x, y) => {
+            spec::ExprKind::BVSub(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSub(x, y)))
             }
 
-            spec::Expr::BVMul(x, y) => {
+            spec::ExprKind::BVMul(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVMul(x, y)))
             }
 
-            spec::Expr::BVSDiv(x, y) => {
+            spec::ExprKind::BVSDiv(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSDiv(x, y)))
             }
 
-            spec::Expr::BVAnd(x, y) => {
+            spec::ExprKind::BVAnd(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVAnd(x, y)))
             }
 
-            spec::Expr::BVOr(x, y) => {
+            spec::ExprKind::BVOr(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVOr(x, y)))
             }
 
-            spec::Expr::BVXor(x, y) => {
+            spec::ExprKind::BVXor(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVXor(x, y)))
             }
 
-            spec::Expr::BVShl(x, y) => {
+            spec::ExprKind::BVShl(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVShl(x, y)))
             }
 
-            spec::Expr::BVLShr(x, y) => {
+            spec::ExprKind::BVLShr(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVLShr(x, y)))
             }
 
-            spec::Expr::BVAShr(x, y) => {
+            spec::ExprKind::BVAShr(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVAShr(x, y)))
             }
 
-            spec::Expr::BVUDiv(x, y) => {
+            spec::ExprKind::BVUDiv(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUDiv(x, y)))
             }
 
-            spec::Expr::BVURem(x, y) => {
+            spec::ExprKind::BVURem(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVURem(x, y)))
             }
 
-            spec::Expr::BVSRem(x, y) => {
+            spec::ExprKind::BVSRem(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSRem(x, y)))
             }
 
-            spec::Expr::BVRotl(x, y) => {
+            spec::ExprKind::BVRotl(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVRotl(x, y)))
             }
 
-            spec::Expr::BVRotr(x, y) => {
+            spec::ExprKind::BVRotr(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVRotr(x, y)))
             }
 
-            spec::Expr::Conditional(c, t, e) => {
+            spec::ExprKind::Conditional(c, t, e) => {
                 let c = self.spec_expr(c, vars)?.try_into()?;
                 let t = self.spec_expr(t, vars)?;
                 let e = self.spec_expr(e, vars)?;
                 self.conditional(c, t, e)
             }
 
-            spec::Expr::Switch(on, arms) => self.spec_switch(on, arms, vars),
+            spec::ExprKind::Switch(on, arms) => self.spec_switch(on, arms, vars),
 
-            spec::Expr::Match(on, arms) => self.spec_match(on, arms, vars),
+            spec::ExprKind::Match(on, arms) => self.spec_match(on, arms, vars),
 
-            spec::Expr::Let(defs, body) => self.spec_let(defs, body, vars),
+            spec::ExprKind::Let(defs, body) => self.spec_let(defs, body, vars),
 
-            spec::Expr::With(decls, body) => self.spec_with(decls, body, vars),
+            spec::ExprKind::With(decls, body) => self.spec_with(decls, body, vars),
 
-            spec::Expr::Macro(ident, args) => self.spec_macro(ident, args, vars),
+            spec::ExprKind::Macro(ident, args) => self.spec_macro(ident, args, vars),
 
-            spec::Expr::BVZeroExt(w, x) => {
+            spec::ExprKind::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVZeroExt(w, x)))
             }
 
-            spec::Expr::BVSignExt(w, x) => {
+            spec::ExprKind::BVSignExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSignExt(w, x)))
             }
 
-            spec::Expr::BVConvTo(w, x) => {
+            spec::ExprKind::BVConvTo(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVConvTo(w, x)))
             }
 
-            spec::Expr::BVExtract(h, l, x) => {
+            spec::ExprKind::BVExtract(h, l, x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVExtract(*h, *l, x)))
             }
 
-            spec::Expr::BVConcat(x, y) => {
+            spec::ExprKind::BVConcat(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVConcat(x, y)))
             }
 
-            spec::Expr::Int2BV(w, x) => {
+            spec::ExprKind::Int2BV(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Int2BV(w, x)))
             }
 
-            spec::Expr::BV2Nat(x) => {
+            spec::ExprKind::BV2Nat(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BV2Nat(x)))
             }
 
-            spec::Expr::WidthOf(x) => {
+            spec::ExprKind::WidthOf(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::WidthOf(x)))
             }
