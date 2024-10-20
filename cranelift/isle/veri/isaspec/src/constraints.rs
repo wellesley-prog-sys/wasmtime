@@ -299,7 +299,7 @@ impl Translator {
                 let rhs = self.expr(rhs)?;
                 self.assign(&target, rhs)
             }
-            Stmt::ConstDecl { name, rhs, .. } => {
+            Stmt::ConstDecl { name, rhs, .. } | Stmt::VarDecl { name, rhs, .. } => {
                 let target = Target::Var(name.clone());
                 self.scope_mut().decl(target.clone());
                 let rhs = self.expr(rhs)?;
