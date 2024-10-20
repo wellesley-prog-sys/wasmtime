@@ -1,6 +1,6 @@
 use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
-    ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
+    ast::{self, AttrKind, AttrTarget, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
     sema::{ReturnKind, RuleId, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
@@ -486,13 +486,16 @@ pub struct SpecEnv {
     pub chain: HashSet<TermId>,
 
     /// Tags applied to each term.
-    pub tags: HashMap<TermId, HashSet<String>>,
+    pub term_tags: HashMap<TermId, HashSet<String>>,
 
     // Type instantiations for the given term.
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
 
     /// Rules for which priority is significant.
     pub priority: HashSet<RuleId>,
+
+    /// Tags applied to each rule.
+    pub rule_tags: HashMap<RuleId, HashSet<String>>,
 
     /// Model for the given type.
     pub type_model: HashMap<TypeId, Compound>,
@@ -510,9 +513,10 @@ impl SpecEnv {
             term_spec: HashMap::new(),
             state: Vec::new(),
             chain: HashSet::new(),
-            tags: HashMap::new(),
+            term_tags: HashMap::new(),
             term_instantiations: HashMap::new(),
             priority: HashSet::new(),
+            rule_tags: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
             macros: HashMap::new(),
@@ -703,25 +707,48 @@ impl SpecEnv {
     fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for def in defs {
             if let ast::Def::Attr(attr) = def {
-                for attr_kind in &attr.kinds {
-                    match attr_kind {
-                        AttrKind::Chain => {
-                            let term_id = termenv
-                                .get_term_by_name(tyenv, &attr.name)
-                                .ok_or(format_err!("attr term should exist"))?;
-                            self.chain.insert(term_id);
+                match &attr.target {
+                    AttrTarget::Term(name) => {
+                        let term_id = termenv.get_term_by_name(tyenv, name).ok_or(format_err!(
+                            "attr term '{name}' should exist",
+                            name = name.0
+                        ))?;
+                        for kind in &attr.kinds {
+                            match kind {
+                                AttrKind::Chain => {
+                                    self.chain.insert(term_id);
+                                }
+                                AttrKind::Tag(tag) => {
+                                    self.term_tags
+                                        .entry(term_id)
+                                        .or_default()
+                                        .insert(tag.0.clone());
+                                }
+                                AttrKind::Priority => {
+                                    bail!("priority attribute cannot be applied to terms");
+                                }
+                            }
                         }
-                        AttrKind::Priority => {
-                            let rule_id = termenv
-                                .get_rule_by_name(tyenv, &attr.name)
-                                .ok_or(format_err!("attr rule '{}' does not exist", attr.name.0))?;
-                            self.priority.insert(rule_id);
-                        }
-                        AttrKind::Tag(tag) => {
-                            let term_id = termenv
-                                .get_term_by_name(tyenv, &attr.name)
-                                .ok_or(format_err!("attr term should exist"))?;
-                            self.tags.entry(term_id).or_default().insert(tag.0.clone());
+                    }
+                    AttrTarget::Rule(name) => {
+                        let rule_id = termenv
+                            .get_rule_by_name(tyenv, name)
+                            .ok_or(format_err!("attr rule '{}' does not exist", name.0))?;
+                        for kind in &attr.kinds {
+                            match kind {
+                                AttrKind::Priority => {
+                                    self.priority.insert(rule_id);
+                                }
+                                AttrKind::Tag(tag) => {
+                                    self.rule_tags
+                                        .entry(rule_id)
+                                        .or_default()
+                                        .insert(tag.0.clone());
+                                }
+                                AttrKind::Chain => {
+                                    bail!("chain attribute cannot be applied to rule");
+                                }
+                            }
                         }
                     }
                 }

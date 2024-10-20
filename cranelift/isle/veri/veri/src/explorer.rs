@@ -395,7 +395,7 @@ impl<'a> ExplorerWriter<'a> {
             )?;
 
             // Tags
-            let mut tags: Vec<String> = expansion.term_tags(self.prog).iter().cloned().collect();
+            let mut tags: Vec<String> = expansion.tags(self.prog).iter().cloned().collect();
             tags.sort();
             writeln!(output, "<td>{tags}</td>", tags = tags.join(", "))?;
 

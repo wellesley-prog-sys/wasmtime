@@ -98,9 +98,16 @@ pub struct Decl {
 /// An attribute applied to a declaration.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Attr {
-    pub name: Ident,
+    pub target: AttrTarget,
     pub kinds: Vec<AttrKind>,
     pub pos: Pos,
+}
+
+/// Object an attribute applies to.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum AttrTarget {
+    Term(Ident),
+    Rule(Ident),
 }
 
 /// A kind of attribute that can be applied to a term declaration or rule.
@@ -121,7 +128,7 @@ pub enum AttrKind {
     /// conditions.
     Priority,
 
-    /// Tag allows for categorizing terms.
+    /// Tag allows for categorizing terms and rules.
     Tag(Ident),
 }
 

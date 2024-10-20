@@ -117,7 +117,7 @@ fn status(expansions: &Vec<Expansion>, skip_tags: &[String], prog: &Program) {
 }
 
 fn skip(expansion: &Expansion, skip_tags: &[String], prog: &Program) -> bool {
-    let tags = expansion.term_tags(prog);
+    let tags = expansion.tags(prog);
     for tag in skip_tags {
         if tags.contains(tag) {
             return true;

@@ -364,12 +364,18 @@ impl<'a> Parser<'a> {
 
     fn parse_attr(&mut self) -> Result<Attr> {
         let pos = self.pos();
+        let rule = self.eat_sym_str("rule")?;
         let name = self.parse_ident()?;
+        let target = if rule {
+            AttrTarget::Rule(name)
+        } else {
+            AttrTarget::Term(name)
+        };
         let mut kinds = Vec::new();
         while !self.is_rparen() {
             kinds.push(self.parse_attr_kind()?);
         }
-        Ok(Attr { name, kinds, pos })
+        Ok(Attr { target, kinds, pos })
     }
 
     fn parse_attr_kind(&mut self) -> Result<AttrKind> {
