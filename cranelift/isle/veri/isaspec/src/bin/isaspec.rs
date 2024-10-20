@@ -7,8 +7,8 @@ use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
 use cranelift_codegen::ir::types::I8;
 use cranelift_codegen::isa::aarch64::inst::{
-    vreg, writable_vreg, MoveWideConst, MoveWideOp, SImm9, UImm12Scaled, VecLanesOp, VectorSize,
-    NZCV,
+    vreg, writable_vreg, MoveWideConst, MoveWideOp, SImm9, ScalarSize, UImm12Scaled, VecLanesOp,
+    VectorSize, NZCV,
 };
 use cranelift_codegen::{
     ir::MemFlags,
@@ -165,6 +165,10 @@ fn define() -> Result<Vec<FileConfig>> {
         FileConfig {
             name: "conds.isle".into(),
             specs: define_conds()?,
+        },
+        FileConfig {
+            name: "mov_to_fpu.isle".into(),
+            specs: vec![define_mov_to_fpu()],
         },
         FileConfig {
             name: "vec_lanes.isle".into(),
@@ -1728,6 +1732,49 @@ fn flags_mappings() -> Mappings {
     }
 
     mappings
+}
+
+// MInst.MovToFpu specification configuration.
+fn define_mov_to_fpu() -> SpecConfig {
+    // ScalarSize
+    let sizes = [ScalarSize::Size16, ScalarSize::Size32, ScalarSize::Size64];
+
+    // VecLanes
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::vreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
+    );
+
+    SpecConfig {
+        term: "MInst.MovToFpu".to_string(),
+        args: ["rd", "rn", "size"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Instruction(InstConfig {
+                        opcodes: Opcodes::Instruction(Inst::MovToFpu {
+                            rd: writable_vreg(4),
+                            rn: xreg(5),
+                            size: *size,
+                        }),
+                        scope: aarch64::state(),
+                        mappings: mappings.clone(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
 }
 
 // MInst.VecLanes specification configuration.
