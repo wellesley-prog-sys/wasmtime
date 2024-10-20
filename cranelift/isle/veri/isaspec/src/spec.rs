@@ -302,6 +302,11 @@ pub fn substitute(expr: SpecExpr, substitutions: &HashMap<String, SpecExpr>) -> 
         }
 
         // Recurse into child expressions.
+        SpecExpr::As { x, ty, pos } => SpecExpr::As {
+            x: Box::new(substitute(*x, substitutions)?),
+            ty,
+            pos,
+        },
         SpecExpr::Field { field, x, pos } => SpecExpr::Field {
             field,
             x: Box::new(substitute(*x, substitutions)?),

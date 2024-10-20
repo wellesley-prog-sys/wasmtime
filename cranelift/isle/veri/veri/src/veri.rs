@@ -601,6 +601,13 @@ pub struct Call {
     pub signatures: Vec<Signature>,
 }
 
+// Type qualifier, for example derived from an `(as ...)` expression.
+#[derive(Debug)]
+pub struct Qualifier {
+    pub value: Symbolic,
+    pub ty: Compound,
+}
+
 /// Verification conditions for an expansion.
 #[derive(Debug, Default)]
 pub struct Conditions {
@@ -609,6 +616,7 @@ pub struct Conditions {
     pub assertions: Vec<ExprId>,
     pub variables: Vec<Variable>,
     pub calls: Vec<Call>,
+    pub qualifiers: Vec<Qualifier>,
 }
 
 impl Conditions {
@@ -1613,6 +1621,15 @@ impl<'a> ConditionsBuilder<'a> {
             spec::ExprKind::WidthOf(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::WidthOf(x)))
+            }
+
+            spec::ExprKind::As(x, ty) => {
+                let x = self.spec_expr(x, vars)?;
+                self.conditions.qualifiers.push(Qualifier {
+                    value: x.clone(),
+                    ty: ty.clone(),
+                });
+                Ok(x)
             }
         }
     }

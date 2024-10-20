@@ -240,6 +240,9 @@ impl Printable for SpecExpr {
             }),
             SpecExpr::ConstBool { val, .. } => RcDoc::text(if *val { "true" } else { "false" }),
             SpecExpr::Var { var, .. } => var.to_doc(),
+            SpecExpr::As { x, ty, pos: _ } => {
+                sexp(vec![RcDoc::text("as"), x.to_doc(), ty.to_doc()])
+            }
             SpecExpr::Op { op, args, .. } => sexp(
                 Vec::from([op.to_doc()])
                     .into_iter()
