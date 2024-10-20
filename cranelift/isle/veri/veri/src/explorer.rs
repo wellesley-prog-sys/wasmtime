@@ -509,6 +509,17 @@ impl<'a> ExplorerWriter<'a> {
             }
         }
 
+        // TODO(mbm): Parameters
+        // TODO(mbm): Result
+
+        writeln!(
+            output,
+            r#"
+            </tbody>
+        </table>
+        "#
+        )?;
+
         // Constraints
         writeln!(output, "<h2>Constraints</h2>")?;
         writeln!(output, "<ul>")?;
@@ -520,17 +531,6 @@ impl<'a> ExplorerWriter<'a> {
             )?;
         }
         writeln!(output, "</ul>")?;
-
-        // TODO(mbm): Parameters
-        // TODO(mbm): Result
-
-        writeln!(
-            output,
-            r#"
-            </tbody>
-        </table>
-        "#
-        )?;
 
         // Footer.
         self.footer(&mut output)?;
