@@ -163,11 +163,16 @@ impl Printable for Field {
 
 impl Printable for Attr {
     fn to_doc(&self) -> RcDoc<()> {
-        sexp(
-            vec![RcDoc::text("attr"), self.name.to_doc()]
-                .into_iter()
-                .chain(self.kinds.iter().map(|k| k.to_doc())),
-        )
+        let mut parts = vec![RcDoc::text("attr")];
+        match &self.target {
+            AttrTarget::Term(name) => parts.push(name.to_doc()),
+            AttrTarget::Rule(name) => {
+                parts.push(RcDoc::text("rule"));
+                parts.push(name.to_doc());
+            }
+        }
+        parts.extend(self.kinds.iter().map(Printable::to_doc));
+        sexp(parts)
     }
 }
 
