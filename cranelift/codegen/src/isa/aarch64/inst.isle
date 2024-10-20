@@ -1180,7 +1180,7 @@
 )
 
 ;; Registers.
-(model Reg (type (bv 64)))
+(model Reg (type (bv)))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1438,6 +1438,22 @@
         ;; for [crate::isa::aarch64::abi](the ABI module) for more details.
         (SlotOffset
          (off i64))))
+
+; Type instantiations for register addressing modes.
+;
+; Register type is an unspecified bit-vector to support both general-purpose and
+; vector register types. When the `Reg` type is used as an addressing mode we
+; face two problems.  Firstly, acted on in a way that type inference cannot
+; always deduce the width. For example, some addressing registers only have bits
+; extracted.  Secondly, some variants such as `RegOffset` are only ever used
+; from Rust. Type inference has no information to use to deduce the width of
+; `Reg` fields in these cases.  For these reasons we specify explicitly that
+; addressing modes are general purpose registers, therefore 64-bit.
+(instantiate AMode.RegReg                 ((args (bv 64) (bv 64)) (ret (named AMode))))
+(instantiate AMode.RegScaled              ((args (bv 64) (bv 64)) (ret (named AMode))))
+(instantiate AMode.RegScaledExtended      ((args (bv 64) (bv 64) (named ExtendOp)) (ret (named AMode))))
+(instantiate AMode.RegExtended            ((args (bv 64) (bv 64) (named ExtendOp)) (ret (named AMode))))
+(instantiate AMode.RegOffset              ((args (bv 64) (named i64)) (ret (named AMode))))
 
 ;; A memory argument to a load/store-pair.
 (type PairAMode (enum

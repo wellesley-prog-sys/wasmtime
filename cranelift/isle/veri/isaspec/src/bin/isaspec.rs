@@ -31,8 +31,8 @@ use cranelift_isle_veri_isaspec::{
     constraints::Target,
     memory::ReadEffect,
     spec::{
-        spec_binary, spec_const_bit_vector, spec_const_int, spec_discriminator, spec_eq,
-        spec_eq_bool, spec_extract, spec_field, spec_var,
+        spec_as_bit_vector_width, spec_binary, spec_const_bit_vector, spec_const_int,
+        spec_discriminator, spec_eq, spec_eq_bool, spec_extract, spec_field, spec_var,
     },
 };
 use itertools::Itertools;
@@ -785,7 +785,7 @@ fn define_bit_rr() -> SpecConfig {
     );
     mappings.reads.insert(
         aarch64::gpreg(5),
-        Mapping::require(spec_var("rn".to_string())),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
     );
 
     SpecConfig {
@@ -957,7 +957,7 @@ fn define_extend() -> SpecConfig {
     );
     mappings.reads.insert(
         aarch64::gpreg(5),
-        Mapping::require(spec_var("rn".to_string())),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
     );
 
     SpecConfig {
@@ -1149,7 +1149,7 @@ where
     // Source register.
     mappings.reads.insert(
         aarch64::gpreg(4),
-        Mapping::require(spec_var("rd".to_string())),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rd".to_string()), 64)),
     );
 
     // ISA store state mapped to memory set effect.
