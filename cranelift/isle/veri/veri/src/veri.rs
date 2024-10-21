@@ -432,6 +432,20 @@ impl Symbolic {
                     })
                     .collect(),
             ),
+            Symbolic::Enum(e) => Symbolic::Enum(SymbolicEnum {
+                ty: e.ty,
+                discriminant: f(e.discriminant),
+                variants: e
+                    .variants
+                    .iter()
+                    .map(|v| SymbolicVariant {
+                        id: v.id,
+                        name: v.name.clone(),
+                        discriminant: v.discriminant,
+                        value: v.value.scalar_map(f),
+                    })
+                    .collect(),
+            }),
             v => todo!("scalar map: {v:?}"),
         }
     }

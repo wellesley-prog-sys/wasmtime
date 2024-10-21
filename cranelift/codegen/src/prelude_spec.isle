@@ -8,3 +8,6 @@
 
 ; n-bit bitvector with low m bits set.
 (macro (low_bits_mask n m) (bvsub (bvshl (bvone! n) (int2bv n m)) (bvone! n)))
+
+; bitvector zero test
+(macro (bv_is_zero x) (= x (bvzero! (widthof x))))
