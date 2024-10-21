@@ -153,6 +153,15 @@
     ((args (bv 64)) (ret (bv 64)))
 )
 
+(spec (popcnt x)
+    (provide (= result (popcnt x))))
+(instantiate popcnt
+    ((args (bv 8)) (ret (bv 8)))
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 64)) (ret (bv 64)))
+)
+
 (spec (load flags p offset)
     (modifies clif_load loaded_value)
     (provide
