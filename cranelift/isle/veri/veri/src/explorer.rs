@@ -439,6 +439,12 @@ impl<'a> ExplorerWriter<'a> {
         writeln!(output, "<h2>Rules</h2>")?;
         self.write_rules_list(&mut output, expansion.rules.iter().copied())?;
 
+        // Negated Rules
+        if !expansion.negated.is_empty() {
+            writeln!(output, "<h2>Negated</h2>")?;
+            self.write_rules_list(&mut output, expansion.negated.iter().copied())?;
+        }
+
         // Terms
         writeln!(output, "<h2>Terms</h2>")?;
         let terms = expansion.terms(self.prog);
