@@ -731,6 +731,13 @@ impl Conditions {
     pub fn print_model(&self, model: &Model, prog: &Program) -> Result<()> {
         // Calls
         for call in &self.calls {
+            // Skip unit enum variant terms, which may occur frequently and are
+            // rarely informative.
+            let term = prog.term(call.term);
+            if term.is_enum_variant() && call.args.is_empty() {
+                continue;
+            }
+
             println!(
                 "{term_name}({args}) -> {ret}",
                 term_name = prog.term_name(call.term),
