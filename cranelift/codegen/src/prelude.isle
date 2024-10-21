@@ -222,6 +222,7 @@
 
 (decl pure u64_sub (u64 u64) u64)
 (extern constructor u64_sub u64_sub)
+(spec (u64_sub x y) (provide (= result (bvsub x y))))
 
 (decl pure u64_mul (u64 u64) u64)
 (extern constructor u64_mul u64_mul)
@@ -302,6 +303,7 @@
 
 (decl pure u64_is_odd (u64) bool)
 (extern constructor u64_is_odd u64_is_odd)
+(spec (u64_is_odd x) (provide (= result (= (conv_to 1 x) #b1))))
 
 ;; Each of these extractors tests whether the upper half of the input equals the
 ;; lower half of the input
@@ -777,10 +779,45 @@
 ;; For conditions without a signed component, this is a no-op.
 (decl pure intcc_unsigned (IntCC) IntCC)
 (extern constructor intcc_unsigned intcc_unsigned)
+(spec (intcc_unsigned cc)
+      (provide
+            (= result
+                  (match cc
+                        ((Equal) (IntCC.Equal))
+                        ((NotEqual) (IntCC.NotEqual))
+                        ((SignedGreaterThanOrEqual) (IntCC.UnsignedGreaterThanOrEqual))
+                        ((SignedGreaterThan) (IntCC.UnsignedGreaterThan))
+                        ((SignedLessThanOrEqual) (IntCC.UnsignedLessThanOrEqual))
+                        ((SignedLessThan) (IntCC.UnsignedLessThan))
+                        ((UnsignedGreaterThanOrEqual) (IntCC.UnsignedGreaterThanOrEqual))
+                        ((UnsignedGreaterThan) (IntCC.UnsignedGreaterThan))
+                        ((UnsignedLessThanOrEqual) (IntCC.UnsignedLessThanOrEqual))
+                        ((UnsignedLessThan) (IntCC.UnsignedLessThan))
+                  )
+            )
+      )
+)
 
 ;; Pure constructor that only matches signed integer cond codes.
 (decl pure partial signed_cond_code (IntCC) IntCC)
 (extern constructor signed_cond_code signed_cond_code)
+(spec (signed_cond_code cc)
+      (match
+            (match result
+                  ((Equal) false)
+                  ((NotEqual) false)
+                  ((SignedGreaterThanOrEqual) true)
+                  ((SignedGreaterThan) true)
+                  ((SignedLessThanOrEqual) true)
+                  ((SignedLessThan) true)
+                  ((UnsignedGreaterThanOrEqual) false)
+                  ((UnsignedGreaterThan) false)
+                  ((UnsignedLessThanOrEqual) false)
+                  ((UnsignedLessThan) false)
+            )
+      )
+      (provide (= result cc))
+)
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

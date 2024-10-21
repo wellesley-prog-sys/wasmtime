@@ -339,6 +339,7 @@
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
+(spec (u64_from_iconst arg) (match (= arg (zero_ext 64 result))))
 
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
@@ -517,7 +518,7 @@
 
 ;; Chain another producer to a `ProducesFlags`.
 (decl produces_flags_concat (ProducesFlags ProducesFlags) ProducesFlags)
-(attr produces_flags_concat (veri chain))
+(attr produces_flags_concat (tag TODO))
 (rule (produces_flags_concat (ProducesFlags.ProducesFlagsSideEffect inst1) (ProducesFlags.ProducesFlagsSideEffect inst2))
       (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2))
 
