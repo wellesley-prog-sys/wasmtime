@@ -160,16 +160,26 @@ impl Expansion {
     /// Tags that appear on rules and term in the expansion.
     pub fn tags(&self, prog: &Program) -> HashSet<String> {
         let mut tags = HashSet::new();
+
+        // Root term
+        if let Some(term_tags) = prog.specenv.term_tags.get(&self.term) {
+            tags = &tags | term_tags;
+        }
+
+        // Rules
         for rule_id in &self.rules {
             if let Some(rule_tags) = prog.specenv.rule_tags.get(rule_id) {
                 tags = &tags | rule_tags;
             }
         }
+
+        // Terms
         for term_id in self.terms(prog) {
             if let Some(term_tags) = prog.specenv.term_tags.get(&term_id) {
                 tags = &tags | term_tags;
             }
         }
+
         tags
     }
 
