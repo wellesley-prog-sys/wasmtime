@@ -14,7 +14,7 @@
 ; underconstrained type inference.
 (decl add_then_mask (Value Value) Value)
 (extern extractor add_then_mask add_then_mask)
-(spec (add_then_mask x y) (match (= result (extract 7 0 (bvadd x (as y (bv 16)))))))
+(spec (add_then_mask x y) (provide (= result (extract 7 0 (bvadd x (as y (bv 16)))))))
 
 ; Mask low byte then add.
 (decl mask_then_add (Value Value) Value)

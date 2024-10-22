@@ -322,8 +322,11 @@
 ;; instruction as well.
 (decl has_type (Type Inst) Inst)
 (spec (has_type ty arg)
-      (provide (= result arg))
-      (match (= ty (widthof arg))))
+      (provide
+            (= result arg)
+            (= ty (widthof arg))
+      )
+)
 (extractor (has_type ty inst)
            (and (result_type ty)
                 inst))
@@ -331,15 +334,15 @@
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
 (spec (def_inst arg)
-      (provide true)
-      (match (= result arg)))
+      (provide (= result arg))
+)
 (extern extractor def_inst def_inst)
 
 ;; Extract a constant `u64` from a value defined by an `iconst`.
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
-(spec (u64_from_iconst arg) (match (= arg (zero_ext 64 result))))
+(spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
 
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.

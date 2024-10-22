@@ -2179,7 +2179,7 @@
 (extern extractor integral_ty integral_ty)
 (spec (integral_ty ty)
       (provide (= result ty))
-      (match (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+      (match (or (= result 8) (= result 16) (= result 32) (= result 64))))
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)

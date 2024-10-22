@@ -11,7 +11,7 @@
 ; Add 42.
 (decl add42 (Value) Value)
 (extern extractor add42 add42)
-(spec (add42 x) (match (= result (bvadd x #x2a))))
+(spec (add42 x) (provide (= result (bvadd x #x2a))))
 
 ; Operation type.
 (type Op
