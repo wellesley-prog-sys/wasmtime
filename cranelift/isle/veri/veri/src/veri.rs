@@ -1,8 +1,8 @@
 use crate::{
-    expand::Expansion,
+    expand::{Constrain, Expansion},
     program::Program,
     spec::{self, Arm, Constructor, Signature, State},
-    trie_again::{binding_type, BindingType},
+    trie::{binding_type, BindingType},
     types::{Compound, Const, Type, Variant, Width},
 };
 use anyhow::{bail, format_err, Result};
@@ -39,10 +39,15 @@ pub enum Expr {
     Or(ExprId, ExprId),
     Imp(ExprId, ExprId),
     Eq(ExprId, ExprId),
+    Lt(ExprId, ExprId),
     Lte(ExprId, ExprId),
 
+    BVUgt(ExprId, ExprId),
+    BVUge(ExprId, ExprId),
     BVUlt(ExprId, ExprId),
     BVUle(ExprId, ExprId),
+
+    BVSgt(ExprId, ExprId),
     BVSge(ExprId, ExprId),
     BVSlt(ExprId, ExprId),
     BVSle(ExprId, ExprId),
@@ -60,12 +65,17 @@ pub enum Expr {
     BVSub(ExprId, ExprId),
     BVMul(ExprId, ExprId),
     BVSDiv(ExprId, ExprId),
+    BVUDiv(ExprId, ExprId),
+    BVSRem(ExprId, ExprId),
+    BVURem(ExprId, ExprId),
     BVAnd(ExprId, ExprId),
     BVOr(ExprId, ExprId),
     BVXor(ExprId, ExprId),
     BVShl(ExprId, ExprId),
     BVLShr(ExprId, ExprId),
     BVAShr(ExprId, ExprId),
+    BVRotl(ExprId, ExprId),
+    BVRotr(ExprId, ExprId),
 
     // ITE
     Conditional(ExprId, ExprId, ExprId),
@@ -83,6 +93,7 @@ pub enum Expr {
 
     // Integer conversion.
     Int2BV(ExprId, ExprId),
+    BV2Nat(ExprId),
 
     // Bitwidth.
     WidthOf(ExprId),
@@ -95,46 +106,56 @@ impl Expr {
 
     pub fn sources(&self) -> Vec<ExprId> {
         match self {
-            Self::Const(_) | Self::Variable(_) => Vec::new(),
+            Expr::Const(_) | Expr::Variable(_) => Vec::new(),
             // Unary
-            &Self::Not(x)
-            | &Self::BVNot(x)
-            | &Self::BVNeg(x)
-            | &Self::BVExtract(_, _, x)
-            | &Self::Int2BV(_, x)
-            | &Self::Cls(x)
-            | &Self::Popcnt(x)
-            | &Self::WidthOf(x) => vec![x],
+            Expr::Not(x)
+            | Expr::BVNot(x)
+            | Expr::BVNeg(x)
+            | Expr::BVExtract(_, _, x)
+            | Expr::BV2Nat(x)
+            | Expr::Cls(x)
+            | Expr::Popcnt(x)
+            | Expr::WidthOf(x) => vec![*x],
 
             // Binary
-            &Self::And(x, y)
-            | &Self::Or(x, y)
-            | &Self::Imp(x, y)
-            | &Self::Eq(x, y)
-            | &Self::Lte(x, y)
-            | &Self::BVUlt(x, y)
-            | &Self::BVUle(x, y)
-            | &Self::BVSge(x, y)
-            | &Self::BVSlt(x, y)
-            | &Self::BVSle(x, y)
-            | &Self::BVSaddo(x, y)
-            | &Self::BVAdd(x, y)
-            | &Self::BVSub(x, y)
-            | &Self::BVMul(x, y)
-            | &Self::BVSDiv(x, y)
-            | &Self::BVAnd(x, y)
-            | &Self::BVOr(x, y)
-            | &Self::BVXor(x, y)
-            | &Self::BVShl(x, y)
-            | &Self::BVLShr(x, y)
-            | &Self::BVAShr(x, y)
-            | &Self::BVZeroExt(x, y)
-            | &Self::BVSignExt(x, y)
-            | &Self::BVConvTo(x, y)
-            | &Self::BVConcat(x, y) => vec![x, y],
+            Expr::And(x, y)
+            | Expr::Or(x, y)
+            | Expr::Imp(x, y)
+            | Expr::Eq(x, y)
+            | Expr::Lt(x, y)
+            | Expr::Lte(x, y)
+            | Expr::BVUgt(x, y)
+            | Expr::BVUge(x, y)
+            | Expr::BVUlt(x, y)
+            | Expr::BVUle(x, y)
+            | Expr::BVSgt(x, y)
+            | Expr::BVSge(x, y)
+            | Expr::BVSlt(x, y)
+            | Expr::BVSle(x, y)
+            | Expr::BVSaddo(x, y)
+            | Expr::BVAdd(x, y)
+            | Expr::BVSub(x, y)
+            | Expr::BVMul(x, y)
+            | Expr::BVSDiv(x, y)
+            | Expr::BVUDiv(x, y)
+            | Expr::BVSRem(x, y)
+            | Expr::BVURem(x, y)
+            | Expr::BVAnd(x, y)
+            | Expr::BVOr(x, y)
+            | Expr::BVXor(x, y)
+            | Expr::BVShl(x, y)
+            | Expr::BVLShr(x, y)
+            | Expr::BVAShr(x, y)
+            | Expr::BVRotl(x, y)
+            | Expr::BVRotr(x, y)
+            | Expr::BVZeroExt(x, y)
+            | Expr::BVSignExt(x, y)
+            | Expr::BVConvTo(x, y)
+            | Expr::Int2BV(x, y)
+            | Expr::BVConcat(x, y) => vec![*x, *y],
 
             // Ternary
-            &Self::Conditional(c, t, e) => vec![c, t, e],
+            Expr::Conditional(c, t, e) => vec![*c, *t, *e],
         }
     }
 }
@@ -142,44 +163,54 @@ impl Expr {
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Const(c) => write!(f, "const({c})"),
-            Self::Variable(v) => write!(f, "var({})", v.index()),
-            Self::Not(x) => write!(f, "!{}", x.index()),
-            Self::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
-            Self::Or(x, y) => write!(f, "{} || {}", x.index(), y.index()),
-            Self::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
-            Self::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
-            Self::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
-            Self::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
-            Self::BVUle(x, y) => write!(f, "bvule({}, {})", x.index(), y.index()),
-            Self::BVSge(x, y) => write!(f, "bvsge({}, {})", x.index(), y.index()),
-            Self::BVSlt(x, y) => write!(f, "bvslt({}, {})", x.index(), y.index()),
-            Self::BVSle(x, y) => write!(f, "bvsle({}, {})", x.index(), y.index()),
-            Self::BVSaddo(x, y) => write!(f, "bvsaddo({}, {})", x.index(), y.index()),
-            Self::BVNot(x) => write!(f, "bvnot({})", x.index()),
-            Self::BVNeg(x) => write!(f, "bvneg({})", x.index()),
-            Self::Cls(x) => write!(f, "cls({})", x.index()),
-            Self::Popcnt(x) => write!(f, "popcnt({})", x.index()),
-            Self::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
-            Self::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
-            Self::BVMul(x, y) => write!(f, "bvmul({}, {})", x.index(), y.index()),
-            Self::BVSDiv(x, y) => write!(f, "bvsdiv({}, {})", x.index(), y.index()),
-            Self::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
-            Self::BVOr(x, y) => write!(f, "bvor({}, {})", x.index(), y.index()),
-            Self::BVXor(x, y) => write!(f, "bvxor({}, {})", x.index(), y.index()),
-            Self::BVShl(x, y) => write!(f, "bvshl({}, {})", x.index(), y.index()),
-            Self::BVLShr(x, y) => write!(f, "bvlshr({}, {})", x.index(), y.index()),
-            Self::BVAShr(x, y) => write!(f, "bvashr({}, {})", x.index(), y.index()),
-            Self::Conditional(c, t, e) => {
+            Expr::Const(c) => write!(f, "const({c})"),
+            Expr::Variable(v) => write!(f, "var({})", v.index()),
+            Expr::Not(x) => write!(f, "!{}", x.index()),
+            Expr::And(x, y) => write!(f, "{} && {}", x.index(), y.index()),
+            Expr::Or(x, y) => write!(f, "{} || {}", x.index(), y.index()),
+            Expr::Imp(x, y) => write!(f, "{} => {}", x.index(), y.index()),
+            Expr::Eq(x, y) => write!(f, "{} == {}", x.index(), y.index()),
+            Expr::Lt(x, y) => write!(f, "{} < {}", x.index(), y.index()),
+            Expr::Lte(x, y) => write!(f, "{} <= {}", x.index(), y.index()),
+            Expr::BVUgt(x, y) => write!(f, "bvugt({}, {})", x.index(), y.index()),
+            Expr::BVUge(x, y) => write!(f, "bvuge({}, {})", x.index(), y.index()),
+            Expr::BVUlt(x, y) => write!(f, "bvult({}, {})", x.index(), y.index()),
+            Expr::BVUle(x, y) => write!(f, "bvule({}, {})", x.index(), y.index()),
+            Expr::BVSgt(x, y) => write!(f, "bvsgt({}, {})", x.index(), y.index()),
+            Expr::BVSge(x, y) => write!(f, "bvsge({}, {})", x.index(), y.index()),
+            Expr::BVSlt(x, y) => write!(f, "bvslt({}, {})", x.index(), y.index()),
+            Expr::BVSle(x, y) => write!(f, "bvsle({}, {})", x.index(), y.index()),
+            Expr::BVSaddo(x, y) => write!(f, "bvsaddo({}, {})", x.index(), y.index()),
+            Expr::BVNot(x) => write!(f, "bvnot({})", x.index()),
+            Expr::BVNeg(x) => write!(f, "bvneg({})", x.index()),
+            Expr::Cls(x) => write!(f, "cls({})", x.index()),
+            Expr::Popcnt(x) => write!(f, "popcnt({})", x.index()),
+            Expr::BVAdd(x, y) => write!(f, "bvadd({}, {})", x.index(), y.index()),
+            Expr::BVSub(x, y) => write!(f, "bvsub({}, {})", x.index(), y.index()),
+            Expr::BVMul(x, y) => write!(f, "bvmul({}, {})", x.index(), y.index()),
+            Expr::BVSDiv(x, y) => write!(f, "bvsdiv({}, {})", x.index(), y.index()),
+            Expr::BVUDiv(x, y) => write!(f, "bvudiv({}, {})", x.index(), y.index()),
+            Expr::BVSRem(x, y) => write!(f, "bvsrem({}, {})", x.index(), y.index()),
+            Expr::BVURem(x, y) => write!(f, "bvurem({}, {})", x.index(), y.index()),
+            Expr::BVAnd(x, y) => write!(f, "bvand({}, {})", x.index(), y.index()),
+            Expr::BVOr(x, y) => write!(f, "bvor({}, {})", x.index(), y.index()),
+            Expr::BVXor(x, y) => write!(f, "bvxor({}, {})", x.index(), y.index()),
+            Expr::BVShl(x, y) => write!(f, "bvshl({}, {})", x.index(), y.index()),
+            Expr::BVLShr(x, y) => write!(f, "bvlshr({}, {})", x.index(), y.index()),
+            Expr::BVAShr(x, y) => write!(f, "bvashr({}, {})", x.index(), y.index()),
+            Expr::BVRotl(x, y) => write!(f, "bvrotl({}, {})", x.index(), y.index()),
+            Expr::BVRotr(x, y) => write!(f, "bvrotr({}, {})", x.index(), y.index()),
+            Expr::Conditional(c, t, e) => {
                 write!(f, "{} ? {} : {}", c.index(), t.index(), e.index())
             }
-            Self::BVZeroExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
-            Self::BVSignExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
-            Self::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
-            Self::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
-            Self::BVConcat(x, y) => write!(f, "bv_concat({}, {})", x.index(), y.index()),
-            Self::Int2BV(w, x) => write!(f, "int2bv({}, {})", w.index(), x.index()),
-            Self::WidthOf(x) => write!(f, "width_of({})", x.index()),
+            Expr::BVZeroExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
+            Expr::BVSignExt(w, x) => write!(f, "bv_zero_ext({}, {})", w.index(), x.index()),
+            Expr::BVConvTo(w, x) => write!(f, "bv_conv_to({}, {})", w.index(), x.index()),
+            Expr::BVExtract(h, l, x) => write!(f, "bv_extract({h}, {l}, {})", x.index()),
+            Expr::BVConcat(x, y) => write!(f, "bv_concat({}, {})", x.index(), y.index()),
+            Expr::Int2BV(w, x) => write!(f, "int2bv({}, {})", w.index(), x.index()),
+            Expr::BV2Nat(x) => write!(f, "bv2nat({})", x.index()),
+            Expr::WidthOf(x) => write!(f, "width_of({})", x.index()),
         }
     }
 }
@@ -223,8 +254,9 @@ impl SymbolicField {
 
 #[derive(Debug, Clone)]
 pub struct SymbolicEnum {
-    discriminant: ExprId,
-    variants: Vec<SymbolicVariant>,
+    pub ty: TypeId,
+    pub discriminant: ExprId,
+    pub variants: Vec<SymbolicVariant>,
 }
 
 impl SymbolicEnum {
@@ -234,13 +266,46 @@ impl SymbolicEnum {
             .find(|v| v.name == name)
             .ok_or(format_err!("no variant with name {name}"))
     }
+
+    fn validate(&self) -> Result<()> {
+        // Expect the variants to have distinct discriminants in the range [0, num_variants).
+        for (expect, variant) in self.variants.iter().enumerate() {
+            if variant.discriminant != expect {
+                bail!(
+                    "variant '{name}' has unexpected discriminant",
+                    name = variant.name
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct SymbolicVariant {
-    name: String,
-    discriminant: usize,
-    value: Symbolic,
+    pub name: String,
+    pub id: VariantId,
+    pub discriminant: usize,
+    pub value: Symbolic,
+}
+
+impl SymbolicVariant {
+    fn try_field_by_name(&self, name: &str) -> Result<&SymbolicField> {
+        self.fields()?
+            .iter()
+            .find(|f| f.name == name)
+            .ok_or(format_err!("no field with name {name}"))
+    }
+
+    fn field_values(&self) -> Result<Vec<Symbolic>> {
+        Ok(self.fields()?.iter().map(|f| f.value.clone()).collect())
+    }
+
+    fn fields(&self) -> Result<&Vec<SymbolicField>> {
+        self.value
+            .as_struct()
+            .ok_or(format_err!("variant value is not a struct"))
+    }
 }
 
 impl std::fmt::Display for SymbolicVariant {
@@ -370,6 +435,20 @@ impl Symbolic {
                     })
                     .collect(),
             ),
+            Symbolic::Enum(e) => Symbolic::Enum(SymbolicEnum {
+                ty: e.ty,
+                discriminant: f(e.discriminant),
+                variants: e
+                    .variants
+                    .iter()
+                    .map(|v| SymbolicVariant {
+                        id: v.id,
+                        name: v.name.clone(),
+                        discriminant: v.discriminant,
+                        value: v.value.scalar_map(f),
+                    })
+                    .collect(),
+            }),
             v => todo!("scalar map: {v:?}"),
         }
     }
@@ -398,20 +477,25 @@ impl Symbolic {
                 ))
             }
             (Symbolic::Enum(a), Symbolic::Enum(b)) => {
+                assert_eq!(a.ty, b.ty);
+                let ty = a.ty;
                 let discriminant = merge(a.discriminant, b.discriminant);
                 assert_eq!(a.variants.len(), b.variants.len());
                 let variants = zip(&a.variants, &b.variants)
                     .map(|(a, b)| {
                         assert_eq!(a.name, b.name);
+                        assert_eq!(a.id, b.id);
                         assert_eq!(a.discriminant, b.discriminant);
                         Ok(SymbolicVariant {
                             name: a.name.clone(),
+                            id: a.id,
                             discriminant: a.discriminant,
                             value: Symbolic::merge(&a.value, &b.value, merge)?,
                         })
                     })
                     .collect::<Result<_>>()?;
                 Ok(Symbolic::Enum(SymbolicEnum {
+                    ty,
                     discriminant,
                     variants,
                 }))
@@ -534,6 +618,13 @@ pub struct Call {
     pub signatures: Vec<Signature>,
 }
 
+// Type qualifier, for example derived from an `(as ...)` expression.
+#[derive(Debug)]
+pub struct Qualifier {
+    pub value: Symbolic,
+    pub ty: Compound,
+}
+
 /// Verification conditions for an expansion.
 #[derive(Debug, Default)]
 pub struct Conditions {
@@ -542,6 +633,7 @@ pub struct Conditions {
     pub assertions: Vec<ExprId>,
     pub variables: Vec<Variable>,
     pub calls: Vec<Call>,
+    pub qualifiers: Vec<Qualifier>,
 }
 
 impl Conditions {
@@ -656,6 +748,13 @@ impl Conditions {
     pub fn print_model(&self, model: &Model, prog: &Program) -> Result<()> {
         // Calls
         for call in &self.calls {
+            // Skip unit enum variant terms, which may occur frequently and are
+            // rarely informative.
+            let term = prog.term(call.term);
+            if term.is_enum_variant() && call.args.is_empty() {
+                continue;
+            }
+
             println!(
                 "{term_name}({args}) -> {ret}",
                 term_name = prog.term_name(call.term),
@@ -767,10 +866,9 @@ impl<'a> ConditionsBuilder<'a> {
         )?;
 
         // Constraints.
-        for (binding_id, constraints) in &self.expansion.constraints {
-            for constraint in constraints {
-                self.add_constraint(*binding_id, constraint)?;
-            }
+        for constrain in &self.expansion.constraints {
+            let holds = self.constrain(constrain)?;
+            self.conditions.assumptions.push(holds);
         }
 
         // Equals.
@@ -859,7 +957,11 @@ impl<'a> ConditionsBuilder<'a> {
                 fields,
             } => self.make_variant(id, *ty, *variant, fields),
 
-            Binding::MatchVariant { .. } => todo!("binding: match_variant"),
+            Binding::MatchVariant {
+                source,
+                variant,
+                field,
+            } => self.match_variant(id, *source, *variant, *field),
 
             Binding::MakeSome { inner } => self.make_some(id, *inner),
 
@@ -870,6 +972,12 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn const_int(&mut self, id: BindingId, val: i128, ty: TypeId) -> Result<()> {
+        let eq = self.equals_const_int(id, val, ty)?;
+        self.conditions.assumptions.push(eq);
+        Ok(())
+    }
+
+    fn equals_const_int(&mut self, id: BindingId, val: i128, ty: TypeId) -> Result<ExprId> {
         // Determine modeled type.
         let ty_name = self.prog.type_name(ty);
         let ty = self
@@ -884,14 +992,18 @@ impl<'a> ConditionsBuilder<'a> {
         // Construct value of the determined type.
         let value = self.spec_typed_value(val, ty)?.into();
 
-        // Assumption: destination binding equals constant value.
+        // Destination binding equals constant value.
         let eq = self.values_equal(self.binding_value[&id].clone(), value);
-        self.conditions.assumptions.push(eq);
-
-        Ok(())
+        Ok(eq)
     }
 
     fn const_prim(&mut self, id: BindingId, val: Sym) -> Result<()> {
+        let eq = self.equals_const_prim(id, val)?;
+        self.conditions.assumptions.push(eq);
+        Ok(())
+    }
+
+    fn equals_const_prim(&mut self, id: BindingId, val: Sym) -> Result<ExprId> {
         // Lookup value.
         let spec_value = self.prog.specenv.const_value.get(&val).ok_or(format_err!(
             "value of constant {const_name} is unspecified",
@@ -899,11 +1011,9 @@ impl<'a> ConditionsBuilder<'a> {
         ))?;
         let value = self.spec_expr_no_vars(spec_value)?;
 
-        // Assumption: destination binding equals constant value.
+        // Destination binding equals constant value.
         let eq = self.values_equal(self.binding_value[&id].clone(), value);
-        self.conditions.assumptions.push(eq);
-
-        Ok(())
+        Ok(eq)
     }
 
     fn extractor(&mut self, id: BindingId, term: TermId, parameter: BindingId) -> Result<()> {
@@ -1023,17 +1133,27 @@ impl<'a> ConditionsBuilder<'a> {
             .extend(term_spec.modifies.iter().map(|v| v.0.clone()));
 
         // Record callsite.
+        self.record_term_instantiation(term, args.to_vec(), ret)?;
+
+        Ok(())
+    }
+
+    fn record_term_instantiation(
+        &mut self,
+        term: TermId,
+        args: Vec<Symbolic>,
+        ret: Symbolic,
+    ) -> Result<()> {
         let signatures = self
             .prog
             .specenv
             .resolve_term_instantiations(&term, &self.prog.tyenv)?;
         self.conditions.calls.push(Call {
             term,
-            args: args.to_vec(),
+            args,
             ret,
             signatures,
         });
-
         Ok(())
     }
 
@@ -1044,14 +1164,68 @@ impl<'a> ConditionsBuilder<'a> {
         variant: VariantId,
         fields: &[BindingId],
     ) -> Result<()> {
-        // TODO(mbm): make_variant binding conditions generation must account for enum type models
-        log::warn!("make_variant binding partially implemented");
-
         // Lookup term corresponding to variant.
         let variant_term_id = self.prog.get_variant_term(ty, variant);
 
         // Invoke as a constructor.
         self.constructor(id, variant_term_id, fields, Invocation::Caller)?;
+
+        Ok(())
+    }
+
+    fn match_variant(
+        &mut self,
+        id: BindingId,
+        source: BindingId,
+        variant: VariantId,
+        field: TupleIndex,
+    ) -> Result<()> {
+        // Source binding should be an enum.
+        let e = self.binding_value[&source]
+            .as_enum()
+            .ok_or(format_err!(
+                "target of variant constraint should be an enum"
+            ))?
+            .clone();
+
+        // Lookup enum type via corresponding constriant,
+        let tys: Vec<_> = self
+            .expansion
+            .constraints
+            .iter()
+            .flat_map(|c| match c {
+                Constrain::Match(id, Constraint::Variant { ty, variant: v, .. })
+                    if *id == source && *v == variant =>
+                {
+                    Some(ty)
+                }
+                _ => None,
+            })
+            .collect();
+        if tys.len() != 1 {
+            bail!("expected exactly one variant constraint for match variant binding");
+        }
+        let ty = tys[0];
+
+        // Lookup variant and field.
+        let variant_type = self.prog.tyenv.get_variant(*ty, variant);
+        let variant_name = self.prog.tyenv.syms[variant_type.name.index()].as_str();
+
+        let field_sym = variant_type.fields[field.index()].name;
+        let field_name = &self.prog.tyenv.syms[field_sym.index()];
+
+        // Destination binding.
+        let v = self.binding_value[&id].clone();
+
+        // Assumption: if the variant matches then the destination binding
+        // equals the projected field.
+        let variant = e.try_variant_by_name(variant_name)?;
+        let field = variant.try_field_by_name(field_name)?;
+
+        let discriminator = self.discriminator(&e, variant);
+        let eq = self.values_equal(v, field.value.clone());
+        let constraint = self.dedup_expr(Expr::Imp(discriminator, eq));
+        self.conditions.assumptions.push(constraint);
 
         Ok(())
     }
@@ -1112,11 +1286,26 @@ impl<'a> ConditionsBuilder<'a> {
         Ok(())
     }
 
-    fn add_constraint(&mut self, binding_id: BindingId, constraint: &Constraint) -> Result<()> {
+    fn constrain(&mut self, constrain: &Constrain) -> Result<ExprId> {
+        match constrain {
+            Constrain::Match(binding_id, constraint) => self.constraint(*binding_id, constraint),
+            Constrain::NotAll(constrains) => {
+                let cs = constrains
+                    .iter()
+                    .map(|c| self.constrain(c))
+                    .collect::<Result<_>>()?;
+                let all = self.all(cs);
+                let not_all = self.dedup_expr(Expr::Not(all));
+                Ok(not_all)
+            }
+        }
+    }
+
+    fn constraint(&mut self, binding_id: BindingId, constraint: &Constraint) -> Result<ExprId> {
         match constraint {
             Constraint::Some => self.constraint_some(binding_id),
-            Constraint::ConstPrim { val } => self.const_prim(binding_id, *val),
-            Constraint::ConstInt { val, ty } => self.const_int(binding_id, *val, *ty),
+            Constraint::ConstPrim { val } => self.equals_const_prim(binding_id, *val),
+            Constraint::ConstInt { val, ty } => self.equals_const_int(binding_id, *val, *ty),
             Constraint::Variant {
                 ty,
                 variant,
@@ -1125,17 +1314,15 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
-    fn constraint_some(&mut self, binding_id: BindingId) -> Result<()> {
+    fn constraint_some(&mut self, binding_id: BindingId) -> Result<ExprId> {
         // Constrained binding should be an option.
         let opt = self.binding_value[&binding_id]
             .as_option()
             .expect("target of some constraint should be an option")
             .clone();
 
-        // Assumption: option is Some.
-        self.conditions.assumptions.push(opt.some);
-
-        Ok(())
+        // Constraint: option is Some.
+        Ok(opt.some)
     }
 
     fn constraint_variant(
@@ -1143,7 +1330,7 @@ impl<'a> ConditionsBuilder<'a> {
         binding_id: BindingId,
         ty: TypeId,
         variant: VariantId,
-    ) -> Result<()> {
+    ) -> Result<ExprId> {
         // Constrained binding should be an enum.
         let e = self.binding_value[&binding_id]
             .as_enum()
@@ -1161,239 +1348,317 @@ impl<'a> ConditionsBuilder<'a> {
         // Assumption: discriminant equals variant.
         let variant = e.try_variant_by_name(variant_name)?;
         let discriminator = self.discriminator(&e, variant);
-        self.conditions.assumptions.push(discriminator);
-
-        Ok(())
+        Ok(discriminator)
     }
 
     fn spec_expr(&mut self, expr: &spec::Expr, vars: &Variables) -> Result<Symbolic> {
-        match expr {
-            spec::Expr::Var(v) => {
+        match &expr.x {
+            spec::ExprKind::Var(v) => {
                 let v = vars.get(&v.0)?;
                 Ok(v.clone())
             }
 
-            spec::Expr::Const(c) => Ok(self.constant(c.clone()).into()),
+            spec::ExprKind::Const(c) => Ok(self.constant(c.clone()).into()),
 
-            spec::Expr::Constructor(constructor) => self.construct(constructor, vars),
+            spec::ExprKind::Constructor(constructor) => self.construct(constructor, vars),
 
-            spec::Expr::Field(name, x) => {
+            spec::ExprKind::Field(name, x) => {
                 let x = self.spec_expr(x, vars)?;
                 self.spec_field(name, x)
             }
 
-            spec::Expr::Discriminator(variant, x) => {
+            spec::ExprKind::Discriminator(variant, x) => {
                 let x = self.spec_expr(x, vars)?;
                 self.spec_discriminator(variant, x)
             }
 
             // TODO(mbm): fix boilerplate for common expressions
-            spec::Expr::Not(x) => {
+            spec::ExprKind::Not(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Not(x)))
             }
 
-            spec::Expr::And(x, y) => {
+            spec::ExprKind::And(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::And(x, y)))
             }
 
-            spec::Expr::Or(x, y) => {
+            spec::ExprKind::Or(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Or(x, y)))
             }
 
-            spec::Expr::Imp(x, y) => {
+            spec::ExprKind::Imp(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Imp(x, y)))
             }
 
-            spec::Expr::Eq(x, y) => {
+            spec::ExprKind::Eq(x, y) => {
                 let x = self.spec_expr(x, vars)?;
                 let y = self.spec_expr(y, vars)?;
                 Ok(self.values_equal(x, y).into())
             }
 
-            spec::Expr::Lte(x, y) => {
+            spec::ExprKind::Lt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Lt(x, y)))
+            }
+
+            spec::ExprKind::Lte(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Lte(x, y)))
             }
 
-            spec::Expr::BVUlt(x, y) => {
+            spec::ExprKind::Gt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Lt(y, x)))
+            }
+
+            spec::ExprKind::Gte(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::Lte(y, x)))
+            }
+
+            spec::ExprKind::BVUlt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUlt(x, y)))
             }
 
-            spec::Expr::BVUle(x, y) => {
+            spec::ExprKind::BVUle(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVUle(x, y)))
             }
 
-            spec::Expr::BVSge(x, y) => {
+            spec::ExprKind::BVSge(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSge(x, y)))
             }
 
-            spec::Expr::BVSlt(x, y) => {
+            spec::ExprKind::BVSlt(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSlt(x, y)))
             }
 
-            spec::Expr::BVSle(x, y) => {
+            spec::ExprKind::BVSle(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSle(x, y)))
             }
 
-            spec::Expr::BVSaddo(x, y) => {
+            spec::ExprKind::BVSgt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSgt(x, y)))
+            }
+
+            spec::ExprKind::BVUgt(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUgt(x, y)))
+            }
+
+            spec::ExprKind::BVUge(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUge(x, y)))
+            }
+
+            spec::ExprKind::BVSaddo(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSaddo(x, y)))
             }
 
-            spec::Expr::BVNot(x) => {
+            spec::ExprKind::BVNot(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVNot(x)))
             }
 
-            spec::Expr::BVNeg(x) => {
+            spec::ExprKind::BVNeg(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVNeg(x)))
             }
 
-            spec::Expr::Cls(x) => {
+            spec::ExprKind::Cls(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Cls(x)))
             }
 
-            spec::Expr::Popcnt(x) => {
+            spec::ExprKind::Popcnt(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Popcnt(x)))
             }
 
-            spec::Expr::BVAdd(x, y) => {
+            spec::ExprKind::BVAdd(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVAdd(x, y)))
             }
 
-            spec::Expr::BVSub(x, y) => {
+            spec::ExprKind::BVSub(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSub(x, y)))
             }
 
-            spec::Expr::BVMul(x, y) => {
+            spec::ExprKind::BVMul(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVMul(x, y)))
             }
 
-            spec::Expr::BVSDiv(x, y) => {
+            spec::ExprKind::BVSDiv(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSDiv(x, y)))
             }
 
-            spec::Expr::BVAnd(x, y) => {
+            spec::ExprKind::BVAnd(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVAnd(x, y)))
             }
 
-            spec::Expr::BVOr(x, y) => {
+            spec::ExprKind::BVOr(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVOr(x, y)))
             }
 
-            spec::Expr::BVXor(x, y) => {
+            spec::ExprKind::BVXor(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVXor(x, y)))
             }
 
-            spec::Expr::BVShl(x, y) => {
+            spec::ExprKind::BVShl(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVShl(x, y)))
             }
 
-            spec::Expr::BVLShr(x, y) => {
+            spec::ExprKind::BVLShr(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVLShr(x, y)))
             }
 
-            spec::Expr::BVAShr(x, y) => {
+            spec::ExprKind::BVAShr(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVAShr(x, y)))
             }
 
-            spec::Expr::Conditional(c, t, e) => {
+            spec::ExprKind::BVUDiv(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVUDiv(x, y)))
+            }
+
+            spec::ExprKind::BVURem(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVURem(x, y)))
+            }
+
+            spec::ExprKind::BVSRem(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVSRem(x, y)))
+            }
+
+            spec::ExprKind::BVRotl(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVRotl(x, y)))
+            }
+
+            spec::ExprKind::BVRotr(x, y) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                let y = self.spec_expr(y, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BVRotr(x, y)))
+            }
+
+            spec::ExprKind::Conditional(c, t, e) => {
                 let c = self.spec_expr(c, vars)?.try_into()?;
                 let t = self.spec_expr(t, vars)?;
                 let e = self.spec_expr(e, vars)?;
                 self.conditional(c, t, e)
             }
 
-            spec::Expr::Switch(on, arms) => self.spec_switch(on, arms, vars),
+            spec::ExprKind::Switch(on, arms) => self.spec_switch(on, arms, vars),
 
-            spec::Expr::Match(on, arms) => self.spec_match(on, arms, vars),
+            spec::ExprKind::Match(on, arms) => self.spec_match(on, arms, vars),
 
-            spec::Expr::Let(defs, body) => self.spec_let(defs, body, vars),
+            spec::ExprKind::Let(defs, body) => self.spec_let(defs, body, vars),
 
-            spec::Expr::With(decls, body) => self.spec_with(decls, body, vars),
+            spec::ExprKind::With(decls, body) => self.spec_with(decls, body, vars),
 
-            spec::Expr::Macro(ident, args) => self.spec_macro(ident, args, vars),
+            spec::ExprKind::Macro(ident, args) => self.spec_macro(ident, args, vars),
 
-            spec::Expr::BVZeroExt(w, x) => {
+            spec::ExprKind::BVZeroExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVZeroExt(w, x)))
             }
 
-            spec::Expr::BVSignExt(w, x) => {
+            spec::ExprKind::BVSignExt(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVSignExt(w, x)))
             }
 
-            spec::Expr::BVConvTo(w, x) => {
+            spec::ExprKind::BVConvTo(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVConvTo(w, x)))
             }
 
-            spec::Expr::BVExtract(h, l, x) => {
+            spec::ExprKind::BVExtract(h, l, x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVExtract(*h, *l, x)))
             }
 
-            spec::Expr::BVConcat(x, y) => {
+            spec::ExprKind::BVConcat(x, y) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 let y = self.spec_expr(y, vars)?.try_into()?;
                 Ok(self.scalar(Expr::BVConcat(x, y)))
             }
 
-            spec::Expr::Int2BV(w, x) => {
+            spec::ExprKind::Int2BV(w, x) => {
                 let w = self.spec_expr(w, vars)?.try_into()?;
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::Int2BV(w, x)))
             }
 
-            spec::Expr::WidthOf(x) => {
+            spec::ExprKind::BV2Nat(x) => {
+                let x = self.spec_expr(x, vars)?.try_into()?;
+                Ok(self.scalar(Expr::BV2Nat(x)))
+            }
+
+            spec::ExprKind::WidthOf(x) => {
                 let x = self.spec_expr(x, vars)?.try_into()?;
                 Ok(self.scalar(Expr::WidthOf(x)))
+            }
+
+            spec::ExprKind::As(x, ty) => {
+                let x = self.spec_expr(x, vars)?;
+                self.conditions.qualifiers.push(Qualifier {
+                    value: x.clone(),
+                    ty: ty.clone(),
+                });
+                Ok(x)
             }
         }
     }
@@ -1444,14 +1709,14 @@ impl<'a> ConditionsBuilder<'a> {
                     ))?;
 
                 // Should be an enum.
-                let variants = model.as_enum().ok_or(format_err!(
+                let e = model.as_enum().ok_or(format_err!(
                     "{name} expected to have enum type",
                     name = name.0
                 ))?;
 
                 // Lookup variant.
                 let variant =
-                    variants
+                    e.variants
                         .iter()
                         .find(|v| v.name.0 == variant.0)
                         .ok_or(format_err!(
@@ -1462,35 +1727,37 @@ impl<'a> ConditionsBuilder<'a> {
                 // Discriminant: constant value since we are constructing a known variant.
                 let discriminant = self.constant(Const::Int(variant.id.index().try_into()?));
 
-                Ok(Symbolic::Enum(SymbolicEnum {
-                    discriminant,
-                    variants: variants
-                        .iter()
-                        .map(|v| {
-                            // For all except the variant under construction, allocate an undefined variant.
-                            if v.id != variant.id {
-                                // QUESTION(mbm): use undef variant or IfThen and fresh bits in solver?
-                                return self.alloc_variant(v, "undef".to_string());
-                            }
+                // Variants: undefined except for the variant under construction.
+                let variants = e
+                    .variants
+                    .iter()
+                    .map(|v| {
+                        // For all except the variant under construction, allocate an undefined variant.
+                        if v.id != variant.id {
+                            // QUESTION(mbm): use undef variant or IfThen and fresh bits in solver?
+                            return self.alloc_variant(v, "undef".to_string());
+                        }
 
-                            // Construct a variant provided arguments.
-                            assert_eq!(args.len(), v.fields.len());
-                            let fields = zip(&v.fields, args)
-                                .map(|(f, a)| {
-                                    Ok(SymbolicField {
-                                        name: f.name.0.clone(),
-                                        value: self.spec_expr(a, vars)?,
-                                    })
+                        // Construct a variant provided arguments.
+                        assert_eq!(args.len(), v.fields.len());
+                        let fields = zip(&v.fields, args)
+                            .map(|(f, a)| {
+                                Ok(SymbolicField {
+                                    name: f.name.0.clone(),
+                                    value: self.spec_expr(a, vars)?,
                                 })
-                                .collect::<Result<_>>()?;
-                            Ok(SymbolicVariant {
-                                name: v.name.0.clone(),
-                                discriminant: v.id.index(),
-                                value: Symbolic::Struct(fields),
                             })
+                            .collect::<Result<_>>()?;
+                        Ok(SymbolicVariant {
+                            name: v.name.0.clone(),
+                            id: v.id,
+                            discriminant: v.id.index(),
+                            value: Symbolic::Struct(fields),
                         })
-                        .collect::<Result<_>>()?,
-                }))
+                    })
+                    .collect::<Result<_>>()?;
+
+                Ok(self.new_enum(type_id, discriminant, variants)?)
             }
         }
     }
@@ -1804,14 +2071,16 @@ impl<'a> ConditionsBuilder<'a> {
                     })
                     .collect::<Result<_>>()?,
             )),
-            Compound::Enum(variants) => Ok(Symbolic::Enum(SymbolicEnum {
-                discriminant: self
-                    .alloc_variable(Type::Int, Variable::component_name(&name, "discriminant")),
-                variants: variants
+            Compound::Enum(e) => {
+                let discriminant =
+                    self.alloc_variable(Type::Int, Variable::component_name(&name, "discriminant"));
+                let variants = e
+                    .variants
                     .iter()
                     .map(|v| self.alloc_variant(v, name.clone()))
-                    .collect::<Result<_>>()?,
-            })),
+                    .collect::<Result<_>>()?;
+                Ok(self.new_enum(e.id, discriminant, variants)?)
+            }
             Compound::Named(_) => {
                 let ty = self.prog.specenv.resolve_type(ty, &self.prog.tyenv)?;
                 self.alloc_value(&ty, name)
@@ -1819,10 +2088,49 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
+    fn new_enum(
+        &mut self,
+        ty: TypeId,
+        discriminant: ExprId,
+        variants: Vec<SymbolicVariant>,
+    ) -> Result<Symbolic> {
+        // Construct symbolic enum and ensure it's valid.
+        let e = SymbolicEnum {
+            ty,
+            discriminant,
+            variants,
+        };
+        e.validate()?;
+
+        // Assume discriminant invariant: positive integer less than number of
+        // variants.
+        let zero = self.constant(Const::Int(0));
+        let num_variants = self.constant(Const::Int(e.variants.len().try_into()?));
+        let discriminant_positive = self.dedup_expr(Expr::Lte(zero, discriminant));
+        let discriminant_less_than_num_variants =
+            self.dedup_expr(Expr::Lt(discriminant, num_variants));
+        let discriminant_in_range = self.dedup_expr(Expr::And(
+            discriminant_positive,
+            discriminant_less_than_num_variants,
+        ));
+        self.conditions.assumptions.push(discriminant_in_range);
+
+        // Variant term instantiations.
+        let ret = Symbolic::Enum(e.clone());
+        for variant in &e.variants {
+            let term = self.prog.get_variant_term(e.ty, variant.id);
+            let args = variant.field_values()?;
+            self.record_term_instantiation(term, args, ret.clone())?;
+        }
+
+        Ok(ret)
+    }
+
     fn alloc_variant(&mut self, variant: &Variant, name: String) -> Result<SymbolicVariant> {
         let name = Variable::component_name(&name, &variant.name.0);
         Ok(SymbolicVariant {
             name: variant.name.0.clone(),
+            id: variant.id,
             discriminant: variant.id.index(),
             value: self.alloc_value(&variant.ty(), name)?,
         })

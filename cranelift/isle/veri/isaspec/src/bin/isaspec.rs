@@ -5,7 +5,11 @@ use std::{io, vec};
 
 use anyhow::{bail, Result};
 use clap::Parser as ClapParser;
-use cranelift_codegen::isa::aarch64::inst::{MoveWideConst, MoveWideOp, SImm9};
+use cranelift_codegen::ir::types::I8;
+use cranelift_codegen::isa::aarch64::inst::{
+    vreg, writable_vreg, MoveWideConst, MoveWideOp, SImm9, ScalarSize, UImm12Scaled, VecLanesOp,
+    VecMisc2, VectorSize, NZCV,
+};
 use cranelift_codegen::{
     ir::MemFlags,
     isa::aarch64::inst::{
@@ -30,8 +34,8 @@ use cranelift_isle_veri_isaspec::{
     constraints::Target,
     memory::ReadEffect,
     spec::{
-        spec_binary, spec_const_bit_vector, spec_const_int, spec_discriminator, spec_eq,
-        spec_eq_bool, spec_extract, spec_field, spec_var,
+        spec_as_bit_vector_width, spec_binary, spec_const_bit_vector, spec_const_int,
+        spec_discriminator, spec_eq, spec_eq_bool, spec_extract, spec_field, spec_var,
     },
 };
 use itertools::Itertools;
@@ -160,7 +164,19 @@ fn define() -> Result<Vec<FileConfig>> {
         },
         FileConfig {
             name: "conds.isle".into(),
-            specs: define_conds(),
+            specs: define_conds()?,
+        },
+        FileConfig {
+            name: "mov_to_fpu.isle".into(),
+            specs: vec![define_mov_to_fpu()],
+        },
+        FileConfig {
+            name: "vec_misc.isle".into(),
+            specs: vec![define_vec_misc()],
+        },
+        FileConfig {
+            name: "vec_lanes.isle".into(),
+            specs: vec![define_vec_lanes()],
         },
     ])
 }
@@ -344,12 +360,7 @@ fn is_alu3_op_size_supported(alu3_op: ALUOp3, size: OperandSize) -> bool {
 // MInst.AluRRImm12 specification configuration.
 fn define_alu_rr_imm12() -> Result<SpecConfig> {
     // ALUOps supported by AluRRImm12.
-    let alu_ops = [
-        ALUOp::Add,
-        ALUOp::Sub,
-        // ALUOp::AddS,
-        // ALUOp::SubS,
-    ];
+    let alu_ops = [ALUOp::Add, ALUOp::Sub, ALUOp::AddS, ALUOp::SubS];
 
     // OperandSize
     let sizes = [OperandSize::Size32, OperandSize::Size64];
@@ -789,7 +800,7 @@ fn define_bit_rr() -> SpecConfig {
     );
     mappings.reads.insert(
         aarch64::gpreg(5),
-        Mapping::require(spec_var("rn".to_string())),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
     );
 
     SpecConfig {
@@ -961,7 +972,7 @@ fn define_extend() -> SpecConfig {
     );
     mappings.reads.insert(
         aarch64::gpreg(5),
-        Mapping::require(spec_var("rn".to_string())),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
     );
 
     SpecConfig {
@@ -973,7 +984,7 @@ fn define_extend() -> SpecConfig {
         cases: Cases::Cases(
             bits.iter()
                 .cartesian_product(&bits)
-                .filter(|(from_bits, to_bits)| from_bits < to_bits)
+                .filter(|(from_bits, to_bits)| from_bits <= to_bits && **from_bits < 64)
                 .cartesian_product(&signed)
                 .map(|((from_bits, to_bits), signed)| Case {
                     conds: vec![
@@ -1153,7 +1164,7 @@ where
     // Source register.
     mappings.reads.insert(
         aarch64::gpreg(4),
-        Mapping::require(spec_var("rd".to_string())),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rd".to_string()), 64)),
     );
 
     // ISA store state mapped to memory set effect.
@@ -1361,12 +1372,40 @@ where
         }),
     };
 
+    // UnsignedOffset
+    let mut unsigned_offset_scope = aarch64::state();
+    let uimm12 = Target::Var("uimm12".to_string());
+    unsigned_offset_scope.global(uimm12.clone());
+
+    let mut unsigned_offset_mappings = mappings.clone();
+    unsigned_offset_mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    unsigned_offset_mappings
+        .reads
+        .insert(uimm12, Mapping::require(spec_var("uimm12".to_string())));
+
+    let unsigned_offset_template =
+        amode_unsigned_offset_template(xreg(5), |amode| inst(amode, MemFlags::new()))?;
+
+    let unsigned_offset = Arm {
+        variant: "UnsignedOffset".to_string(),
+        args: ["rn", "uimm12"].map(String::from).to_vec(),
+        body: Cases::Instruction(InstConfig {
+            opcodes: Opcodes::Template(unsigned_offset_template),
+            scope: unsigned_offset_scope,
+            mappings: unsigned_offset_mappings,
+        }),
+    };
+
     Ok(vec![
         reg_reg,
         reg_scaled,
         reg_scaled_extended,
         reg_extended,
         unscaled,
+        unsigned_offset,
     ])
 }
 
@@ -1401,7 +1440,36 @@ where
     Ok(template)
 }
 
-fn define_conds() -> Vec<SpecConfig> {
+fn amode_unsigned_offset_template<F>(rn: Reg, inst: F) -> Result<Bits>
+where
+    F: Fn(AMode) -> Inst,
+{
+    // Assemble a base instruction with a placeholder for the immediate bits field.
+    let placeholder = UImm12Scaled::zero(I8);
+    let base = inst(AMode::UnsignedOffset {
+        rn,
+        uimm12: placeholder,
+    });
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic immediate fields.
+    let imm = Bits {
+        segments: vec![Segment::Symbolic("uimm12".to_string(), 12)],
+    };
+    let template = Bits::splice(&bits, &imm, 10)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let bits = assignment.get("uimm12").unwrap();
+        let uimm12 = UImm12Scaled::maybe_from_i64((*bits).try_into().unwrap(), I8).unwrap();
+        Ok(inst(AMode::UnsignedOffset { rn, uimm12 }))
+    })?;
+
+    Ok(template)
+}
+
+fn define_conds() -> Result<Vec<SpecConfig>> {
     // CSel
     let csel = define_csel("MInst.CSel", |rd, cond, rn, rm| Inst::CSel {
         rd,
@@ -1418,31 +1486,22 @@ fn define_conds() -> Vec<SpecConfig> {
         rm,
     });
 
-    vec![csel, csneg]
+    // CSet
+    let cset = define_cset("MInst.CSet", |rd, cond| Inst::CSet { rd, cond });
+
+    // CSetm
+    let csetm = define_cset("MInst.CSetm", |rd, cond| Inst::CSetm { rd, cond });
+
+    // CCmp
+    let ccmp = define_ccmp()?;
+
+    Ok(vec![csel, csneg, cset, csetm, ccmp])
 }
 
 fn define_csel<F>(term: &str, inst: F) -> SpecConfig
 where
     F: Fn(Writable<Reg>, Cond, Reg, Reg) -> Inst,
 {
-    // Cond
-    let conds = [
-        Cond::Eq,
-        Cond::Ne,
-        Cond::Hs,
-        Cond::Lo,
-        Cond::Mi,
-        Cond::Pl,
-        Cond::Vs,
-        Cond::Vc,
-        Cond::Hi,
-        Cond::Ls,
-        Cond::Ge,
-        Cond::Lt,
-        Cond::Gt,
-        Cond::Le,
-    ];
-
     // Flags and register mappings.
     let mut mappings = flags_mappings();
     mappings.writes.insert(
@@ -1464,7 +1523,7 @@ where
 
         cases: Cases::Match(Match {
             on: spec_var("cond".to_string()),
-            arms: conds
+            arms: conds()
                 .iter()
                 .rev()
                 .map(|cond| Arm {
@@ -1484,6 +1543,174 @@ where
                 .collect(),
         }),
     }
+}
+
+fn define_cset<F>(term: &str, inst: F) -> SpecConfig
+where
+    F: Fn(Writable<Reg>, Cond) -> Inst,
+{
+    // Flags and register mappings.
+    let mut mappings = flags_mappings();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+
+    SpecConfig {
+        term: term.to_string(),
+        args: ["rd", "cond"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("cond".to_string()),
+            arms: conds()
+                .iter()
+                .rev()
+                .map(|cond| Arm {
+                    variant: format!("{cond:?}"),
+                    args: Vec::new(),
+                    body: Cases::Instruction(InstConfig {
+                        opcodes: Opcodes::Instruction(inst(writable_xreg(4), *cond)),
+                        scope: aarch64::state(),
+                        mappings: mappings.clone(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
+}
+
+fn define_ccmp() -> Result<SpecConfig> {
+    // OperandSize
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+
+    // Execution scope: define opcode template fields.
+    let mut scope = aarch64::state();
+    for flag in &["n", "z", "c", "v"] {
+        scope.global(Target::Var(flag.to_string()));
+    }
+
+    // Flags and register mappings.
+    let mut mappings = flags_mappings();
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(6),
+        Mapping::require(spec_var("rm".to_string())),
+    );
+    for flag in &["n", "z", "c", "v"] {
+        mappings.reads.insert(
+            Target::Var(flag.to_string()),
+            MappingBuilder::var("nzcv")
+                .field(&flag.to_uppercase())
+                .build(),
+        );
+    }
+
+    Ok(SpecConfig {
+        term: "MInst.CCmp".to_string(),
+        args: ["size", "rn", "rm", "nzcv", "cond"]
+            .map(String::from)
+            .to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| {
+                    Ok(Arm {
+                        variant: format!("{size:?}"),
+                        args: Vec::new(),
+                        body: Cases::Match(Match {
+                            on: spec_var("cond".to_string()),
+                            arms: conds()
+                                .iter()
+                                .rev()
+                                .map(|cond| {
+                                    let template = ccmp_template(*size, xreg(5), xreg(6), *cond)?;
+                                    Ok(Arm {
+                                        variant: format!("{cond:?}"),
+                                        args: Vec::new(),
+                                        body: Cases::Instruction(InstConfig {
+                                            opcodes: Opcodes::Template(template),
+                                            scope: scope.clone(),
+                                            mappings: mappings.clone(),
+                                        }),
+                                    })
+                                })
+                                .collect::<Result<_>>()?,
+                        }),
+                    })
+                })
+                .collect::<Result<_>>()?,
+        }),
+    })
+}
+
+fn ccmp_template(size: OperandSize, rn: Reg, rm: Reg, cond: Cond) -> Result<Bits> {
+    // Assemble a base instruction with a placeholder for the NZCV field.
+    let placeholder = NZCV::new(false, false, false, false);
+    let base = Inst::CCmp {
+        size,
+        rn,
+        rm,
+        nzcv: placeholder,
+        cond,
+    };
+    let opcode = aarch64::opcode(&base);
+    let bits = Bits::from_u32(opcode);
+
+    // Splice in symbolic immediate fields.
+    let nzcv = Bits {
+        segments: vec![
+            Segment::Symbolic("v".to_string(), 1),
+            Segment::Symbolic("c".to_string(), 1),
+            Segment::Symbolic("z".to_string(), 1),
+            Segment::Symbolic("n".to_string(), 1),
+        ],
+    };
+    let template = Bits::splice(&bits, &nzcv, 0)?;
+
+    // Verify template against the assembler.
+    verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
+        let nzcv = NZCV::new(
+            assignment["n"] != 0,
+            assignment["z"] != 0,
+            assignment["c"] != 0,
+            assignment["v"] != 0,
+        );
+        Ok(Inst::CCmp {
+            size,
+            rn,
+            rm,
+            nzcv,
+            cond,
+        })
+    })?;
+
+    Ok(template)
+}
+
+/// All condition codes.
+fn conds() -> Vec<Cond> {
+    vec![
+        Cond::Eq,
+        Cond::Ne,
+        Cond::Hs,
+        Cond::Lo,
+        Cond::Mi,
+        Cond::Pl,
+        Cond::Vs,
+        Cond::Vc,
+        Cond::Hi,
+        Cond::Ls,
+        Cond::Ge,
+        Cond::Lt,
+        Cond::Gt,
+        Cond::Le,
+    ]
 }
 
 fn flags_mappings() -> Mappings {
@@ -1511,6 +1738,169 @@ fn flags_mappings() -> Mappings {
     mappings
 }
 
+// MInst.MovToFpu specification configuration.
+fn define_mov_to_fpu() -> SpecConfig {
+    // ScalarSize
+    let sizes = [ScalarSize::Size16, ScalarSize::Size32, ScalarSize::Size64];
+
+    // MovToFpu
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::vreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::gpreg(5),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
+    );
+
+    SpecConfig {
+        term: "MInst.MovToFpu".to_string(),
+        args: ["rd", "rn", "size"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Instruction(InstConfig {
+                        opcodes: Opcodes::Instruction(Inst::MovToFpu {
+                            rd: writable_vreg(4),
+                            rn: xreg(5),
+                            size: *size,
+                        }),
+                        scope: aarch64::state(),
+                        mappings: mappings.clone(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
+}
+
+// MInst.VecMisc specification configuration.
+fn define_vec_misc() -> SpecConfig {
+    // VecMisc2
+    let ops = [VecMisc2::Cnt];
+
+    // VectorSize
+    let sizes = [VectorSize::Size8x8, VectorSize::Size8x16];
+
+    // VecMisc
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::vreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::vreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+
+    SpecConfig {
+        term: "MInst.VecMisc".to_string(),
+        args: ["op", "rd", "rn", "size"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: spec_var("op".to_string()),
+                        arms: ops
+                            .iter()
+                            .map(|op| Arm {
+                                variant: format!("{op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Instruction(InstConfig {
+                                    opcodes: Opcodes::Instruction(Inst::VecMisc {
+                                        op: *op,
+                                        rd: writable_vreg(4),
+                                        rn: vreg(5),
+                                        size: *size,
+                                    }),
+                                    scope: aarch64::state(),
+                                    mappings: mappings.clone(),
+                                }),
+                            })
+                            .collect(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
+}
+
+// MInst.VecLanes specification configuration.
+fn define_vec_lanes() -> SpecConfig {
+    // VecLanesOp
+    let vec_lanes_ops = [VecLanesOp::Uminv, VecLanesOp::Addv];
+
+    // VectorSize
+    let sizes = [
+        VectorSize::Size8x8,
+        VectorSize::Size8x16,
+        VectorSize::Size16x4,
+        VectorSize::Size16x8,
+        VectorSize::Size32x4,
+    ];
+
+    // VecLanes
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::vreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::vreg(5),
+        Mapping::require(spec_var("rn".to_string())),
+    );
+
+    SpecConfig {
+        term: "MInst.VecLanes".to_string(),
+        args: ["op", "rd", "rn", "size"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: spec_var("op".to_string()),
+                        arms: vec_lanes_ops
+                            .iter()
+                            .map(|op| Arm {
+                                variant: format!("{op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Instruction(InstConfig {
+                                    opcodes: Opcodes::Instruction(Inst::VecLanes {
+                                        op: *op,
+                                        rd: writable_vreg(4),
+                                        rn: vreg(5),
+                                        size: *size,
+                                    }),
+                                    scope: aarch64::state(),
+                                    mappings: mappings.clone(),
+                                }),
+                            })
+                            .collect(),
+                    }),
+                })
+                .collect(),
+        }),
+    }
+}
+
 // Compare an opcode template against the instruction we expect it to represent.
 fn verify_opcode_template<F>(template: &Bits, expect: F) -> Result<()>
 where
@@ -1522,7 +1912,11 @@ where
         let opcode = aarch64::opcode(&inst);
         let got = concrete.eval()?;
         if got != opcode {
-            bail!("template mismatch");
+            bail!(
+                "template mismatch: opcode {:#x}, template {:#x}",
+                opcode,
+                got,
+            );
         }
     }
     Ok(())

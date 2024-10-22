@@ -25,7 +25,7 @@ pub mod reachability;
 pub mod runner;
 pub mod solver;
 pub mod spec;
-pub mod trie_again;
+pub mod trie;
 pub mod type_inference;
 pub mod types;
 pub mod veri;

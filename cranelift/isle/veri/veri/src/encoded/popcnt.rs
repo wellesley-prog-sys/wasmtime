@@ -20,7 +20,7 @@ fn zero_extend(smt: &mut Context, padding: usize, value: SExpr) -> SExpr {
     ])
 }
 
-pub fn popcnt(smt: &mut Context, ty: usize, x: SExpr, id: u32) -> SExpr {
+pub fn popcnt(smt: &mut Context, ty: usize, x: SExpr, id: usize) -> SExpr {
     let mut bits: Vec<_> = (0..ty)
         .map(|i| zero_extend(smt, 7, smt.extract(i as i32, i as i32, x)))
         .collect();

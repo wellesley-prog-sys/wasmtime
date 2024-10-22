@@ -6,10 +6,10 @@ use cranelift_isle::{
 };
 
 use crate::{
-    debug::{binding_string, constraint_string},
+    debug::{binding_string, constrain_string},
     expand::{Chaining, Expansion},
     program::Program,
-    trie_again::{binding_type, BindingType},
+    trie::{binding_type, BindingType},
 };
 use std::{
     fs::File,
@@ -395,7 +395,7 @@ impl<'a> ExplorerWriter<'a> {
             )?;
 
             // Tags
-            let mut tags: Vec<String> = expansion.term_tags(self.prog).iter().cloned().collect();
+            let mut tags: Vec<String> = expansion.tags(self.prog).iter().cloned().collect();
             tags.sort();
             writeln!(output, "<td>{tags}</td>", tags = tags.join(", "))?;
 
@@ -439,6 +439,12 @@ impl<'a> ExplorerWriter<'a> {
         writeln!(output, "<h2>Rules</h2>")?;
         self.write_rules_list(&mut output, expansion.rules.iter().copied())?;
 
+        // Negated Rules
+        if !expansion.negated.is_empty() {
+            writeln!(output, "<h2>Negated</h2>")?;
+            self.write_rules_list(&mut output, expansion.negated.iter().copied())?;
+        }
+
         // Terms
         writeln!(output, "<h2>Terms</h2>")?;
         let terms = expansion.terms(self.prog);
@@ -472,7 +478,6 @@ impl<'a> ExplorerWriter<'a> {
             r#"
                     <th>Type</th>
                     <th>Binding</th>
-                    <th>Constraints</th>
                 </tr>
             </thead>
             <tbody>
@@ -506,21 +511,6 @@ impl<'a> ExplorerWriter<'a> {
                     binding = binding_string(binding, expansion.term, self.prog, lookup_binding)
                 )?;
 
-                // Constraints
-                if let Some(constraints) = expansion.constraints.get(&id) {
-                    writeln!(
-                        output,
-                        "<td>{}</td>",
-                        constraints
-                            .iter()
-                            .map(|c| constraint_string(c, &self.prog.tyenv))
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    )?;
-                } else {
-                    writeln!(output, "<td></td>")?;
-                }
-
                 writeln!(output, "</tr>")?;
             }
         }
@@ -535,6 +525,18 @@ impl<'a> ExplorerWriter<'a> {
         </table>
         "#
         )?;
+
+        // Constraints
+        writeln!(output, "<h2>Constraints</h2>")?;
+        writeln!(output, "<ul>")?;
+        for constrain in &expansion.constraints {
+            writeln!(
+                output,
+                "<li>{constrain}</li>",
+                constrain = constrain_string(constrain, &self.prog.tyenv)
+            )?;
+        }
+        writeln!(output, "</ul>")?;
 
         // Footer.
         self.footer(&mut output)?;

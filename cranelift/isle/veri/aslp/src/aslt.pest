@@ -5,6 +5,7 @@ aslt = _{ SOI ~ (stmt ~ (NEWLINE ~ stmt)* ~ NEWLINE?)? ~ EOI }
 stmt = {
     stmt_assign
   | stmt_constdecl
+  | stmt_vardecl
   | stmt_vardeclsnoinit
   | stmt_assert
   | stmt_if
@@ -13,6 +14,7 @@ stmt = {
 
 stmt_assign         = { "Stmt_Assign(" ~ lexpr ~ "," ~ expr ~ ")" }
 stmt_constdecl      = { "Stmt_ConstDecl(" ~ ty ~ "," ~ ident ~ "," ~ expr ~ ")" }
+stmt_vardecl        = { "Stmt_VarDecl(" ~ ty ~ "," ~ ident ~ "," ~ expr ~ ")" }
 stmt_vardeclsnoinit = { "Stmt_VarDeclsNoInit(" ~ ty ~ "," ~ vars ~ ")" }
 stmt_assert         = { "Stmt_Assert(" ~ expr ~ ")" }
 stmt_if             = { "Stmt_If(" ~ expr ~ "," ~ stmts ~ "," ~ stmts ~ "," ~ stmts ~ ")" }

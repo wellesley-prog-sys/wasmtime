@@ -98,12 +98,19 @@ pub struct Decl {
 /// An attribute applied to a declaration.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Attr {
-    pub term: Ident,
+    pub target: AttrTarget,
     pub kinds: Vec<AttrKind>,
     pub pos: Pos,
 }
 
-/// A kind of attribute that can be applied to a declaration.
+/// Object an attribute applies to.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum AttrTarget {
+    Term(Ident),
+    Rule(Ident),
+}
+
+/// A kind of attribute that can be applied to a term declaration or rule.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum AttrKind {
     /// In verification, apply rule chaining to this term.
@@ -113,7 +120,15 @@ pub enum AttrKind {
     /// verified.
     Chain,
 
-    /// Tag allows for categorizing terms.
+    /// In verification, declare that the correctness of the rule is dependent
+    /// upon priorities.
+    ///
+    /// The effect of this attribute on a rule is that during rule expansion,
+    /// the negations of higher-priority rules are added to the verification
+    /// conditions.
+    Priority,
+
+    /// Tag allows for categorizing terms and rules.
     Tag(Ident),
 }
 
@@ -139,6 +154,13 @@ pub enum SpecExpr {
     // A variable
     Var {
         var: Ident,
+        pos: Pos,
+    },
+    // As expression specifies the intended type of the expression. Functionally
+    // it is the identity. Analogous to qualified identifiers in SMT-LIB.
+    As {
+        x: Box<SpecExpr>,
+        ty: ModelType,
         pos: Pos,
     },
     /// Struct field access.
@@ -205,6 +227,7 @@ impl SpecExpr {
             | &Self::ConstBitVec { pos, .. }
             | &Self::ConstBool { pos, .. }
             | &Self::Var { pos, .. }
+            | &Self::As { pos, .. }
             | &Self::Field { pos, .. }
             | &Self::Discriminator { pos, .. }
             | &Self::Op { pos, .. }
@@ -275,7 +298,6 @@ pub enum SpecOp {
     Concat,
 
     // Custom encodings
-    Subs,
     Popcnt,
     Clz,
     Cls,
@@ -284,7 +306,7 @@ pub enum SpecOp {
     // Conversion operations
     ConvTo,
     Int2BV,
-    BV2Int,
+    BV2Nat,
     WidthOf,
 
     // Control operations

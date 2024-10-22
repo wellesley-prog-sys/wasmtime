@@ -1,15 +1,16 @@
 use crate::spec::{self, SpecEnv};
+use crate::trie;
 use anyhow::{bail, Result};
-use cranelift_isle::ast::Ident;
-use cranelift_isle::error::{Errors, ErrorsBuilder};
+use cranelift_isle::ast::{Def, Ident};
+use cranelift_isle::error::Errors;
 use cranelift_isle::files::Files;
 use cranelift_isle::lexer::Pos;
 use cranelift_isle::sema::{
     self, Rule, RuleId, Term, TermEnv, TermId, Type, TypeEnv, TypeId, VariantId,
 };
-use cranelift_isle::trie_again::{self, RuleSet};
+use cranelift_isle::trie_again::{Overlap, RuleSet};
 use cranelift_isle::{lexer, parser};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub struct Program {
@@ -17,6 +18,7 @@ pub struct Program {
     pub tyenv: TypeEnv,
     pub termenv: TermEnv,
     pub specenv: SpecEnv,
+    pub overlaps: HashMap<RuleId, HashSet<RuleId>>,
 }
 
 impl Program {
@@ -61,11 +63,14 @@ impl Program {
 
         let specenv = spec::SpecEnv::from_ast(&defs, &termenv, &tyenv)?;
 
+        let overlaps = Self::build_overlaps(&defs, files.clone())?;
+
         Ok(Self {
             files,
             tyenv,
             termenv,
             specenv,
+            overlaps,
         })
     }
 
@@ -103,6 +108,11 @@ impl Program {
             .expect("invalid rule id")
     }
 
+    pub fn rule_identifer(&self, rule_id: RuleId) -> String {
+        let rule = self.rule(rule_id);
+        rule.identifier(&self.tyenv, &self.files)
+    }
+
     pub fn rules_by_term(&self) -> HashMap<TermId, Vec<RuleId>> {
         let mut rules: HashMap<TermId, Vec<RuleId>> = HashMap::new();
         for rule in &self.termenv.rules {
@@ -124,14 +134,46 @@ impl Program {
     }
 
     pub fn build_trie(&self) -> Result<Vec<(TermId, RuleSet)>, Errors> {
-        let (terms, errors) = trie_again::build(&self.termenv);
-        if errors.is_empty() {
-            Ok(terms)
-        } else {
-            Err(ErrorsBuilder::new()
-                .errors(errors)
-                .files(self.files.clone())
-                .build())
+        trie::build_trie(&self.termenv, self.files.clone())
+    }
+
+    fn build_overlaps(defs: &[Def], files: Arc<Files>) -> Result<HashMap<RuleId, HashSet<RuleId>>> {
+        // Overlap checking relies on term environment constructed with internal
+        // extractor expansion enabled, so we need to generate it again.
+        let mut tyenv = match sema::TypeEnv::from_ast(defs) {
+            Ok(type_env) => type_env,
+            Err(errs) => bail!(Errors::new(errs, files)),
+        };
+
+        let expand_internal_extractors = true;
+        let termenv = match sema::TermEnv::from_ast(&mut tyenv, defs, expand_internal_extractors) {
+            Ok(term_env) => term_env,
+            Err(errs) => bail!(Errors::new(errs, files)),
+        };
+
+        // Check all pairs of rules for overlap.
+        let term_rule_sets = trie::build_trie(&termenv, files.clone())?;
+        let mut overlaps: HashMap<RuleId, HashSet<RuleId>> = HashMap::new();
+        for (_, rule_set) in &term_rule_sets {
+            for rule in &rule_set.rules {
+                for other in &rule_set.rules {
+                    // Ignore same or higher priority rules.
+                    if other.prio <= rule.prio {
+                        continue;
+                    }
+
+                    // Check for overlap.
+                    let overlap = rule.may_overlap(other);
+                    if overlap == Overlap::No {
+                        continue;
+                    }
+
+                    // Record overlap.
+                    overlaps.entry(rule.id).or_default().insert(other.id);
+                }
+            }
         }
+
+        Ok(overlaps)
     }
 }

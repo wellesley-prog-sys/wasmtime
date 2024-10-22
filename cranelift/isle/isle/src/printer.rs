@@ -163,11 +163,16 @@ impl Printable for Field {
 
 impl Printable for Attr {
     fn to_doc(&self) -> RcDoc<()> {
-        sexp(
-            vec![RcDoc::text("attr"), self.term.to_doc()]
-                .into_iter()
-                .chain(self.kinds.iter().map(|k| k.to_doc())),
-        )
+        let mut parts = vec![RcDoc::text("attr")];
+        match &self.target {
+            AttrTarget::Term(name) => parts.push(name.to_doc()),
+            AttrTarget::Rule(name) => {
+                parts.push(RcDoc::text("rule"));
+                parts.push(name.to_doc());
+            }
+        }
+        parts.extend(self.kinds.iter().map(Printable::to_doc));
+        sexp(parts)
     }
 }
 
@@ -175,6 +180,7 @@ impl Printable for AttrKind {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             AttrKind::Chain => sexp(vec![RcDoc::text("veri"), RcDoc::text("chain")]),
+            AttrKind::Priority => sexp(vec![RcDoc::text("veri"), RcDoc::text("priority")]),
             AttrKind::Tag(tag) => sexp(vec![RcDoc::text("tag"), tag.to_doc()]),
         }
     }
@@ -239,6 +245,9 @@ impl Printable for SpecExpr {
             }),
             SpecExpr::ConstBool { val, .. } => RcDoc::text(if *val { "true" } else { "false" }),
             SpecExpr::Var { var, .. } => var.to_doc(),
+            SpecExpr::As { x, ty, pos: _ } => {
+                sexp(vec![RcDoc::text("as"), x.to_doc(), ty.to_doc()])
+            }
             SpecExpr::Op { op, args, .. } => sexp(
                 Vec::from([op.to_doc()])
                     .into_iter()
@@ -333,11 +342,10 @@ impl Printable for SpecOp {
             SpecOp::Concat => "concat",
             SpecOp::ConvTo => "conv_to",
             SpecOp::Int2BV => "int2bv",
-            SpecOp::BV2Int => "bv2int",
+            SpecOp::BV2Nat => "bv2nat",
             SpecOp::WidthOf => "widthof",
             SpecOp::If => "if",
             SpecOp::Switch => "switch",
-            SpecOp::Subs => "subs",
             SpecOp::Popcnt => "popcnt",
             SpecOp::Rev => "rev",
             SpecOp::Cls => "cls",

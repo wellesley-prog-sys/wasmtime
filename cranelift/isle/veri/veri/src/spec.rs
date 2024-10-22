@@ -1,114 +1,135 @@
 use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
-    ast::{self, AttrKind, Def, Ident, Model, ModelType, SpecOp},
+    ast::{self, AttrKind, AttrTarget, Def, Ident, Model, ModelType, SpecOp},
     lexer::Pos,
-    sema::{ReturnKind, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
+    sema::{ReturnKind, RuleId, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    fmt::Debug,
+};
 
 use crate::types::{Compound, Const};
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
 
+/// Positioned attaches positional information to a wrapped object.
+#[derive(Clone)]
+pub struct Positioned<X> {
+    pub pos: Pos,
+    pub x: X,
+}
+
+impl<X> Positioned<X> {
+    fn new(pos: Pos, x: X) -> Box<Self> {
+        Box::new(Self { pos, x })
+    }
+}
+
+impl<X: Debug> Debug for Positioned<X> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Positioned")
+            .field(&self.pos)
+            .field(&self.x)
+            .finish()
+    }
+}
+
+pub type Expr = Box<Positioned<ExprKind>>;
+
 /// Spec expression.
 #[derive(Debug, Clone)]
-pub enum Expr {
+pub enum ExprKind {
     // TODO(mbm): plumb positional information through spec expressions
 
     // Terminal nodes
     Var(Ident),
     Const(Const),
+    As(Expr, Compound),
     Constructor(Constructor),
-    //True,
-    //False,
-    Field(Ident, Box<Expr>),
-    Discriminator(Ident, Box<Expr>),
+    Field(Ident, Expr),
+    Discriminator(Ident, Expr),
 
     // Get the width of a bitvector
-    WidthOf(Box<Expr>),
+    WidthOf(Expr),
 
     // Boolean operations
-    // QUESTION(mbm): would it be preferable to use the Binary(Opcode, Box<Expr>, Box<Expr>) form instead?
-    Not(Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
-    Or(Box<Expr>, Box<Expr>),
-    Imp(Box<Expr>, Box<Expr>),
-    Eq(Box<Expr>, Box<Expr>),
-    Lte(Box<Expr>, Box<Expr>),
-    //Lt(Box<Expr>, Box<Expr>),
+    // QUESTION(mbm): would it be preferable to use the Binary(Opcode, ExprBox, ExprBox) form instead?
+    Not(Expr),
+    And(Expr, Expr),
+    Or(Expr, Expr),
+    Imp(Expr, Expr),
+    Eq(Expr, Expr),
+    Lt(Expr, Expr),
+    Lte(Expr, Expr),
+    Gt(Expr, Expr),
+    Gte(Expr, Expr),
 
-    //BVSgt(Box<Expr>, Box<Expr>),
-    BVSge(Box<Expr>, Box<Expr>),
-    BVSlt(Box<Expr>, Box<Expr>),
-    BVSle(Box<Expr>, Box<Expr>),
-    //BVUgt(Box<Expr>, Box<Expr>),
-    //BVUgte(Box<Expr>, Box<Expr>),
-    BVUlt(Box<Expr>, Box<Expr>),
-    BVUle(Box<Expr>, Box<Expr>),
+    BVSgt(Expr, Expr),
+    BVSge(Expr, Expr),
+    BVSlt(Expr, Expr),
+    BVSle(Expr, Expr),
+    BVUgt(Expr, Expr),
+    BVUge(Expr, Expr),
+    BVUlt(Expr, Expr),
+    BVUle(Expr, Expr),
 
-    BVSaddo(Box<Expr>, Box<Expr>),
+    BVSaddo(Expr, Expr),
 
-    //// Bitvector operations
-    ////      Note: these follow the naming conventions of the SMT theory of bitvectors:
-    ////      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
+    // Bitvector operations
+
     // Unary operators
-    BVNeg(Box<Expr>),
-    BVNot(Box<Expr>),
-    Cls(Box<Expr>),
-    //CLZ(Box<Expr>),
-    //A64CLZ(Box<Expr>, Box<Expr>),
-    //Rev(Box<Expr>),
-    //A64Rev(Box<Expr>, Box<Expr>),
-    Popcnt(Box<Expr>), // or is it BVPopcnt?
+    BVNeg(Expr),
+    BVNot(Expr),
+    Cls(Expr),
+    Popcnt(Expr),
+    //CLZ(Expr),
+    //Rev(Expr),
+    //BVPopcnt(Expr),
 
-    //// Binary operators
-    //BVUDiv(Box<Expr>, Box<Expr>),
-    BVSDiv(Box<Expr>, Box<Expr>),
-    BVAdd(Box<Expr>, Box<Expr>),
-    BVSub(Box<Expr>, Box<Expr>),
-    BVMul(Box<Expr>, Box<Expr>),
-    //BVUrem(Box<Expr>, Box<Expr>),
-    //BVSrem(Box<Expr>, Box<Expr>),
-    BVAnd(Box<Expr>, Box<Expr>),
-    BVOr(Box<Expr>, Box<Expr>),
-    BVXor(Box<Expr>, Box<Expr>),
-    //BVRotl(Box<Expr>, Box<Expr>),
-    //BVRotr(Box<Expr>, Box<Expr>),
-    BVShl(Box<Expr>, Box<Expr>),
-    BVLShr(Box<Expr>, Box<Expr>),
-    BVAShr(Box<Expr>, Box<Expr>),
-
-    //// Includes type
-    //BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
+    // Binary operators
+    BVAdd(Expr, Expr),
+    BVSub(Expr, Expr),
+    BVMul(Expr, Expr),
+    BVUDiv(Expr, Expr),
+    BVSDiv(Expr, Expr),
+    BVURem(Expr, Expr),
+    BVSRem(Expr, Expr),
+    BVAnd(Expr, Expr),
+    BVOr(Expr, Expr),
+    BVXor(Expr, Expr),
+    BVRotl(Expr, Expr),
+    BVRotr(Expr, Expr),
+    BVShl(Expr, Expr),
+    BVLShr(Expr, Expr),
+    BVAShr(Expr, Expr),
 
     // Conversions
-    BVZeroExt(Box<Expr>, Box<Expr>),
-    BVSignExt(Box<Expr>, Box<Expr>),
+    BVZeroExt(Expr, Expr),
+    BVSignExt(Expr, Expr),
     // Conversion to wider/narrower bits, without an explicit extend.
-    BVConvTo(Box<Expr>, Box<Expr>),
+    BVConvTo(Expr, Expr),
 
     // Extract specified bits
-    BVExtract(usize, usize, Box<Expr>),
+    BVExtract(usize, usize, Expr),
 
     // Concatenate bitvectors.
-    BVConcat(Box<Expr>, Box<Expr>),
+    BVConcat(Expr, Expr),
 
-    // Convert integer to bitvector.
-    Int2BV(Box<Expr>, Box<Expr>),
-
-    //// Convert bitvector to integer
-    //BVToInt(Box<Expr>),
+    // Convert between integers and bitvector.
+    Int2BV(Expr, Expr),
+    BV2Nat(Expr),
 
     // Conditional if-then-else
-    Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
+    Conditional(Expr, Expr, Expr),
     // Switch
-    Switch(Box<Expr>, Vec<(Expr, Expr)>),
+    Switch(Expr, Vec<(Expr, Expr)>),
     // Match
-    Match(Box<Expr>, Vec<Arm>),
+    Match(Expr, Vec<Arm>),
     // Let bindings
-    Let(Vec<(Ident, Expr)>, Box<Expr>),
+    Let(Vec<(Ident, Expr)>, Expr),
     // With scope.
-    With(Vec<Ident>, Box<Expr>),
+    With(Vec<Ident>, Expr),
     // Macro expansion.
     Macro(Ident, Vec<Expr>),
 }
@@ -122,7 +143,7 @@ macro_rules! unary_expr {
             "Unexpected number of args for unary operator at {:?}",
             $pos
         );
-        $expr(Box::new(Expr::from_ast(&$args[0])))
+        $expr(expr_from_ast(&$args[0]))
     }};
 }
 
@@ -135,10 +156,7 @@ macro_rules! binary_expr {
             "Unexpected number of args for binary operator at {:?}",
             $pos
         );
-        $expr(
-            Box::new(Expr::from_ast(&$args[0])),
-            Box::new(Expr::from_ast(&$args[1])),
-        )
+        $expr(expr_from_ast(&$args[0]), expr_from_ast(&$args[1]))
     }};
 }
 
@@ -152,9 +170,9 @@ macro_rules! ternary_expr {
             $pos
         );
         $expr(
-            Box::new(Expr::from_ast(&$args[0])),
-            Box::new(Expr::from_ast(&$args[1])),
-            Box::new(Expr::from_ast(&$args[2])),
+            expr_from_ast(&$args[0]),
+            expr_from_ast(&$args[1]),
+            expr_from_ast(&$args[2]),
         )
     }};
 }
@@ -169,81 +187,92 @@ macro_rules! variadic_binary_expr {
         );
         $args
             .iter()
-            .map(Expr::from_ast)
+            .map(ExprKind::from_ast)
             .rev()
-            .reduce(|acc, e| $expr(Box::new(e), Box::new(acc)))
+            .reduce(|acc, e| $expr(Positioned::new(*$pos, e), Positioned::new(*$pos, acc)))
             .unwrap()
     }};
 }
 
-impl Expr {
-    fn from_ast(expr: &ast::SpecExpr) -> Self {
+fn expr_from_ast(expr: &ast::SpecExpr) -> Expr {
+    Positioned::new(expr.pos(), ExprKind::from_ast(expr))
+}
+
+fn exprs_from_ast(exprs: &[ast::SpecExpr]) -> Vec<Expr> {
+    exprs.iter().map(expr_from_ast).collect()
+}
+
+fn var_from_ident(ident: Ident) -> Expr {
+    Positioned::new(ident.1, ExprKind::Var(ident))
+}
+
+impl ExprKind {
+    fn from_ast(expr: &ast::SpecExpr) -> ExprKind {
         match expr {
-            ast::SpecExpr::ConstInt { val, pos: _ } => Expr::Const(Const::Int(*val)),
-            ast::SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const::Bool(*val)),
+            ast::SpecExpr::ConstInt { val, pos: _ } => ExprKind::Const(Const::Int(*val)),
+            ast::SpecExpr::ConstBool { val, pos: _ } => ExprKind::Const(Const::Bool(*val)),
             ast::SpecExpr::ConstBitVec { val, width, pos: _ } => {
-                Expr::Const(Const::BitVector(*width, *val))
+                ExprKind::Const(Const::BitVector(*width, *val))
             }
-            ast::SpecExpr::Var { var, pos: _ } => Expr::Var(var.clone()),
+            ast::SpecExpr::Var { var, pos: _ } => ExprKind::Var(var.clone()),
+            ast::SpecExpr::As { x, ty, pos: _ } => {
+                ExprKind::As(expr_from_ast(x), Compound::from_ast(ty))
+            }
             ast::SpecExpr::Field { field, x, pos: _ } => {
-                Expr::Field(field.clone(), Box::new(Expr::from_ast(x)))
+                ExprKind::Field(field.clone(), expr_from_ast(x))
             }
             ast::SpecExpr::Discriminator { variant, x, pos: _ } => {
-                Expr::Discriminator(variant.clone(), Box::new(Expr::from_ast(x)))
+                ExprKind::Discriminator(variant.clone(), expr_from_ast(x))
             }
             ast::SpecExpr::Op { op, args, pos } => match op {
                 // Unary
-                SpecOp::Not => unary_expr!(Expr::Not, args, pos),
-                SpecOp::BVNot => unary_expr!(Expr::BVNot, args, pos),
-                SpecOp::BVNeg => unary_expr!(Expr::BVNeg, args, pos),
-                SpecOp::Cls => unary_expr!(Expr::Cls, args, pos),
-                //SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
-                //SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
-                SpecOp::Popcnt => unary_expr!(Expr::Popcnt, args, pos),
-                //SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
+                SpecOp::Not => unary_expr!(ExprKind::Not, args, pos),
+                SpecOp::BVNot => unary_expr!(ExprKind::BVNot, args, pos),
+                SpecOp::BVNeg => unary_expr!(ExprKind::BVNeg, args, pos),
+                SpecOp::Cls => unary_expr!(ExprKind::Cls, args, pos),
+                SpecOp::Popcnt => unary_expr!(ExprKind::Popcnt, args, pos),
+                SpecOp::Rev => todo!(),
+                SpecOp::Clz => todo!(),
 
                 // Variadic binops
-                SpecOp::And => variadic_binary_expr!(Expr::And, args, pos),
-                SpecOp::Or => variadic_binary_expr!(Expr::Or, args, pos),
+                SpecOp::And => variadic_binary_expr!(ExprKind::And, args, pos),
+                SpecOp::Or => variadic_binary_expr!(ExprKind::Or, args, pos),
 
                 // Binary
-                SpecOp::Eq => binary_expr!(Expr::Eq, args, pos),
-                //SpecOp::Lt => binop(|x, y| Expr::Lt(x, y), args, pos, env),
-                SpecOp::Lte => binary_expr!(Expr::Lte, args, pos),
-                //SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
-                //SpecOp::Gte => binop(|x, y| Expr::Lte(y, x), args, pos, env),
-                SpecOp::Imp => binary_expr!(Expr::Imp, args, pos),
-                //SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
-                SpecOp::BVAnd => binary_expr!(Expr::BVAnd, args, pos),
-                SpecOp::BVOr => binary_expr!(Expr::BVOr, args, pos),
-                SpecOp::BVXor => binary_expr!(Expr::BVXor, args, pos),
-                SpecOp::BVAdd => binary_expr!(Expr::BVAdd, args, pos),
-                SpecOp::BVSub => binary_expr!(Expr::BVSub, args, pos),
-                //SpecOp::BVSub => binop(|x, y| Expr::BVSub(x, y), args, pos, env),
-                SpecOp::BVMul => binary_expr!(Expr::BVMul, args, pos),
-                SpecOp::BVSdiv => binary_expr!(Expr::BVSDiv, args, pos),
-                //SpecOp::BVUdiv => binop(|x, y| Expr::BVUDiv(x, y), args, pos, env),
-                //SpecOp::BVUrem => binop(|x, y| Expr::BVUrem(x, y), args, pos, env),
-                //SpecOp::BVSrem => binop(|x, y| Expr::BVSrem(x, y), args, pos, env),
-                SpecOp::BVShl => binary_expr!(Expr::BVShl, args, pos),
-                SpecOp::BVLshr => binary_expr!(Expr::BVLShr, args, pos),
-                SpecOp::BVAshr => binary_expr!(Expr::BVAShr, args, pos),
-                SpecOp::BVUle => binary_expr!(Expr::BVUle, args, pos),
-                //SpecOp::BVUlt => binop(|x, y| Expr::BVUlt(x, y), args, pos, env),
-                SpecOp::BVUlt => binary_expr!(Expr::BVUlt, args, pos),
-                //SpecOp::BVUgt => binop(|x, y| Expr::BVUgt(x, y), args, pos, env),
-                //SpecOp::BVUge => binop(|x, y| Expr::BVUgte(x, y), args, pos, env),
-                SpecOp::BVSlt => binary_expr!(Expr::BVSlt, args, pos),
-                SpecOp::BVSle => binary_expr!(Expr::BVSle, args, pos),
-                //SpecOp::BVSgt => binop(|x, y| Expr::BVSgt(x, y), args, pos, env),
-                SpecOp::BVSge => binary_expr!(Expr::BVSge, args, pos),
-                SpecOp::BVSaddo => binary_expr!(Expr::BVSaddo, args, pos),
-                //SpecOp::Rotr => binop(|x, y| Expr::BVRotr(x, y), args, pos, env),
-                //SpecOp::Rotl => binop(|x, y| Expr::BVRotl(x, y), args, pos, env),
-                SpecOp::ZeroExt => binary_expr!(Expr::BVZeroExt, args, pos),
-                SpecOp::SignExt => binary_expr!(Expr::BVSignExt, args, pos),
-                SpecOp::ConvTo => binary_expr!(Expr::BVConvTo, args, pos),
-                SpecOp::Concat => variadic_binary_expr!(Expr::BVConcat, args, pos),
+                SpecOp::Eq => binary_expr!(ExprKind::Eq, args, pos),
+                SpecOp::Lt => binary_expr!(ExprKind::Lt, args, pos),
+                SpecOp::Lte => binary_expr!(ExprKind::Lte, args, pos),
+                SpecOp::Gt => binary_expr!(ExprKind::Gt, args, pos),
+                SpecOp::Gte => binary_expr!(ExprKind::Gte, args, pos),
+                SpecOp::Imp => binary_expr!(ExprKind::Imp, args, pos),
+                SpecOp::BVAnd => binary_expr!(ExprKind::BVAnd, args, pos),
+                SpecOp::BVOr => binary_expr!(ExprKind::BVOr, args, pos),
+                SpecOp::BVXor => binary_expr!(ExprKind::BVXor, args, pos),
+                SpecOp::BVAdd => binary_expr!(ExprKind::BVAdd, args, pos),
+                SpecOp::BVSub => binary_expr!(ExprKind::BVSub, args, pos),
+                SpecOp::BVMul => binary_expr!(ExprKind::BVMul, args, pos),
+                SpecOp::BVSdiv => binary_expr!(ExprKind::BVSDiv, args, pos),
+                SpecOp::BVUdiv => binary_expr!(ExprKind::BVUDiv, args, pos),
+                SpecOp::BVUrem => binary_expr!(ExprKind::BVURem, args, pos),
+                SpecOp::BVSrem => binary_expr!(ExprKind::BVSRem, args, pos),
+                SpecOp::BVShl => binary_expr!(ExprKind::BVShl, args, pos),
+                SpecOp::BVLshr => binary_expr!(ExprKind::BVLShr, args, pos),
+                SpecOp::BVAshr => binary_expr!(ExprKind::BVAShr, args, pos),
+                SpecOp::BVUle => binary_expr!(ExprKind::BVUle, args, pos),
+                SpecOp::BVUlt => binary_expr!(ExprKind::BVUlt, args, pos),
+                SpecOp::BVUgt => binary_expr!(ExprKind::BVUgt, args, pos),
+                SpecOp::BVUge => binary_expr!(ExprKind::BVUge, args, pos),
+                SpecOp::BVSlt => binary_expr!(ExprKind::BVSlt, args, pos),
+                SpecOp::BVSle => binary_expr!(ExprKind::BVSle, args, pos),
+                SpecOp::BVSgt => binary_expr!(ExprKind::BVSgt, args, pos),
+                SpecOp::BVSge => binary_expr!(ExprKind::BVSge, args, pos),
+                SpecOp::BVSaddo => binary_expr!(ExprKind::BVSaddo, args, pos),
+                SpecOp::Rotr => binary_expr!(ExprKind::BVRotr, args, pos),
+                SpecOp::Rotl => binary_expr!(ExprKind::BVRotl, args, pos),
+                SpecOp::ZeroExt => binary_expr!(ExprKind::BVZeroExt, args, pos),
+                SpecOp::SignExt => binary_expr!(ExprKind::BVSignExt, args, pos),
+                SpecOp::ConvTo => binary_expr!(ExprKind::BVConvTo, args, pos),
+                SpecOp::Concat => variadic_binary_expr!(ExprKind::BVConcat, args, pos),
                 SpecOp::Extract => {
                     // TODO(mbm): return error instead of assert
                     assert_eq!(
@@ -251,67 +280,54 @@ impl Expr {
                         3,
                         "Unexpected number of args for extract operator at {pos:?}",
                     );
-                    Expr::BVExtract(
+                    ExprKind::BVExtract(
                         spec_expr_to_usize(&args[0]).unwrap(),
                         spec_expr_to_usize(&args[1]).unwrap(),
-                        Box::new(Expr::from_ast(&args[2])),
+                        expr_from_ast(&args[2]),
                     )
                 }
-                SpecOp::Int2BV => binary_expr!(Expr::Int2BV, args, pos),
-                //SpecOp::Subs => {
-                //    assert_eq!(
-                //        args.len(),
-                //        3,
-                //        "Unexpected number of args for subs operator {:?}",
-                //        pos
-                //    );
-                //    Expr::BVSubs(
-                //        Box::new(spec_to_expr(&args[0], env)),
-                //        Box::new(spec_to_expr(&args[1], env)),
-                //        Box::new(spec_to_expr(&args[2], env)),
-                //    )
-                //}
-                SpecOp::WidthOf => unary_expr!(Expr::WidthOf, args, pos),
-                SpecOp::If => ternary_expr!(Expr::Conditional, args, pos),
+                SpecOp::Int2BV => binary_expr!(ExprKind::Int2BV, args, pos),
+                SpecOp::BV2Nat => unary_expr!(ExprKind::BV2Nat, args, pos),
+                SpecOp::WidthOf => unary_expr!(ExprKind::WidthOf, args, pos),
+                SpecOp::If => ternary_expr!(ExprKind::Conditional, args, pos),
                 SpecOp::Switch => {
                     assert!(
                         args.len() > 1,
                         "Unexpected number of args for switch operator {pos:?}",
                     );
-                    let on = Expr::from_ast(&args[0]);
-                    let arms: Vec<(Expr, Expr)> = args[1..]
+                    let on = expr_from_ast(&args[0]);
+                    let arms: Vec<_> = args[1..]
                         .iter()
                         .map(|p| match p {
                             ast::SpecExpr::Pair { l, r, pos: _ } => {
-                                (Expr::from_ast(l), Expr::from_ast(r))
+                                (expr_from_ast(l), expr_from_ast(r))
                             }
                             // TODO(mbm): error rather than panic for non-pair in switch, since it's not actually unreachable
                             _ => unreachable!("switch expression arguments must be pairs"),
                         })
                         .collect();
-                    Expr::Switch(Box::new(on), arms)
+                    ExprKind::Switch(on, arms)
                 }
-                _ => todo!("ast spec op: {op:?}"),
             },
             ast::SpecExpr::Match { x, arms, pos: _ } => {
-                let x = Box::new(Expr::from_ast(x));
+                let x = expr_from_ast(x);
                 let arms = arms
                     .iter()
                     .map(|arm| Arm {
                         variant: arm.variant.clone(),
                         args: arm.args.clone(),
-                        body: Expr::from_ast(&arm.body),
+                        body: expr_from_ast(&arm.body),
                     })
                     .collect();
-                Expr::Match(x, arms)
+                ExprKind::Match(x, arms)
             }
             ast::SpecExpr::Let { defs, body, pos: _ } => {
                 let defs = defs
                     .iter()
-                    .map(|(ident, x)| (ident.clone(), Expr::from_ast(x)))
+                    .map(|(ident, x)| (ident.clone(), expr_from_ast(x)))
                     .collect();
-                let body = Box::new(Expr::from_ast(body));
-                Expr::Let(defs, body)
+                let body = expr_from_ast(body);
+                ExprKind::Let(defs, body)
             }
             ast::SpecExpr::With {
                 decls,
@@ -319,8 +335,8 @@ impl Expr {
                 pos: _,
             } => {
                 let decls = decls.clone();
-                let body = Box::new(Expr::from_ast(body));
-                Expr::With(decls, body)
+                let body = expr_from_ast(body);
+                ExprKind::With(decls, body)
             }
             ast::SpecExpr::Pair { l, r, pos: _ } => {
                 // QUESTION(mbm): is there a cleaner way to handle switch statements without the pair type?
@@ -334,13 +350,13 @@ impl Expr {
                 variant,
                 args,
                 pos: _,
-            } => Expr::Constructor(Constructor::Enum {
+            } => ExprKind::Constructor(Constructor::Enum {
                 name: name.clone(),
                 variant: variant.clone(),
-                args: args.iter().map(Expr::from_ast).collect(),
+                args: exprs_from_ast(args),
             }),
             ast::SpecExpr::Macro { name, args, pos: _ } => {
-                Expr::Macro(name.clone(), args.iter().map(Expr::from_ast).collect())
+                ExprKind::Macro(name.clone(), exprs_from_ast(args))
             }
         }
     }
@@ -403,9 +419,9 @@ impl Spec {
         Self {
             args: spec.args.clone(),
             ret: Self::result_ident(),
-            provides: spec.provides.iter().map(Expr::from_ast).collect(),
-            requires: spec.requires.iter().map(Expr::from_ast).collect(),
-            matches: spec.matches.iter().map(Expr::from_ast).collect(),
+            provides: exprs_from_ast(&spec.provides),
+            requires: exprs_from_ast(&spec.requires),
+            matches: exprs_from_ast(&spec.matches),
             modifies: spec.modifies.clone(),
             pos: spec.pos,
         }
@@ -471,10 +487,16 @@ pub struct SpecEnv {
     pub chain: HashSet<TermId>,
 
     /// Tags applied to each term.
-    pub tags: HashMap<TermId, HashSet<String>>,
+    pub term_tags: HashMap<TermId, HashSet<String>>,
 
     // Type instantiations for the given term.
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
+
+    /// Rules for which priority is significant.
+    pub priority: HashSet<RuleId>,
+
+    /// Tags applied to each rule.
+    pub rule_tags: HashMap<RuleId, HashSet<String>>,
 
     /// Model for the given type.
     pub type_model: HashMap<TypeId, Compound>,
@@ -492,8 +514,10 @@ impl SpecEnv {
             term_spec: HashMap::new(),
             state: Vec::new(),
             chain: HashSet::new(),
-            tags: HashMap::new(),
+            term_tags: HashMap::new(),
             term_instantiations: HashMap::new(),
+            priority: HashSet::new(),
+            rule_tags: HashMap::new(),
             type_model: HashMap::new(),
             const_value: HashMap::new(),
             macros: HashMap::new(),
@@ -505,7 +529,7 @@ impl SpecEnv {
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
         env.collect_specs(defs, termenv, tyenv)?;
-        env.collect_attrs(defs, termenv, tyenv);
+        env.collect_attrs(defs, termenv, tyenv)?;
         env.collect_macros(defs);
         env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
         env.check_for_chained_terms_with_spec();
@@ -525,7 +549,7 @@ impl SpecEnv {
                         let sym = tyenv.intern(name).expect("constant name should be defined");
                         // TODO(mbm): enforce that the expression is constant.
                         // TODO(mbm): ensure the type of the expression matches the type of the
-                        self.const_value.insert(sym, Expr::from_ast(val));
+                        self.const_value.insert(sym, expr_from_ast(val));
                     }
                 }
             }
@@ -551,14 +575,11 @@ impl SpecEnv {
     }
 
     fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
-        for (type_id, model) in &self.type_model {
-            if let Compound::Enum(variants) = model {
-                let ty = &tyenv.types[type_id.index()];
-                let name = Ident(ty.name(tyenv).to_string(), ty.pos());
-
-                for variant in variants {
+        for model in self.type_model.values() {
+            if let Compound::Enum(e) = model {
+                for variant in &e.variants {
                     // Lookup the corresponding term.
-                    let full_name = ast::Variant::full_name(&name, &variant.name);
+                    let full_name = ast::Variant::full_name(&e.name, &variant.name);
                     let term_id =
                         termenv
                             .get_term_by_name(tyenv, &full_name)
@@ -568,20 +589,22 @@ impl SpecEnv {
                             ))?;
 
                     // Synthesize spec.
+                    let pos = variant.name.1;
                     let args: Vec<Ident> = variant.fields.iter().map(|f| f.name.clone()).collect();
-
-                    let constructor = Constructor::Enum {
-                        name: name.clone(),
-                        variant: variant.name.clone(),
-                        args: args.iter().map(|arg| Expr::Var(arg.clone())).collect(),
-                    };
+                    let constructor = Positioned::new(
+                        pos,
+                        ExprKind::Constructor(Constructor::Enum {
+                            name: e.name.clone(),
+                            variant: variant.name.clone(),
+                            args: args.iter().cloned().map(var_from_ident).collect(),
+                        }),
+                    );
 
                     let mut spec = Spec::new();
                     spec.args = args;
-                    spec.provides.push(Expr::Eq(
-                        Box::new(Expr::Var(spec.ret.clone())),
-                        Box::new(Expr::Constructor(constructor)),
-                    ));
+                    let ret = var_from_ident(spec.ret.clone());
+                    spec.provides
+                        .push(Positioned::new(pos, ExprKind::Eq(ret, constructor)));
                     self.term_spec.insert(term_id, spec);
                 }
             }
@@ -615,7 +638,7 @@ impl SpecEnv {
             }) = def
             {
                 let ty = Compound::from_ast(ty);
-                let default = Expr::from_ast(default);
+                let default = expr_from_ast(default);
                 self.state.push(State {
                     name: name.clone(),
                     ty,
@@ -682,30 +705,63 @@ impl SpecEnv {
         Ok(())
     }
 
-    fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) {
+    fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for def in defs {
             if let ast::Def::Attr(attr) = def {
-                let term_id = termenv
-                    .get_term_by_name(tyenv, &attr.term)
-                    .expect("attr term should exist");
-                for attr_kind in &attr.kinds {
-                    match attr_kind {
-                        AttrKind::Chain => {
-                            self.chain.insert(term_id);
+                match &attr.target {
+                    AttrTarget::Term(name) => {
+                        let term_id = termenv.get_term_by_name(tyenv, name).ok_or(format_err!(
+                            "attr term '{name}' should exist",
+                            name = name.0
+                        ))?;
+                        for kind in &attr.kinds {
+                            match kind {
+                                AttrKind::Chain => {
+                                    self.chain.insert(term_id);
+                                }
+                                AttrKind::Tag(tag) => {
+                                    self.term_tags
+                                        .entry(term_id)
+                                        .or_default()
+                                        .insert(tag.0.clone());
+                                }
+                                AttrKind::Priority => {
+                                    bail!("priority attribute cannot be applied to terms");
+                                }
+                            }
                         }
-                        AttrKind::Tag(tag) => {
-                            self.tags.entry(term_id).or_default().insert(tag.0.clone());
+                    }
+                    AttrTarget::Rule(name) => {
+                        let rule_id = termenv
+                            .get_rule_by_name(tyenv, name)
+                            .ok_or(format_err!("attr rule '{}' does not exist", name.0))?;
+                        for kind in &attr.kinds {
+                            match kind {
+                                AttrKind::Priority => {
+                                    self.priority.insert(rule_id);
+                                }
+                                AttrKind::Tag(tag) => {
+                                    self.rule_tags
+                                        .entry(rule_id)
+                                        .or_default()
+                                        .insert(tag.0.clone());
+                                }
+                                AttrKind::Chain => {
+                                    bail!("chain attribute cannot be applied to rule");
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+        Ok(())
     }
 
     fn collect_macros(&mut self, defs: &[Def]) {
         for def in defs {
             if let ast::Def::SpecMacro(spec_macro) = def {
-                let body = Expr::from_ast(&spec_macro.body);
+                let body = expr_from_ast(&spec_macro.body);
                 self.macros.insert(
                     spec_macro.name.0.clone(),
                     Macro {

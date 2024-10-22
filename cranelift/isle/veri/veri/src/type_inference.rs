@@ -11,7 +11,7 @@ use cranelift_isle::sema::TermId;
 use crate::{
     spec::Signature,
     types::{Compound, Const, Type, Width},
-    veri::{Call, Conditions, Expr, ExprId, Symbolic},
+    veri::{Call, Conditions, Expr, ExprId, Qualifier, Symbolic},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -260,6 +260,11 @@ impl<'a> SystemBuilder<'a> {
             self.call(call);
         }
 
+        // Qualifiers.
+        for qualifier in &self.conditions.qualifiers {
+            self.qualifier(qualifier);
+        }
+
         self.system
     }
 
@@ -326,13 +331,16 @@ impl<'a> SystemBuilder<'a> {
                     then: Box::new(Constraint::Identical { x: *y, y: *z }),
                 });
             }
-            Expr::Lte(y, z) => {
+            Expr::Lt(y, z) | Expr::Lte(y, z) => {
                 self.boolean(x);
                 self.integer(*y);
                 self.integer(*z);
             }
-            Expr::BVUlt(y, z)
+            Expr::BVUgt(y, z)
+            | Expr::BVUge(y, z)
+            | Expr::BVUlt(y, z)
             | Expr::BVUle(y, z)
+            | Expr::BVSgt(y, z)
             | Expr::BVSge(y, z)
             | Expr::BVSlt(y, z)
             | Expr::BVSle(y, z)
@@ -349,13 +357,8 @@ impl<'a> SystemBuilder<'a> {
 
                 self.same_type(x, *y);
             }
-            Expr::Cls(y) => {
-                self.bit_vector(x);
-                self.bit_vector(*y);
-
-                self.same_type(x, *y);
-            }
-            Expr::Popcnt(y) => {
+            Expr::Cls(y) 
+            | Expr::Popcnt(y) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
 
@@ -365,12 +368,17 @@ impl<'a> SystemBuilder<'a> {
             | Expr::BVSub(y, z)
             | Expr::BVMul(y, z)
             | Expr::BVSDiv(y, z)
+            | Expr::BVUDiv(y, z)
+            | Expr::BVSRem(y, z)
+            | Expr::BVURem(y, z)
             | Expr::BVAnd(y, z)
             | Expr::BVOr(y, z)
             | Expr::BVXor(y, z)
             | Expr::BVShl(y, z)
             | Expr::BVLShr(y, z)
-            | Expr::BVAShr(y, z) => {
+            | Expr::BVAShr(y, z)
+            | Expr::BVRotl(y, z)
+            | Expr::BVRotr(y, z) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
@@ -407,6 +415,10 @@ impl<'a> SystemBuilder<'a> {
                 self.integer(*w);
                 self.integer(*y);
                 self.width_of(x, *w);
+            }
+            Expr::BV2Nat(y) => {
+                self.integer(x);
+                self.bit_vector(*y);
             }
             Expr::WidthOf(y) => {
                 self.integer(x);
@@ -445,6 +457,10 @@ impl<'a> SystemBuilder<'a> {
         }
     }
 
+    fn qualifier(&mut self, qualifier: &Qualifier) {
+        self.symbolic(&qualifier.value, qualifier.ty.clone());
+    }
+
     fn symbolic(&mut self, v: &Symbolic, ty: Compound) {
         match (v, ty) {
             (Symbolic::Scalar(x), Compound::Primitive(ty)) => self.ty(*x, ty),
@@ -455,7 +471,17 @@ impl<'a> SystemBuilder<'a> {
                     self.symbolic(&field.value, field_ty.ty);
                 }
             }
-            (Symbolic::Enum(_), Compound::Enum(_)) => todo!("enum type constraints"),
+            (Symbolic::Enum(e), Compound::Enum(enum_ty)) => {
+                assert_eq!(e.ty, enum_ty.id);
+                // Discriminant is an integer.
+                self.integer(e.discriminant);
+                // Variant types.
+                assert_eq!(e.variants.len(), enum_ty.variants.len());
+                for (variant, variant_ty) in zip(&e.variants, &enum_ty.variants) {
+                    assert_eq!(variant.id, variant_ty.id);
+                    self.symbolic(&variant.value, variant_ty.ty());
+                }
+            }
             // QUESTION(mbm): should Option and Tuple be in a different enum so they don't appear in type inference?
             (Symbolic::Option(_), _) => unimplemented!("option types unsupported"),
             (Symbolic::Tuple(_), _) => unimplemented!("tuple types unsupported"),

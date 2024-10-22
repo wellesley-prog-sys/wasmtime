@@ -90,7 +90,7 @@
 ;;;; CLIF Instruction Specifications ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (spec (iadd x y)
-    (provide (= result (bvadd x y))))
+    (match (= result (bvadd x y))))
 (instantiate iadd
     ((args (bv 8) (bv 8)) (ret (bv 8)))
     ((args (bv 16) (bv 16)) (ret (bv 16)))
@@ -100,25 +100,63 @@
 )
 
 (spec (isub x y)
-    (provide (= result (bvsub x y))))
+    (match (= result (bvsub x y))))
 (instantiate isub bv_binary_8_to_64)
 
 (spec (ineg x)
-    (provide (= result (bvneg x))))
+    (match (= result (bvneg x))))
 (instantiate ineg bv_unary_8_to_64)
 
+(spec (iabs x)
+    (provide (= result (if (bvsge x (zero_ext (widthof x) #b0)) x (bvneg x)))))
+(instantiate iabs bv_unary_8_to_64)
+
 (spec (imul x y)
-    (provide (= result (bvmul x y))))
+    (match (= result (bvmul x y))))
 (instantiate imul bv_binary_8_to_64)
 
+(spec (smulhi x y)
+    (match
+        (let
+            (
+                (double (concat x x))
+                (double_width (widthof double))
+                (xwide (sign_ext double_width x))
+                (ywide (sign_ext double_width y))
+            )
+            (with (low)
+                (= (concat result low) (bvmul xwide ywide))
+            )
+        )
+    )
+)
+(instantiate smulhi bv_binary_8_to_64)
+
+(spec (umulhi x y)
+    (match
+        (let
+            (
+                (double (concat x x))
+                (double_width (widthof double))
+                (xwide (zero_ext double_width x))
+                (ywide (zero_ext double_width y))
+            )
+            (with (low)
+                (= (concat result low) (bvmul xwide ywide))
+            )
+        )
+    )
+)
+(instantiate umulhi bv_binary_8_to_64)
+
 (spec (iconst arg)
-    (provide (= arg (zero_ext 64 result))))
+    (match (= arg (zero_ext 64 result))))
 (instantiate iconst
     ((args (bv 64)) (ret (bv 64)))
 )
 
 (spec (ishl x y)
-    (provide
+    (match
         (= result
             (bvshl
                 x
@@ -130,41 +168,31 @@
 (instantiate ishl bv_binary_8_to_64)
 
 (spec (band x y)
-    (provide (= result (bvand x y))))
+    (match (= result (bvand x y))))
 (instantiate band bv_binary_8_to_64)
 
+(spec (bxor x y)
+    (match (= result (bvxor x y))))
+(instantiate bxor bv_binary_8_to_64)
+
 (spec (bor x y)
-    (provide (= result (bvor x y))))
+    (match (= result (bvor x y))))
 (instantiate bor bv_binary_8_to_64)
 
 (spec (bnot x)
-    (provide (= result (bvnot x))))
+    (match (= result (bvnot x))))
 (instantiate bnot bv_unary_8_to_64)
 
 (spec (bitselect c x y)
-    (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
+    (match (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)
 
 (spec (cls x) (provide (= result (cls x))))
-(instantiate cls
-    ((args (bv 8)) (ret (bv 8)))
-    ((args (bv 16)) (ret (bv 16)))
-    ((args (bv 32)) (ret (bv 32)))
-    ((args (bv 64)) (ret (bv 64)))
-)
-
-(spec (popcnt x)
-    (provide (= result (popcnt x))))
-(instantiate popcnt
-    ((args (bv 8)) (ret (bv 8)))
-    ((args (bv 16)) (ret (bv 16)))
-    ((args (bv 32)) (ret (bv 32)))
-    ((args (bv 64)) (ret (bv 64)))
-)
+(instantiate cls bv_unary_8_to_64)
 
 (spec (load flags p offset)
     (modifies clif_load loaded_value)
-    (provide
+    (match
         ; Activate the CLIF load effect
         (:active clif_load)
 
@@ -189,7 +217,7 @@
 
 (spec (store flags value p offset)
     (modifies clif_store)
-    (provide
+    (match
         ; Activate the CLIF store effect
         (:active clif_store)
 
@@ -227,9 +255,54 @@
 )
 
 (spec (uextend x)
-    (provide (= result (zero_ext (widthof result) x))))
+    (match (= result (zero_ext (widthof result) x))))
 (instantiate uextend extend)
 
 (spec (sextend x)
-    (provide (= result (sign_ext (widthof result) x))))
+    (match (= result (sign_ext (widthof result) x))))
 (instantiate sextend extend)
+
+(spec (smin x y)
+    (match (= result (if (bvsle x y) x y))))
+(instantiate smin bv_binary_8_to_64)
+
+(spec (umin x y)
+    (match (= result (if (bvule x y) x y))))
+(instantiate umin bv_binary_8_to_64)
+
+(spec (smax x y)
+    (provide (= result (if (bvsge x y) x y))))
+(instantiate smax bv_binary_8_to_64)
+
+(spec (umax x y)
+    (provide (= result (if (bvuge x y) x y))))
+(instantiate umax bv_binary_8_to_64)
+
+(spec (icmp cc x y)
+    (match
+        (= result
+            (if
+                (match cc
+                    ((Equal) (= x y))
+                    ((NotEqual) (not (= x y)))
+                    ((SignedGreaterThan) (bvsgt x y))
+                    ((SignedGreaterThanOrEqual) (bvsge x y))
+                    ((SignedLessThan) (bvslt x y))
+                    ((SignedLessThanOrEqual) (bvsle x y))
+                    ((UnsignedGreaterThan) (bvugt x y))
+                    ((UnsignedGreaterThanOrEqual) (bvuge x y))
+                    ((UnsignedLessThan) (bvult x y))
+                    ((UnsignedLessThanOrEqual) (bvule x y))
+                )
+                #x01
+                #x00
+            )
+        )
+    )
+)
+(instantiate icmp
+    ((args (named IntCC) (bv  8) (bv  8)) (ret (bv 8)))
+    ((args (named IntCC) (bv 16) (bv 16)) (ret (bv 8)))
+    ((args (named IntCC) (bv 32) (bv 32)) (ret (bv 8)))
+    ((args (named IntCC) (bv 64) (bv 64)) (ret (bv 8)))
+)

@@ -339,6 +339,7 @@
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
+(spec (u64_from_iconst arg) (match (= arg (zero_ext 64 result))))
 
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
@@ -495,6 +496,7 @@
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
+                  (has_result Bool)
             )
       )
 )
@@ -503,12 +505,20 @@
       (provide
             (= (:flags result) (:flags_out inst))
             (= (:result result) reg)
+            (:has_result result)
+      )
+)
+
+(spec (ProducesFlags.ProducesFlagsSideEffect inst)
+      (provide
+            (= (:flags result) (:flags_out inst))
+            (not (:has_result result))
       )
 )
 
 ;; Chain another producer to a `ProducesFlags`.
 (decl produces_flags_concat (ProducesFlags ProducesFlags) ProducesFlags)
-(attr produces_flags_concat (veri chain))
+(attr produces_flags_concat (tag TODO))
 (rule (produces_flags_concat (ProducesFlags.ProducesFlagsSideEffect inst1) (ProducesFlags.ProducesFlagsSideEffect inst2))
       (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2))
 
@@ -540,6 +550,7 @@
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
+                  (has_result Bool)
             )
       )
 )
@@ -548,6 +559,15 @@
       (provide
             (= (:flags result) (:flags_in inst))
             (= (:result result) reg)
+            (:has_result result)
+      )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsReturnsReg inst reg)
+      (provide
+            (= (:flags result) (:flags_in inst))
+            (= (:result result) reg)
+            (:has_result result)
       )
 )
 
@@ -595,8 +615,15 @@
             ; Transfer flags from producer to consumer.
             (= (:flags producer) (:flags consumer))
             ; Construct resulting value registers.
-            (= (:lo result) (:result producer))
-            (= (:hi result) (:result consumer))
+            (=> (and (:has_result producer) (:has_result consumer))
+                  (and
+                        (= (:lo result) (:result producer))
+                        (= (:hi result) (:result consumer))
+                  )
+            )
+            (=> (and (not (:has_result producer)) (:has_result consumer))
+                  (= (:lo result) (:result consumer))
+            )
       )
 )
 

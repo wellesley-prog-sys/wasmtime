@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{bail, Result};
 
-use cranelift_isle::ast::{Arm, Ident, SpecExpr, SpecOp};
+use cranelift_isle::ast::{Arm, Ident, ModelType, SpecExpr, SpecOp};
 use cranelift_isle::lexer::Pos;
 
 pub fn spec_const_int(val: i128) -> SpecExpr {
@@ -150,6 +150,14 @@ pub fn spec_enum(name: String, variant: String, args: Vec<SpecExpr>) -> SpecExpr
 
 pub fn spec_enum_unit(name: String, variant: String) -> SpecExpr {
     spec_enum(name, variant, Vec::new())
+}
+
+pub fn spec_as_bit_vector_width(x: SpecExpr, width: usize) -> SpecExpr {
+    SpecExpr::As {
+        x: Box::new(x),
+        ty: ModelType::BitVec(Some(width)),
+        pos: Pos::default(),
+    }
 }
 
 pub fn spec_field(field: String, x: SpecExpr) -> SpecExpr {
@@ -302,6 +310,11 @@ pub fn substitute(expr: SpecExpr, substitutions: &HashMap<String, SpecExpr>) -> 
         }
 
         // Recurse into child expressions.
+        SpecExpr::As { x, ty, pos } => SpecExpr::As {
+            x: Box::new(substitute(*x, substitutions)?),
+            ty,
+            pos,
+        },
         SpecExpr::Field { field, x, pos } => SpecExpr::Field {
             field,
             x: Box::new(substitute(*x, substitutions)?),

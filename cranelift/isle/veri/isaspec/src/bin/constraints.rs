@@ -1,10 +1,12 @@
+use std::vec;
+
 use anyhow::Result;
 use clap::Parser as ClapParser;
 use cranelift_codegen::ir::types::I64;
 use cranelift_codegen::isa::aarch64::inst::{
     vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, Imm12, ImmLogic,
     ImmShift, Inst, MoveWideConst, MoveWideOp, OperandSize, ShiftOp, ShiftOpAndAmt,
-    ShiftOpShiftImm, VecALUOp, VectorSize,
+    ShiftOpShiftImm, VecALUOp, VecMisc2, VectorSize, NZCV,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::ast::Block;
@@ -261,6 +263,17 @@ fn define_insts() -> Vec<Inst> {
         });
     }
 
+    // CCmp
+    for cond in conds.clone() {
+        insts.push(Inst::CCmp {
+            size: OperandSize::Size64,
+            rn: xreg(1),
+            rm: xreg(2),
+            nzcv: NZCV::new(true, false, true, false),
+            cond,
+        });
+    }
+
     // VecRRR
     let alu_ops = vec![
         VecALUOp::Cmeq,
@@ -315,6 +328,17 @@ fn define_insts() -> Vec<Inst> {
             rn: vreg(1),
             rm: vreg(2),
             size: VectorSize::Size32x4,
+        });
+    }
+
+    // VecMisc
+    let vec_misc2s = vec![VecMisc2::Cnt];
+    for vec_misc2 in vec_misc2s {
+        insts.push(Inst::VecMisc {
+            op: vec_misc2,
+            rd: writable_vreg(3),
+            rn: vreg(1),
+            size: VectorSize::Size8x8,
         });
     }
 

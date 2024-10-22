@@ -202,7 +202,7 @@
                                 t98
                                 t99)
                             (and
-                                (= t1 (bvxor (extract 63 1 rn) (extract 62 0 rn)))
+                                (= t1 (bvxor (extract 63 1 (as rn (bv 64))) (extract 62 0 (as rn (bv 64)))))
                                 (= t2 (= (extract 62 62 t1) #b1))
                                 (if
                                     t2
@@ -1628,7 +1628,7 @@
                                 t94
                                 t95)
                             (and
-                                (= t1 (bvxor (extract 31 1 rn) (extract 30 0 rn)))
+                                (= t1 (bvxor (extract 31 1 (as rn (bv 64))) (extract 30 0 (as rn (bv 64)))))
                                 (= t2 (= (extract 30 30 t1) #b1))
                                 (if
                                     t2

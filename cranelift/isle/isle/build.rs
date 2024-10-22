@@ -28,6 +28,7 @@ fn isle_printer_tests(out_dir: &std::path::PathBuf) {
     let mut out = String::new();
 
     emit_tests(&mut out, "isle_examples/pass", "run_print");
+    emit_tests(&mut out, "../veri/veri/filetests/pass", "run_print");
     emit_tests(&mut out, "../../codegen/src", "run_print");
     emit_tests(&mut out, "../../codegen/src/opts", "run_print");
     emit_tests(&mut out, "../../codegen/src/isa/x64", "run_print");

@@ -1,8 +1,24 @@
+use std::sync::Arc;
+
 use crate::program::Program;
 use cranelift_isle::{
-    sema::{ExternalSig, ReturnKind, TermId, Type, TypeEnv, TypeId},
-    trie_again::{Binding, BindingId},
+    error::{Errors, ErrorsBuilder},
+    files::Files,
+    sema::{ExternalSig, ReturnKind, TermEnv, TermId, Type, TypeEnv, TypeId},
+    trie_again::{self, Binding, BindingId, RuleSet},
 };
+
+pub fn build_trie(termenv: &TermEnv, files: Arc<Files>) -> Result<Vec<(TermId, RuleSet)>, Errors> {
+    let (terms, errors) = trie_again::build(termenv);
+    if errors.is_empty() {
+        Ok(terms)
+    } else {
+        Err(ErrorsBuilder::new()
+            .errors(errors)
+            .files(files.clone())
+            .build())
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum BindingType {

@@ -10,6 +10,11 @@ pub enum Stmt {
         name: String,
         rhs: Expr,
     },
+    VarDecl {
+        ty: Type,
+        name: String,
+        rhs: Expr,
+    },
     VarDeclsNoInit {
         ty: Type,
         names: Vec<String>,

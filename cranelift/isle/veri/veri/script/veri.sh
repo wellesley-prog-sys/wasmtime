@@ -45,5 +45,6 @@ cargo run --bin veri --profile "${profile}" -- \
     --timeout 10 \
     --log-dir "${output_dir}/log" \
     --skip-tag TODO \
+    --skip-tag vector \
     "$@" \
     | tee "${output_dir}/${arch}.veri"

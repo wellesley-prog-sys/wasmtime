@@ -211,7 +211,7 @@ impl Runner {
                 Ok(rule.name.is_some().into())
             }
             ExpansionPredicate::SkipTag(tag) => {
-                let tags = expansion.term_tags(&self.prog);
+                let tags = expansion.tags(&self.prog);
                 Ok(if tags.contains(tag) {
                     log::debug!("skip expansion with tag: {}", tag);
                     ShouldVerify::No

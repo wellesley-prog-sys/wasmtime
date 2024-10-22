@@ -55,6 +55,13 @@ fn parse_stmt(pair: Pair<Rule>) -> Result<Stmt> {
             let rhs = parse_expr(pairs.next().unwrap())?;
             Ok(Stmt::ConstDecl { ty, name, rhs })
         }
+        Rule::stmt_vardecl => {
+            let mut pairs = pair.into_inner();
+            let ty = parse_type(pairs.next().unwrap())?;
+            let name = parse_ident(pairs.next().unwrap())?;
+            let rhs = parse_expr(pairs.next().unwrap())?;
+            Ok(Stmt::VarDecl { ty, name, rhs })
+        }
         Rule::stmt_vardeclsnoinit => {
             let mut pairs = pair.into_inner();
             let ty = parse_type(pairs.next().unwrap())?;

@@ -1,7 +1,7 @@
 use crate::{
-    expand::Expansion,
+    expand::{Constrain, Expansion},
     program::Program,
-    trie_again::{binding_type, BindingType},
+    trie::{binding_type, BindingType},
 };
 use cranelift_isle::{
     sema::{TermId, Type, TypeEnv},
@@ -17,6 +17,14 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
     // Rules.
     println!("\trules = [");
     for rule_id in &expansion.rules {
+        let rule = &prog.termenv.rules[rule_id.index()];
+        println!("\t\t{}", rule.identifier(&prog.tyenv, &prog.files));
+    }
+    println!("\t]");
+
+    // Negated rules.
+    println!("\tnegated = [");
+    for rule_id in &expansion.negated {
         let rule = &prog.termenv.rules[rule_id.index()];
         println!("\t\t{}", rule.identifier(&prog.tyenv, &prog.files));
     }
@@ -40,16 +48,8 @@ pub fn print_expansion(prog: &Program, expansion: &Expansion) {
 
     // Constraints.
     println!("\tconstraints = [");
-    let mut constrained_binding_ids: Vec<_> = expansion.constraints.keys().collect();
-    constrained_binding_ids.sort();
-    for binding_id in &constrained_binding_ids {
-        for constraint in &expansion.constraints[binding_id] {
-            println!(
-                "\t\t{}:\t{}",
-                binding_id.index(),
-                constraint_string(constraint, &prog.tyenv)
-            );
-        }
+    for constrain in &expansion.constraints {
+        println!("\t\t{}", constrain_string(constrain, &prog.tyenv));
     }
     println!("\t]");
 
@@ -237,6 +237,26 @@ pub fn binding_string(
             field = field.index()
         ),
         Binding::Iterator { .. } => unimplemented!("iterator bindings unsupported"),
+    }
+}
+
+pub fn constrain_string(constrain: &Constrain, tyenv: &TypeEnv) -> String {
+    match constrain {
+        Constrain::Match(binding_id, constraint) => format!(
+            "{}: {}",
+            binding_id.index(),
+            constraint_string(constraint, tyenv)
+        ),
+        Constrain::NotAll(constraints) => {
+            format!(
+                "not_all({constraints})",
+                constraints = constraints
+                    .iter()
+                    .map(|c| constrain_string(c, tyenv))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
+        }
     }
 }
 

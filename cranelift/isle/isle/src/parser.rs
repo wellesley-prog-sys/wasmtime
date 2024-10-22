@@ -364,12 +364,18 @@ impl<'a> Parser<'a> {
 
     fn parse_attr(&mut self) -> Result<Attr> {
         let pos = self.pos();
-        let term = self.parse_ident()?;
+        let rule = self.eat_sym_str("rule")?;
+        let name = self.parse_ident()?;
+        let target = if rule {
+            AttrTarget::Rule(name)
+        } else {
+            AttrTarget::Term(name)
+        };
         let mut kinds = Vec::new();
         while !self.is_rparen() {
             kinds.push(self.parse_attr_kind()?);
         }
-        Ok(Attr { term, kinds, pos })
+        Ok(Attr { target, kinds, pos })
     }
 
     fn parse_attr_kind(&mut self) -> Result<AttrKind> {
@@ -388,6 +394,7 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         match &self.expect_symbol()?[..] {
             "chain" => Ok(AttrKind::Chain),
+            "priority" => Ok(AttrKind::Priority),
             x => Err(self.error(pos, format!("Not a valid verification attribute: {x}"))),
         }
     }
@@ -542,6 +549,11 @@ impl<'a> Parser<'a> {
                 }
                 self.expect_rparen()?;
                 Ok(SpecExpr::Match { x, arms, pos })
+            } else if self.eat_sym_str("as")? {
+                let x = Box::new(self.parse_spec_expr()?);
+                let ty = self.parse_model_type()?;
+                self.expect_rparen()?;
+                Ok(SpecExpr::As { x, ty, pos })
             } else if self.is_sym() && !self.is_spec_bit_vector() {
                 let sym_pos = self.pos();
                 let sym = self.expect_symbol()?;
@@ -636,11 +648,10 @@ impl<'a> Parser<'a> {
             "concat" => Ok(SpecOp::Concat),
             "conv_to" => Ok(SpecOp::ConvTo),
             "int2bv" => Ok(SpecOp::Int2BV),
-            "bv2int" => Ok(SpecOp::BV2Int),
+            "bv2nat" => Ok(SpecOp::BV2Nat),
             "widthof" => Ok(SpecOp::WidthOf),
             "if" => Ok(SpecOp::If),
             "switch" => Ok(SpecOp::Switch),
-            "subs" => Ok(SpecOp::Subs),
             "popcnt" => Ok(SpecOp::Popcnt),
             "rev" => Ok(SpecOp::Rev),
             "cls" => Ok(SpecOp::Cls),

@@ -379,10 +379,10 @@
 (rule -1 (lower (has_type ty @ (multi_lane _ _) (iabs x)))
       (vec_abs x (vector_size ty)))
 
-(rule 2 (lower (has_type $I64 (iabs x)))
+(rule iabs_64 2 (lower (has_type $I64 (iabs x)))
       (abs (OperandSize.Size64) x))
 
-(rule 1 (lower (has_type (fits_in_32 ty) (iabs x)))
+(rule iabs_8_16_32 1 (lower (has_type (fits_in_32 ty) (iabs x)))
       (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
 
 ; `rustc` implementation.
@@ -823,7 +823,7 @@
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule -3 (lower (has_type (fits_in_64 ty) (imul x y)))
+(rule imul -3 (lower (has_type (fits_in_64 ty) (imul x y)))
       (madd ty x y (zero_reg)))
 
 ;; `i128`.
@@ -999,10 +999,10 @@
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (has_type $I64 (smulhi x y)))
+(rule smulhi_64 1 (lower (has_type $I64 (smulhi x y)))
       (smulh $I64 x y))
 
-(rule (lower (has_type (fits_in_32 ty) (smulhi x y)))
+(rule smulhi_32 (lower (has_type (fits_in_32 ty) (smulhi x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_in_reg_sext64 y))
             (mul Reg (madd $I64 x64 y64 (zero_reg)))
@@ -1011,10 +1011,10 @@
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (has_type $I64 (umulhi x y)))
+(rule umulhi_64 1 (lower (has_type $I64 (umulhi x y)))
       (umulh $I64 x y))
 
-(rule (lower (has_type (fits_in_32 ty) (umulhi x y)))
+(rule umulhi_32 (lower (has_type (fits_in_32 ty) (umulhi x y)))
       (let (
           (x64 Reg (put_in_reg_zext64 x))
           (y64 Reg (put_in_reg_zext64 y))
@@ -1122,11 +1122,14 @@
 ;; cmp     $x, $y
 ;; csel    .., $x, $y, $cc
 (decl cmp_and_choose (Type Cond bool Value Value) ValueRegs)
-(rule (cmp_and_choose (fits_in_64 ty) cc _ x y)
+(attr cmp_and_choose (veri chain))
+(rule cmp_and_choose_64
+      (cmp_and_choose (fits_in_64 ty) cc _ x y)
       (let ((x Reg (put_in_reg x))
             (y Reg (put_in_reg y)))
        (with_flags_reg (cmp (operand_size ty) x y)
                        (csel cc x y))))
+(attr rule cmp_and_choose_64 (veri priority))
 
 ;; `i16` and `i8` min/max require sign extension as
 ;; the comparison operates on (at least) 32 bits.
@@ -1136,13 +1139,13 @@
       (with_flags_reg (cmp (operand_size ty) x y)
                       (csel cc x y))))
 
-(rule 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (umin x y)))
+(rule umin 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (umin x y)))
       (cmp_and_choose ty (Cond.Lo) $false x y))
-(rule 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (smin x y)))
+(rule smin 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (smin x y)))
       (cmp_and_choose ty (Cond.Lt) $true x y))
-(rule 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (umax x y)))
+(rule umax 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (umax x y)))
       (cmp_and_choose ty (Cond.Hi) $false x y))
-(rule 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (smax x y)))
+(rule smax 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (smax x y)))
       (cmp_and_choose ty (Cond.Gt) $true x y))
 
 ;; Vector types.
@@ -1305,7 +1308,7 @@
       (not x (vector_size ty)))
 
 ;; Special-cases for fusing a bnot with bxor
-(rule 2 (lower (has_type (fits_in_64 ty) (bnot (bxor x y))))
+(rule bnot_bxor 2 (lower (has_type (fits_in_64 ty) (bnot (bxor x y))))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
 (rule 3 (lower (has_type $I128 (bnot (bxor x y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
 
@@ -1360,7 +1363,7 @@
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule -1 (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule bxor -1 (lower (has_type (fits_in_64 ty) (bxor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y))
 
 (rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
@@ -1372,9 +1375,9 @@
 ;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 1 (lower (has_type (fits_in_64 ty) (bxor x (bnot y))))
+(rule bxor_not_right 1 (lower (has_type (fits_in_64 ty) (bxor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
-(rule 2 (lower (has_type (fits_in_64 ty) (bxor (bnot y) x)))
+(rule bxor_not_left 2 (lower (has_type (fits_in_64 ty) (bxor (bnot y) x)))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
 
 (rule 3 (lower (has_type $I128 (bxor x (bnot y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
@@ -1833,15 +1836,9 @@
                            (csel (Cond.Eq) lo_sign_bits (zero_reg)))))
         (value_regs (add $I64 maybe_lo hi_cls) (imm $I64 (ImmExtend.Zero) 0))))
 
-;; TODO: rule priorities https://github.com/mmcloughlin/veriisle-wasmtime/issues/128
-;; (rule cls_32_64 -1 (lower (has_type ty (cls x)))
-;;       (a64_cls ty x))
-
-(rule cls_32 -1 (lower (has_type $I32 (cls x)))
-      (a64_cls $I32 x))
-
-(rule cls_64 -1 (lower (has_type $I64 (cls x)))
-      (a64_cls $I64 x))
+(attr rule cls_32_64 (veri priority))
+(rule cls_32_64 -1 (lower (has_type ty (cls x)))
+      (a64_cls ty x))
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2000,7 +1997,7 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
 
-(rule -1 (lower (icmp cond x @ (value_type in_ty) y))
+(rule icmp -1 (lower (icmp cond x @ (value_type in_ty) y))
       (lower_icmp_into_reg cond x y in_ty $I8))
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

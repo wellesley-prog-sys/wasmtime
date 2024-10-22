@@ -5,15 +5,42 @@ use cranelift_isle::{
     sema::{RuleId, TermId},
     trie_again::{Binding, BindingId, Constraint, Rule, RuleSet},
 };
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone)]
+pub enum Constrain {
+    Match(BindingId, Constraint),
+    NotAll(Vec<Constrain>),
+}
+
+impl Constrain {
+    fn bindings(&self) -> Vec<BindingId> {
+        match self {
+            Constrain::Match(binding_id, _) => vec![*binding_id],
+            Constrain::NotAll(constrains) => constrains.iter().flat_map(|c| c.bindings()).collect(),
+        }
+    }
+
+    fn substitute(&self, reindex: &Reindex) -> Self {
+        match self {
+            Constrain::Match(binding_id, constraint) => {
+                Constrain::Match(reindex.id(*binding_id), *constraint)
+            }
+            Constrain::NotAll(constrains) => {
+                Constrain::NotAll(constrains.iter().map(|c| c.substitute(reindex)).collect())
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Expansion {
     pub term: TermId,
     pub rules: Vec<RuleId>,
+    pub negated: Vec<RuleId>,
     pub bindings: Vec<Option<Binding>>,
     // QUESTION(mbm): are multiple constraints per binding necessary?
-    pub constraints: BTreeMap<BindingId, Vec<Constraint>>,
+    pub constraints: Vec<Constrain>,
     pub equals: DisjointSets<BindingId>,
     pub parameters: Vec<BindingId>,
     pub result: BindingId,
@@ -30,13 +57,19 @@ impl Expansion {
         self.validate();
 
         // Check if any constraints are incompatible.
-        for (binding_id, constraints) in &self.constraints {
-            let binding = self.bindings[binding_id.index()]
-                .as_ref()
-                .expect("constrained binding must be defined");
-            for constraint in constraints {
-                if !constraint.compatible(binding) {
-                    return false;
+        for constrain in &self.constraints {
+            match constrain {
+                Constrain::Match(binding_id, constraint) => {
+                    let binding = self.bindings[binding_id.index()]
+                        .as_ref()
+                        .expect("constrained binding must be defined");
+                    if !constraint.compatible(binding) {
+                        return false;
+                    }
+                }
+                Constrain::NotAll(_) => {
+                    // Conservatively assume negated constraints can be met.
+                    continue;
                 }
             }
         }
@@ -44,11 +77,12 @@ impl Expansion {
         true
     }
 
-    fn add_constraint(&mut self, binding_id: BindingId, constraint: Constraint) {
-        self.constraints
-            .entry(binding_id)
-            .or_default()
-            .push(constraint);
+    fn constrain(&mut self, constrain: Constrain) {
+        self.constraints.push(constrain);
+    }
+
+    fn add_match(&mut self, binding_id: BindingId, constraint: Constraint) {
+        self.constrain(Constrain::Match(binding_id, constraint));
     }
 
     fn push_binding(&mut self, binding: Binding) -> BindingId {
@@ -68,8 +102,10 @@ impl Expansion {
         }
 
         // Constraints: should refer to defined bindings.
-        for binding in self.constraints.keys() {
-            assert!(self.is_defined(*binding));
+        for constrain in &self.constraints {
+            for binding_id in constrain.bindings() {
+                assert!(self.is_defined(binding_id));
+            }
         }
 
         // Parameters: should be defined argument bindings.
@@ -121,14 +157,29 @@ impl Expansion {
         terms
     }
 
-    /// Tags that appear on any term in the expansion.
-    pub fn term_tags(&self, prog: &Program) -> HashSet<String> {
+    /// Tags that appear on rules and term in the expansion.
+    pub fn tags(&self, prog: &Program) -> HashSet<String> {
         let mut tags = HashSet::new();
+
+        // Root term
+        if let Some(term_tags) = prog.specenv.term_tags.get(&self.term) {
+            tags = &tags | term_tags;
+        }
+
+        // Rules
+        for rule_id in &self.rules {
+            if let Some(rule_tags) = prog.specenv.rule_tags.get(rule_id) {
+                tags = &tags | rule_tags;
+            }
+        }
+
+        // Terms
         for term_id in self.terms(prog) {
-            if let Some(term_tags) = prog.specenv.tags.get(&term_id) {
+            if let Some(term_tags) = prog.specenv.term_tags.get(&term_id) {
                 tags = &tags | term_tags;
             }
         }
+
         tags
     }
 
@@ -155,11 +206,11 @@ impl Expansion {
         self.bindings[target.index()] = None;
 
         // Constraints.
-        let mut constraints = BTreeMap::new();
-        for (binding_id, constraint) in &self.constraints {
-            constraints.insert(reindex.id(*binding_id), constraint.clone());
-        }
-        self.constraints = constraints;
+        self.constraints = self
+            .constraints
+            .iter()
+            .map(|c| c.substitute(&reindex))
+            .collect();
 
         // Result.
         self.result = reindex.id(self.result);
@@ -443,8 +494,9 @@ impl<'a> Expander<'a> {
         let expansion = Expansion {
             term: term_id,
             rules: Vec::new(),
+            negated: Vec::new(),
             bindings,
-            constraints: BTreeMap::new(),
+            constraints: Vec::new(),
             equals: DisjointSets::default(),
             parameters,
             result,
@@ -531,8 +583,28 @@ impl<'a> Expander<'a> {
         let rule_set = &self.term_rule_sets[term];
         assert!(!rule_set.rules.is_empty());
         for rule in rule_set.rules.iter().rev() {
+            // Apply rule.
             let mut apply = Application::new(expansion.clone());
-            let chained = apply.rule(rule_set, rule, parameters, chain_binding_id);
+            apply.rule(rule_set, rule, parameters, chain_binding_id);
+
+            // If the rule is annotated to indicate that priority is
+            // significant, then negate any overlapping higher priority rules.
+            let priority_significant = self.prog.specenv.priority.contains(&rule.id);
+            if priority_significant {
+                if let Some(overlaps) = self.prog.overlaps.get(&rule.id) {
+                    for other in rule_set.rules.iter().rev() {
+                        if overlaps.contains(&other.id) {
+                            apply.negation(rule_set, other);
+                        }
+                    }
+                }
+            }
+
+            // Finalize the chaining application.
+            let chained = apply.build();
+
+            // Push onto stack for further expansion, optionally checking if the
+            // current partial state is feasible.
             if !self.prune_infeasible || chained.is_feasible() {
                 self.stack.push(Partial {
                     expansion: chained,
@@ -558,8 +630,14 @@ impl<'a> Expander<'a> {
     }
 }
 
+struct Substitution {
+    target: BindingId,
+    replace: BindingId,
+}
+
 struct Application {
     expansion: Expansion,
+    substitutions: Vec<Substitution>,
     import_reindex: Reindex,
 }
 
@@ -567,6 +645,7 @@ impl Application {
     fn new(expansion: Expansion) -> Self {
         Self {
             expansion,
+            substitutions: Vec::new(),
             import_reindex: Reindex::new(),
         }
     }
@@ -577,17 +656,9 @@ impl Application {
         rule: &Rule,
         parameters: &[BindingId],
         call_site: BindingId,
-    ) -> Expansion {
-        struct Substitution {
-            target: BindingId,
-            replace: BindingId,
-        }
-
+    ) {
         // Record the application of this rule.
         self.expansion.rules.push(rule.id);
-
-        //
-        let mut substitutions = Vec::new();
 
         // Arguments.
         for (i, parameter) in parameters.iter().enumerate() {
@@ -603,7 +674,7 @@ impl Application {
             let arg_binding_id = self.add_binding(rule_set, binding_id);
 
             // Substitute argument with the parameter.
-            substitutions.push(Substitution {
+            self.substitutions.push(Substitution {
                 target: arg_binding_id,
                 replace: *parameter,
             });
@@ -614,8 +685,7 @@ impl Application {
             let binding_id = i.try_into().unwrap();
             if let Some(constraint) = rule.get_constraint(binding_id) {
                 let expansion_binding_id = self.add_binding(rule_set, binding_id);
-                self.expansion
-                    .add_constraint(expansion_binding_id, constraint);
+                self.expansion.add_match(expansion_binding_id, constraint);
             }
         }
 
@@ -644,19 +714,41 @@ impl Application {
         //
         // Once imported, the callsite should be substituted for the result binding.
         let result_binding_id = self.add_binding(rule_set, rule.result);
-        substitutions.push(Substitution {
+        self.substitutions.push(Substitution {
             target: call_site,
             replace: result_binding_id,
         });
+    }
 
+    fn build(mut self) -> Expansion {
         // Process substitutions.
-        for substitution in substitutions.iter().rev() {
+        for substitution in self.substitutions.iter().rev() {
             self.expansion
                 .substitute(substitution.target, substitution.replace);
         }
 
         // Return expanded rule.
-        self.expansion.clone()
+        self.expansion
+    }
+
+    fn negation(&mut self, rule_set: &RuleSet, rule: &Rule) {
+        // Record negation.
+        self.expansion.negated.push(rule.id);
+
+        // Collect the constraints required.
+        let mut constraints = Vec::new();
+        for i in 0..rule_set.bindings.len() {
+            let binding_id = i.try_into().unwrap();
+            if let Some(constraint) = rule.get_constraint(binding_id) {
+                let expansion_binding_id = self.add_binding(rule_set, binding_id);
+                constraints.push(Constrain::Match(expansion_binding_id, constraint));
+            }
+        }
+
+        // Require their negation.
+        self.expansion.constrain(Constrain::NotAll(constraints));
+
+        // TODO(mbm): negation of equality constraints
     }
 
     fn add_binding(&mut self, rule_set: &RuleSet, binding_id: BindingId) -> BindingId {
