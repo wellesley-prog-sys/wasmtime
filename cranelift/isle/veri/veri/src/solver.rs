@@ -225,7 +225,7 @@ impl<'a> Solver<'a> {
             Expr::BVShl(x, y) => Ok(self.smt.bvshl(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVLShr(x, y) => Ok(self.smt.bvlshr(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVAShr(x, y) => Ok(self.smt.bvashr(self.expr_atom(x), self.expr_atom(y))),
-            Expr::BVRotl(..) => todo!("bvrotl"),
+            Expr::BVRotl(x, y) => Ok(self.smt.bvrotl(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVRotr(..) => todo!("bvrotr"),
             Expr::Conditional(c, t, e) => {
                 Ok(self

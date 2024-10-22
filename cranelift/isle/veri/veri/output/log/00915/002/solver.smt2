@@ -50,3 +50,4 @@
 (declare-const b7_inner_0_34 (_ BitVec 32))
 (declare-const b7_inner_1_35 (_ BitVec 32))
 (declare-const e36 (_ BitVec 32))
+(assert (! (= e36 (rotl b7_inner_0_34 b7_inner_1_35)) :named expr36))
