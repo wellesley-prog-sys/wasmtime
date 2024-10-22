@@ -1151,9 +1151,15 @@ impl<'a> ConditionsBuilder<'a> {
         // Partial function.
         // REVIEW(mbm): pin down semantics for partial function specifications.
         if let Domain::Partial(p) = domain {
+            // Matches describe when the function applies.
             let all_matches = self.all(matches);
             let eq = self.exprs_equal(p, all_matches);
             self.conditions.assumptions.push(eq);
+
+            // Provides are conditioned on the match.
+            let all_provides = self.all(provides);
+            let provide = self.dedup_expr(Expr::Imp(all_matches, all_provides));
+            provides = vec![provide];
         } else if !matches.is_empty() {
             bail!("spec matches on non-partial function");
         }
