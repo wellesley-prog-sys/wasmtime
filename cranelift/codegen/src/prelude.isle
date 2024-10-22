@@ -77,12 +77,7 @@
 (decl pure partial u32_lteq (u32 u32) Unit)
 (spec (u32_lteq a b)
       (provide (= result #b1))
-      (match
-            (bvule a b)
-            (= (widthof a) 32)
-            (= (widthof b) 32)
-            (= (widthof result) 1)
-      )
+      (match (bvule a b))
 )
 (extern constructor u32_lteq u32_lteq)
 
@@ -104,10 +99,6 @@
 (decl pure u8_as_u32 (u8) u32)
 (spec (u8_as_u32 arg)
       (provide (= result (zero_ext 32 arg)))
-      (require
-            (= (widthof arg) 8)
-            (= (widthof result) 32)
-      )
 )
 (extern constructor u8_as_u32 u8_as_u32)
 (convert u8 u32 u8_as_u32)
@@ -567,7 +558,7 @@
 (decl fits_in_16 (Type) Type)
 (spec (fits_in_16 arg)
       (provide (= result arg))
-      (match (<= arg 16)))
+      (match (<= result 16)))
 (extern extractor fits_in_16 fits_in_16)
 
 ;; An extractor that only matches types that can fit in 32 bits.
@@ -575,7 +566,7 @@
 (extern extractor fits_in_32 fits_in_32)
 (spec (fits_in_32 arg)
       (provide (= result arg))
-      (match (<= arg 32)))
+      (match (<= result 32)))
 
 ;; An extractor that only matches types that can fit in 32 bits.
 (decl lane_fits_in_32 (Type) Type)
@@ -585,7 +576,7 @@
 (decl fits_in_64 (Type) Type)
 (spec (fits_in_64 arg)
       (provide (= result arg))
-      (match (<= arg 64)))
+      (match (<= result 64)))
 (extern extractor fits_in_64 fits_in_64)
 
 ;; An extractor that only matches types that fit in exactly 32 bits.
@@ -614,7 +605,7 @@
 (decl ty_32_or_64 (Type) Type)
 (spec (ty_32_or_64 arg)
       (provide (= result arg))
-      (match (or (= arg 32) (= arg 64))))
+      (match (or (= result 32) (= result 64))))
 (extern extractor ty_32_or_64 ty_32_or_64)
 
 ;; An extractor that matches 8- and 16-bit types only.
@@ -803,7 +794,7 @@
 (extern constructor signed_cond_code signed_cond_code)
 (spec (signed_cond_code cc)
       (match
-            (match result
+            (match cc
                   ((Equal) false)
                   ((NotEqual) false)
                   ((SignedGreaterThanOrEqual) true)

@@ -8,12 +8,12 @@
 ;; An extractor that only matches types that can fit in 64 bits.
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)
-(spec (fits_in_32 ty) (provide (= result ty)) (match (<= ty 32)))
+(spec (fits_in_32 ty) (provide (= result ty)) (match (<= result 32)))
 
 ;; An extractor that only matches types that can fit in 64 bits.
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
-(spec (fits_in_64 ty) (provide (= result ty)) (match (<= ty 64)))
+(spec (fits_in_64 ty) (provide (= result ty)) (match (<= result 64)))
 
 ;; Helper for calculating the `OperandSize` corresponding to a type.
 (decl test (Type) OperandSize)
