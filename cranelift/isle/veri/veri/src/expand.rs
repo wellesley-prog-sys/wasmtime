@@ -1,5 +1,5 @@
 use crate::{program::Program, reachability::Reachability};
-use anyhow::{format_err, Result};
+use anyhow::{bail, format_err, Result};
 use cranelift_isle::{
     disjointsets::DisjointSets,
     sema::{RuleId, TermId},
@@ -328,6 +328,19 @@ impl<'a> Chaining<'a> {
         true
     }
 
+    /// Validate chaining configuration.
+    pub fn validate(&self) -> Result<()> {
+        for term_id in (0..self.prog.termenv.terms.len()).map(TermId) {
+            if self.has_chain_attribute(term_id) && !self.is_chainable(term_id) {
+                bail!(
+                    "term '{name}' has chain attribute but is not chainable",
+                    name = self.prog.term_name(term_id)
+                );
+            }
+        }
+        Ok(())
+    }
+
     pub fn should_chain(&self, term_id: TermId) -> bool {
         // Check baseline requirements.
         if !self.is_chainable(term_id) {
@@ -350,7 +363,6 @@ impl<'a> Chaining<'a> {
         }
 
         // Marked with chaining attribute.
-        // TODO(mbm): error when chain attribute is applied to unchainable terms
         if self.prog.specenv.chain.contains(&term_id) {
             return true;
         }
@@ -367,6 +379,10 @@ impl<'a> Chaining<'a> {
 
         // Default fallback.
         self.default
+    }
+
+    fn has_chain_attribute(&self, term_id: TermId) -> bool {
+        self.prog.specenv.chain.contains(&term_id)
     }
 
     fn num_rules(&self, term_id: TermId) -> usize {
