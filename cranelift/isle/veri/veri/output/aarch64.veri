@@ -1,1 +1,33 @@
 #918	rotl_32_imm
+	iconst(bv 64) -> bv 8
+		type solution status = inapplicable
+	iconst(bv 64) -> bv 16
+		type solution status = inapplicable
+	iconst(bv 64) -> bv 32
+	rotl(bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst(bv 64) -> bv 32
+	rotl(bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst(bv 64) -> bv 32
+	rotl(bv 32, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = failure
+model:
+has_type(32, #x00000000) -> #x00000000
+rotl(#x00000000, #x00000000) -> #x00000000
+def_inst(#x00000000) -> #x00000000
+iconst(#x0000000000000000) -> #x00000000
+imm_shift_from_imm64(32, #x0000000000000000) -> #b000000
+put_in_reg(#x00000000) -> #x0000000000000000
+negate_imm_shift(32, #b000000) -> #b000000
+temp_writable_reg(64) -> #xffffffffffffffff
+writable_reg_to_reg(#xffffffffffffffff) -> #xffffffffffffffff
+value_reg(#xffffffffffffffff) -> {lo: #xffffffffffffffff, hi: #xffffffffffffffff}
+output({lo: #xffffffffffffffff, hi: #xffffffffffffffff}) -> #xffffffff
+ALUOp.RotR() -> RotR {}
+operand_size(32) -> Size32 {}
+MInst.AluRRImmShift(RotR {}, Size32 {}, #xffffffffffffffff, #x0000000000000000, #b000000) -> {flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}
+emit({flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}) -> #b1
+lower(#x00000000) -> #xffffffff
