@@ -83,8 +83,8 @@ pub enum ExprKind {
     BVNot(Expr),
     Cls(Expr),
     Popcnt(Expr),
-    //CLZ(Expr),
-    //Rev(Expr),
+    CLZ(Expr),
+    Rev(Expr),
     //BVPopcnt(Expr),
 
     // Binary operators
