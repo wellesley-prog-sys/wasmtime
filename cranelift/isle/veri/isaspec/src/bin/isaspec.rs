@@ -171,6 +171,10 @@ fn define() -> Result<Vec<FileConfig>> {
             specs: vec![define_mov_to_fpu()],
         },
         FileConfig {
+            name: "mov_from_vec.isle".into(),
+            specs: vec![define_mov_from_vec()],
+        },
+        FileConfig {
             name: "vec_misc.isle".into(),
             specs: vec![define_vec_misc()],
         },
@@ -198,14 +202,11 @@ fn define_alu_rrr() -> SpecConfig {
         ALUOp::UMulH,
         ALUOp::SDiv,
         ALUOp::UDiv,
+        ALUOp::RotR,
+        ALUOp::Lsr,
+        ALUOp::Asr,
+        ALUOp::Lsl,
         ALUOp::Adc,
-        // --------------
-        // Shift variable is 6-bits:
-        // ALUOp::Lsr,
-        // ALUOp::Asr,
-        // ALUOp::Lsl,
-        // ALUOp::RotR,
-        //
         // Flag ops not required yet:
         // ALUOp::Sbc,
         // ALUOp::AdcS,
@@ -1775,6 +1776,68 @@ fn define_mov_to_fpu() -> SpecConfig {
                         scope: aarch64::state(),
                         mappings: mappings.clone(),
                     }),
+                })
+                .collect(),
+        }),
+    }
+}
+
+// MInst.MovFromVec specification configuration.
+fn define_mov_from_vec() -> SpecConfig {
+    // ScalarSize
+    let sizes = [
+        ScalarSize::Size8,
+        ScalarSize::Size16,
+        ScalarSize::Size32,
+        ScalarSize::Size64,
+    ];
+
+    // MovFromVec
+    let mut mappings = Mappings::default();
+    mappings.writes.insert(
+        aarch64::gpreg(4),
+        Mapping::require(spec_var("rd".to_string())),
+    );
+    mappings.reads.insert(
+        aarch64::vreg(5),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 128)),
+    );
+
+    SpecConfig {
+        term: "MInst.MovFromVec".to_string(),
+        args: ["rd", "rn", "idx", "size"].map(String::from).to_vec(),
+
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .rev()
+                .map(|size| {
+                    let lanes = 128 / size.ty().bits();
+                    Arm {
+                        variant: format!("{size:?}"),
+                        args: Vec::new(),
+                        body: Cases::Cases(
+                            (0..lanes)
+                                .map(|idx| Case {
+                                    conds: vec![spec_eq(
+                                        spec_var("idx".to_string()),
+                                        spec_const_bit_vector(idx.into(), 8),
+                                    )],
+                                    cases: Cases::Instruction(InstConfig {
+                                        opcodes: Opcodes::Instruction(Inst::MovFromVec {
+                                            rd: writable_xreg(4),
+                                            rn: vreg(5),
+                                            idx: idx.try_into().unwrap(),
+                                            size: *size,
+                                        }),
+                                        scope: aarch64::state(),
+                                        mappings: mappings.clone(),
+                                    }),
+                                })
+                                .collect(),
+                        ),
+                    }
                 })
                 .collect(),
         }),

@@ -2179,7 +2179,7 @@
 (extern extractor integral_ty integral_ty)
 (spec (integral_ty ty)
       (provide (= result ty))
-      (match (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+      (match (or (= result 8) (= result 16) (= result 32) (= result 64))))
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
@@ -2232,14 +2232,97 @@
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
+(model ExtendedValue (type
+      (struct
+            (val (named Value))
+            (extend (named ExtendOp))
+      )
+))
+
+(macro (extend_op_src_width extend)
+      (match extend
+            ((UXTB) 8)
+            ((UXTH) 16)
+            ((UXTW) 32)
+            ((UXTX) 64)
+            ((SXTB) 8)
+            ((SXTH) 16)
+            ((SXTW) 32)
+            ((SXTX) 64)
+      )
+)
+
+(macro (extend_op_signed extend)
+      (match extend
+            ((UXTB) false)
+            ((UXTH) false)
+            ((UXTW) false)
+            ((UXTX) false)
+            ((SXTB) true)
+            ((SXTH) true)
+            ((SXTW) true)
+            ((SXTX) true)
+      )
+)
+
+(macro (is_zero_ext dst src)
+      (and
+            (>= (widthof dst) (widthof src))
+            (= dst (conv_to (widthof dst) (zero_ext 64 src)))
+      )
+)
+
+(macro (is_sign_ext dst src)
+      (and
+            (>= (widthof dst) (widthof src))
+            (= dst (conv_to (widthof dst) (sign_ext 64 src)))
+      )
+)
+
+(macro (is_ext dst src) (or (is_zero_ext! dst src) (is_sign_ext! dst src)))
+
 (decl extended_value_from_value (ExtendedValue) Value)
 (extern extractor extended_value_from_value extended_value_from_value)
+(spec (extended_value_from_value x)
+      ; Match when the result can be represented as an extend.
+      (match
+            (or
+                  (with (b) (is_ext! result (as b (bv 8))))
+                  (with (h) (is_ext! result (as h (bv 16))))
+                  (with (w) (is_ext! result (as w (bv 32))))
+                  (with (x) (is_ext! result (as x (bv 64))))
+            )
+      )
+
+      ; Determine the ExtendedValue parameters.
+      (provide
+            ; Width of the input.
+            (= (widthof (:val x)) (extend_op_src_width! (:extend x)))
+
+            ; Result equals the extension.
+            (if (extend_op_signed! (:extend x))
+                  (is_sign_ext! result (:val x))
+                  (is_zero_ext! result (:val x))
+            )
+      )
+)
+(instantiate extended_value_from_value
+      ((args (struct (val (bv  8)) (extend (named ExtendOp)))) (ret (named Value)))
+      ((args (struct (val (bv 16)) (extend (named ExtendOp)))) (ret (named Value)))
+      ((args (struct (val (bv 32)) (extend (named ExtendOp)))) (ret (named Value)))
+      ((args (struct (val (bv 64)) (extend (named ExtendOp)))) (ret (named Value)))
+)
 
 ;; Constructors used to poke at the fields of an `ExtendedValue`.
 (decl put_extended_in_reg (ExtendedValue) Reg)
 (extern constructor put_extended_in_reg put_extended_in_reg)
+(spec (put_extended_in_reg x)
+      (provide (= result (conv_to (widthof result) (:val x))))
+)
+
 (decl get_extended_op (ExtendedValue) ExtendOp)
 (extern constructor get_extended_op get_extended_op)
+(spec (get_extended_op x) (provide (= result (:extend x))))
 
 (decl nzcv (bool bool bool bool) NZCV)
 (extern constructor nzcv nzcv)

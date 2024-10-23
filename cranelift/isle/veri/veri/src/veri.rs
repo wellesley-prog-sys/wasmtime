@@ -5,7 +5,7 @@ use crate::{
     trie::{binding_type, BindingType},
     types::{Compound, Const, Type, Variant, Width},
 };
-use anyhow::{bail, format_err, Result};
+use anyhow::{bail, format_err, Context, Result};
 use cranelift_isle::{
     ast::Ident,
     sema::{Sym, TermId, TypeId, VariantId},
@@ -772,6 +772,11 @@ impl Conditions {
     }
 }
 
+enum TermKind {
+    Constructor,
+    Extractor,
+}
+
 #[derive(Copy, Clone)]
 enum Invocation {
     Caller,
@@ -1026,7 +1031,20 @@ impl<'a> ConditionsBuilder<'a> {
         let result = self.binding_value[&parameter].clone();
 
         // Call extractor.
-        self.call(term, args, result, Invocation::Caller, domain)
+        self.call(
+            term,
+            TermKind::Extractor,
+            args,
+            result,
+            Invocation::Caller,
+            domain,
+        )
+        .with_context(|| {
+            format!(
+                "expanding extractor '{name}'",
+                name = self.prog.term_name(term)
+            )
+        })
     }
 
     fn constructor(
@@ -1051,12 +1069,26 @@ impl<'a> ConditionsBuilder<'a> {
         let (domain, result) = Domain::from_return_value(&self.binding_value[&id]);
 
         // Call constructor.
-        self.call(term, &args, result, invocation, domain)
+        self.call(
+            term,
+            TermKind::Constructor,
+            &args,
+            result,
+            invocation,
+            domain,
+        )
+        .with_context(|| {
+            format!(
+                "expanding constructor '{name}'",
+                name = self.prog.term_name(term)
+            )
+        })
     }
 
     fn call(
         &mut self,
         term: TermId,
+        kind: TermKind,
         args: &[Symbolic],
         ret: Symbolic,
         invocation: Invocation,
@@ -1071,32 +1103,33 @@ impl<'a> ConditionsBuilder<'a> {
             .get(&term)
             .ok_or(format_err!("no spec for term {term_name}",))?;
 
-        // Assignment of signature variables to expressions.
-        let mut vars = self.state.clone();
-
-        // Arguments.
+        // We are provided the arguments and return value as they appear
+        // syntactically in the term declaration and specification. However,
+        // whether these are the actual inputs and outputs of the corresponding
+        // function depends on the term kind.
         if term_spec.args.len() != args.len() {
             bail!("incorrect number of arguments for term {term_name}");
         }
-        for (name, arg) in zip(&term_spec.args, args) {
-            vars.set(name.0.clone(), arg.clone())?;
-        }
+        let arguments: Vec<_> = zip(&term_spec.args, args).collect();
+        let result = (&term_spec.ret, &ret);
+        let (inputs, outputs) = match kind {
+            TermKind::Constructor => (arguments.as_slice(), std::slice::from_ref(&result)),
+            TermKind::Extractor => (std::slice::from_ref(&result), arguments.as_slice()),
+        };
 
-        // Return value.
-        vars.set(term_spec.ret.0.clone(), ret.clone())?;
+        // Scope for spec expression evaluation. State variables are always available.
+        let mut vars = self.state.clone();
+
+        // Inputs are available to the requires and matches clauses.
+        for (name, input) in inputs {
+            vars.set(name.0.clone(), (*input).clone())?;
+        }
 
         // Requires.
         let mut requires: Vec<ExprId> = Vec::new();
         for require in &term_spec.requires {
             let require = self.spec_expr(require, &vars)?.try_into()?;
             requires.push(require);
-        }
-
-        // Provides.
-        let mut provides: Vec<ExprId> = Vec::new();
-        for provide in &term_spec.provides {
-            let provide = self.spec_expr(provide, &vars)?.try_into()?;
-            provides.push(provide);
         }
 
         // Matches.
@@ -1106,12 +1139,30 @@ impl<'a> ConditionsBuilder<'a> {
             matches.push(m);
         }
 
+        // Outputs: only in scope for provides.
+        for (name, output) in outputs {
+            vars.set(name.0.clone(), (*output).clone())?;
+        }
+
+        // Provides.
+        let mut provides: Vec<ExprId> = Vec::new();
+        for provide in &term_spec.provides {
+            let provide = self.spec_expr(provide, &vars)?.try_into()?;
+            provides.push(provide);
+        }
+
         // Partial function.
         // REVIEW(mbm): pin down semantics for partial function specifications.
         if let Domain::Partial(p) = domain {
+            // Matches describe when the function applies.
             let all_matches = self.all(matches);
             let eq = self.exprs_equal(p, all_matches);
             self.conditions.assumptions.push(eq);
+
+            // Provides are conditioned on the match.
+            let all_provides = self.all(provides);
+            let provide = self.dedup_expr(Expr::Imp(all_matches, all_provides));
+            provides = vec![provide];
         } else if !matches.is_empty() {
             bail!("spec matches on non-partial function");
         }

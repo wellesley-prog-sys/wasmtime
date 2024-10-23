@@ -162,6 +162,7 @@ impl Runner {
         // Generate expansions.
         // TODO(mbm): don't hardcode the expansion configuration
         let chaining = Chaining::new(&self.prog, &self.term_rule_sets)?;
+        chaining.validate()?;
         let mut expander = Expander::new(&self.prog, &self.term_rule_sets, chaining);
         expander.add_root_term_name(&self.root_term)?;
         expander.set_prune_infeasible(true);
