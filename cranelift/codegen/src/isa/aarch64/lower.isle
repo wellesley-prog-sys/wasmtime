@@ -103,10 +103,10 @@
 
 ;; Special cases for when we're adding an extended register where the extending
 ;; operation can get folded into the add itself.
-(rule 0 (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
+(rule iadd_extend_right 0 (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
       (add_extend ty x y))
 
-(rule 1 (lower (has_type (fits_in_64 ty) (iadd (extended_value_from_value x) y)))
+(rule iadd_extend_left 1 (lower (has_type (fits_in_64 ty) (iadd (extended_value_from_value x) y)))
       (add_extend ty y x))
 
 ;; Special cases for when we're adding the shift of a different
