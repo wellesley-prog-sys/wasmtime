@@ -1633,7 +1633,7 @@
       (a64_rotr_imm $I32 x (negate_imm_shift $I32 n)))
 
 ;; Specialization for the 64-bit case when the rotation amount is an immediate.
-(rule 1 (lower (has_type $I64 (rotl x (iconst k))))
+(rule rotl_64_imm 1 (lower (has_type $I64 (rotl x (iconst k))))
       (if-let n (imm_shift_from_imm64 $I64 k))
       (a64_rotr_imm $I64 x (negate_imm_shift $I64 n)))
 
@@ -1660,7 +1660,7 @@
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; General 8/16-bit case.
-(rule -3 (lower (has_type (fits_in_16 ty) (rotr x y)))
+(rule rotl_fits_in_16 -3 (lower (has_type (fits_in_16 ty) (rotr x y)))
       (small_rotr ty (put_in_reg_zext32 x) (value_regs_get y 0)))
 
 ;; General 32-bit case.
@@ -1707,6 +1707,7 @@
             (val_lshift Reg (lsl $I32 val neg_amt)))
         (orr $I32 val_lshift val_rshift)))
 
+(spec (rotr_mask x) (provide (= (bvsub (int2bv 64 x) #x0000000000000001) result)))
 (decl rotr_mask (Type) ImmLogic)
 (extern constructor rotr_mask rotr_mask)
 

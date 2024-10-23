@@ -190,6 +190,10 @@
     (provide (= result (rotl x y))))
 (instantiate rotl bv_binary_8_to_64)
 
+(spec (rotr x y)
+    (provide (= result (rotr x y))))
+(instantiate rotr bv_binary_8_to_64)
+
 (spec (bitselect c x y)
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 (instantiate bitselect bv_ternary_8_to_64)

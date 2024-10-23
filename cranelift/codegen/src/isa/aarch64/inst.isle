@@ -2115,10 +2115,6 @@
       (provide (= result imm64))
       (match (or (= ty 32) (= ty 64))))
 
-(spec (imm_shift_from_imm64 ty x)
-      (provide (= result (extract 5 0 (bvand x (bvsub (int2bv 64 ty) #x0000000000000001)))))
-      (match (bvult (bvand x (bvsub (int2bv 64 ty)  #x0000000000000001)) #x0000000000000040)))
-
 (decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
 (spec (imm_shift_from_imm64 ty v)
