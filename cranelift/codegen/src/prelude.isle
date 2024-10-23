@@ -415,7 +415,6 @@
 (extern const $F128 Type)
 
 (extern const $I8X8 Type)
-(model I8X8 (const 128))
 (extern const $I8X16 Type)
 (model I8X16 (const 128))
 (extern const $I16X4 Type)
