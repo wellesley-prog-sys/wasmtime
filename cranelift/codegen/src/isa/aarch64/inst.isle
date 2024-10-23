@@ -2115,6 +2115,10 @@
       (provide (= result imm64))
       (match (or (= ty 32) (= ty 64))))
 
+(spec (imm_shift_from_imm64 ty x)
+      (provide (= result (extract 5 0 (bvand x (bvsub (int2bv 64 ty) #x0000000000000001)))))
+      (match (bvult (bvand x (bvsub (int2bv 64 ty)  #x0000000000000001)) #x0000000000000040)))
+
 (decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
 (spec (imm_shift_from_imm64 ty v)
@@ -3343,7 +3347,13 @@
 (rule (sshr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Sshr) amt x size))
 
 ;; Helpers for generating `rotr` instructions.
-
+(spec (a64_rotr ty x y)
+  (provide
+    (= result
+       (if (= ty 32)
+           (zero_ext 64 (rotr (extract 31 0 x) (extract 31 0 y)))
+           (rotr x y))))
+  (require (or (= ty 32) (= ty 64))))
 (decl a64_rotr (Type Reg Reg) Reg)
 (rule (a64_rotr ty x y) (alu_rrr (ALUOp.RotR) ty x y))
 
