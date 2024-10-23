@@ -22,8 +22,12 @@ fn zero_extend(smt: &mut Context, padding: usize, value: SExpr) -> SExpr {
 
 pub fn popcnt(smt: &mut Context, ty: usize, x: SExpr, id: usize) -> SExpr {
     log::debug!("popcnt encoding: {ty}");
+    // Only use the number of bits necessary to calculate the result
+    // max = 2^(n-1) - 1; n = floor(log_2(n)) + 1
+    let bits_for_result: usize = ty.ilog2().try_into().unwrap();
+    let bits_for_result = bits_for_result + 1;
     let mut bits: Vec<_> = (0..ty)
-        .map(|i| zero_extend(smt, 7, smt.extract(i as i32, i as i32, x)))
+        .map(|i| zero_extend(smt, bits_for_result-1, smt.extract(i as i32, i as i32, x)))
         .collect();
     let initial = bits.pop().unwrap();
     let r = bits.iter().fold(initial, |a, b| smt.bvadd(a, *b));
@@ -34,11 +38,10 @@ pub fn popcnt(smt: &mut Context, ty: usize, x: SExpr, id: usize) -> SExpr {
         smt.list(vec![
             smt.atoms().und,
             smt.atom("BitVec"),
-            smt.numeral(8),
+            smt.numeral(bits_for_result),
         ]),
     );
     smt.assert(smt.eq(result, r)).unwrap();
-    log::debug!("end popcnt encoding: {ty}");
-    zero_extend(smt, ty-8, result)
+    zero_extend(smt, ty-bits_for_result, result)
 }
 

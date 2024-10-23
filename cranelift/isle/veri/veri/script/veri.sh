@@ -42,7 +42,7 @@ cargo run --bin veri --profile "${profile}" -- \
     --codegen-crate-dir ../../../codegen/ \
     --work-dir "${tmp_dir}" \
     --name "${arch}" \
-    --timeout 600 \
+    --timeout 10 \
     --log-dir "${output_dir}/log" \
     --skip-tag TODO \
     "$@" \
