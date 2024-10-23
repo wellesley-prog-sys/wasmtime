@@ -95,6 +95,26 @@
                                     (= t2 #x0000000000000000)
                                     (= t4 (extract 63 0 (bvsdiv (zero_ext 128 rn) (zero_ext 128 rm)))))
                                 (= rd (if t1 t2 t4)))))
+                    ((RotR)
+                        (with
+                            (t1 t3 t4 t5)
+                            (and
+                                (= t1 (= (extract 5 0 rm) #b000000))
+                                (if
+                                    t1
+                                    (= t3 rn)
+                                    (and
+                                        (not (= (extract 5 0 rm) #b000000))
+                                        (=
+                                            t4
+                                            (bvor
+                                                (bvlshr rn (zero_ext 64 (extract 5 0 rm)))
+                                                (bvshl rn (zero_ext 64 (bvsub #x40 (zero_ext 8 (extract 5 0 rm)))))))))
+                                (= t5 (if t1 t3 t4))
+                                (= rd t5))))
+                    ((Lsr) (= rd (bvlshr rn (zero_ext 64 (extract 5 0 rm)))))
+                    ((Asr) (= rd (bvashr rn (zero_ext 64 (extract 5 0 rm)))))
+                    ((Lsl) (= rd (bvshl rn (zero_ext 64 (extract 5 0 rm)))))
                     ((Adc) (= rd (bvadd (bvadd rn rm) (zero_ext 64 (extract 0 0 (:C (:flags_in result)))))))))
             ((Size32)
                 (match
@@ -170,6 +190,28 @@
                                 (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
                                 (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                 (= rd t4))))
+                    ((RotR)
+                        (with
+                            (t1 t3 t4 t5)
+                            (and
+                                (= t1 (= (extract 4 0 rm) #b00000))
+                                (if
+                                    t1
+                                    (= t3 (extract 31 0 rn))
+                                    (and
+                                        (not (= (extract 4 0 rm) #b00000))
+                                        (=
+                                            t4
+                                            (bvor
+                                                (bvlshr (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm)))
+                                                (bvshl
+                                                    (extract 31 0 rn)
+                                                    (zero_ext 32 (bvsub #x20 (zero_ext 8 (extract 4 0 rm)))))))))
+                                (= t5 (if t1 t3 t4))
+                                (= rd (zero_ext 64 t5)))))
+                    ((Lsr) (= rd (zero_ext 64 (bvlshr (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm))))))
+                    ((Asr) (= rd (zero_ext 64 (bvashr (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm))))))
+                    ((Lsl) (= rd (zero_ext 64 (bvshl (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm))))))
                     ((Adc)
                         (=
                             rd
@@ -198,6 +240,10 @@
                     ((UMulH) true)
                     ((SDiv) true)
                     ((UDiv) true)
+                    ((RotR) true)
+                    ((Lsr) true)
+                    ((Asr) true)
+                    ((Lsl) true)
                     ((Adc) true)))
             ((Size32)
                 (match
@@ -212,4 +258,8 @@
                     ((EorNot) true)
                     ((AddS) true)
                     ((SubS) true)
+                    ((RotR) true)
+                    ((Lsr) true)
+                    ((Asr) true)
+                    ((Lsl) true)
                     ((Adc) true))))))

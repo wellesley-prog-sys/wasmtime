@@ -202,14 +202,11 @@ fn define_alu_rrr() -> SpecConfig {
         ALUOp::UMulH,
         ALUOp::SDiv,
         ALUOp::UDiv,
+        ALUOp::RotR,
+        ALUOp::Lsr,
+        ALUOp::Asr,
+        ALUOp::Lsl,
         ALUOp::Adc,
-        // --------------
-        // Shift variable is 6-bits:
-        // ALUOp::Lsr,
-        // ALUOp::Asr,
-        // ALUOp::Lsl,
-        // ALUOp::RotR,
-        //
         // Flag ops not required yet:
         // ALUOp::Sbc,
         // ALUOp::AdcS,
