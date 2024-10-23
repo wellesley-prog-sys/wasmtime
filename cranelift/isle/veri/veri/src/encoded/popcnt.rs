@@ -21,6 +21,7 @@ fn zero_extend(smt: &mut Context, padding: usize, value: SExpr) -> SExpr {
 }
 
 pub fn popcnt(smt: &mut Context, ty: usize, x: SExpr, id: usize) -> SExpr {
+    log::debug!("popcnt encoding: {ty}");
     let mut bits: Vec<_> = (0..ty)
         .map(|i| zero_extend(smt, 7, smt.extract(i as i32, i as i32, x)))
         .collect();
@@ -37,6 +38,7 @@ pub fn popcnt(smt: &mut Context, ty: usize, x: SExpr, id: usize) -> SExpr {
         ]),
     );
     smt.assert(smt.eq(result, r)).unwrap();
-    result
+    log::debug!("end popcnt encoding: {ty}");
+    zero_extend(smt, ty-8, result)
 }
 

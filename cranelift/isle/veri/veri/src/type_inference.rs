@@ -163,6 +163,7 @@ pub struct System {
 
 impl System {
     fn fork(&self) -> Vec<System> {
+        log::debug!("fork");
         let mut branches = self.branches.clone();
         let branch = branches.pop().expect("should have at least one branch");
 
@@ -799,6 +800,7 @@ impl Solver {
     }
 
     pub fn solve(mut self, system: &System) -> Vec<Solution> {
+        log::debug!("solve");
         // Deduce assignments from constraints.
         let result = self.propagate(&system.constraints);
         if let Err(status) = result {

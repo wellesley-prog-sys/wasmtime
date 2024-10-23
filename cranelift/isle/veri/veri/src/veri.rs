@@ -1096,6 +1096,7 @@ impl<'a> ConditionsBuilder<'a> {
     ) -> Result<()> {
         // Lookup spec.
         let term_name = self.prog.term_name(term);
+        log::trace!("call {term_name}");
         let term_spec = self
             .prog
             .specenv
@@ -1126,6 +1127,7 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Requires.
+        log::trace!("{term_name} requires");
         let mut requires: Vec<ExprId> = Vec::new();
         for require in &term_spec.requires {
             let require = self.spec_expr(require, &vars)?.try_into()?;
@@ -1133,6 +1135,7 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Matches.
+        log::trace!("{term_name} matches");
         let mut matches: Vec<ExprId> = Vec::new();
         for m in &term_spec.matches {
             let m = self.spec_expr(m, &vars)?.try_into()?;
@@ -1140,11 +1143,13 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Outputs: only in scope for provides.
+        log::trace!("{term_name} outputs");
         for (name, output) in outputs {
             vars.set(name.0.clone(), (*output).clone())?;
         }
 
         // Provides.
+        log::trace!("{term_name} provides");
         let mut provides: Vec<ExprId> = Vec::new();
         for provide in &term_spec.provides {
             let provide = self.spec_expr(provide, &vars)?.try_into()?;
@@ -1152,6 +1157,7 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Partial function.
+        log::trace!("{term_name} partial");
         // REVIEW(mbm): pin down semantics for partial function specifications.
         if let Domain::Partial(p) = domain {
             // Matches describe when the function applies.
@@ -1185,6 +1191,7 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Record callsite.
         self.record_term_instantiation(term, args.to_vec(), ret)?;
+        log::trace!("{term_name} done");
 
         Ok(())
     }
@@ -1403,6 +1410,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn spec_expr(&mut self, expr: &spec::Expr, vars: &Variables) -> Result<Symbolic> {
+        
         match &expr.x {
             spec::ExprKind::Var(v) => {
                 let v = vars.get(&v.0)?;
@@ -1430,9 +1438,30 @@ impl<'a> ConditionsBuilder<'a> {
             }
 
             spec::ExprKind::And(x, y) => {
-                let x = self.spec_expr(x, vars)?.try_into()?;
-                let y = self.spec_expr(y, vars)?.try_into()?;
-                Ok(self.scalar(Expr::And(x, y)))
+                log::trace!("and");
+                let mut second = y;
+
+                let x = self.spec_expr(x, vars);
+                let mut result = x;
+                loop {
+                    match &(second.x) {
+                        spec::ExprKind::And(a, b) => {
+                            log::trace!("and loop");
+                            let rid : ExprId = result?.try_into()?;
+                            let aid: ExprId =  self.spec_expr(a, vars)?.try_into()?;
+                            result = Ok(self.scalar(Expr::And(rid, aid)));
+                            second = b;
+                        }
+                        _ => {
+                            let s = self.spec_expr(second, vars)?.try_into()?;
+                            let rid : ExprId = result?.try_into()?;
+                            result = Ok(self.scalar(Expr::And(rid, s)));
+                            break
+                        }
+                    }
+                }
+                return result;
+             
             }
 
             spec::ExprKind::Or(x, y) => {
@@ -1942,14 +1971,16 @@ impl<'a> ConditionsBuilder<'a> {
         body: &spec::Expr,
         vars: &Variables,
     ) -> Result<Symbolic> {
+        log::trace!("spec_with");
         // Declare new variables.
         let mut with_vars = vars.clone();
         for name in decls {
+            log::trace!("{:?}", name);
             // QUESTION(mbm): allow with scopes to optionally specify types?
             let expr = Symbolic::Scalar(self.alloc_variable(Type::Unknown, name.0.clone()));
             with_vars.set(name.0.clone(), expr)?;
         }
-
+        log::trace!("after");
         // Evaluate body in new scope.
         self.spec_expr(body, &with_vars)
     }
