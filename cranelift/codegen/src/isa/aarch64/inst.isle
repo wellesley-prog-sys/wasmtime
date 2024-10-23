@@ -3347,13 +3347,6 @@
 (rule (sshr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Sshr) amt x size))
 
 ;; Helpers for generating `rotr` instructions.
-(spec (a64_rotr ty x y)
-  (provide
-    (= result
-       (if (= ty 32)
-           (zero_ext 64 (rotr (extract 31 0 x) (extract 31 0 y)))
-           (rotr x y))))
-  (require (or (= ty 32) (= ty 64))))
 (decl a64_rotr (Type Reg Reg) Reg)
 (rule (a64_rotr ty x y) (alu_rrr (ALUOp.RotR) ty x y))
 
