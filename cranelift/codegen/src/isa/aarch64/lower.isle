@@ -1637,6 +1637,9 @@
       (if-let n (imm_shift_from_imm64 $I64 k))
       (a64_rotr_imm $I64 x (negate_imm_shift $I64 n)))
 
+(spec (negate_imm_shift ty x)
+   (provide
+     (= result (bvand (bvsub (int2bv 6 ty) x) (bvsub (int2bv 6 ty) #b000001)))))
 (decl negate_imm_shift (Type ImmShift) ImmShift)
 (extern constructor negate_imm_shift negate_imm_shift)
 

@@ -152,6 +152,9 @@
 (spec (iconst arg)
     (provide (= arg (zero_ext 64 result))))
 (instantiate iconst
+    ((args (bv 64)) (ret (bv 8)))
+    ((args (bv 64)) (ret (bv 16)))
+    ((args (bv 64)) (ret (bv 32)))
     ((args (bv 64)) (ret (bv 64)))
 )
 
