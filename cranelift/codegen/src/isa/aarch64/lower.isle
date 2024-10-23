@@ -1386,11 +1386,11 @@
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift for i8/i16/i32.
-(rule -1 (lower (has_type (fits_in_32 ty) (ishl x y)))
+(rule ishl_8_16_32 -1 (lower (has_type (fits_in_32 ty) (ishl x y)))
       (do_shift (ALUOp.Lsl) ty x y))
 
 ;; Shift for i64.
-(rule (lower (has_type $I64 (ishl x y)))
+(rule ishl_64 (lower (has_type $I64 (ishl x y)))
       (do_shift (ALUOp.Lsl) $I64 x y))
 
 ;; Shift for i128.
@@ -1442,6 +1442,7 @@
 ;; Note that this automatically handles the clif semantics of masking the
 ;; shift amount where necessary.
 (decl do_shift (ALUOp Type Reg Value) Reg)
+(attr do_shift (veri chain))
 
 ;; 8/16-bit shift base case.
 ;;
@@ -1452,17 +1453,19 @@
 ;; On i32 and i64 types this matches what the aarch64 spec does, but on smaller
 ;; types (i16, i8) we need to do this manually, so we wrap the shift amount
 ;; with an AND instruction
-(rule -1 (do_shift op (fits_in_16 ty) x y)
+(rule do_shift_fits_in_16
+      -1 (do_shift op (fits_in_16 ty) x y)
       (let ((shift_amt Reg (value_regs_get y 0))
             (masked_shift_amt Reg (and_imm $I32 shift_amt (shift_mask ty))))
         (alu_rrr op $I32 x masked_shift_amt)))
 
 (decl shift_mask (Type) ImmLogic)
 (extern constructor shift_mask shift_mask)
+(spec (shift_mask ty) (provide (= result (shift_mask! 64 ty))))
 
 ;; 32/64-bit shift base cases.
-(rule (do_shift op $I32 x y) (alu_rrr op $I32 x (value_regs_get y 0)))
-(rule (do_shift op $I64 x y) (alu_rrr op $I64 x (value_regs_get y 0)))
+(rule do_shift_32 (do_shift op $I32 x y) (alu_rrr op $I32 x (value_regs_get y 0)))
+(rule do_shift_64 (do_shift op $I64 x y) (alu_rrr op $I64 x (value_regs_get y 0)))
 
 ;; Special case for shifting by a constant value where the value can fit into an
 ;; `ImmShift`.
@@ -1470,7 +1473,7 @@
 ;; Note that this rule explicitly has a higher priority than the others
 ;; to ensure it's attempted first, otherwise the type-based filters on the
 ;; previous rules seem to take priority over this rule.
-(rule 1 (do_shift op ty x (iconst k))
+(rule do_shift_const 1 (do_shift op ty x (iconst k))
       (if-let shift (imm_shift_from_imm64 ty k))
       (alu_rr_imm_shift op ty x shift))
 
