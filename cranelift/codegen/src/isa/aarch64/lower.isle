@@ -1619,13 +1619,13 @@
         (a64_rotr $I32 x neg_shift)))
 
 ;; General 64-bit case.
-(rule (lower (has_type $I64 (rotl x y)))
+(rule rotl_64_base_case (lower (has_type $I64 (rotl x y)))
       (let ((amt Reg (value_regs_get y 0))
             (neg_shift Reg (sub $I64 (zero_reg) amt)))
         (a64_rotr $I64 x neg_shift)))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
-(rule 1 (lower (has_type $I32 (rotl x (iconst k))))
+(rule rotl_32_imm 1 (lower (has_type $I32 (rotl x (iconst k))))
       (if-let n (imm_shift_from_imm64 $I32 k))
       (a64_rotr_imm $I32 x (negate_imm_shift $I32 n)))
 
