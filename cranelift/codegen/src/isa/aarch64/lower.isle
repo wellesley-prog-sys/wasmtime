@@ -1763,16 +1763,16 @@
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I8 (clz x)))
+(rule clz_8 (lower (has_type $I8 (clz x)))
       (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 24)))
 
-(rule (lower (has_type $I16 (clz x)))
+(rule clz_16 (lower (has_type $I16 (clz x)))
       (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16)))
 
 (rule (lower (has_type $I128 (clz x)))
       (lower_clz128 x))
 
-(rule -1 (lower (has_type ty (clz x)))
+(rule clz_32_64 -1 (lower (has_type ty (clz x)))
       (a64_clz ty x))
 
 ;; clz hi_clz, hi
@@ -1793,10 +1793,10 @@
 ;; then using a `clz` instruction since the tail zeros are the same as the
 ;; leading zeros of the reversed value.
 
-(rule (lower (has_type $I8 (ctz x)))
+(rule ctz_8 (lower (has_type $I8 (ctz x)))
       (a64_clz $I32 (orr_imm $I32 (rbit $I32 x) (u64_into_imm_logic $I32 0x800000))))
 
-(rule (lower (has_type $I16 (ctz x)))
+(rule ctz_16 (lower (has_type $I16 (ctz x)))
       (a64_clz $I32 (orr_imm $I32 (rbit $I32 x) (u64_into_imm_logic $I32 0x8000))))
 
 (rule (lower (has_type $I128 (ctz x)))
@@ -1805,7 +1805,7 @@
             (hi Reg (rbit $I64 (value_regs_get val 1))))
         (lower_clz128 (value_regs hi lo))))
 
-(rule -1 (lower (has_type ty (ctz x)))
+(rule ctz_32_64 -1 (lower (has_type ty (ctz x)))
       (a64_clz ty (rbit ty x)))
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
