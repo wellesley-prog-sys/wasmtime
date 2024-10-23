@@ -83,7 +83,7 @@ pub enum ExprKind {
     BVNot(Expr),
     Cls(Expr),
     Popcnt(Expr),
-    CLZ(Expr),
+    Clz(Expr),
     Rev(Expr),
     //BVPopcnt(Expr),
 

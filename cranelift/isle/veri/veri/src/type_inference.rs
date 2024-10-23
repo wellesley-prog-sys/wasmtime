@@ -359,7 +359,9 @@ impl<'a> SystemBuilder<'a> {
                 self.same_type(x, *y);
             }
             Expr::Cls(y) 
-            | Expr::Popcnt(y) => {
+            | Expr::Popcnt(y) 
+            | Expr::Clz(y)
+            | Expr::Rev(y)=> {
                 self.bit_vector(x);
                 self.bit_vector(*y);
 

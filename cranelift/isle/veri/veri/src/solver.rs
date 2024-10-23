@@ -11,6 +11,8 @@ use crate::{
 
 use crate::encoded::cls::*;
 use crate::encoded::popcnt::*;
+use crate::encoded::clz::*;
+use crate::encoded::rev::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Applicability {
@@ -222,6 +224,38 @@ impl<'a> Solver<'a> {
                     16 => Ok(cls16(&mut self.smt, xe, id)),
                     32 => Ok(cls32(&mut self.smt, xe, id)),
                     64 => Ok(cls64(&mut self.smt, xe, id)),
+                    _ => unimplemented!("unexpected CLS width"),
+                }
+            }
+            Expr::Clz(x) => {
+                let width = self
+                    .assignment
+                    .try_bit_vector_width(x)
+                    .context("clz semantics require known width")?;
+                let xe = self.expr_atom(x);
+                let id: usize = x.index();
+                match width {
+                    1 => Ok(clz1(&mut self.smt, xe, id)),
+                    8 => Ok(clz8(&mut self.smt, xe, id)),
+                    16 => Ok(clz16(&mut self.smt, xe, id)),
+                    32 => Ok(clz32(&mut self.smt, xe, id)),
+                    64 => Ok(clz64(&mut self.smt, xe, id)),
+                    _ => unimplemented!("unexpected CLZ width"),
+                }
+            }
+            Expr::Rev(x) => {
+                let width = self
+                    .assignment
+                    .try_bit_vector_width(x)
+                    .context("cls semantics require known width")?;
+                let xe = self.expr_atom(x);
+                let id = x.index();
+                match width {
+                    1 => Ok(rev1(&mut self.smt, xe, id)),
+                    8 => Ok(rev8(&mut self.smt, xe, id)),
+                    16 => Ok(rev16(&mut self.smt, xe, id)),
+                    32 => Ok(rev32(&mut self.smt, xe, id)),
+                    64 => Ok(rev64(&mut self.smt, xe, id)),
                     _ => unimplemented!("unexpected CLS width"),
                 }
             }
