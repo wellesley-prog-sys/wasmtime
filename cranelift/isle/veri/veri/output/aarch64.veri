@@ -1,11 +1,1 @@
-#915	rotl_32_base_case
-	rotl(bv 8, bv 8) -> bv 8
-		type solution status = inapplicable
-	rotl(bv 16, bv 16) -> bv 16
-		type solution status = inapplicable
-	rotl(bv 32, bv 32) -> bv 32
-		type solution status = solved
-		applicability = applicable
-		verification = success
-	rotl(bv 64, bv 64) -> bv 64
-		type solution status = inapplicable
+#918	rotl_32_imm
