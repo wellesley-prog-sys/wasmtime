@@ -233,7 +233,14 @@ impl<'a> Solver<'a> {
                 let ys = self.expr_atom(y);
                 Ok(self.encode_rotate("rotate_left", xs, ys, source_width))
             }
-            Expr::BVRotr(..) => todo!("bvrotr"),
+            Expr::BVRotr(x, y) => {
+                let source_width = self.assignment.try_bit_vector_width(x).context(
+                    "target of width_of expression should be a bit-vector of known width",
+                )?;
+                let xs = self.expr_atom(x);
+                let ys = self.expr_atom(y);
+                Ok(self.encode_rotate("rotate_right", xs, ys, source_width))
+            }
             Expr::Conditional(c, t, e) => {
                 Ok(self
                     .smt
