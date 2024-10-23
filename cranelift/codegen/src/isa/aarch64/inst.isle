@@ -1167,6 +1167,13 @@
             (=> (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
                   (= rd (zero_ext 64 (bvashr (extract 31 0 rn) (zero_ext 32 immshift))))
             )
+
+            (=> (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
+                  (= rd (bvshl rn (zero_ext 64 immshift)))
+            )
+            (=> (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
+                  (= rd (zero_ext 64 (bvshl (extract 31 0 rn) (zero_ext 32 immshift))))
+            )
       )
       (require
             (or
@@ -1175,6 +1182,9 @@
 
                   (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
             )
       )
 )
@@ -1253,9 +1263,7 @@
 )
 
 (type ImmLogic (primitive ImmLogic))
-; Note: ImmLogic values can be 32 or 64 bit.
-; QUESTION(mbm): do we want to support "polymorphic" models: (model ImmLogic (type (poly (bv 32) (bv 64))))
-(model ImmLogic (type (bv)))
+(model ImmLogic (type (bv 64)))
 (type ImmShift (primitive ImmShift))
 (model ImmShift (type (bv 6)))
 
@@ -2068,6 +2076,20 @@
 
 (decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
+(spec (imm_shift_from_imm64 ty v)
+      (provide
+            (let
+                  ((imm_value (bvand v (shift_mask! 64 ty))))
+                  (= result (extract 5 0 imm_value))
+            )
+      )
+      (match
+            (let
+                  ((imm_value (bvand v (shift_mask! 64 ty))))
+                  (bvult imm_value (int2bv 64 64))
+            )
+      )
+)
 
 (decl imm_shift_from_u8 (u8) ImmShift)
 (extern constructor imm_shift_from_u8 imm_shift_from_u8)
