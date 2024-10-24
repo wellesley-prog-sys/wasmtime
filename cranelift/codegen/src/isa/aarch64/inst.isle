@@ -1174,6 +1174,44 @@
             (=> (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
                   (= rd (zero_ext 64 (bvshl (extract 31 0 rn) (zero_ext 32 immshift))))
             )
+
+            (=> (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size32)))
+                (with
+                            (t1 t3 t4 t5)
+                            (and
+                                (= t1 (= (extract 4 0 immshift) #b00000))
+                                (if
+                                    t1
+                                    (= t3 (extract 31 0 rn))
+                                    (and
+                                        (not (= (extract 4 0 immshift) #b00000))
+                                        (=
+                                            t4
+                                            (bvor
+                                                (bvlshr (extract 31 0 rn) (zero_ext 32 (extract 4 0 immshift)))
+                                                (bvshl
+                                                    (extract 31 0 rn)
+                                                    (zero_ext 32 (bvsub #x20 (zero_ext 8 (extract 4 0 immshift)))))))))
+                                (= t5 (if t1 t3 t4))
+                                (= rd (zero_ext 64 t5))))
+            )
+            (=> (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size64)))
+            (with
+                            (t1 t3 t4 t5)
+                            (and
+                                (= t1 (= (extract 5 0 immshift) #b000000))
+                                (if
+                                    t1
+                                    (= t3 rn)
+                                    (and
+                                        (not (= (extract 5 0 immshift) #b000000))
+                                        (=
+                                            t4
+                                            (bvor
+                                                (bvlshr rn (zero_ext 64 (extract 5 0 immshift)))
+                                                (bvshl rn (zero_ext 64 (bvsub #x40 (zero_ext 8 (extract 5 0 immshift)))))))))
+                                (= t5 (if t1 t3 t4))
+                                (= rd t5))))
       )
       (require
             (or
@@ -1185,6 +1223,9 @@
 
                   (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
                   (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size32)))
             )
       )
 )
@@ -3302,7 +3343,6 @@
 (rule (sshr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Sshr) amt x size))
 
 ;; Helpers for generating `rotr` instructions.
-
 (decl a64_rotr (Type Reg Reg) Reg)
 (rule (a64_rotr ty x y) (alu_rrr (ALUOp.RotR) ty x y))
 

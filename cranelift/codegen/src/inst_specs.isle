@@ -152,6 +152,9 @@
 (spec (iconst arg)
     (provide (= arg (zero_ext 64 result))))
 (instantiate iconst
+    ((args (bv 64)) (ret (bv 8)))
+    ((args (bv 64)) (ret (bv 16)))
+    ((args (bv 64)) (ret (bv 32)))
     ((args (bv 64)) (ret (bv 64)))
 )
 
@@ -182,6 +185,14 @@
 (spec (bnot x)
     (provide (= result (bvnot x))))
 (instantiate bnot bv_unary_8_to_64)
+
+(spec (rotl x y)
+    (provide (= result (rotl x y))))
+(instantiate rotl bv_binary_8_to_64)
+
+(spec (rotr x y)
+    (provide (= result (rotr x y))))
+(instantiate rotr bv_binary_8_to_64)
 
 (spec (bitselect c x y)
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
