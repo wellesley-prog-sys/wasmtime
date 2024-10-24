@@ -244,17 +244,19 @@ impl<'a> Solver<'a> {
             Expr::BVLShr(x, y) => Ok(self.smt.bvlshr(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVAShr(x, y) => Ok(self.smt.bvashr(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVRotl(x, y) => {
-                let source_width = self.assignment.try_bit_vector_width(x).context(
-                    "target of width_of expression should be a bit-vector of known width",
-                )?;
+                let source_width = self
+                    .assignment
+                    .try_bit_vector_width(x)
+                    .context("target of Rotl expression should be a bit-vector of known width")?;
                 let xs = self.expr_atom(x);
                 let ys = self.expr_atom(y);
                 Ok(self.encode_rotate("rotate_left", xs, ys, source_width))
             }
             Expr::BVRotr(x, y) => {
-                let source_width = self.assignment.try_bit_vector_width(x).context(
-                    "target of width_of expression should be a bit-vector of known width",
-                )?;
+                let source_width = self
+                    .assignment
+                    .try_bit_vector_width(x)
+                    .context("target of Rotr expression should be a bit-vector of known width")?;
                 let xs = self.expr_atom(x);
                 let ys = self.expr_atom(y);
                 Ok(self.encode_rotate("rotate_right", xs, ys, source_width))
