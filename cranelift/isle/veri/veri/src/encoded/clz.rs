@@ -17,7 +17,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         ret0,
         smt.list(vec![
             smt.atoms().und,
@@ -50,11 +50,11 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         y32,
         smt.bvlshr(x, smt.atom("#x0000000000000020")),
     ));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -81,7 +81,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -122,14 +122,14 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt.eq(
             y16,
             smt
                 .bvlshr(x32, smt.atom("#x0000000000000010")),
         ),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -156,7 +156,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -197,14 +197,14 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt.eq(
             y8,
             smt
                 .bvlshr(x16, smt.atom("#x0000000000000008")),
         ),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -231,7 +231,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -272,11 +272,11 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         y4,
         smt.bvlshr(x8, smt.atom("#x0000000000000004")),
     ));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -303,7 +303,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -344,11 +344,11 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         y2,
         smt.bvlshr(x4, smt.atom("#x0000000000000002")),
     ));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -375,7 +375,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -416,11 +416,11 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         y1,
         smt.bvlshr(x2, smt.atom("#x0000000000000001")),
     ));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -447,7 +447,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -473,7 +473,7 @@ pub fn clz64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -517,7 +517,7 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         ret0,
         smt.list(vec![
             smt.atoms().und,
@@ -550,11 +550,11 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y16, smt.bvlshr(x, smt.atom("#x00000010"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -581,7 +581,7 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -622,11 +622,11 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y8, smt.bvlshr(x16, smt.atom("#x00000008"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -653,7 +653,7 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -694,11 +694,11 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y4, smt.bvlshr(x8, smt.atom("#x00000004"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -725,7 +725,7 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -766,11 +766,11 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y2, smt.bvlshr(x4, smt.atom("#x00000002"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -797,7 +797,7 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -838,11 +838,11 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y1, smt.bvlshr(x2, smt.atom("#x00000001"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -869,7 +869,7 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -895,7 +895,7 @@ pub fn clz32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -938,7 +938,7 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         ret1,
         smt.list(vec![
             smt.atoms().und,
@@ -971,11 +971,11 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y8, smt.bvlshr(x, smt.atom("#x0008"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1002,7 +1002,7 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1043,11 +1043,11 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y4, smt.bvlshr(x8, smt.atom("#x0004"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1074,7 +1074,7 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1115,11 +1115,11 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y2, smt.bvlshr(x4, smt.atom("#x0002"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1146,7 +1146,7 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1187,11 +1187,11 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y1, smt.bvlshr(x2, smt.atom("#x0001"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1218,7 +1218,7 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1244,7 +1244,7 @@ pub fn clz16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1288,7 +1288,7 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         ret0,
         smt.list(vec![
             smt.atoms().und,
@@ -1321,11 +1321,11 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y4, smt.bvlshr(x, smt.atom("#x04"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1352,7 +1352,7 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1393,11 +1393,11 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y2, smt.bvlshr(x4, smt.atom("#x02"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1424,7 +1424,7 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1465,11 +1465,11 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(y1, smt.bvlshr(x2, smt.atom("#x01"))),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1496,7 +1496,7 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             ]),
         ),
     ]));
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1521,7 +1521,7 @@ pub fn clz8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(smt.list(vec![
+    let _ = smt.assert(smt.list(vec![
         smt.atom("ite"),
         smt.list(vec![
             smt.atom("not"),
@@ -1564,7 +1564,7 @@ pub fn clz1(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(1),
         ]),
     );
-    smt.assert(
+    let _ = smt.assert(
         smt
             .eq(clz1ret, smt.list(vec![smt.atom("bvnot"), x])),
     );

@@ -231,8 +231,8 @@ impl ExprKind {
                 SpecOp::BVNeg => unary_expr!(ExprKind::BVNeg, args, pos),
                 SpecOp::Cls => unary_expr!(ExprKind::Cls, args, pos),
                 SpecOp::Popcnt => unary_expr!(ExprKind::Popcnt, args, pos),
-                SpecOp::Rev => todo!(),
-                SpecOp::Clz => todo!(),
+                SpecOp::Rev => unary_expr!(ExprKind::Rev, args, pos),
+                SpecOp::Clz => unary_expr!(ExprKind::Clz, args, pos),
 
                 // Variadic binops
                 SpecOp::And => variadic_binary_expr!(ExprKind::And, args, pos),

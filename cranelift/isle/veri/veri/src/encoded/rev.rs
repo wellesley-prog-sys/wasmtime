@@ -15,7 +15,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x1,
         smt.bvor(
             smt.bvlshr(x, smt.atom("#x0000000000000020")),
@@ -30,7 +30,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x2,
         smt.bvor(
             smt.bvlshr(
@@ -51,7 +51,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x3,
         smt.bvor(
             smt.bvlshr(
@@ -72,7 +72,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x4,
         smt.bvor(
             smt.bvlshr(
@@ -93,7 +93,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x5,
         smt.bvor(
             smt.bvlshr(
@@ -114,7 +114,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(64),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         rev64ret,
         smt.bvor(
             smt.bvlshr(
@@ -143,7 +143,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x1,
         smt.bvor(
             smt.bvlshr(x, smt.atom("#x00000010")),
@@ -158,7 +158,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x2,
         smt.bvor(
             smt.bvlshr(
@@ -179,7 +179,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x3,
         smt.bvor(
             smt.bvlshr(
@@ -200,7 +200,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x4,
         smt.bvor(
             smt.bvlshr(
@@ -221,7 +221,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(32),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         rev32ret,
         smt.bvor(
             smt.bvlshr(
@@ -250,7 +250,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x1,
         smt.bvor(
             smt.bvlshr(x, smt.atom("#x0008")),
@@ -265,7 +265,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x2,
         smt.bvor(
             smt.bvlshr(
@@ -286,7 +286,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x3,
         smt.bvor(
             smt.bvlshr(
@@ -307,7 +307,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(16),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         rev16ret,
         smt.bvor(
             smt.bvlshr(
@@ -321,8 +321,9 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
         ),
     ));
 
-    let padding = smt.new_fresh_bits(smt.bitwidth - 16);
-    smt.concat(padding, rev16ret)
+    // let padding = smt.new_fresh_bits(smt.bitwidth - 16);
+    // smt.concat(padding, rev16ret)
+    rev16ret
 }
 
 pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
@@ -337,7 +338,7 @@ pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x1,
         smt.bvor(
             smt.bvlshr(x, smt.atom("#x04")),
@@ -352,7 +353,7 @@ pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         x2,
         smt.bvor(
             smt.bvlshr(
@@ -373,7 +374,7 @@ pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(8),
         ]),
     );
-    smt.assert(smt.eq(
+    let _ = smt.assert(smt.eq(
         rev8ret,
         smt.bvor(
             smt.bvlshr(
@@ -387,8 +388,9 @@ pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
         ),
     ));
 
-    let padding = smt.new_fresh_bits(smt.bitwidth - 8);
-    smt.concat(padding, rev8ret)
+    // let padding = smt.new_fresh_bits(smt.bitwidth - 8);
+    // smt.concat(padding, rev8ret)
+    rev8ret
 }
 
 pub fn rev1(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
@@ -403,9 +405,10 @@ pub fn rev1(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
             smt.numeral(1),
         ]),
     );
-    smt.assert(smt.eq(rev1ret, x));
+    let _ = smt.assert(smt.eq(rev1ret, x));
 
-    let padding = smt.new_fresh_bits(smt.bitwidth - 1);
-    smt.concat(padding, rev1ret)
+    // let padding = smt.new_fresh_bits(smt.bitwidth - 1);
+    // smt.concat(padding, rev1ret)
+    rev1ret
 }
 
