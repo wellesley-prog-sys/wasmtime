@@ -249,7 +249,7 @@ impl<'a> Solver<'a> {
                     .try_bit_vector_width(x)
                     .context("cls semantics require known width")?;
                 let xe = self.expr_atom(x);
-                let id = x.index();
+                let id: usize = x.index();
                 match width {
                     1 => Ok(rev1(&mut self.smt, xe, id)),
                     8 => Ok(rev8(&mut self.smt, xe, id)),
