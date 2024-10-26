@@ -45,6 +45,11 @@ impl std::fmt::Display for Verification {
     }
 }
 
+pub enum RotationDirection {
+    Left,
+    Right,
+}
+
 static UNSPECIFIED_SORT: &str = "Unspecified";
 static UNIT_SORT: &str = "Unit";
 
@@ -244,22 +249,22 @@ impl<'a> Solver<'a> {
             Expr::BVLShr(x, y) => Ok(self.smt.bvlshr(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVAShr(x, y) => Ok(self.smt.bvashr(self.expr_atom(x), self.expr_atom(y))),
             Expr::BVRotl(x, y) => {
-                let source_width = self
+                let width = self
                     .assignment
                     .try_bit_vector_width(x)
-                    .context("target of Rotl expression should be a bit-vector of known width")?;
+                    .context("target of rotl expression should be a bit-vector of known width")?;
                 let xs = self.expr_atom(x);
                 let ys = self.expr_atom(y);
-                Ok(self.encode_rotate("rotate_left", xs, ys, source_width))
+                Ok(self.encode_rotate(RotationDirection::Left, xs, ys, width))
             }
             Expr::BVRotr(x, y) => {
-                let source_width = self
+                let width = self
                     .assignment
                     .try_bit_vector_width(x)
-                    .context("target of Rotr expression should be a bit-vector of known width")?;
+                    .context("target of rotr expression should be a bit-vector of known width")?;
                 let xs = self.expr_atom(x);
                 let ys = self.expr_atom(y);
-                Ok(self.encode_rotate("rotate_right", xs, ys, source_width))
+                Ok(self.encode_rotate(RotationDirection::Right, xs, ys, width))
             }
             Expr::Conditional(c, t, e) => {
                 Ok(self
@@ -540,38 +545,28 @@ impl<'a> Solver<'a> {
         Ok(self.smt.atom(name))
     }
 
-    /// Construct a constant bit-vector value of the given width. (This is used so pervasively that
-    /// perhaps we should submit it for inclusion in the easy_smt library...)
-    fn bv(&self, value: i128, width: usize) -> SExpr {
-        if value < 0 {
-            return self
-                .smt
-                .list(vec![self.smt.atom("bvneg"), self.bv(-value, width)]);
-        }
-        self.smt.list(vec![
-            self.smt.atoms().und,
-            self.smt.atom(format!("bv{}", value)),
-            self.smt.numeral(width),
-        ])
-    }
-
-    fn encode_rotate(&self, op: &str, source: SExpr, amount: SExpr, width: usize) -> SExpr {
+    fn encode_rotate(
+        &self,
+        op: RotationDirection,
+        source: SExpr,
+        amount: SExpr,
+        width: usize,
+    ) -> SExpr {
         // SMT bitvector rotate_left requires that the rotate amount be
         // statically specified. Instead, to use a dynamic amount, desugar
         // to shifts and bit arithmetic.
-        let width_as_bv = self.bv(width.try_into().unwrap(), width);
+        let width_as_bv = self.smt.binary(width.try_into().unwrap(), width);
         let wrapped_amount = self.smt.bvurem(amount, width_as_bv);
         let wrapped_delta = self.smt.bvsub(width_as_bv, wrapped_amount);
         match op {
-            "rotate_left" => self.smt.bvor(
+            RotationDirection::Left => self.smt.bvor(
                 self.smt.bvshl(source, wrapped_amount),
                 self.smt.bvlshr(source, wrapped_delta),
             ),
-            "rotate_right" => self.smt.bvor(
+            RotationDirection::Right => self.smt.bvor(
                 self.smt.bvshl(source, wrapped_delta),
                 self.smt.bvlshr(source, wrapped_amount),
             ),
-            _ => unreachable!(),
         }
     }
 }
