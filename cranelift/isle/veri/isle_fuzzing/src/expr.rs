@@ -1,6 +1,6 @@
 use cranelift_isle as isle;
 use isle::ast::*;
-use isle::sema::{Pattern, TermEnv, TypeEnv, VarId};
+use isle::sema::{Pattern, TermEnv, TypeEnv, VarId, TermKind, ConstructorKind, ExtractorKind, Sym};
 use std::path::Path;
 use crate::isle::ast;
 use isle::lexer::Pos;
@@ -8,6 +8,8 @@ use isle::compile::create_envs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use rand::Rng;
+// use isle::ast::Ident as OtherIdent;
+
 
 /*
 Creating the Enums and Structs
@@ -44,13 +46,61 @@ Notes: Helper function to turn Idents to a String type
 pub fn ident_string(varname: Ident) -> String {
     format!("{}", varname.0)
 }
+
+
+fn process_non_inst_term(
+    // will take in the name from convert pattern
+    term_name: &ast::Ident,
+    termenv: &TermEnv,
+    typeenv: &TypeEnv,
+    constructors: &mut Vec<String>,   // ExternalConstructor list
+    extractors: &mut Vec<String>      // ExternalExtractor list
+) {
+    // println!("{:?}", term_name.0);
+    // Find the equivalent sema term
+    if let Some(term_id) = termenv.get_term_by_name(typeenv, term_name) {
+        // Use term_id to access the whole term from termenv
+        if let Some(term) = termenv.terms.get(term_id.index()) {
+            match &term.kind { //term as two kinds
+                TermKind::Decl { .. } => {
+                    if term.has_external_constructor() {
+                        constructors.push(term_name.0.clone());
+                        if let Some(sig) = term.constructor_sig(typeenv) {
+                            println!("Constructor: {}\n", sig.full_name);
+                        }
+                    }
+                    if term.has_external_extractor() {
+                        extractors.push(term_name.0.clone());
+                        if let Some(sig) = term.extractor_sig(typeenv) {
+                            println!("Extractor: {}\n", sig.full_name);
+                        }
+                    }
+                }
+                TermKind::EnumVariant { .. } => {
+                    println!("Term is an enum variant: {:?}\n", term_name.0);
+                }
+            }
+        } else {
+            println!("No term found for term_id: {:?}\n", term_id);
+        }
+    } else {
+        println!("No term found for name: {:?}\n", term_name.0);
+    }
+}
+
 /*
 Function convert_pattern
 Arguments, pattern, typeEnv
 Returns Expr
 Notes: Compares each pattern against the instruction list, labels it to Inst, NotAnInst, Var or Int and creates an Expression (as defined in the Struct Above)
 */
-fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
+fn convert_pattern(
+    pattern: &ast::Pattern, 
+    typeenv: &TypeEnv,     
+    termenv: &TermEnv,
+    constructors: &mut Vec<String>,
+    extractors: &mut Vec<String>
+) -> Expr {
     match pattern {
         ast::Pattern::Var { var, .. } => {
             let name = var.0.clone();
@@ -58,7 +108,7 @@ fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
         }, 
         ast::Pattern::ConstInt { val, .. } => Expr::Int(*val),
         ast::Pattern::Term { sym, args, .. } => {
-            let converted_args = args.iter().map(|a| convert_pattern(a, typeenv)).collect();
+            let converted_args = args.iter().map(|a| convert_pattern(a, typeenv, termenv, constructors, extractors)).collect();
             let instr = lines_from_file("instructions.txt");
             let name = sym.0.clone();
             let is_inst_in_list = instr.contains(&name);
@@ -70,6 +120,7 @@ fn convert_pattern(pattern: &ast::Pattern, typeenv: &TypeEnv) -> Expr {
                     }
                 )
             } else {
+                process_non_inst_term(sym, termenv, typeenv, constructors, extractors);
                 let not_an_inst_expr = NotAnInst {
                     name: Ident(sym.0.clone(), Pos::default()),
                     args: converted_args,
@@ -105,7 +156,11 @@ Arguments: filename
 Returns Vector of Expr
 Notes: Parses isle file into the rule, Uses convert_pattern to create a vector of expressions
 */
-fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
+fn convert_rules(
+    filename: impl AsRef<Path>,
+    constructors: &mut Vec<String>,
+    extractors: &mut Vec<String>
+) -> Vec<Expr>{
     let lexer = isle::lexer::Lexer::from_files([&filename]).unwrap();
     let defs = isle::parser::parse(lexer).expect("should parse");
     let (typeenv, termenv) = create_envs(&defs).unwrap();
@@ -119,7 +174,7 @@ fn convert_rules(filename: impl AsRef<Path>) -> Vec<Expr>{
     }).cloned().collect();
     let mut list_Expr = Vec::new();
     for r in &rules{
-        list_Expr.push(convert_pattern(&r.pattern,&typeenv));
+        list_Expr.push(convert_pattern(&r.pattern,&typeenv, &termenv, constructors, extractors));
     }
     return list_Expr;
 }
@@ -242,7 +297,21 @@ Notes: Takes in the tuple and formats it to a string containing the clif file.
 
 fn main() {
     let littledots = vec![".i8",".i16", ".i32", ".i64"];
-    let list_Expr: Vec<Expr> = convert_rules("amod_unextended.isle");
+
+    let mut constructors: Vec<String> = Vec::new();  // List to store ExternalConstructor terms
+    let mut extractors: Vec<String> = Vec::new();    // List to store ExternalExtractor terms
+
+    // println!("Constructors:");
+    // for constructor in &constructors {
+    //     println!("{}", constructor);
+    // }
+
+    // println!("\nExtractors:");
+    // for extractor in &extractors {
+    //     println!("{}", extractor);
+    // }
+
+    let list_Expr: Vec<Expr> = convert_rules("amod_unextended.isle", &mut constructors, &mut extractors);
     let mut result: Vec<(String, String)> = Vec::new();
     let mut variables: Vec<String> = Vec::new();
     let mut rng = rand::thread_rng();
