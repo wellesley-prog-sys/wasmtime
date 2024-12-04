@@ -142,6 +142,8 @@ pub fn get_isle_compilations(
                 ],
                 untracked_inputs: vec![clif_opt_isle],
                 rule_trace: false,
+                // "lower" -- replace
+                // new root term is "simplify"
             },
             // The x86-64 instruction selector.
             IsleCompilation {
