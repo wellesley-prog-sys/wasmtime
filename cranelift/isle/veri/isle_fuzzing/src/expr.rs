@@ -1,6 +1,7 @@
 use cranelift_isle as isle;
 use isle::ast::*;
-use isle::sema::{Pattern, TermEnv, TypeEnv, VarId, TermKind, ConstructorKind, ExtractorKind, Sym};
+use isle::sema::{Pattern, TermEnv, TypeEnv, VarId, TermKind, ConstructorKind, ExtractorKind, Sym,IfLet};
+use isle::ast::Expr as semaExpr;
 use std::path::Path;
 use crate::isle::ast;
 use isle::lexer::Pos;
@@ -8,8 +9,6 @@ use isle::compile::create_envs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use rand::Rng;
-// use isle::ast::Ident as OtherIdent;
-
 
 /*
 Creating the Enums and Structs
@@ -56,7 +55,7 @@ fn process_non_inst_term(
     constructors: &mut Vec<String>,   // ExternalConstructor list
     extractors: &mut Vec<String>      // ExternalExtractor list
 ) {
-    // println!("{:?}", term_name.0);
+    println!("{:?}", term_name.0);
     // Find the equivalent sema term
     if let Some(term_id) = termenv.get_term_by_name(typeenv, term_name) {
         // Use term_id to access the whole term from termenv
@@ -88,6 +87,36 @@ fn process_non_inst_term(
     }
 }
 
+fn match_inst_or_non_inst(
+    sym: &ast::Ident,
+    args: Vec<Expr>,
+    termenv: &TermEnv,
+    typeenv: &TypeEnv,     
+    constructors: &mut Vec<String>,
+    extractors: &mut Vec<String>
+) -> Option<Expr>{
+    let instr = lines_from_file("instructions.txt");
+    let name = sym.0.clone();
+
+    if instr.contains(&name) {
+        Some(Expr::Inst(
+            Inst {
+                name: Ident(sym.0.clone(), Pos::default()),
+                args,
+            }
+        ))
+    } else {
+        process_non_inst_term(sym, termenv, typeenv, constructors, extractors);
+        let not_an_inst_expr = NotAnInst {
+            name: Ident(sym.0.clone(), Pos::default()),
+            args,
+        };
+        Some(Expr::NotAnInst(not_an_inst_expr.args))
+        
+    }
+}
+
+
 /*
 Function convert_pattern
 Arguments, pattern, typeEnv
@@ -100,39 +129,96 @@ fn convert_pattern(
     termenv: &TermEnv,
     constructors: &mut Vec<String>,
     extractors: &mut Vec<String>
-) -> Expr {
+) -> Option<Expr> {
     match pattern {
         ast::Pattern::Var { var, .. } => {
             let name = var.0.clone();
-            Expr::Var(name)
+            println!("I see Var: {}", name);
+            Some(Expr::Var(name))
         }, 
-        ast::Pattern::ConstInt { val, .. } => Expr::Int(*val),
+        ast::Pattern::ConstInt { val, .. } => {
+            println!("I see ConstInt: {}", val);
+            Some(Expr::Int(*val))
+        },
         ast::Pattern::Term { sym, args, .. } => {
-            let converted_args = args.iter().map(|a| convert_pattern(a, typeenv, termenv, constructors, extractors)).collect();
-            let instr = lines_from_file("instructions.txt");
-            let name = sym.0.clone();
-            let is_inst_in_list = instr.contains(&name);
-            if is_inst_in_list {
-                Expr::Inst(
-                    Inst {
-                        name: Ident(sym.0.clone(), Pos::default()),
-                        args: converted_args,
-                    }
-                )
-            } else {
-                process_non_inst_term(sym, termenv, typeenv, constructors, extractors);
-                let not_an_inst_expr = NotAnInst {
-                    name: Ident(sym.0.clone(), Pos::default()),
-                    args: converted_args,
-                };
-                Expr::NotAnInst(not_an_inst_expr.args)
-            }
+            println!("I see Term: {}", sym.0);
+            let converted_args: Vec<Option<Expr>> = args.iter().map(|a| convert_pattern(a, typeenv, termenv, constructors, extractors)).collect();
+            let converted_args: Vec<Expr> = converted_args.into_iter().flatten().collect();
+            match_inst_or_non_inst(sym, converted_args,termenv,typeenv,constructors,extractors)
         }
-        ast::Pattern::Wildcard { .. } => todo!(), 
-        ast::Pattern::BindPattern {..} => todo!(),
+        // wildcard was not very specified in sema to begin with
+        ast::Pattern::Wildcard { .. } => {
+            println!("I see Wildcard");
+            None
+        }, 
+        // 11.20: recurr on box<pattern> for bindpattern; read box in rust box, deref the pat of box patten
+        // ast::Pattern::BindPattern {var,subpat,..} => {            
+            // 11.20: match inst and non_inst, call helpfer function, see above => expecting non_inst that is external extractor or const
+            // let converted_arg = convert_pattern(&*subpat, typeenv, termenv, constructors, extractors)?;
+            // match_inst_or_non_inst(var, vec![converted_arg], termenv, typeenv, constructors, extractors)
+        ast::Pattern::BindPattern { var, subpat, .. } => {
+            println!("Recursing on BindPattern with var: {:?} and subpat: {:?}", var.0, subpat);
+            let converted_arg = convert_pattern(&*subpat, typeenv, termenv, constructors, extractors)?;
+            match_inst_or_non_inst(var, vec![converted_arg], termenv, typeenv, constructors, extractors)
+        
+
+            // 11.20: future, we wanna call the extractor as rust function; before that we need to figureout what args it need
+            // 11.20: (More reading/open ended): start finding how to generate Rust, given a name. Likely within cranelift/isle/isle/src/codegen.rs
+        },
         _ => todo!(), 
     }
 }
+
+
+// 12.4 TODO: convert_expr should look very similar to convert pattern, convert sema.rs expr into our own expr
+// 12.4 TODO: 2 cases, one for convert pattern (pattern -> our expr), one for convert expr (sema expr -> our expr); put the rest
+//              into helpfer function and call after convert_expr/convert_pattern
+fn convert_expr(
+    expr: &semaExpr,
+    typeenv: &TypeEnv,
+    termenv: &TermEnv,
+    constructors: &mut Vec<String>,
+    extractors: &mut Vec<String>,
+) -> Option<Expr> {
+    match expr {
+        semaExpr::Term{sym, args,..} => {
+            // convert each arg recursively.
+            let converted_args: Vec<Expr> = args.iter()
+                .filter_map(|a| convert_expr(a, typeenv, termenv, constructors, extractors))
+                .collect();
+                match_inst_or_non_inst(sym, converted_args, termenv, typeenv, constructors, extractors)
+
+        }
+
+        semaExpr::Var{name,..} => {
+
+            Some(Expr::Var(name.0.clone()))
+        }
+
+        semaExpr::ConstInt{val,..} => {
+            println!("convert_expr: I see ConstInt: {}", val);
+            Some(Expr::Int(*val))
+        }
+
+
+        semaExpr::ConstPrim{val, ..} => {
+            Some(Expr::Var(val.0.clone()))
+        }
+
+        semaExpr::Let { defs, body,..} => {
+            println!("convert_expr: I see Let");
+            let mut exprs = Vec::new();
+            // convert body
+            if let Some(converted_body) = convert_expr(body, typeenv, termenv, constructors, extractors) {
+                exprs.push(converted_body);
+            }
+
+            Some(Expr::NotAnInst(exprs))
+        }
+    }
+}
+
+
 
 /*
 Function lines_from_file
@@ -149,6 +235,9 @@ fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
         .map(|l| l.expect("Could not parse line"))
         .collect()
 }
+
+
+
 
 /*
 Function convert_rules
@@ -174,10 +263,50 @@ fn convert_rules(
     }).cloned().collect();
     let mut list_Expr = Vec::new();
     for r in &rules{
-        list_Expr.push(convert_pattern(&r.pattern,&typeenv, &termenv, constructors, extractors));
+        if let Some(expr) = convert_pattern(&r.pattern,&typeenv, &termenv, constructors, extractors) {
+            list_Expr.push(expr);
+        }
+        
+        // 10.30 TODO
+        // for loop over the iflets
+        // find iflet for each r and call convert pattern like L177 recursive
+        // for each iflet in r.iflet, convert the LHS of it (property of iflet)
+
+        // for iflet in &r.iflets{
+        //     println!("iflet: {:?}", iflet.pattern); // pattern is for lhs
+        //     if let Some(expr) = convert_pattern(&iflet.pattern,&typeenv, &termenv, constructors, extractors) {
+        //         list_Expr.push(expr);
+        //     }
+        // }
+
+        // 12.4 TODO: convert sema.rs Expr into our expr
+
+        for iflet in &r.iflets {
+            println!("I see iflet: {:?}", iflet.pattern);
+
+            // Recurse on the `iflet` LHS pattern
+            if let Some(expr) = convert_pattern(&iflet.pattern, &typeenv, &termenv, constructors, extractors) {
+                println!("Processed iflet pattern to expr LHS: {:?}", expr);
+                list_Expr.push(expr);
+            }
+
+            // RHS
+            // 12.4 TODO: convert_expr should look very similar to convert pattern, convert sema.rs expr into our own expr
+            // 12.4 TODO: 2 cases, one for convert pattern (pattern -> our expr), one for convert expr (sema expr -> our expr); put the rest
+            //              into helpfer function and call after convert_expr/convert_pattern
+            if let Some(expr) = convert_expr(&iflet.expr, &typeenv, &termenv, constructors, extractors) {   // 12.4 TODO: convert expr to get RHS iflet
+                println!("Processed iflet pattern to expr RHS: {:?}", expr);
+                list_Expr.push(expr);
+            }
+            // 12.4 TODO: once this works, see how to call rust function w/ the same name & only compile if match rule constraint
+                            // might want to do this in a separate rust file and call that file in here to generate ->reference codegen.rs
+        }
     }
     return list_Expr;
 }
+
+// 10.30 TODO
+// only want ExtractorKind that is ExternalExtractor -> need filtering
 
 /*
 Function to_clif_list
@@ -295,6 +424,26 @@ Notes: Takes in the tuple and formats it to a string containing the clif file.
     output
 }
 
+/// Filters and prints only the External Extractors
+fn filter_external_extractors(extractors: &Vec<String>) {
+    println!("\nExternal Extractors:");
+    for extractor in extractors {
+        println!("{}", extractor);
+    }
+    println!()
+}
+
+// 12.11 TODO: check if these are actually filtering *external* const and exst; also wrong spelling
+fn filter_external_constructors(constructors: &Vec<String>) {
+    println!("\nExternal Constructors:");   // 12.11 TODO: idk if its actually filtering external 
+    for constructor in constructors {
+        println!("{}", constructor);
+    }
+    println!()
+}
+
+
+
 fn main() {
     let littledots = vec![".i8",".i16", ".i32", ".i64"];
 
@@ -320,6 +469,17 @@ fn main() {
     for element in list_Expr{
         result.extend(to_clif_list(element, &mut count, &mut variables, random_uextend.to_string()));
     }
+    
+    filter_external_extractors(&extractors);
+    // 12.11 TODO: filter external constractors as well, print them, and try calling them as rust functions
+    // 12.11 TODO: look at codegen.rs for call rust func inspiration; or add to extractor list also the # of args that needs to be passed in
+    filter_external_constructors(&constructors);
+
     let mut program = String::new();
     program = format_output(result, variables, random_uextend.to_string());
-    }
+}
+
+
+
+// final goal for generation:   (if (u32_lteq (u8_as_u32 shift) 3)) -> can generate variable that matches this lteq 3 constraint 
+                        //          this is iflet RHS, which 12.4 us is not handling rn
