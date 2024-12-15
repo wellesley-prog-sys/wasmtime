@@ -1,3 +1,4 @@
+use cranelift_isle::trie_again::RuleSet;
 use cranelift_isle as isle;
 use isle::ast::*;
 use isle::sema::{Pattern, TermEnv, TypeEnv, VarId, TermKind, ConstructorKind, ExtractorKind, Sym,IfLet};
@@ -9,6 +10,10 @@ use isle::compile::create_envs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use rand::Rng;
+use isle::codegen::*;
+// use isle::serialize::{RuleSet, Rule, Binding};
+
+
 
 /*
 Creating the Enums and Structs
@@ -170,8 +175,8 @@ fn convert_pattern(
 }
 
 
-// 12.4 TODO: convert_expr should look very similar to convert pattern, convert sema.rs expr into our own expr
-// 12.4 TODO: 2 cases, one for convert pattern (pattern -> our expr), one for convert expr (sema expr -> our expr); put the rest
+// 12.4: convert_expr should look very similar to convert pattern, convert sema.rs expr into our own expr
+// 12.4: 2 cases, one for convert pattern (pattern -> our expr), one for convert expr (sema expr -> our expr); put the rest
 //              into helpfer function and call after convert_expr/convert_pattern
 fn convert_expr(
     expr: &semaExpr,
@@ -249,7 +254,7 @@ fn convert_rules(
     filename: impl AsRef<Path>,
     constructors: &mut Vec<String>,
     extractors: &mut Vec<String>
-) -> Vec<Expr>{
+) -> (Vec<Expr>,TypeEnv,TermEnv){
     let lexer = isle::lexer::Lexer::from_files([&filename]).unwrap();
     let defs = isle::parser::parse(lexer).expect("should parse");
     let (typeenv, termenv) = create_envs(&defs).unwrap();
@@ -267,20 +272,9 @@ fn convert_rules(
             list_Expr.push(expr);
         }
         
-        // 10.30 TODO
         // for loop over the iflets
-        // find iflet for each r and call convert pattern like L177 recursive
-        // for each iflet in r.iflet, convert the LHS of it (property of iflet)
-
-        // for iflet in &r.iflets{
-        //     println!("iflet: {:?}", iflet.pattern); // pattern is for lhs
-        //     if let Some(expr) = convert_pattern(&iflet.pattern,&typeenv, &termenv, constructors, extractors) {
-        //         list_Expr.push(expr);
-        //     }
-        // }
-
-        // 12.4 TODO: convert sema.rs Expr into our expr
-
+        // find iflet for each r and call convert pattern recursive
+        // for each iflet in r.iflet, convert the LHS and RHS of it (property of iflet)
         for iflet in &r.iflets {
             println!("I see iflet: {:?}", iflet.pattern);
 
@@ -291,8 +285,8 @@ fn convert_rules(
             }
 
             // RHS
-            // 12.4 TODO: convert_expr should look very similar to convert pattern, convert sema.rs expr into our own expr
-            // 12.4 TODO: 2 cases, one for convert pattern (pattern -> our expr), one for convert expr (sema expr -> our expr); put the rest
+            // 12.4: convert_expr should look very similar to convert pattern, convert sema.rs expr into our own expr
+            // 12.4: 2 cases, one for convert pattern (pattern -> our expr), one for convert expr (sema expr -> our expr); put the rest
             //              into helpfer function and call after convert_expr/convert_pattern
             if let Some(expr) = convert_expr(&iflet.expr, &typeenv, &termenv, constructors, extractors) {   // 12.4 TODO: convert expr to get RHS iflet
                 println!("Processed iflet pattern to expr RHS: {:?}", expr);
@@ -302,11 +296,9 @@ fn convert_rules(
                             // might want to do this in a separate rust file and call that file in here to generate ->reference codegen.rs
         }
     }
-    return list_Expr;
+    return (list_Expr,typeenv,termenv);
 }
 
-// 10.30 TODO
-// only want ExtractorKind that is ExternalExtractor -> need filtering
 
 /*
 Function to_clif_list
@@ -424,7 +416,7 @@ Notes: Takes in the tuple and formats it to a string containing the clif file.
     output
 }
 
-/// Filters and prints only the External Extractors
+// Filters and prints only the External Extractors
 fn filter_external_extractors(extractors: &Vec<String>) {
     println!("\nExternal Extractors:");
     for extractor in extractors {
@@ -433,15 +425,30 @@ fn filter_external_extractors(extractors: &Vec<String>) {
     println!()
 }
 
-// 12.11 TODO: check if these are actually filtering *external* const and exst; also wrong spelling
+// 12.11: check if these are actually filtering *external* const and exst; also wrong spelling
+// Filters and prints only the External Constructors
+// already filtered to external because used 'has_external_constructor' when making the constructors list
 fn filter_external_constructors(constructors: &Vec<String>) {
-    println!("\nExternal Constructors:");   // 12.11 TODO: idk if its actually filtering external 
+    println!("\nExternal Constructors:");
     for constructor in constructors {
         println!("{}", constructor);
     }
     println!()
 }
 
+// fn generate_rust(&self, options: &CodegenOptions) -> String {
+//     let mut code = String::new();
+
+//     self.generate_header(&mut code, options);
+//     self.generate_ctx_trait(&mut code);
+//     self.generate_internal_types(&mut code);
+//     self.generate_internal_term_constructors(&mut code).unwrap();
+
+//     code
+// }
+// fn generate_rust_attempt(typeenv: &TypeEnv, termenv: &TermEnv, terms,options)->String{
+//     return isle::codegen::codegen(typeenv, termenv, terms, options);
+// }
 
 
 fn main() {
@@ -449,18 +456,13 @@ fn main() {
 
     let mut constructors: Vec<String> = Vec::new();  // List to store ExternalConstructor terms
     let mut extractors: Vec<String> = Vec::new();    // List to store ExternalExtractor terms
+    
+    let convert_rules_result = convert_rules("amod_unextended.isle", &mut constructors, &mut extractors);
 
-    // println!("Constructors:");
-    // for constructor in &constructors {
-    //     println!("{}", constructor);
-    // }
+    let list_Expr: Vec<Expr> = convert_rules_result.0;
+    let typeenv: TypeEnv = convert_rules_result.1;
+    let termenv : TermEnv = convert_rules_result.2;
 
-    // println!("\nExtractors:");
-    // for extractor in &extractors {
-    //     println!("{}", extractor);
-    // }
-
-    let list_Expr: Vec<Expr> = convert_rules("amod_unextended.isle", &mut constructors, &mut extractors);
     let mut result: Vec<(String, String)> = Vec::new();
     let mut variables: Vec<String> = Vec::new();
     let mut rng = rand::thread_rng();
@@ -477,6 +479,26 @@ fn main() {
 
     let mut program = String::new();
     program = format_output(result, variables, random_uextend.to_string());
+
+
+    // 12.15 code gen attempts
+
+    // let amode_add_sym = ast::Ident("amode_add".to_string(), Pos::default()); 
+    // // loopup amode_add in termenv to try hard coding term ID
+    // let amode_add_term_id = termenv
+    //     .get_term_by_name(&typeenv, &amode_add_sym);
+    // println!("{:?}",amode_add_term_id); // term id of amode_add is 9
+
+    // !!!HOW DO I GET RULESET
+
+    // let amode_add_ruleset = build_ruleset_for_term(amode_add_term_id, &defs, &typeenv, &termenv);
+
+    // let terms: Vec<(TermId, RuleSet)> = vec![
+    //     (amode_add_term_id, amode_add_ruleset)
+    // ];
+
+    // let options = CodegenOptions { exclude_global_allow_pragmas: false };
+    // let mut generated = generate_rust_attempt(&typeenv, &termenv, &terms, &options);
 }
 
 
