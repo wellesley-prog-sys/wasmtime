@@ -1,4 +1,4 @@
-# Wellesley Programming System Lab and CS 340 Final Project: Creating a Fuzzer to randomly generate clif code from isle rules and run through Cranelift compiler
+# Wellesley Programming System Lab: Creating a Fuzzer to randomly generate clif code from isle rules and run through Cranelift compiler
 
 Written by Becky Chen and Annette Chau
 
@@ -18,7 +18,7 @@ Written by Becky Chen and Annette Chau
 
 ## Extractors in ISLE
 
-We can identify between **internal extractors** and **external extactors**, allowing us to break down terms for more complex pattern matching. Stores External Constructors into constructors list and External Extractors in extractors list. 
+We can identify between **external constructors** and **external extactors**, allowing us to break down terms for more complex pattern matching. Stores External Constructors into constructors list and External Extractors in extractors list. 
 
 ## Functions
 
