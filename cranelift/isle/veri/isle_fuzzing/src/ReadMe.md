@@ -1,6 +1,6 @@
 # Wellesley Programming System Lab and CS 340 Final Project: Creating a Fuzzer to randomly generate clif code from isle rules and run through Cranelift compiler
 
-Written by Annette Chau and Becky Chen
+Written by Becky Chen
 
 ## Code Structure
 
@@ -16,6 +16,10 @@ Written by Annette Chau and Becky Chen
 - **Inst**: Structure representing an instruction with its name and arguments.
 - **NotAnInst**: Structure representing a non-instruction with its name and arguments.
 
+## Extractors in ISLE
+
+We can identify between **internal extractors** and **external extactors**, allowing us to break down terms for more complex pattern matching. Stores External Constructors into constructors list and External Extractors in extractors list. 
+
 ## Functions
 
 - **ident_string**: Helper function to convert an identifier to a string.
@@ -24,6 +28,8 @@ Written by Annette Chau and Becky Chen
 - **convert_rules**: Parses ISLE file into rules and converts them into expressions.
 - **to_clif_list**: Converts expressions to CLIF instructions.
 - **format_output**: Formats the CLIF program output.
+- **process_non_inst_term**: Takes term_name, termenv, typeenv, constructors and extractors, looks to see if in term environment. If TermDecl and has external constructor, adds term name to constructors. If EnumVariant (PRINT MSG??).
+- **match_inst_or_non_inst**: Takes sym, args, termenv, typenev, constructors, extractors. If it is an Instruction, create Expr::Inst. Else, calls **process_non_inst_term** and create Expr::NotAnInst.
 
 ## Usage
 First, install and setup RUST following this link: https://www.rust-lang.org/tools/install. 
@@ -105,8 +111,3 @@ This fuzzer is also not foolproof-- it occasionally generates invalid clif progr
 We want to be able to detect when the program can be lowered successfully. This would be more effective from a fuzzing perspective, to have the output efficiently checked against expected output.
 
 We also want to take in and generate multiple programs at a time, hopefully through more advanced automation.
-
-## Goals and Reflection
-Our goals did not change from our proposal. Quite the opposite, we were able to have a much clearer train of thought after receiving feedback for our proposal. We clarified our goals and tried our best to execute them. 
-
-We have completed most of our reach goals. 
