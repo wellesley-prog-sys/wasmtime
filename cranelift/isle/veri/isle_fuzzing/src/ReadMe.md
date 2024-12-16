@@ -28,7 +28,7 @@ We can identify between **internal extractors** and **external extactors**, allo
 - **convert_rules**: Parses ISLE file into rules and converts them into expressions.
 - **to_clif_list**: Converts expressions to CLIF instructions.
 - **format_output**: Formats the CLIF program output.
-- **process_non_inst_term**: Takes term_name, termenv, typeenv, constructors and extractors, looks to see if in term environment. If TermDecl and has external constructor, adds term name to constructors. If EnumVariant (PRINT MSG??).
+- **process_non_inst_term**: Takes term_name, termenv, typeenv, constructors and extractors, looks to see if in term environment. If TermDecl and has external constructor, adds term name to constructors. Can identify EnumVaian.
 - **match_inst_or_non_inst**: Takes sym, args, termenv, typenev, constructors, extractors. If it is an Instruction, create Expr::Inst. Else, calls **process_non_inst_term** and create Expr::NotAnInst.
 
 ## Usage
@@ -91,7 +91,7 @@ Then, you will see the ISLE-guided, lowered ARM module in the terminal. This res
 
 **Limitation**
 
-Note that this only works for Macs with the ARM Chips (M1, M2, M3 or M4).
+Only tested with Amode Add (files)
 
 ## General Problem
 
