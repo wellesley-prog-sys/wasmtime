@@ -30,6 +30,9 @@ We can identify between **external constructors** and **external extactors**, al
 - **format_output**: Formats the CLIF program output.
 - **process_non_inst_term**: Takes term_name, termenv, typeenv, constructors and extractors, looks to see if in term environment. If TermDecl and has external constructor, adds term name to constructors. Can identify EnumVaian.
 - **match_inst_or_non_inst**: Takes sym, args, termenv, typenev, constructors, extractors. If it is an Instruction, create Expr::Inst. Else, calls **process_non_inst_term** and create Expr::NotAnInst.
+- **convert_expr**: convert sema::expr to our newly defined expr struct
+- **filter_external_constructors**: prints list of external constructor
+- **filter_external_extractors**: prints list of external extractors
 
 ## Usage
 First, install and setup RUST following this link: https://www.rust-lang.org/tools/install. 
