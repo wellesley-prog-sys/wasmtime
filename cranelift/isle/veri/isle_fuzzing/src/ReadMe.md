@@ -18,7 +18,7 @@ Written by Becky Chen and Annette Chau
 
 ## Extractors in ISLE
 
-We can identify between **external constructors** and **external extactors**, allowing us to break down terms for more complex pattern matching. Stores External Constructors into constructors list and External Extractors in extractors list. 
+We can identify between **external constructors** and **external extactors**, allowing us to break down rules for more complex pattern matching for fuzzing purposes. Stores External Constructors into constructors list and External Extractors in extractors list for calling rust functions with the same names. 
 
 ## Functions
 
