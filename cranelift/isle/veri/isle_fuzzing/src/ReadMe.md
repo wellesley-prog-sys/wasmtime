@@ -106,11 +106,11 @@ A fuzzer is one way to find inputs that the ISLE rules guide has difficulty lowe
 
 We tried different parsing methods (seen in the misc folder/main.rs), where we attempted to find rules through parenthesis counting instead of through the patterns given. 
 
-Currently our fuzzer has a limited scope, where we can only generate one clif module that matches one single input ISLE rule at once. In the future, we want to have it take in multiple files of ISLE rules. This will speed up the fuzzing process and generate code with more variety and sophisticated patterns. 
+Currently our fuzzer has a limited scope, where we can only generate one clif module that matches one single input ISLE rule at once. In the future, we want to have it take in multiple files of ISLE rules. This will speed up the fuzzing process and generate code with more variety and sophisticated patterns. In the newest update where we can successfully extract a rule's external constructors and extractors, we are also limited by the one-rule scope of testing.
 
 This fuzzer is also not foolproof-- it occasionally generates invalid clif programs due to the extension (.i16, .i32, .i64) not always being compatible throughout the program. This is the tradeoff of using random generation. Our automatic approach partially tackles this issue. However, it still takes more than the ideal amount of time to generate an executable clif module.
 
 ## Next Steps
-We want to be able to detect when the program can be lowered successfully. This would be more effective from a fuzzing perspective, to have the output efficiently checked against expected output.
+We want to be able to detect when the program can be lowered successfully. As a future goal, we want to be able to utilize the lists of external constructors and extractors to generate and call the Rust functions with the same names and appropriate parameters to further guide the fuzzing process. With cautiously generated Rust functions and parameters that can make sure the functions step through the steps, we are interested in evaluating, our fuzzing can become more guided and targeted. 
 
 We also want to take in and generate multiple programs at a time, hopefully through more advanced automation.
