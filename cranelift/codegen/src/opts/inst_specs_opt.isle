@@ -1,26 +1,73 @@
+;; from: arithmetic.isle
+;; rewrites for integer and floating-point arithmetic
+;; eg: `iadd`, `isub`, `ineg`, `imul`, `fadd`, `fsub`, `fmul`
+
+;; For commutative instructions, we depend on cprop.isle pushing immediates to
+;; the right, and thus only simplify patterns like `x+0`, not `0+x`.
+
+;; x+0 == x.
 (rule iadd_zero (simplify (iadd ty
                       x
                       (iconst_u ty 0)))
       (subsume x))
+;; x-0 == x.
+(rule isub_zero (simplify (isub ty
+                      x
+                      (iconst_u ty 0)))
+      (subsume x))
+;; 0-x == (ineg x).
+(rule isub_from_zero (simplify (isub ty
+                      (iconst_u ty 0)
+                      x))
+      (ineg ty x))
 
 
-(spec (iadd ty x y)
-    (provide (= result (bvadd x y)) (and (= (:bits ty) (widthof x)) (= (:bits ty) (widthof y))))
-)
+;; (spec (iadd ty x y)
+;;     (provide (= result (bvadd x y)) (and (= (:bits ty) (widthof x)) (= (:bits ty) (widthof y))))
+;; )
 
-(instantiate iadd
-    ((args (named Type) (bv 8) (bv 8)) (ret (bv 8)))
-    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
-    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
-    ((args (named Type) (bv 128) (bv 128)) (ret (bv 128)))
-)
+;; (spec (isub ty x y)
+;;     (provide (= result (bvsub x y)) (and (= (:bits ty) (widthof x)) (= (:bits ty) (widthof y))))
+;; )
+;; (instantiate isub bv_binary_8_to_64)
+
+
+;; (spec (ineg ty x)
+;;     (provide (= result (bvneg x)) (and (= (:bits ty) (widthof x)))))
+;; (instantiate ineg bv_unary_8_to_64)
+
+;; (form
+;;     bv_unary_8_to_64
+;;     ((args (named Type) (bv  8)) (ret (bv  8)))
+;;     ((args (named Type) (bv 16)) (ret (bv 16)))
+;;     ((args (named Type) (bv 32)) (ret (bv 32)))
+;;     ((args (named Type) (bv 64)) (ret (bv 64)))
+;; )
+
+;; (form
+;;     bv_binary_8_to_64
+;;     ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
+;;     ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+;;     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+;;     ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+;; )
+
+;; (instantiate iadd
+;;     ((args (named Type) (bv 8) (bv 8)) (ret (bv 8)))
+;;     ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+;;     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+;;     ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+;;     ((args (named Type) (bv 128) (bv 128)) (ret (bv 128)))
+;; )
+
+
 
 (spec (iconst_u ty x)
     (provide
-    (if (= (:bits ty) 128) (= result (zero_ext 128 (conv_to 64 x)))
+    ;;(if (= (:bits ty) 128)
+    ;;    (= result (zero_ext 128 (conv_to 64 x)))
         (= result (conv_to (widthof result) x)))
-    )
+    ;;)
 )
 
 (spec (subsume x)
