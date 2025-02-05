@@ -18,9 +18,9 @@
 
 (spec (iconst_u ty x)
     (provide
-    ;;  (if (= (:bits ty) 128) (= result (zero_ext 128 (conv_to 64 x)))
+    (if (= (:bits ty) 128) (= result (zero_ext 128 (conv_to 64 x)))
         (= result (conv_to (widthof result) x)))
-    ;;  )
+    )
 )
 
 (spec (subsume x)
