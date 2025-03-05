@@ -100,8 +100,11 @@
 
 ;; Integer Instructions
 
+;; (spec (iadd ty x y)
+;;     (provide (= result (bvadd x y))))
 (spec (iadd ty x y)
-    (provide (= result (bvadd x y))))
+    (provide (= result (bvadd x y)) (= (widthof x) (widthof y)) (= (:bits ty) (widthof result))))
+
 (instantiate iadd
     ((args (named Type) (bv 8) (bv 8)) (ret (bv 8)))
     ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
@@ -110,20 +113,28 @@
     ((args (named Type) (bv 128) (bv 128)) (ret (bv 128)))
 )
 
+;; (spec (isub ty x y)
+;;     (provide (= result (bvsub x y))))
 (spec (isub ty x y)
-    (provide (= result (bvsub x y))))
+    (provide (= result (bvsub x y))  (= (:bits ty) (widthof result))))
 (instantiate isub bv_binary_8_to_64)
 
+;; (spec (ineg ty x)
+;;     (provide (= result (bvneg x))))
 (spec (ineg ty x)
-    (provide (= result (bvneg x))))
+    (provide (= result (bvneg x)) (= (:bits ty) (widthof result))))
 (instantiate ineg bv_unary_8_to_64)
 
 (spec (iabs ty x)
     (provide (= result (if (bvsge x (zero_ext (widthof x) #b0)) x (bvneg x)))))
+;; (spec (iabs ty x)
+;;     (provide (= result (if (bvsge x (zero_ext (widthof x) #b0)) x (bvneg x))) (= (:bits ty) (widthof result))))
 (instantiate iabs bv_unary_8_to_64)
 
+;; (spec (imul ty x y)
+;;     (provide (= result (bvmul x y))))
 (spec (imul ty x y)
-    (provide (= result (bvmul x y))))
+    (provide (= result (bvmul x y)) (= (widthof x) (widthof y))  (= (:bits ty) (widthof result))))
 (instantiate imul bv_binary_8_to_64)
 
 (spec (smulhi ty x y)
@@ -165,6 +176,7 @@
     (provide
         (= result (bvudiv x y))
         (= clif_trap (bv_is_zero! y))
+        (and (= (:bits ty) (widthof result)))
     )
 )
 (instantiate udiv bv_binary_8_to_64)
@@ -191,6 +203,7 @@
                 (= result (bvsdiv x y))
             )
         ))
+        (and (= (:bits ty) (widthof result)))
     )
 )
 
@@ -265,7 +278,7 @@
 
 
 (spec (iconst ty arg)
-    (provide (= arg (zero_ext 64 result))))
+    (provide (= arg (zero_ext 64 result)) (= (:bits ty) (widthof result))))
 (instantiate iconst
     ((args (named Type) (bv 64)) (ret (bv 8)))
     ((args (named Type) (bv 64)) (ret (bv 16)))
@@ -366,6 +379,16 @@
 
 
 (form extend
+    ((args (named Type) (bv  8)) (ret (bv 16)))
+    ((args (named Type) (bv  8)) (ret (bv 32)))
+    ((args (named Type) (bv  8)) (ret (bv 64)))
+    ((args (named Type) (bv 16)) (ret (bv 32)))
+    ((args (named Type) (bv 16)) (ret (bv 64)))
+    ((args (named Type) (bv 32)) (ret (bv 64)))
+    ;; Note: (bv 64) -> (bv 64) not accepted in clif
+)
+
+(form uextend_maybe
     ((args (named Type) (bv  8)) (ret (bv  8)))
     ((args (named Type) (bv  8)) (ret (bv 16)))
     ((args (named Type) (bv  8)) (ret (bv 32)))
@@ -375,7 +398,7 @@
     ((args (named Type) (bv 16)) (ret (bv 64)))
     ((args (named Type) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 32)) (ret (bv 64)))
-    ;; Note: (bv 64) -> (bv 64) not accepted in clif
+    ((args (named Type) (bv 64)) (ret (bv 64)))
 )
 
 (spec (uextend ty x)
@@ -422,6 +445,8 @@
                 #x00
             )
         )
+        (= (widthof x) (widthof y))
+        (= (:bits ty) (widthof x))
     )
 )
 (instantiate icmp

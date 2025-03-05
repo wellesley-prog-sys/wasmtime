@@ -1,0 +1,11 @@
+test run
+target aarch64
+
+function %fmul_fneg(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fneg v0
+  v3 = fneg v1
+  v4 = fmul v2, v3
+  return v2
+}
+; run: %fmul_fneg(-NaN:0xffffffff, NaN:0x7f800001) == 0x0.0

@@ -125,7 +125,7 @@ pub fn get_isle_compilations(
                     prelude_isle.clone(),
                     prelude_opt_isle,
                     prelude_spec_isle.clone(),
-                    // inst_specs_isle.clone(),
+                    inst_specs_isle.clone(),
                     // inst_tags_isle.clone(),
                     src_opts.join("inst_specs_opt.isle"),
                     // src_opts.join("arithmetic.isle"),

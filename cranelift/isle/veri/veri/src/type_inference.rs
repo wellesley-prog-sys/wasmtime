@@ -971,6 +971,7 @@ impl Solver {
         let existing = &self.assignment.expr_type_value[&x];
         let merged = TypeValue::merge(existing, &tv).ok_or_else(|| {
             if !existing.ty().is_compatible_with(&tv.ty()) {
+                dbg!(&self.assignment.expr_type_value);
                 Status::TypeError(Conflict::new(
                     x,
                     format!("concrete type error between types:\n\t{existing}\n\t{tv}"),
