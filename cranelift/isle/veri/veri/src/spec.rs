@@ -159,6 +159,7 @@ pub enum ExprKind {
     FPIsNaN(Expr),
     FPIsNegative(Expr),
     FPIsPositive(Expr),
+    IsFP(Expr),
 
     // Conditional if-then-else
     Conditional(Expr, Expr, Expr),
@@ -380,6 +381,7 @@ impl ExprKind {
                 SpecOp::FPIsNaN => unary_expr!(ExprKind::FPIsNaN, args, pos),
                 SpecOp::FPIsNegative => unary_expr!(ExprKind::FPIsNegative, args, pos),
                 SpecOp::FPIsPositive => unary_expr!(ExprKind::FPIsPositive, args, pos),
+                SpecOp::IsFP => unary_expr!(ExprKind::IsFP, args, pos),
 
                 // Conditionals
                 SpecOp::If => ternary_expr!(ExprKind::Conditional, args, pos),

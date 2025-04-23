@@ -1,9 +1,4 @@
-use std::{cmp::Ordering, iter::zip};
-
-use anyhow::{bail, format_err, Context as _, Error, Result};
-use easy_smt::{Context, Response, SExpr, SExprData};
-use num_bigint::BigUint;
-use num_traits::Num as _;
+use std::{cmp::Ordering, collections::HashSet, iter::zip};
 
 use crate::{
     program::Program,
@@ -11,6 +6,10 @@ use crate::{
     types::{Const, Type, Width},
     veri::{Conditions, Expr, ExprId, Model},
 };
+use anyhow::{bail, format_err, Context as _, Error, Result};
+use easy_smt::{Context, Response, SExpr, SExprData};
+use num_bigint::BigUint;
+use num_traits::Num as _;
 
 use crate::encoded::cls::*;
 use crate::encoded::clz::*;
@@ -70,6 +69,7 @@ pub struct Solver<'a> {
     prog: &'a Program,
     conditions: &'a Conditions,
     assignment: &'a Assignment,
+    fp_values: &'a HashSet<ExprId>,
     tmp_idx: usize,
 }
 
@@ -86,12 +86,14 @@ impl<'a> Solver<'a> {
         prog: &'a Program,
         conditions: &'a Conditions,
         assignment: &'a Assignment,
+        fp_values: &'a HashSet<ExprId>,
     ) -> Result<Self> {
         let mut solver = Self {
             smt,
             prog,
             conditions,
             assignment,
+            fp_values,
             tmp_idx: 0,
         };
         solver.prelude()?;
@@ -413,6 +415,7 @@ impl<'a> Solver<'a> {
             Expr::FPIsNaN(x) => Ok(self.fp_unary_predicate("fp.isNaN", x)?),
             Expr::FPIsNegative(x) => Ok(self.fp_unary_predicate("fp.isNegative", x)?),
             Expr::FPIsPositive(x) => Ok(self.fp_unary_predicate("fp.isPositive", x)?),
+            Expr::IsFP(x) => Ok(self.is_fp(x)?),
         }
     }
 
@@ -528,6 +531,17 @@ impl<'a> Solver<'a> {
 
         // Substitute known constant width.
         Ok(self.smt.numeral(width))
+    }
+
+    fn is_fp(&self, x: ExprId) -> Result<SExpr> {
+        // Look up in the solution whether this is an fp
+        if self.fp_values.contains(&x) {
+            print!("true {:?}", x);
+            Ok(self.smt.true_())
+        } else {
+            print!("false {:?}", x);
+            Ok(self.smt.false_())
+        }
     }
 
     fn verification_condition(&mut self) -> Result<()> {

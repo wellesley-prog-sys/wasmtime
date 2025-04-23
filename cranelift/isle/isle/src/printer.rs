@@ -367,6 +367,7 @@ impl Printable for SpecOp {
             SpecOp::ToFPUnsigned => "to_fp_unsigned",
             SpecOp::ToFPFromFP => "to_fp_from_fp",
             SpecOp::WidthOf => "widthof",
+            SpecOp::IsFP => "is_fp",
             SpecOp::If => "if",
             SpecOp::Switch => "switch",
             SpecOp::Popcnt => "popcnt",

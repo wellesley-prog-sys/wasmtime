@@ -682,6 +682,7 @@ impl<'a> Parser<'a> {
             "int2bv" => Ok(SpecOp::Int2BV),
             "bv2nat" => Ok(SpecOp::BV2Nat),
             "widthof" => Ok(SpecOp::WidthOf),
+            "is_fp" => Ok(SpecOp::IsFP),
             "if" => Ok(SpecOp::If),
             "switch" => Ok(SpecOp::Switch),
             "popcnt" => Ok(SpecOp::Popcnt),

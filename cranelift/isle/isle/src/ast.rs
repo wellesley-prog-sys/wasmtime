@@ -354,6 +354,7 @@ pub enum SpecOp {
     FPIsNaN,
     FPIsNegative,
     FPIsPositive,
+    IsFP,
 
     // Custom encodings
     Popcnt,

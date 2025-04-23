@@ -140,6 +140,7 @@ pub enum Expr {
     FPIsNaN(ExprId),
     FPIsNegative(ExprId),
     FPIsPositive(ExprId),
+    IsFP(ExprId),
 }
 
 impl Expr {
@@ -183,7 +184,8 @@ impl Expr {
             | Expr::FPIsInfinite(x)
             | Expr::FPIsNaN(x)
             | Expr::FPIsNegative(x)
-            | Expr::FPIsPositive(x) => vec![*x],
+            | Expr::FPIsPositive(x)
+            | Expr::IsFP(x) => vec![*x],
 
             // Binary
             Expr::And(x, y)
@@ -337,6 +339,7 @@ impl std::fmt::Display for Expr {
             Expr::FPIsNaN(x) => write!(f, "fp.isNaN({})", x.index()),
             Expr::FPIsNegative(x) => write!(f, "fp.isNegative({})", x.index()),
             Expr::FPIsPositive(x) => write!(f, "fp.isPositive({})", x.index()),
+            Expr::IsFP(x) => write!(f, "is_fp({})", x.index()),
         }
     }
 }
@@ -1766,6 +1769,7 @@ impl<'a> ConditionsBuilder<'a> {
             spec::ExprKind::FPIsNaN(x) => unary_expr!(Expr::FPIsNaN, x),
             spec::ExprKind::FPIsNegative(x) => unary_expr!(Expr::FPIsNegative, x),
             spec::ExprKind::FPIsPositive(x) => unary_expr!(Expr::FPIsPositive, x),
+            spec::ExprKind::IsFP(x) => unary_expr!(Expr::IsFP, x),
 
             spec::ExprKind::Macro(params, body) => Ok(Symbolic::Macro(Macro {
                 params: params.clone(),

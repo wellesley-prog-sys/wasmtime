@@ -49,7 +49,8 @@
 
 ;; `cranelift-entity`-based identifiers.
 (type Type (primitive Type))
-(model Type (type (struct (bits Int))))
+(model Type (type (struct (bits Int)
+                          (fp (bv 1)))))
 (type Value (primitive Value))
 (model Value (type (bv)))
 (type ValueList (primitive ValueList))

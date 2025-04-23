@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     iter::zip,
     vec,
 };
@@ -163,6 +163,7 @@ pub struct System {
     choices: Vec<Choice>,
     constraints: Vec<Constraint>,
     branches: Vec<Branch>,
+    fp_values: HashSet<ExprId>,
 }
 
 impl System {
@@ -180,11 +181,11 @@ impl System {
             if branch.arms.len() > 1 {
                 choices.push(arm.choice.clone());
             }
-
             children.push(System {
                 constraints,
                 choices,
                 branches: branches.clone(),
+                fp_values: self.fp_values.clone(),
             })
         }
 
@@ -235,6 +236,7 @@ struct SystemBuilder<'a> {
 
     system: System,
     arm: Option<Arm>,
+    fp_values: HashSet<ExprId>,
 }
 
 impl<'a> SystemBuilder<'a> {
@@ -243,6 +245,7 @@ impl<'a> SystemBuilder<'a> {
             conditions,
             system: System::default(),
             arm: None,
+            fp_values: HashSet::new(),
         }
     }
 
@@ -271,6 +274,8 @@ impl<'a> SystemBuilder<'a> {
         for qualifier in &self.conditions.qualifiers {
             self.qualifier(qualifier);
         }
+
+        self.system.fp_values = self.fp_values;
 
         self.system
     }
@@ -351,16 +356,24 @@ impl<'a> SystemBuilder<'a> {
             | Expr::BVSge(y, z)
             | Expr::BVSlt(y, z)
             | Expr::BVSle(y, z)
-            | Expr::FPEq(y, z)
-            | Expr::FPNe(y, z)
-            | Expr::FPLt(y, z)
-            | Expr::FPGt(y, z)
-            | Expr::FPLe(y, z)
-            | Expr::FPGe(y, z)
             | Expr::BVSaddo(y, z) => {
                 self.boolean(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
+
+                self.same_type(*y, *z);
+            }
+            Expr::FPEq(y, z)
+            | Expr::FPNe(y, z)
+            | Expr::FPLt(y, z)
+            | Expr::FPGt(y, z)
+            | Expr::FPLe(y, z)
+            | Expr::FPGe(y, z) => {
+                self.boolean(x);
+                self.bit_vector(*y);
+                self.bit_vector(*z);
+                self.floating_point(*y);
+                self.floating_point(*z);
 
                 self.same_type(*y, *z);
             }
@@ -395,8 +408,15 @@ impl<'a> SystemBuilder<'a> {
             | Expr::BVLShr(y, z)
             | Expr::BVAShr(y, z)
             | Expr::BVRotl(y, z)
-            | Expr::BVRotr(y, z)
-            | Expr::FPAdd(y, z)
+            | Expr::BVRotr(y, z) => {
+                self.bit_vector(x);
+                self.bit_vector(*y);
+                self.bit_vector(*z);
+
+                self.same_type(x, *y);
+                self.same_type(x, *z);
+            }
+            Expr::FPAdd(y, z)
             | Expr::FPSub(y, z)
             | Expr::FPMul(y, z)
             | Expr::FPDiv(y, z)
@@ -405,6 +425,9 @@ impl<'a> SystemBuilder<'a> {
                 self.bit_vector(x);
                 self.bit_vector(*y);
                 self.bit_vector(*z);
+                self.floating_point(x);
+                self.floating_point(*y);
+                self.floating_point(*z);
 
                 self.same_type(x, *y);
                 self.same_type(x, *z);
@@ -417,6 +440,8 @@ impl<'a> SystemBuilder<'a> {
             | Expr::FPTrunc(y) => {
                 self.bit_vector(x);
                 self.bit_vector(*y);
+                self.floating_point(x);
+                self.floating_point(*y);
 
                 self.same_type(x, *y);
             }
@@ -426,6 +451,11 @@ impl<'a> SystemBuilder<'a> {
             | Expr::FPIsNaN(y)
             | Expr::FPIsNegative(y)
             | Expr::FPIsPositive(y) => {
+                self.boolean(x);
+                self.bit_vector(*y);
+                self.floating_point(*y);
+            }
+            Expr::IsFP(y) => {
                 self.boolean(x);
                 self.bit_vector(*y);
             }
@@ -467,6 +497,8 @@ impl<'a> SystemBuilder<'a> {
                 self.integer(*w);
                 self.bit_vector(*y);
                 self.bit_vector(x);
+                self.floating_point(x);
+
                 self.width_of(x, *w);
                 self.width_of(*y, *w);
             }
@@ -474,12 +506,17 @@ impl<'a> SystemBuilder<'a> {
                 self.integer(*w);
                 self.bit_vector(*y);
                 self.bit_vector(x);
+                self.floating_point(*y);
+
                 self.width_of(x, *w);
             }
             Expr::ToFPFromFP(w, y) => {
                 self.integer(*w);
                 self.bit_vector(*y);
                 self.bit_vector(x);
+                self.floating_point(x);
+                self.floating_point(*y);
+
                 self.width_of(x, *w);
             }
             Expr::WidthOf(y) => {
@@ -494,6 +531,8 @@ impl<'a> SystemBuilder<'a> {
             | Expr::FPNaN(w) => {
                 self.bit_vector(x);
                 self.integer(*w);
+                self.floating_point(x);
+
                 self.width_of(x, *w);
             }
         }
@@ -568,6 +607,10 @@ impl<'a> SystemBuilder<'a> {
         self.ty(x, Type::BitVector(Width::Unknown));
     }
 
+    fn floating_point(&mut self, x: ExprId) {
+        self.fp_values.insert(x);
+    }
+
     fn integer(&mut self, x: ExprId) {
         self.ty(x, Type::Int);
     }
@@ -581,6 +624,11 @@ impl<'a> SystemBuilder<'a> {
     }
 
     fn same_type(&mut self, x: ExprId, y: ExprId) {
+        if self.fp_values.contains(&x) {
+            self.fp_values.insert(y);
+        } else if self.fp_values.contains(&y) {
+            self.fp_values.insert(x);
+        }
         self.constraint(Constraint::SameType { x, y });
     }
 
@@ -880,21 +928,27 @@ pub struct Solution {
     pub status: Status,
     pub choices: Vec<Choice>,
     pub assignment: Assignment,
+    pub fp_values: HashSet<ExprId>,
 }
 
 #[derive(Clone)]
 pub struct Solver {
     assignment: Assignment,
+    fp_values: HashSet<ExprId>,
 }
 
 impl Solver {
     pub fn new() -> Self {
         Self {
             assignment: Assignment::new(),
+            fp_values: HashSet::new(),
         }
     }
 
     pub fn solve(mut self, system: &System) -> Vec<Solution> {
+        // save fp_values
+        self.fp_values = system.fp_values.clone();
+
         // Deduce assignments from constraints.
         let result = self.propagate(&system.constraints);
         if let Err(status) = result {
@@ -902,6 +956,7 @@ impl Solver {
                 status,
                 choices: system.choices.clone(),
                 assignment: self.assignment,
+                fp_values: self.fp_values.clone(),
             }];
         }
 
@@ -916,6 +971,7 @@ impl Solver {
                 status,
                 choices: system.choices.clone(),
                 assignment: self.assignment,
+                fp_values: self.fp_values.clone(),
             }];
         };
 
@@ -1000,6 +1056,15 @@ impl Solver {
         self.set_type(x, Type::BitVector(Width::Bits(bits)))
     }
 
+    fn set_type_floating_point(&mut self, x: ExprId, y: ExprId) -> Result<bool, Status> {
+        if self.fp_values.contains(&x) {
+            self.fp_values.insert(y);
+        } else if self.fp_values.contains(&y) {
+            self.fp_values.insert(x);
+        }
+        Ok(false)
+    }
+
     fn same_type(&mut self, x: ExprId, y: ExprId) -> Result<bool, Status> {
         // TODO(mbm): union find
         // TODO(mbm): simplify by initializing all expression types to unknown
@@ -1007,10 +1072,16 @@ impl Solver {
             self.assignment.expr_type_value.get(&x).cloned(),
             self.assignment.expr_type_value.get(&y).cloned(),
         ) {
-            (None, None) => Ok(false),
-            (Some(tvx), None) => self.set_type(y, tvx.ty()),
-            (None, Some(tvy)) => self.set_type(x, tvy.ty()),
-            (Some(tvx), Some(tvy)) => Ok(self.set_type(x, tvy.ty())? | self.set_type(y, tvx.ty())?),
+            (None, None) => Ok(false | self.set_type_floating_point(x, y)?),
+            (Some(tvx), None) => {
+                Ok(self.set_type(y, tvx.ty())? | self.set_type_floating_point(x, y)?)
+            }
+            (None, Some(tvy)) => {
+                Ok(self.set_type(x, tvy.ty())? | self.set_type_floating_point(x, y)?)
+            }
+            (Some(tvx), Some(tvy)) => Ok(self.set_type(x, tvy.ty())?
+                | self.set_type(y, tvx.ty())?
+                | self.set_type_floating_point(x, y)?),
         }
     }
 
@@ -1020,11 +1091,15 @@ impl Solver {
             self.assignment.expr_type_value.get(&y).cloned(),
         ) {
             (None, None) => Ok(false),
-            (Some(tvx), None) => self.set_type_value(y, tvx),
-            (None, Some(tvy)) => self.set_type_value(x, tvy),
-            (Some(tvx), Some(tvy)) => {
-                Ok(self.set_type_value(x, tvy)? | self.set_type_value(y, tvx)?)
+            (Some(tvx), None) => {
+                Ok(self.set_type_value(y, tvx)? | self.set_type_floating_point(x, y)?)
             }
+            (None, Some(tvy)) => {
+                Ok(self.set_type_value(x, tvy)? | self.set_type_floating_point(x, y)?)
+            }
+            (Some(tvx), Some(tvy)) => Ok(self.set_type_value(x, tvy)?
+                | self.set_type_value(y, tvx)?
+                | self.set_type_floating_point(x, y)?),
         }
     }
 
