@@ -1090,6 +1090,7 @@
 (model SyntheticAmode (type (bv 64)))
 
 (decl synthetic_amode_to_reg_mem (SyntheticAmode) RegMem)
+(spec (synthetic_amode_to_reg_mem am) (provide(= result(RegMem.Mem am))))
 (extern constructor synthetic_amode_to_reg_mem synthetic_amode_to_reg_mem)
 
 (decl amode_to_synthetic_amode (Amode) SyntheticAmode)
@@ -1198,6 +1199,7 @@
         (amode_imm_reg flags base offset))
 (rule 1 (to_amode flags (iadd _ x y) offset)
         (to_amode_add flags x y offset))
+(attr to_amode (veri chain))
 
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
@@ -1573,6 +1575,7 @@
 (model WritableGpr (type (bv)))
 (type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
+(model GprMem (type (bv)))
 (type GprMemImm extern (enum))
 (model GprMemImm (type (bv)))
 (type Imm8Gpr extern (enum))
@@ -1846,6 +1849,7 @@
 (extractor (is_xmm_type ty) (and (type_register_class (RegisterClass.Xmm)) ty))
 
 (decl is_gpr_type (Type) Type)
+(spec (is_gpr_type arg) (provide (= result arg)))
 (extractor (is_gpr_type ty) (and (type_register_class (RegisterClass.Gpr _)) ty))
 
 (decl is_single_register_gpr_type (Type) Type)
@@ -2288,9 +2292,25 @@
 
 (type ExtMode extern (enum BL BQ WL WQ LQ))
 
-;; `ExtMode::new`
+; `ExtMode::new`
 (decl ext_mode (u16 u16) ExtMode)
 (extern constructor ext_mode ext_mode)
+(spec (ext_mode src_bits dst_bits)
+  ;; only extent from shorter to longer bits 
+  (require (bvule src_bits dst_bits))
+  (provide
+    ;; mirror Rust’s ExtMode::new match:
+    (= result
+       (if (= src_bits 8)
+           (if (= dst_bits 32)
+               (ExtMode.BL)
+               (ExtMode.BQ))
+         (if (= src_bits 16)
+             (if (= dst_bits 32)
+                 (ExtMode.WL)
+                 (ExtMode.WQ))
+             (ExtMode.LQ)))))
+)
 
 ;; Put the given value into a register, but extended as the given type.
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
