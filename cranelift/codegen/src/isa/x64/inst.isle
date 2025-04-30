@@ -734,12 +734,33 @@
 
 (model MInst (type (bv 1)))
 
+;; MovzxRmR
+;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr reg.
+;; Note that the lq variant doesn't really exist since the default
+;; zero-extend rule makes it unnecessary. For that case we emit the
+;; equivalent "movl AM, reg32".
+(spec (MInst.MovzxRmR mode src dst)
+  (provide 
+      ;; dst = zero_extent_to_64(extract_low_k_bits(src))
+      (= dst
+            (zero_ext 64
+                  (switch mode
+                  ;; 8-bit load → extract bits 7–0
+                  ((ExtMode.BL) (extract 7 0 src))
+                  ((ExtMode.BQ) (extract 7 0 src))
+                  ;; 16-bit load → extract bits 15–0
+                  ((ExtMode.WL) (extract 15 0 src))
+                  ((ExtMode.WQ) (extract 15 0 src))
+                  ;; 32-bit→64 zero-extend via plain movl; extract bits 31–0
+                  ((ExtMode.LQ) (extract 31 0 src))
+      )))))
+
 ; TODO(mbm): AluRmiR must handle memory and immediate forms of src2 operand
 (spec (MInst.AluRmiR size op src1 src2 dst)
       (provide
             ; Execute opcode.
             (=
-                  dst
+                  dst 
                   (switch size
                         ; 64-bit forms operate on full register
                         ((OperandSize.Size64)
@@ -1726,6 +1747,8 @@
 ;;
 ;; Asserts that the `RegMem`'s register, if any, is a GPR.
 (decl reg_mem_to_gpr_mem (RegMem) GprMem)
+(spec (reg_mem_to_gpr_mem rm)
+  (provide true))
 (extern constructor reg_mem_to_gpr_mem reg_mem_to_gpr_mem)
 
 ;; Construct a `GprMem` from a `Reg`.
@@ -2473,6 +2496,7 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))
         dst))
+
 
 (decl x64_movsx (ExtMode GprMem) Gpr)
 (rule (x64_movsx mode src)
