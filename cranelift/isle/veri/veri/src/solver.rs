@@ -536,10 +536,8 @@ impl<'a> Solver<'a> {
     fn is_fp(&self, x: ExprId) -> Result<SExpr> {
         // Look up in the solution whether this is an fp
         if self.fp_values.contains(&x) {
-            print!("true {:?}", x);
             Ok(self.smt.true_())
         } else {
-            print!("false {:?}", x);
             Ok(self.smt.false_())
         }
     }

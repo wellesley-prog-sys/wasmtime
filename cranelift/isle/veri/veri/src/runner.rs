@@ -701,13 +701,16 @@ impl Runner {
             }
 
             let solution_log_dir = log_dir.join(format!("{:03}", i));
-            let verify_report = self.verify_expansion_type_instantiation(
-                &conditions,
-                &solution.assignment,
-                solver_backend,
-                solution_log_dir,
-                &mut output,
-            )?;
+            let verify_report = self
+                .verify_expansion_type_instantiation(
+                    &conditions,
+                    &solution.assignment,
+                    &solution.fp_values,
+                    solver_backend,
+                    solution_log_dir,
+                    &mut output,
+                )
+                .context(format!("verify expansion: {id}"))?;
 
             // Append to report.
             let duration = start_solution.elapsed();
@@ -737,6 +740,7 @@ impl Runner {
         &self,
         conditions: &Conditions,
         assignment: &Assignment,
+        fp_values: &HashSet<ExprId>,
         solver_backend: SolverBackend,
         log_dir: std::path::PathBuf,
         output: &mut dyn Write,
