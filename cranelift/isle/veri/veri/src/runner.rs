@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
     path::{Path, PathBuf},
@@ -21,7 +21,7 @@ use crate::{
     program::Program,
     solver::{Applicability, Solver, Verification},
     type_inference::{self, type_constraint_system, Assignment, Choice},
-    veri::Conditions,
+    veri::{Conditions, ExprId},
     BUILD_PROFILE, GIT_VERSION,
 };
 
@@ -705,6 +705,7 @@ impl Runner {
                 .verify_expansion_type_instantiation(
                     &conditions,
                     &solution.assignment,
+                    &solution.fp_values,
                     solver_backend,
                     solution_log_dir,
                     &mut output,
@@ -739,6 +740,7 @@ impl Runner {
         &self,
         conditions: &Conditions,
         assignment: &Assignment,
+        fp_values: &HashSet<ExprId>,
         solver_backend: SolverBackend,
         log_dir: std::path::PathBuf,
         output: &mut dyn Write,
@@ -754,7 +756,7 @@ impl Runner {
             .replay_file(Some(replay_file))
             .build()?;
 
-        let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
+        let mut solver = Solver::new(smt, &self.prog, conditions, assignment, fp_values)?;
         solver.encode()?;
         let init_time = start.elapsed();
 

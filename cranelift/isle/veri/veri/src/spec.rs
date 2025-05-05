@@ -159,6 +159,7 @@ pub enum ExprKind {
     FPIsNaN(Expr),
     FPIsNegative(Expr),
     FPIsPositive(Expr),
+    IsFP(Expr),
 
     // Conditional if-then-else
     Conditional(Expr, Expr, Expr),
@@ -380,6 +381,7 @@ impl ExprKind {
                 SpecOp::FPIsNaN => unary_expr!(ExprKind::FPIsNaN, args, pos),
                 SpecOp::FPIsNegative => unary_expr!(ExprKind::FPIsNegative, args, pos),
                 SpecOp::FPIsPositive => unary_expr!(ExprKind::FPIsPositive, args, pos),
+                SpecOp::IsFP => unary_expr!(ExprKind::IsFP, args, pos),
 
                 // Conditionals
                 SpecOp::If => ternary_expr!(ExprKind::Conditional, args, pos),
@@ -795,9 +797,25 @@ impl SpecEnv {
             }
         }
 
+        // For midend (opt) missing defs
+        // filter out Instantiations without declaration in termenv
+        let defs: Vec<Def> = defs
+            .iter()
+            .cloned()
+            .filter(|d| {
+                if let ast::Def::Instantiation(inst) = d {
+                    !termenv.get_term_by_name(tyenv, &inst.term).is_none()
+                } else {
+                    true
+                }
+            })
+            .collect();
+
         // Collect instantiations.
-        for def in defs {
+        for def in &defs {
+            // how isle meta compiler moves opt/lower
             if let ast::Def::Instantiation(inst) = def {
+                // dbg!(&inst);
                 let term_id = termenv.get_term_by_name(tyenv, &inst.term).unwrap();
                 let sigs = match &inst.form {
                     Some(form) => form_signature[&form.0].clone(),
@@ -809,7 +827,20 @@ impl SpecEnv {
     }
 
     fn collect_specs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
-        for def in defs {
+        // For midend (opt) missing defs
+        // filter out Instantiations without declaration in termenv
+        let defs: Vec<Def> = defs
+            .iter()
+            .cloned()
+            .filter(|d| {
+                if let ast::Def::Spec(spec) = d {
+                    !termenv.get_term_by_name(tyenv, &spec.term).is_none()
+                } else {
+                    true
+                }
+            })
+            .collect();
+        for def in &defs {
             if let ast::Def::Spec(spec) = def {
                 let term_id = termenv
                     .get_term_by_name(tyenv, &spec.term)
@@ -831,7 +862,23 @@ impl SpecEnv {
     }
 
     fn collect_attrs(&mut self, defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
-        for def in defs {
+        // For midend (opt) missing defs
+        // filter out Instantiations without declaration in termenv
+        let defs: Vec<Def> = defs
+            .iter()
+            .cloned()
+            .filter(|d| {
+                if let ast::Def::Attr(attr) = d {
+                    match &attr.target {
+                        AttrTarget::Term(name) => !termenv.get_term_by_name(tyenv, &name).is_none(),
+                        AttrTarget::Rule(name) => !termenv.get_term_by_name(tyenv, &name).is_none(),
+                    }
+                } else {
+                    true
+                }
+            })
+            .collect();
+        for def in &defs {
             if let ast::Def::Attr(attr) = def {
                 match &attr.target {
                     AttrTarget::Term(name) => {
