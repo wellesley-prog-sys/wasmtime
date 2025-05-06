@@ -739,21 +739,49 @@
 ;; Note that the lq variant doesn't really exist since the default
 ;; zero-extend rule makes it unnecessary. For that case we emit the
 ;; equivalent "movl AM, reg32".
-(spec (MInst.MovzxRmR mode src dst)
-  (provide 
-      ;; dst = zero_extent_to_64(extract_low_k_bits(src))
+
+; Parameters of a load operation.
+(state isa_load
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+        )
+    )
+    (default
+        (not (:active isa_load))
+    )
+)
+
+(spec
+  (MInst.MovzxRmR ext_mode src dst)
+  (modifies isa_load)
+
+  (provide
+    ;; Only handle the “memory” case; require that isMem=1
+    (and 
+      (= (:isMem src)  true)    ;; isMem true 
+      ;; mark that we did a load 
+      (= (:active isa_load) true)
+      ;; record how many bits we loaded
+      (= (:size_bits isa_load)
+         (switch ext_mode
+           ((ExtMode.BL)  8) ((ExtMode.BQ)  8)
+           ((ExtMode.WL) 16) ((ExtMode.WQ) 16)
+           ((ExtMode.LQ) 32)))
+      ;; compute effective address from the raw 64‑bit data field
+      (= (:addr isa_load) (:data src))
+      ;; zero‑extend the loaded value into dst
       (= dst
-            (zero_ext 64
-                  (switch mode
-                  ;; 8-bit load → extract bits 7–0
-                  ((ExtMode.BL) (extract 7 0 src))
-                  ((ExtMode.BQ) (extract 7 0 src))
-                  ;; 16-bit load → extract bits 15–0
-                  ((ExtMode.WL) (extract 15 0 src))
-                  ((ExtMode.WQ) (extract 15 0 src))
-                  ;; 32-bit→64 zero-extend via plain movl; extract bits 31–0
-                  ((ExtMode.LQ) (extract 31 0 src))
-      )))))
+         (switch ext_mode
+           ((ExtMode.BL) (zero_ext 64 (conv_to 8  loaded_value)))
+           ((ExtMode.BQ) (zero_ext 64 (conv_to 8  loaded_value)))
+           ((ExtMode.WL) (zero_ext 64 (conv_to 16 loaded_value)))
+           ((ExtMode.WQ) (zero_ext 64 (conv_to 16 loaded_value)))
+           ((ExtMode.LQ) (zero_ext 64 (conv_to 32 loaded_value))))))
+  )
+)
 
 ; TODO(mbm): AluRmiR must handle memory and immediate forms of src2 operand
 (spec (MInst.AluRmiR size op src1 src2 dst)
@@ -825,6 +853,7 @@
 
 ;; Get the true `OperandSize` for a given `Type`, with no rounding.
 (decl raw_operand_size_of_type (Type) OperandSize)
+(spec (raw_operand_size_of_type t) (provide true))
 (extern constructor raw_operand_size_of_type raw_operand_size_of_type)
 
 ;; Get the bit width of an `OperandSize`.
@@ -1084,6 +1113,7 @@
 )
 (extern constructor put_in_reg_mem_imm put_in_reg_mem_imm)
 
+(model RegMem (type (bv)))
 (type RegMem extern
       (enum
        (Reg (reg Reg))
@@ -1111,7 +1141,7 @@
 (model SyntheticAmode (type (bv 64)))
 
 (decl synthetic_amode_to_reg_mem (SyntheticAmode) RegMem)
-(spec (synthetic_amode_to_reg_mem am) (provide(= result(RegMem.Mem am))))
+(spec (synthetic_amode_to_reg_mem am) (provide(= result am)))
 (extern constructor synthetic_amode_to_reg_mem synthetic_amode_to_reg_mem)
 
 (decl amode_to_synthetic_amode (Amode) SyntheticAmode)
@@ -1596,7 +1626,10 @@
 (model WritableGpr (type (bv)))
 (type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
-(model GprMem (type (bv)))
+(model GprMem (type
+  (struct (data (bv 64))
+          (isMem Bool)))
+)
 (type GprMemImm extern (enum))
 (model GprMemImm (type (bv)))
 (type Imm8Gpr extern (enum))
@@ -1748,7 +1781,9 @@
 ;; Asserts that the `RegMem`'s register, if any, is a GPR.
 (decl reg_mem_to_gpr_mem (RegMem) GprMem)
 (spec (reg_mem_to_gpr_mem rm)
-  (provide true))
+  (provide
+    (= (:data result) rm)
+    (= (:isMem result) false))) 
 (extern constructor reg_mem_to_gpr_mem reg_mem_to_gpr_mem)
 
 ;; Construct a `GprMem` from a `Reg`.
@@ -2324,12 +2359,12 @@
   (provide
     ;; mirror Rust’s ExtMode::new match:
     (= result
-       (if (= src_bits 8)
-           (if (= dst_bits 32)
+       (if (= src_bits #x0008)
+           (if (= dst_bits #x0020)
                (ExtMode.BL)
                (ExtMode.BQ))
-         (if (= src_bits 16)
-             (if (= dst_bits 32)
+         (if (= src_bits #x0010)
+             (if (= dst_bits #x0020)
                  (ExtMode.WL)
                  (ExtMode.WQ))
              (ExtMode.LQ)))))
