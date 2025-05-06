@@ -783,6 +783,7 @@
   )
 )
 
+
 ; TODO(mbm): AluRmiR must handle memory and immediate forms of src2 operand
 (spec (MInst.AluRmiR size op src1 src2 dst)
       (provide
@@ -821,14 +822,14 @@
                         ((OperandSize.Size32) (zero_ext 64 (extract 31 0 addr)))
                   )
             )
-      )
-)
+      ))
 
 (type OperandSize extern
       (enum Size8
             Size16
             Size32
             Size64))
+
 
 (type DivSignedness
       (enum Signed
@@ -853,7 +854,14 @@
 
 ;; Get the true `OperandSize` for a given `Type`, with no rounding.
 (decl raw_operand_size_of_type (Type) OperandSize)
-(spec (raw_operand_size_of_type t) (provide true))
+(spec (raw_operand_size_of_type ty)
+  (provide
+    (= result
+       (switch (:bits ty)
+         (8  (OperandSize.Size8))
+         (16 (OperandSize.Size16))
+         (32 (OperandSize.Size32))
+         (64 (OperandSize.Size64))))))
 (extern constructor raw_operand_size_of_type raw_operand_size_of_type)
 
 ;; Get the bit width of an `OperandSize`.
@@ -1340,6 +1348,7 @@
 ;;
 ;; This is used when lowering various shifts and rotates.
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
+(attr put_masked_in_imm8_gpr (veri chain))
 (rule 2 (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
       (const_to_type_masked_imm8 amt ty))
 (rule 1 (put_masked_in_imm8_gpr amt (fits_in_16 ty))
@@ -1633,6 +1642,7 @@
 (type GprMemImm extern (enum))
 (model GprMemImm (type (bv)))
 (type Imm8Gpr extern (enum))
+(model Imm8Gpr (type (bv)))
 
 (type Xmm (primitive Xmm))
 (type WritableXmm (primitive WritableXmm))
@@ -1976,6 +1986,8 @@
 ;; shift/rotate more bits than the type has available, per Cranelift's
 ;; semantics.
 (decl const_to_type_masked_imm8 (u64 Type) Imm8Gpr)
+(spec (const_to_type_masked_imm8 u ty)
+  (provide true))
 (extern constructor const_to_type_masked_imm8 const_to_type_masked_imm8)
 
 ;; Generate a mask for the bit-width of the given type
@@ -1992,6 +2004,7 @@
 
 ;; A load that can be sunk into another operation.
 (type SinkableLoad extern (enum))
+(model SinkableLoad (type (bv)))
 
 ;; Extract a `SinkableLoad` that works with `RegMemImm.Mem` from a value
 ;; operand.
@@ -2001,6 +2014,7 @@
 ;; instructions which load exactly the type width necessary use
 ;; `sinkable_load_exact`.
 (decl sinkable_load (SinkableLoad) Value)
+(spec (sinkable_load sl)(provide true))
 (extern extractor sinkable_load sinkable_load)
 
 ;; Same as `sinkable_load` except that all type widths of loads are supported.
