@@ -1,1 +1,3 @@
-#2454	Xor_mem_reg
+#258	left_shift_small
+		type solution status = inapplicableConflict { x: ExprId(111), reason: "inapplicable set type value: Type(BitVector(Bits(16))) = Type(BitVector(Bits(8)))" }
+#261	left_shift_small

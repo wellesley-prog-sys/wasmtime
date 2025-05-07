@@ -4211,7 +4211,7 @@
 
 ;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule stack_add_guard (lower (stack_addr _ stack_slot offset))
+(rule (lower (stack_addr _ stack_slot offset))
       (stack_addr_impl stack_slot offset))
 
 ;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
