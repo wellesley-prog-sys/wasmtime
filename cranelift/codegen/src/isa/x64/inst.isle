@@ -759,6 +759,8 @@
   (modifies isa_load)
 
   (provide
+    (=> (not (:isMem src))
+            (= dst (:data src)))
     ;; Only handle the “memory” case; require that isMem=1
     (=>
       ( :isMem src )    
@@ -1110,6 +1112,10 @@
 
 (model RegMemImm (type (bv)))
 
+(spec (RegMemImm.Imm simm32) (provide
+      (= result
+            (bvor (bvshl #b10 62)(zero_ext 64 simm32)))
+))
 
 ;; Put the given clif value into a `RegMemImm` operand.
 ;;
@@ -1350,7 +1356,21 @@
 ;;
 ;; This is used when lowering various shifts and rotates.
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
-(attr put_masked_in_imm8_gpr (veri chain))
+(spec (put_masked_in_imm8_gpr amt ty) (provide 
+            (= (:Imm8 result)
+                  (bvand 
+                        (conv_to 8 amt)
+                        (switch (:bits ty)
+                              (8 #x07)
+                              (16 #x0f)
+                              (32 #x1f)
+                              (64 #x3f)
+                        )
+                  )
+            )
+            (= (:isReg result) false)
+            (= (:reg result) #x0000000000000000)
+      ))
 (rule 2 (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
       (const_to_type_masked_imm8 amt ty))
 (rule 1 (put_masked_in_imm8_gpr amt (fits_in_16 ty))
@@ -1799,7 +1819,7 @@
 (spec (reg_mem_to_gpr_mem rm)
   (provide
     (= (:data result) rm)
-    (= (:isMem result) false))) 
+    (= (:isMem result) true))) 
 (extern constructor reg_mem_to_gpr_mem reg_mem_to_gpr_mem)
 
 ;; Construct a `GprMem` from a `Reg`.
@@ -3063,29 +3083,29 @@
       (require 
             (= (:isReg amt) false))
       (provide
-            (and
-                  (= result
-                        (switch (:bits ty)
-                              (8
-                                    ;; for 8‑bit ops, extract the low‑8, shift, then zero‐extend back to 64
-                                    (zero_ext 64
-                                    (bvshl
+            (= result
+                  (switch (:bits ty)
+                        (8
+                              ;; for 8‑bit ops, extract the low‑8, shift, then zero‐extend back to 64
+                              (zero_ext 64
+                              (bvshl
                                     (conv_to 8 src)
                                     (:Imm8 amt))))
-                              (16
-                                    (zero_ext 64
-                                    (bvshl
+                        (16
+                              (zero_ext 64
+                              (bvshl
                                     (conv_to 16 src)
-                                    (:Imm8 amt))))
-                              (32
-                                    (zero_ext 64
-                                    (bvshl
+                                    (zero_ext 16 (:Imm8 amt)))))
+                        (32
+                              (zero_ext 64
+                              (bvshl
                                     (conv_to 32 src)
-                                    (:Imm8 amt))))
-                              (64
-                                    ;; for 64‑bit ops we just shift the full 64
-                                    (bvshl src (:Imm8 amt)))))
-            )
+                                    (zero_ext 32 (:Imm8 amt)))))
+                        (64
+                              ;; for 64‑bit ops we just shift the full 64
+                              (bvshl 
+                                    src 
+                                    (zero_ext 64 (:Imm8 amt))))))
       )
 )
 (rule (x64_shl ty src1 src2)

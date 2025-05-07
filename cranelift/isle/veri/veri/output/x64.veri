@@ -1,3 +1,17 @@
 #258	left_shift_small
-		type solution status = inapplicableConflict { x: ExprId(111), reason: "inapplicable set type value: Type(BitVector(Bits(16))) = Type(BitVector(Bits(8)))" }
-#261	left_shift_small
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+		applicability = applicable
+		verification = success
