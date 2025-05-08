@@ -787,6 +787,55 @@
 )
 
 
+; Parameters of a store operation.
+(state isa_store
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+            (value (bv 64))
+        )
+    )
+    (default
+        (and
+            ; Store is not active.
+            (not (:active isa_store))
+
+            ; Must provide a fixed size in the default case, otherwise type
+            ; inference is underconstrained.
+            (= (:size_bits isa_store) 1)
+        )
+    )
+)
+
+;;MovRM - integer stores, i.e. mov (b w l q) reg addr. 
+;; MovRm (size OperandSize) ;; 1, 2, 4, or 8
+;;       (src Gpr)
+;;       (dst SyntheticAmode)
+(spec (MInst.MovRM size src dst)
+      ;; marks store active
+      (modifies isa_store)
+      ;; provide block
+      (provide 
+            ;; we are doing a store
+            (= (:active isa_store) true)
+            ;; size in bit = size * 8 
+            (= (:size_bits isa_store)
+                  (switch size
+                        ((OperandSize.Size8) 8)
+                        ((OperandSize.Size16) 16)
+                        ((OperandSize.Size32) 32)
+                        ((OperandSize.Size64) 64)
+                  )
+            )
+            ;; address 
+            (= (:addr isa_store) dst)
+            ;; value to store
+            (= (:value isa_store) src)
+      )
+)
+
 ; TODO(mbm): AluRmiR must handle memory and immediate forms of src2 operand
 (spec (MInst.AluRmiR size op src1 src2 dst)
       (provide

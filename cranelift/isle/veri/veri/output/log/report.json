@@ -6,18 +6,18 @@
     "--codegen-crate-dir",
     "../../../codegen/",
     "--work-dir",
-    "/tmp/tmp.zUIcFcbmia",
+    "/tmp/tmp.AdN1sjUpHS",
     "--name",
     "x64",
     "--log-dir",
     "output/log",
     "--filter",
-    "include:rule:left_shift_small",
+    "include:rule:store_narrow",
     "--solver",
     "z3"
   ],
   "filters": [
-    "include:rule:left_shift_small",
+    "include:rule:store_narrow",
     "exclude:tag:TODO"
   ],
   "default_solver": "z3",
@@ -26,8 +26,8 @@
     "nanos": 0
   },
   "duration": {
-    "secs": 5,
-    "nanos": 664435602
+    "secs": 15,
+    "nanos": 614003379
   },
   "num_threads": 1,
   "terms": [
@@ -7512,7 +7512,7 @@
     {
       "name": "MInst.MovRM",
       "class": "enum_variant",
-      "has_spec": false,
+      "has_spec": true,
       "tags": []
     },
     {
@@ -14074,32 +14074,42 @@
   ],
   "expansions": [
     {
-      "id": 258,
-      "description": "left_shift_small",
+      "id": 1697,
+      "description": "store_narrow",
       "root": "lower",
       "rules": [
-        "left_shift_small",
-        "output_gpr",
-        "output_reg"
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1313",
+        "../../../codegen/src/isa/x64/inst.isle line 1358"
       ],
       "chained": [
-        "output_gpr",
-        "output_reg"
+        "amode_imm_reg",
+        "side_effect",
+        "to_amode",
+        "x64_movrm"
       ],
       "terms": [
-        "fits_in_64",
-        "gpr_to_reg",
-        "has_type",
-        "ishl",
-        "output",
+        "Amode.ImmReg",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "emit_side_effect",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
         "put_in_gpr",
-        "put_masked_in_imm8_gpr",
-        "value_reg",
-        "x64_shl"
+        "put_in_reg",
+        "raw_operand_size_of_type",
+        "store",
+        "value_type"
       ],
       "tags": [
-        "clif_ishl",
-        "wasm_category_binary",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_stores",
         "wasm_proposal_mvp"
       ],
       "solver": "z3",
@@ -14107,104 +14117,4580 @@
       "type_instantiations": [
         {
           "choices": [
-            "ishl({bits: int}, bv 8, bv 8) -> bv 8"
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
           ],
           "verify": {
             "verdict": "success",
             "init_time": {
               "secs": 0,
-              "nanos": 39841205
+              "nanos": 51682654
             },
             "applicable_time": {
               "secs": 0,
-              "nanos": 12432237
+              "nanos": 11300553
             },
             "verify_time": {
               "secs": 0,
-              "nanos": 8445372
+              "nanos": 955607
             }
           },
           "duration": {
             "secs": 0,
-            "nanos": 63774274
+            "nanos": 67277036
           }
         },
         {
           "choices": [
-            "ishl({bits: int}, bv 16, bv 16) -> bv 16"
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
           ],
           "verify": {
             "verdict": "success",
             "init_time": {
               "secs": 0,
-              "nanos": 41932299
+              "nanos": 51886976
             },
             "applicable_time": {
               "secs": 0,
-              "nanos": 14976212
+              "nanos": 11111672
             },
             "verify_time": {
               "secs": 0,
-              "nanos": 59898489
+              "nanos": 1007166
             }
           },
           "duration": {
             "secs": 0,
-            "nanos": 119804299
+            "nanos": 67331396
           }
         },
         {
           "choices": [
-            "ishl({bits: int}, bv 32, bv 32) -> bv 32"
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
           ],
           "verify": {
             "verdict": "success",
             "init_time": {
               "secs": 0,
-              "nanos": 43955951
+              "nanos": 50322206
             },
             "applicable_time": {
               "secs": 0,
-              "nanos": 35634900
+              "nanos": 11443154
             },
             "verify_time": {
               "secs": 0,
-              "nanos": 341643269
+              "nanos": 1046847
             }
           },
           "duration": {
             "secs": 0,
-            "nanos": 424410060
+            "nanos": 65967547
           }
         },
         {
           "choices": [
-            "ishl({bits: int}, bv 64, bv 64) -> bv 64"
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
           ],
           "verify": {
             "verdict": "success",
             "init_time": {
               "secs": 0,
-              "nanos": 37923474
+              "nanos": 48040871
             },
             "applicable_time": {
               "secs": 0,
-              "nanos": 157022570
+              "nanos": 18538960
             },
             "verify_time": {
-              "secs": 1,
-              "nanos": 476186991
+              "secs": 0,
+              "nanos": 1247248
             }
           },
           "duration": {
-            "secs": 1,
-            "nanos": 674355255
+            "secs": 0,
+            "nanos": 71039420
           }
         }
       ],
       "duration": {
-        "secs": 2,
-        "nanos": 301340605
+        "secs": 0,
+        "nanos": 292314453
+      }
+    },
+    {
+      "id": 1698,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1313",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 4,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 50905450
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 15260379
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 871965
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 70069854
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 57020049
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 16274266
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1436809
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 77862704
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 52630541
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 15323739
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1084847
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 72227547
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 57842734
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 16194745
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1192048
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 78391908
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 332908635
+      }
+    },
+    {
+      "id": 1699,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1313",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 10,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 59552106
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 22516705
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1657890
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 86783602
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 66336750
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19935009
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1883212
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 91295831
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 65273623
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 20856135
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1552210
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 91001069
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62317244
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 29051188
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1770051
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 96354144
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 423102579
+      }
+    },
+    {
+      "id": 1700,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1313",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 10,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 63854734
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23332071
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1607570
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 91969556
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 65756786
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19646127
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2006973
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 90666946
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 64099055
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 20254051
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1610771
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 89151818
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 63536171
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 25430485
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1745331
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 93888407
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 422708376
+      }
+    },
+    {
+      "id": 1701,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1332",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 4,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 47518348
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 16240865
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1248728
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 67975680
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 53847548
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 16082064
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1470890
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 74743564
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 55181237
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 16699748
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1637210
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 76557096
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 57634453
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 12358760
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1518010
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 74630443
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 328294325
+      }
+    },
+    {
+      "id": 1702,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1332",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 10,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62880127
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 21856661
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1673131
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 89527060
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 64615938
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 20193290
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1656050
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 89725301
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62313444
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 20057529
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1558011
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 87040603
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62711486
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 28001101
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1883572
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 95997861
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 419503035
+      }
+    },
+    {
+      "id": 1703,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1332",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 10,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 65004260
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23257431
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1625691
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 93038282
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 61924801
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 20075250
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1595130
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 86852482
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 65505304
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 20042330
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1805372
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 90479266
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62636886
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27147055
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1697491
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 94723573
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 422428934
+      }
+    },
+    {
+      "id": 1704,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1334",
+        "../../../codegen/src/isa/x64/inst.isle line 1358"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmReg",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "put_in_reg",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 7,
+      "type_instantiations": [
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 55619600
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 15174138
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1491449
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 75479409
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 56322404
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 15477141
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1443289
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 76363174
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 58511978
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 16072824
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1267089
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 78857711
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 53715948
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 14214972
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1398449
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 72415748
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 345351276
+      }
+    },
+    {
+      "id": 1705,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1334",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 11,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 59366264
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 20153730
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1657971
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 84247626
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 57931615
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 21764861
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1494730
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 84389426
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 60917594
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19538486
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1732012
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 85373913
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 57784134
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19485446
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1445450
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 81873090
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 390734769
+      }
+    },
+    {
+      "id": 1706,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1334",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68951686
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23463632
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1829532
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97527632
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 66780552
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27171696
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1985292
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 99304522
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 66395750
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 24926801
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2305415
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97177709
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68684685
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23832954
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1817212
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97697513
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 478869100
+      }
+    },
+    {
+      "id": 1707,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1334",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 59566946
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 22825947
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1819372
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 87514326
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 72195307
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27918381
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1937133
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 105449203
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 72119506
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23405792
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2197974
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 101239855
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 69883692
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23753074
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1765411
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 98748159
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 478765059
+      }
+    },
+    {
+      "id": 1708,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1337",
+        "../../../codegen/src/isa/x64/inst.isle line 1358"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmReg",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "put_in_reg",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 7,
+      "type_instantiations": [
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 53117184
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 15306179
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1216728
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 72674511
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 61825040
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 15293699
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 906446
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 81261046
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62967048
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 15392340
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1244048
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 82625294
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 58287417
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 14890496
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1445570
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 77763664
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 355747223
+      }
+    },
+    {
+      "id": 1709,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1337",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 11,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 58031616
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 18918682
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1420609
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 81336726
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62850127
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 22917388
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1983413
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 90956229
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62329603
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19437006
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1496330
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 86438719
+          }
+        },
+        {
+          "choices": [
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 58652219
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19444686
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1534170
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 84009864
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 396545087
+      }
+    },
+    {
+      "id": 1710,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1337",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70981860
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23157910
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1903012
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 99253162
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68857966
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27065215
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2251815
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 101495617
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70876459
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23986395
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1850092
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 100031728
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70355815
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23418992
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1808611
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 98895040
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 486409188
+      }
+    },
+    {
+      "id": 1711,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1337",
+        "../../../codegen/src/isa/x64/inst.isle line 1360",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg",
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 60392391
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 22793148
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1965372
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 88432772
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68636724
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 35500350
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1747051
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 109193907
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70177694
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23823994
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1863412
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 99031481
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68954646
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23194470
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1938773
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97337630
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 479669745
+      }
+    },
+    {
+      "id": 1712,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1340",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 11,
+      "type_instantiations": [
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 60617393
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19409005
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1785972
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 84917430
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 64274216
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27544338
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1621891
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 96538624
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62832287
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 28213742
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1832292
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 96187782
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62811206
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19689808
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1510089
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 87089924
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 418899551
+      }
+    },
+    {
+      "id": 1713,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1340",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 64192416
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 22711707
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1868292
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 92014396
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70933499
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27352057
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1971373
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 103583990
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 65710185
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23966915
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1859772
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 94845134
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68199561
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 24112516
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1868252
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97635712
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 476153602
+      }
+    },
+    {
+      "id": 1714,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1340",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 69117087
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23711794
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1868812
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 98020194
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70937699
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 42645156
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1827132
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 118756729
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68875806
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 24788481
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1838811
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 99105801
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 69118887
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23482552
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2314695
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 98319596
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 499779115
+      }
+    },
+    {
+      "id": 1715,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1343",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 11,
+      "type_instantiations": [
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 58951462
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19918169
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1790891
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 83689902
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62960568
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 28198022
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1588250
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 95878020
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 63059168
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27824140
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1593970
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 95584059
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 61033195
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19059884
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1478249
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 84632467
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 414228441
+      }
+    },
+    {
+      "id": 1716,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1343",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68606004
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23536113
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1903092
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97145149
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 66272669
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27192375
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1970852
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 98622438
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 69169528
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 25332003
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1248248
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 98909120
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 75132046
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23810914
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2275375
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 104557357
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 484958178
+      }
+    },
+    {
+      "id": 1717,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1343",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 66251749
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23976235
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1802052
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 95132256
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70118254
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 43348601
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1893732
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 118784448
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 72244548
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 24057476
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1966012
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 101593378
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 66957393
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23309551
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1947373
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 95431138
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 496692934
+      }
+    },
+    {
+      "id": 1718,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1346",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 11,
+      "type_instantiations": [
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 51796216
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 18803681
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1048327
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 74684044
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 57233411
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 28171382
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1861932
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 90535986
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62760046
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 28627186
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1597890
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 96131262
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 63027088
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19543607
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1842892
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 87578806
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 403861054
+      }
+    },
+    {
+      "id": 1719,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1346",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 65807266
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23694073
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2096174
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 94849374
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 72123667
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 48295193
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2172214
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 126151536
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68006200
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 24236077
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1903892
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97495791
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 72930152
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23064469
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1321009
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 100554651
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 506783680
+      }
+    },
+    {
+      "id": 1720,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1346",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 66998394
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23466752
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1880692
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 95563099
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68693045
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 26856214
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2107093
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 100971693
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 69642931
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23627432
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1925812
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 98505158
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 71026860
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23221630
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1896812
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 99406923
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 479766105
+      }
+    },
+    {
+      "id": 1721,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1349",
+        "../../../codegen/src/isa/x64/inst.isle line 1365"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "is_gpr_type",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 11,
+      "type_instantiations": [
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 57381491
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 19678008
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1525130
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 81647728
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 56786607
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27676819
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1627371
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 89151057
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 60942634
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27845900
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1564331
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 93487605
+          }
+        },
+        {
+          "choices": [
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 62980847
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 18879002
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1414329
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 86352239
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 405113982
+      }
+    },
+    {
+      "id": 1722,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1349",
+        "../../../codegen/src/isa/x64/inst.isle line 1367"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 63979414
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23248431
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1929932
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 92357078
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 65775026
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 50177325
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2152894
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 121352145
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70643697
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 24430878
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2273495
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 100806212
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 68854046
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23747633
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1927413
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 97921754
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 499185991
+      }
+    },
+    {
+      "id": 1723,
+      "description": "store_narrow",
+      "root": "lower",
+      "rules": [
+        "store_narrow",
+        "side_effect",
+        "x64_movrm",
+        "../../../codegen/src/isa/x64/inst.isle line 1315",
+        "../../../codegen/src/isa/x64/inst.isle line 1349",
+        "../../../codegen/src/isa/x64/inst.isle line 1370"
+      ],
+      "chained": [
+        "amode_imm_reg_reg_shift",
+        "side_effect",
+        "to_amode",
+        "to_amode_add",
+        "x64_movrm"
+      ],
+      "terms": [
+        "Amode.ImmRegRegShift",
+        "MInst.MovRM",
+        "SideEffectNoResult.Inst",
+        "amode_to_synthetic_amode",
+        "def_inst",
+        "emit_side_effect",
+        "i32_from_iconst",
+        "i32_to_offset32",
+        "iadd",
+        "iconst",
+        "is_gpr_type",
+        "ishl",
+        "offset32_to_i32",
+        "output_none",
+        "put_in_gpr",
+        "raw_operand_size_of_type",
+        "s32_add_fallible",
+        "store",
+        "u32_lteq",
+        "u8_as_u32",
+        "uimm8",
+        "value_type"
+      ],
+      "tags": [
+        "clif_iadd",
+        "clif_iconst",
+        "clif_ishl",
+        "clif_store",
+        "internal_derived_spec",
+        "slow",
+        "wasm_category_binary",
+        "wasm_category_const",
+        "wasm_category_loads",
+        "wasm_category_stores",
+        "wasm_proposal_mvp"
+      ],
+      "solver": "z3",
+      "failed_type_inference": 17,
+      "type_instantiations": [
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 8, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 67352156
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23577713
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1941453
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 96369424
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 16, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 67523677
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 27988221
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2362655
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 101347696
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 32, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 70157774
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23843514
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 2206334
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 99637764
+          }
+        },
+        {
+          "choices": [
+            "iconst({bits: int}, bv 64) -> bv 64",
+            "ishl({bits: int}, bv 64, bv 64) -> bv 64",
+            "i32_from_iconst(bv 32) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "iadd({bits: int}, bv 64, bv 64) -> bv 64",
+            "store({aligned: bool, trapcode: bv 4}, bv 64, bv _, bv 32) -> bv 1"
+          ],
+          "verify": {
+            "verdict": "success",
+            "init_time": {
+              "secs": 0,
+              "nanos": 71059180
+            },
+            "applicable_time": {
+              "secs": 0,
+              "nanos": 23863314
+            },
+            "verify_time": {
+              "secs": 0,
+              "nanos": 1896692
+            }
+          },
+          "duration": {
+            "secs": 0,
+            "nanos": 100077208
+          }
+        }
+      ],
+      "duration": {
+        "secs": 0,
+        "nanos": 481478476
       }
     }
   ]
