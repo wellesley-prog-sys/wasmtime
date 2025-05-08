@@ -836,6 +836,40 @@
       )
 )
 
+;; Integer arithmetic read-modify-write on memory.
+      ;; (AluRM (size OperandSize) ;; 1, 2, 4 or 8
+            ;; (op AluRmiROpcode)
+            ;; (src1_dst SyntheticAmode)
+            ;; (src2 Gpr))
+;; add [rdi], rax 
+      ;; read @ (rdi); add rax into it; write @ (rdi). 
+(spec (MInst.AluRM size op src1 src2)
+      ;; active load and store
+      (modifies isa_load)
+      (modifies isa_store)
+      ;; provide block
+      (provide 
+            ;; load from memory 
+            (= (:active isa_load) true)
+            (= (:addr isa_load) src1)
+            (= (:size_bits isa_load)
+                  (switch size
+                        ((OperandSize.Size32) 32)
+                        ((OperandSize.Size8) 8)
+                        ((OperandSize.Size16) 16)
+                        ((OperandSize.Size64) 64)))
+            ;; compute new value
+            (= (:value isa_store) 
+                  (bvxor loaded_value src2
+                  ))
+            ;; store back to memory 
+            (= (:active isa_store) true)
+            (= (:addr isa_store) src1)
+            (= (:size_bits isa_store) (:size_bits isa_load))
+      )
+)
+
+
 ; TODO(mbm): AluRmiR must handle memory and immediate forms of src2 operand
 (spec (MInst.AluRmiR size op src1 src2 dst)
       (provide
@@ -1164,6 +1198,13 @@
 (spec (RegMemImm.Imm simm32) (provide
       (= result
             (bvor (bvshl #b10 62)(zero_ext 64 simm32)))
+))
+
+(spec (RegMemImm.Mem addr) (provide 
+      (= result 
+            (bvor
+                  #x4000000000000000 addr
+            ))
 ))
 
 ;; Put the given clif value into a `RegMemImm` operand.
@@ -2119,7 +2160,9 @@
 ;; instructions which load exactly the type width necessary use
 ;; `sinkable_load_exact`.
 (decl sinkable_load (SinkableLoad) Value)
-(spec (sinkable_load sl)(provide true))
+(spec (sinkable_load sl)
+      (provide
+            (= result sl) ))
 (extern extractor sinkable_load sinkable_load)
 
 ;; Same as `sinkable_load` except that all type widths of loads are supported.
@@ -2135,6 +2178,7 @@
 ;; instruction that produced the `SinkableImm` has been sunk into another
 ;; instruction, and no longer needs to be lowered.
 (decl sink_load (SinkableLoad) SyntheticAmode)
+(spec (sink_load sl) (provide (= result sl)))
 (extern constructor sink_load sink_load)
 
 (decl sink_load_to_gpr_mem_imm (SinkableLoad) GprMemImm)
