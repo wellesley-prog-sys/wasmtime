@@ -529,7 +529,7 @@
 
 ;; `i64` and smaller.
 
-(rule -1 (lower (has_type (fits_in_64 ty) (ishl _ src amt)))
+(rule left_shift_small -1 (lower (has_type (fits_in_64 ty) (ishl _ src amt)))
       (x64_shl ty src (put_masked_in_imm8_gpr amt ty)))
 
 ;; `i128`.
@@ -2949,7 +2949,7 @@
 ;; 8-bit loads.
 ;;
 ;; By default, we zero-extend all sub-64-bit loads to a GPR.
-(rule -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load _ flags address offset)))
+(rule load_narrow -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load _ flags address offset)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
 ;; But if we know that both the `from` and `to` are 64 bits, we simply load with
 ;; no extension.
@@ -3036,7 +3036,7 @@
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8-, 16-, 32- and 64-bit GPR stores.
-(rule -2 (lower (store flags
+(rule store_narrow -2 (lower (store flags
                     value @ (value_type (is_gpr_type ty))
                     address
                     offset))
@@ -3286,7 +3286,7 @@
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
 ;; Xor mem, reg
-(rule 3 (lower
+(rule Xor_mem_reg 3 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (bxor _ (and

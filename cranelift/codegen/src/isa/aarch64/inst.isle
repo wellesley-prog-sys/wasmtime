@@ -75,7 +75,7 @@
         (size OperandSize)
         (rd WritableReg)
         (rn Reg))
-
+      
        ;; An unsigned (zero-extending) 8-bit load.
        (ULoad8
         (rd WritableReg)
