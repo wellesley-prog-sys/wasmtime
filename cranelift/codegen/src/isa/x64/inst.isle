@@ -875,7 +875,7 @@
       (provide
             ; Execute opcode.
             (=
-                  dst 
+                  dst
                   (switch size
                         ; 64-bit forms operate on full register
                         ((OperandSize.Size64)
@@ -908,14 +908,14 @@
                         ((OperandSize.Size32) (zero_ext 64 (extract 31 0 addr)))
                   )
             )
-      ))
+      )
+)
 
 (type OperandSize extern
       (enum Size8
             Size16
             Size32
             Size64))
-
 
 (type DivSignedness
       (enum Signed
@@ -2513,7 +2513,7 @@
 
 (type ExtMode extern (enum BL BQ WL WQ LQ))
 
-; `ExtMode::new`
+;; `ExtMode::new`
 (decl ext_mode (u16 u16) ExtMode)
 (extern constructor ext_mode ext_mode)
 (spec (ext_mode src_bits dst_bits)
@@ -2694,7 +2694,6 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.MovzxRmR mode src dst))))
         dst))
-
 
 (decl x64_movsx (ExtMode GprMem) Gpr)
 (rule (x64_movsx mode src)
