@@ -835,7 +835,6 @@ impl Assignment {
     }
 }
 
-#[derive(Debug)]
 pub struct Conflict {
     pub x: ExprId,
     pub reason: String,
@@ -870,14 +869,12 @@ impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Status::Solved => write!(f, "solved"),
-            Status::Inapplicable(conflict) => write!(f, "inapplicable{:?}", conflict),
+            Status::Inapplicable(..) => write!(f, "inapplicable"),
             Status::Underconstrained => write!(f, "underconstrained"),
             Status::TypeError(..) => write!(f, "type error"),
         }
     }
 }
-
-
 
 pub struct Solution {
     pub status: Status,
