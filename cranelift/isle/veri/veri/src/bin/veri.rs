@@ -9,15 +9,19 @@ use cranelift_isle_veri::runner::{Filter, Runner, SolverBackend, SolverRule};
 struct Opts {
     /// Name of the ISLE compilation.
     #[arg(long, required = true)]
-    name: String,
+    name: Option<String>,
 
     /// Path to codegen crate directory.
     #[arg(long, required = true)]
-    codegen_crate_dir: std::path::PathBuf,
+    codegen_crate_dir: Option<std::path::PathBuf>,
 
     /// Working directory.
     #[arg(long, required = true)]
-    work_dir: std::path::PathBuf,
+    work_dir: Option<std::path::PathBuf>,
+
+    // run verifier on a standalone ISLE file
+    #[arg(long, conflicts_with_all = ["name", "codegen_crate_dir", "work_dir"])]
+    file: Option<std::path::PathBuf>,
 
     /// Filter expansions.
     #[arg(long = "filter", value_name = "FILTER")]
@@ -66,17 +70,32 @@ struct Opts {
 
 impl Opts {
     fn isle_input_files(&self) -> Result<Vec<std::path::PathBuf>> {
-        // Generate ISLE files.
-        let gen_dir = &self.work_dir;
-        generate_isle(gen_dir)?;
+        let name = self
+            .name
+            .as_ref()
+            .expect("missing ISLE compilation name");
+        
+        let codegen_dir = self
+            .codegen_crate_dir
+            .as_ref()
+            .expect("missing codegen crate directory");
+
+        let work_dir = self
+            .work_dir
+            .as_ref()
+            .expect("missing working directory");
+
+        // Generate ISLE files into work_dir
+        // let gen_dir = &self.work_dir;
+        generate_isle(work_dir)?;
 
         // Lookup ISLE compilations.
-        let compilations = get_isle_compilations(&self.codegen_crate_dir, gen_dir);
+        let compilations = get_isle_compilations(codegen_dir, work_dir);
 
         // Return inputs from the matching compilation, if any.
         Ok(compilations
-            .lookup(&self.name)
-            .ok_or(format_err!("unknown ISLE compilation: {}", self.name))?
+            .lookup(name) // now &str, not Option<String> 
+            .ok_or_else( || format_err!("unknown ISLE compilation: {}", name))?
             .paths()?)
     }
 }
@@ -84,16 +103,53 @@ impl Opts {
 fn main() -> Result<()> {
     env_logger::builder().format_target(false).init();
     let opts = Opts::parse();
-
     // Setup thread pool.
     rayon::ThreadPoolBuilder::new()
         .num_threads(opts.num_threads)
         .build_global()?;
     log::info!("num theads: {}", rayon::current_num_threads());
 
+    // standalone file mode
+    if let Some(file) = opts.file {
+        println!("Running standalone mode on {:?}", file);
+        let inputs = vec![file];
+        let mut runner = Runner::from_files(&inputs, "test")?; // NEW entry point
+        runner.include_first_rule_named(); // pick the first rule in the file
+
+        // Configure runner
+        if !opts.filters.is_empty() {
+            runner.filters(&opts.filters);
+        } else {
+            runner.include_first_rule_named();
+        }
+        if opts.skip_todo {
+            runner.skip_tag("TODO");
+        }
+
+        runner.set_default_solver_backend(opts.solver_backend.into());
+        if !opts.ignore_solver_tags {
+            runner.add_solver_tag_rules();
+        }
+        for solver_rule in opts.solver_rules {
+            runner.add_solver_rule(solver_rule);
+        }
+
+        runner.set_timeout(Duration::from_secs(opts.timeout));
+        if let Some(log_dir) = opts.log_dir {
+            runner.set_log_dir(log_dir);
+        }
+        runner.set_results_to_log_dir(opts.results_to_log_dir);
+        runner.skip_solver(opts.skip_solver);
+        runner.debug(opts.debug);
+
+        return runner.run(); // EARLY RETURN in file mode
+    }
+
+    // Normal mode -- not standalone file mode
     // Read ISLE inputs.
     let inputs = opts.isle_input_files()?;
-    let root_term = if opts.name != "opt" {
+    // unwrap before comparing 
+    let root_term = if opts.name.as_deref() != Some("opt") {
         "lower"
     } else {
         "simplify"
