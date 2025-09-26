@@ -1411,12 +1411,17 @@ impl<'a> ConditionsBuilder<'a> {
         field: TupleIndex,
     ) -> Result<()> {
         // Source binding should be an enum.
+        dbg!(&self.binding_value[&source]);
+
+
+        dbg!(&self.binding_value[&id]);
+
         let e = self.binding_value[&source]
             .as_enum()
             .ok_or(self.error("target of variant constraint should be an enum"))?
             .clone();
 
-        // Lookup enum type via corresponding constriant,
+        // Lookup enum type via corresponding constraint,
         let tys: Vec<_> = self
             .expansion
             .constraints

@@ -1688,7 +1688,7 @@
 ;; General 128-bit case.
 ;;
 ;; TODO: much better codegen is possible with a constant amount.
-(rule (lower (has_type $I128 (rotl _ x y)))
+(rule rotl_i128 (lower (has_type $I128 (rotl _ x y)))
       (let ((val ValueRegs x)
             (amt Reg (value_regs_get y 0))
             (neg_amt Reg (sub $I64 (imm $I64 (ImmExtend.Zero) 128) amt))
