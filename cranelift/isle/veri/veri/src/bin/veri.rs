@@ -94,7 +94,7 @@ impl Opts {
 
         // Return inputs from the matching compilation, if any.
         Ok(compilations
-            .lookup(name) // now &str, not Option<String> 
+            .lookup(name) 
             .ok_or_else( || format_err!("unknown ISLE compilation: {}", name))?
             .paths()?)
     }
@@ -113,8 +113,8 @@ fn main() -> Result<()> {
     if let Some(file) = opts.file {
         println!("Running standalone mode on {:?}", file);
         let inputs = vec![file];
-        let mut runner = Runner::from_files(&inputs, "test")?; // NEW entry point
-        runner.include_first_rule_named(); // pick the first rule in the file
+        let mut runner = Runner::from_files(&inputs, "test")?; 
+        runner.include_first_rule_named(); 
 
         // Configure runner
         if !opts.filters.is_empty() {
@@ -142,7 +142,7 @@ fn main() -> Result<()> {
         runner.skip_solver(opts.skip_solver);
         runner.debug(opts.debug);
 
-        return runner.run(); // EARLY RETURN in file mode
+        return runner.run(); 
     }
 
     // Normal mode -- not standalone file mode
