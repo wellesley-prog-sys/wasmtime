@@ -37,13 +37,15 @@ if [[ ! -d "${tmp_dir}" ]]; then
     exit 1
 fi
 
-# Run: two modes.
-
+# Standalone file mode
+# Detect --file in arguments and forward directly to cargo run
 if echo "$@" | grep -q -- "--file"; then
   echo "[veri.sh] Running in file mode with args: $@"
+  # Write results to output/filemode.veri instead of arch-specific logs
   cargo run --bin veri --profile "${profile}" -- "$@" \
     | tee "${output_dir}/filemode.veri"
 else
+    # Normal arch-based single-rule mode 
   echo "[veri.sh] Running in normal mode with arch=${arch}"
     cargo run --bin veri --profile "${profile}" -- \
         --codegen-crate-dir ../../../codegen/ \
