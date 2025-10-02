@@ -70,20 +70,14 @@ struct Opts {
 
 impl Opts {
     fn isle_input_files(&self) -> Result<Vec<std::path::PathBuf>> {
-        let name = self
-            .name
-            .as_ref()
-            .expect("missing ISLE compilation name");
-        
+        let name = self.name.as_ref().expect("missing ISLE compilation name");
+
         let codegen_dir = self
             .codegen_crate_dir
             .as_ref()
             .expect("missing codegen crate directory");
 
-        let work_dir = self
-            .work_dir
-            .as_ref()
-            .expect("missing working directory");
+        let work_dir = self.work_dir.as_ref().expect("missing working directory");
 
         // Generate ISLE files into work_dir
         // let gen_dir = &self.work_dir;
@@ -94,8 +88,8 @@ impl Opts {
 
         // Return inputs from the matching compilation, if any.
         Ok(compilations
-            .lookup(name) 
-            .ok_or_else( || format_err!("unknown ISLE compilation: {}", name))?
+            .lookup(name)
+            .ok_or_else(|| format_err!("unknown ISLE compilation: {}", name))?
             .paths()?)
     }
 }
@@ -113,8 +107,8 @@ fn main() -> Result<()> {
     if let Some(file) = opts.file {
         println!("Running standalone mode on {:?}", file);
         let inputs = vec![file];
-        let mut runner = Runner::from_files(&inputs, "test")?; 
-        runner.include_first_rule_named(); 
+        let mut runner = Runner::from_files(&inputs, "test")?;
+        runner.include_first_rule_named();
 
         // Configure runner
         if !opts.filters.is_empty() {
@@ -142,13 +136,13 @@ fn main() -> Result<()> {
         runner.skip_solver(opts.skip_solver);
         runner.debug(opts.debug);
 
-        return runner.run(); 
+        return runner.run();
     }
 
     // Normal mode -- not standalone file mode
     // Read ISLE inputs.
     let inputs = opts.isle_input_files()?;
-    // unwrap before comparing 
+    // unwrap before comparing
     let root_term = if opts.name.as_deref() != Some("opt") {
         "lower"
     } else {
