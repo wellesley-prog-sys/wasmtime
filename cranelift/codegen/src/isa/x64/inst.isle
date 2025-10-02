@@ -762,6 +762,7 @@
     (=> (not (:isMem src))
             (= dst (:data src)))
     ;; Only handle the “memory” case; require that isMem=1
+    ;; TODO: handle more cases https://github.com/wellesley-prog-sys/wasmtime/issues/31
     (=>
       ( :isMem src )    
       (and ;; isMem true 
@@ -832,9 +833,7 @@
             ;; address 
             (= (:addr isa_store) dst)
             ;; value to store
-            (= (:value isa_store) src)
-      )
-)
+            (= (:value isa_store) src)))
 
 ;; Integer arithmetic read-modify-write on memory.
       ;; (AluRM (size OperandSize) ;; 1, 2, 4 or 8
@@ -2160,9 +2159,7 @@
 ;; instructions which load exactly the type width necessary use
 ;; `sinkable_load_exact`.
 (decl sinkable_load (SinkableLoad) Value)
-(spec (sinkable_load sl)
-      (provide
-            (= result sl) ))
+(spec (sinkable_load sl) (provide (= result sl)))
 (extern extractor sinkable_load sinkable_load)
 
 ;; Same as `sinkable_load` except that all type widths of loads are supported.
@@ -2517,7 +2514,7 @@
 (decl ext_mode (u16 u16) ExtMode)
 (extern constructor ext_mode ext_mode)
 (spec (ext_mode src_bits dst_bits)
-  ;; only extent from shorter to longer bits 
+  ;; only extend from shorter to longer bits 
   (require (bvule src_bits dst_bits))
   (provide
     ;; mirror Rust’s ExtMode::new match:

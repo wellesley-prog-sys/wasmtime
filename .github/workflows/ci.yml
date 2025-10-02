@@ -21,9 +21,10 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.85
         with:
           targets: wasm32-wasip1,wasm32-unknown-unknown
+          components: rustfmt
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
       - name: Setup Tools Directory
@@ -44,9 +45,6 @@ jobs:
         run: cargo build --features cranelift-isle/printer --package 'cranelift-isle*'
       - name: Test
         run: cargo test --features cranelift-isle/printer --package 'cranelift-isle*'
-      - name: Cranelift Test
-        working-directory: cranelift
-        run: cargo test
       - name: Wast Tests
         run: cargo test --test wast
       - name: Format

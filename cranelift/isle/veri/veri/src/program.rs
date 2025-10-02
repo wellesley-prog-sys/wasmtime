@@ -45,7 +45,7 @@ impl Program {
                 Err(err) => bail!(Errors::new(vec![err], files)),
             };
 
-            match parser::parse(lexer) {
+            match parser::parse(lexer, files.clone()) {
                 Ok(mut ds) => defs.append(&mut ds),
                 Err(err) => bail!(Errors::new(vec![err], files)),
             }

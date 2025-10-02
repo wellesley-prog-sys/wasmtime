@@ -19,7 +19,7 @@ use crate::{
     debug::print_expansion,
     expand::{Chaining, Expander, Expansion},
     program::Program,
-    solver::{Applicability, Solver, Verification},
+    solver::{Applicability, Dialect, Solver, Verification},
     type_inference::{self, type_constraint_system, Assignment, Choice},
     veri::Conditions,
     BUILD_PROFILE, GIT_VERSION,
@@ -43,6 +43,13 @@ impl SolverBackend {
 
     fn all() -> Vec<Self> {
         vec![SolverBackend::Z3, SolverBackend::CVC5]
+    }
+
+    fn dialect(&self) -> Dialect {
+        match self {
+            SolverBackend::Z3 => Dialect::Z3,
+            SolverBackend::CVC5 => Dialect::SMTLIB2,
+        }
     }
 
     fn args(&self, timeout: Duration) -> Vec<String> {
@@ -755,6 +762,7 @@ impl Runner {
             .build()?;
 
         let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
+        solver.set_dialect(solver_backend.dialect());
         solver.encode()?;
         let init_time = start.elapsed();
 
