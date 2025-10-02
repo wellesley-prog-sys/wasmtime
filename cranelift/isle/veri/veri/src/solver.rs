@@ -65,8 +65,19 @@ static ROUND_TOWARD_POSITIVE: &str = "roundTowardPositive";
 static ROUND_TOWARD_NEGATIVE: &str = "roundTowardNegative";
 static ROUNDING_MODE: &str = ROUND_NEAREST_TIES_TO_EVEN;
 
+/// SMT Dialect.
+#[derive(Default, Debug, Clone, Copy)]
+pub enum Dialect {
+    /// SMT-LIB2 standard.
+    #[default]
+    SMTLIB2,
+    /// SMT-LIB2 with Z3 extensions.
+    Z3,
+}
+
 pub struct Solver<'a> {
     smt: Context,
+    dialect: Dialect,
     prog: &'a Program,
     conditions: &'a Conditions,
     assignment: &'a Assignment,
@@ -89,6 +100,7 @@ impl<'a> Solver<'a> {
     ) -> Result<Self> {
         let mut solver = Self {
             smt,
+            dialect: Dialect::default(),
             prog,
             conditions,
             assignment,
@@ -96,6 +108,10 @@ impl<'a> Solver<'a> {
         };
         solver.prelude()?;
         Ok(solver)
+    }
+
+    pub fn set_dialect(&mut self, dialect: Dialect) {
+        self.dialect = dialect;
     }
 
     fn prelude(&mut self) -> Result<()> {
@@ -131,7 +147,7 @@ impl<'a> Solver<'a> {
         self.smt.assert(assumptions)?;
 
         // Check
-        let verdict = match self.smt.check()? {
+        let verdict = match self.check()? {
             Response::Sat => Applicability::Applicable,
             Response::Unsat => Applicability::Inapplicable,
             Response::Unknown => Applicability::Unknown,
@@ -151,7 +167,7 @@ impl<'a> Solver<'a> {
         self.verification_condition()?;
 
         // Check
-        let verdict = match self.smt.check()? {
+        let verdict = match self.check()? {
             Response::Sat => Verification::Failure(self.model()?),
             Response::Unsat => Verification::Success,
             Response::Unknown => Verification::Unknown,
@@ -161,6 +177,29 @@ impl<'a> Solver<'a> {
         self.smt.pop()?;
 
         Ok(verdict)
+    }
+
+    fn check(&mut self) -> Result<Response> {
+        // Send check-sat command. Prefer (check-sat-using default) for Z3.
+        let cmd = self.smt.list(match self.dialect {
+            Dialect::SMTLIB2 => vec![self.smt.atoms().check_sat],
+            Dialect::Z3 => vec![self.smt.atom("check-sat-using"), self.smt.atom("default")],
+        });
+
+        self.smt.raw_send(cmd)?;
+
+        // Parse response.
+        let resp = self.smt.raw_recv()?;
+        let atoms = self.smt.atoms();
+        if resp == atoms.sat {
+            Ok(Response::Sat)
+        } else if resp == atoms.unsat {
+            Ok(Response::Unsat)
+        } else if resp == atoms.unknown {
+            Ok(Response::Unknown)
+        } else {
+            bail!("bad solver check response: {}", self.smt.display(resp))
+        }
     }
 
     pub fn exit(&mut self) -> Result<()> {

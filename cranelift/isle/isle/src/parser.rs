@@ -2,22 +2,25 @@
 
 #![allow(missing_docs)]
 
-use crate::ast::*;
 use crate::error::{Error, Span};
+use crate::files::Files;
 use crate::lexer::{Lexer, Pos, Token};
+use crate::{ast::*, log};
+use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, Error>;
 
 /// Parse the top-level ISLE definitions and return their AST.
-pub fn parse(lexer: Lexer) -> Result<Vec<Def>> {
-    let parser = Parser::new(lexer);
-    parser.parse_defs()
+pub fn parse(lexer: Lexer, files: Arc<Files>) -> Result<Vec<Def>> {
+    let mut parser = Parser::new(lexer, files);
+    let result = parser.parse_defs()?;
+    Ok(result)
 }
 
 /// Parse without positional information. Provided mainly to support testing, to
 /// enable equality testing on structure alone.
-pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
-    let mut parser = Parser::new(lexer);
+pub fn parse_without_pos(lexer: Lexer, files: Arc<Files>) -> Result<Vec<Def>> {
+    let mut parser = Parser::new(lexer, files);
     parser.disable_pos();
     parser.parse_defs()
 }
@@ -28,6 +31,7 @@ pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
+    files: Arc<Files>,
     disable_pos: bool,
 }
 
@@ -41,9 +45,10 @@ enum IfLetOrExpr {
 
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
-    pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
+    pub fn new(lexer: Lexer<'a>, files: Arc<Files>) -> Parser<'a> {
         Parser {
             lexer,
+            files,
             disable_pos: false,
         }
     }
@@ -168,7 +173,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_defs(mut self) -> Result<Vec<Def>> {
+    fn parse_defs(&mut self) -> Result<Vec<Def>> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
@@ -198,6 +203,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error(pos, format!("Unexpected identifier: {s}")));
             }
         };
+        self.count_lines(pos, &def);
         self.expect_rparen()?;
         Ok(def)
     }
@@ -1198,5 +1204,47 @@ impl<'a> Parser<'a> {
             outer_ty,
             pos,
         })
+    }
+
+    fn count_lines(&mut self, start_pos: Pos, def: &Def) {
+        // Compute lines between start and end positions.
+        let end_pos = self.pos();
+        assert_eq!(start_pos.file, end_pos.file);
+        let map = self.files.file_line_map(start_pos.file).unwrap();
+        let file_name = self.files.file_name(start_pos.file).unwrap();
+        let start_line = map.line(start_pos.offset);
+        let end_line = map.line(end_pos.offset);
+        let lines = (end_line - start_line) + 1;
+
+        // Categorize the definition.
+        let category = match def {
+            // Spec
+            Def::Attr(_) => "attr",
+            Def::Spec(spec) => &format!("spec/{}", spec.term.0),
+            Def::SpecMacro(_) => "macro",
+            Def::Model(_) => "model",
+            Def::State(_) => "state",
+            Def::Form(_) => "form",
+            Def::Instantiation(_) => "instantiation",
+
+            // ISLE
+            Def::Rule(rule) => {
+                let root_term = rule.pattern.root_term().unwrap();
+                match &rule.name {
+                    Some(name) => &format!("rule/{}/{}", root_term.0, name.0),
+                    None => &format!("rule/{}", root_term.0),
+                }
+            }
+
+            Def::Extern(_)
+            | Def::Converter(_)
+            | Def::Pragma(_)
+            | Def::Type(_)
+            | Def::Extractor(_)
+            | Def::Decl(_) => "isle",
+        };
+
+        // Report
+        log!(target: "isle_spec_lines", "SPEC_LINES\t{lines}\t{category}\t{file_name}\t{start_line}");
     }
 }
