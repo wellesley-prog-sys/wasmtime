@@ -10,6 +10,7 @@ use std::{
 };
 
 use crate::types::Field;
+use crate::types::Enum;
 use crate::types::{Compound, Const};
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
@@ -662,10 +663,11 @@ impl SpecEnv {
 
         env.collect_models(defs, tyenv);
         env.derive_type_models(tyenv)?;
+        env.collect_specs(defs, termenv, tyenv)?;
         env.derive_enum_variant_specs(termenv, tyenv)?;
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
-        env.collect_specs(defs, termenv, tyenv)?;
+        // env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv)?;
         env.collect_macros(defs);
         env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
@@ -756,7 +758,15 @@ impl SpecEnv {
 
     fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for model in self.type_model.values() {
-            if let Compound::Enum(e) = model {
+
+            // handle both Enum and ExtEnum 
+            let enum_ref: Option<&Enum> = match model {
+                Compound::Enum(e) => Some(e),
+                Compound::ExtEnum { base, .. } => Some(base),
+                _ => None,
+            };
+
+            if let Some(e) = enum_ref {
                 for variant in &e.variants {
                     // Lookup the corresponding term.
                     let full_name = ast::Variant::full_name(&e.name, &variant.name);
@@ -767,6 +777,11 @@ impl SpecEnv {
                                 "could not find variant term {name}",
                                 name = full_name.0
                             ))?;
+                    
+                    // guard: skip auto-gen if spec already exists for this
+                    if self.term_spec.contains_key(&term_id) {
+                        continue;
+                    }
 
                     // Synthesize spec.
                     let pos = variant.name.1;
