@@ -9,6 +9,7 @@ use std::{
     fmt::Debug,
 };
 
+use crate::types::Field;
 use crate::types::{Compound, Const};
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
@@ -658,6 +659,21 @@ impl SpecEnv {
         Ok(env)
     }
 
+    // helper function for ExtEnum
+    /// Borrow the base enum for a TypeId if present.
+    fn get_enum_from_typeid(&self, tid: TypeId) -> Option<&crate::types::Enum> {
+        match self.type_model.get(&tid)? {
+            crate::types::Compound::Enum(e) => Some(e),
+            crate::types::Compound::ExtEnum { base, .. } => Some(base),
+            _ => None,
+        }
+    }
+
+    /// Clone out an owned Enum for a TypeId (useful when constructing ExtEnum).
+    fn clone_enum_from_typeid(&self, tid: TypeId) -> Option<crate::types::Enum> {
+        self.get_enum_from_typeid(tid).cloned()
+    }
+
     fn collect_models(&mut self, defs: &[Def], tyenv: &TypeEnv) {
         for def in defs {
             if let ast::Def::Model(Model { name, val }) = def {
@@ -671,6 +687,30 @@ impl SpecEnv {
                         // TODO(mbm): enforce that the expression is constant.
                         // TODO(mbm): ensure the type of the expression matches the type of the
                         self.const_value.insert(sym, expr_from_ast(val));
+                    }
+                    ast::ModelValue::ExtEnumValue(fields) => {
+                        // 1) Resolve the base type to a TypeId.
+                        let base_tid = tyenv
+                            .get_type_by_name(name)
+                            .expect("ext-enum base type should exist");
+
+                        // 2) Clone the existing base enum compound.
+                        let base_enum = self
+                            .clone_enum_from_typeid(base_tid)
+                            .expect("expected base enum to be defined for type-ext-enum");
+
+                        // 3) Lower the extra fields to veri types::Field.
+                        let extra: Vec<Field> = fields
+                            .iter()
+                            .map(|mf| Field {
+                                name: mf.name.clone(),
+                                ty: Compound::from_ast(&mf.ty),
+                            })
+                            .collect();
+
+                        // 4) Build Compound::ExtEnum and overwrite the entry for this TypeId.
+                        let compound = Compound::ExtEnum { base: base_enum, extra };
+                        self.type_model.insert(base_tid, compound);
                     }
                 }
             }

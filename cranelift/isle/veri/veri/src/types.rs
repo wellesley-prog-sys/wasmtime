@@ -264,6 +264,38 @@ impl Compound {
                     .collect(),
             ),
             ModelType::Named(name) => Self::Named(name.clone()),
+            ModelType::ExtEnum(variants) => {
+                // Build `types::Variant`s
+                let lowered_variants: Vec<Variant> = variants
+                    .iter()
+                    .enumerate()
+                    .map(|(i, mv)| {
+                        let fields = mv.fields
+                            .iter()
+                            .map(|mf| Field {
+                                name: mf.name.clone(),
+                                ty: Self::from_ast(&mf.ty),
+                            })
+                            .collect();
+
+                        Variant {
+                            name: mv.name.clone(),
+                            id: VariantId(i),
+                            fields,
+                        }
+                    })
+                    .collect();
+
+                // Wrap in our Compound::ExtEnum
+                Self::ExtEnum {
+                    base: Enum {
+                        id: TypeId(0), // placeholder, depends on type assignment
+                        name: Ident("anon_extenum".to_string(), Pos::default()), // minimal Ident
+                        variants: lowered_variants,
+                    },
+                    extra: vec![], // can fill later if ExtEnum carries extras
+                }
+            }
         }
     }
 

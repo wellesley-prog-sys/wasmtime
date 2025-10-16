@@ -454,6 +454,13 @@ pub enum ModelType {
     Struct(Vec<ModelField>),
     /// Same model as the named type.
     Named(Ident),
+    ExtEnum(Vec<ModelVariant>),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ModelVariant {
+    pub name: Ident,
+    pub fields: Vec<ModelField>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -469,6 +476,8 @@ pub enum ModelValue {
     TypeValue(ModelType),
     /// Corresponds to ISLE external constants.
     ConstValue(SpecExpr),
+    // New ExtEnum model value 
+    ExtEnumValue(Vec<ModelField>),
 }
 
 /// A model of a construct into SMT-LIB (currently, types or enums)
