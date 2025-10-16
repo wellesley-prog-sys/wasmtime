@@ -694,7 +694,11 @@ impl SpecEnv {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
                     ast::ModelValue::TypeValue(model_type) => {
-                        self.set_model_type(name, model_type, tyenv);
+                        // only insert if this name hasn't been seen yet 
+                        let tid = tyenv.get_type_by_name(name).expect("type should exist");
+                        if !self.type_model.contains_key(&tid) {
+                            self.set_model_type(name, model_type, tyenv);
+                        }
                     }
                     ast::ModelValue::ConstValue(val) => {
                         // TODO(mbm): error on missing constant name rather than panic
