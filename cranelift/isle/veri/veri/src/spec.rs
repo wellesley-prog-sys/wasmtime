@@ -697,7 +697,8 @@ impl SpecEnv {
                         // 2) Clone the existing base enum compound.
                         let base_enum = self
                             .clone_enum_from_typeid(base_tid)
-                            .expect("expected base enum to be defined for type-ext-enum");       
+                            .expect("expected base enum to be defined for type-ext-enum");  
+
                         // 3) Lower the extra fields to veri types::Field.
                         let extra: Vec<Field> = fields
                             .iter()
