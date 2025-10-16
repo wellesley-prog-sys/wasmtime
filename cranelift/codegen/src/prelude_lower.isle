@@ -570,7 +570,7 @@
                                                              (result ValueRegs))))
 
 (model ConsumesFlags
-      (type
+      (type-ext-enum
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
