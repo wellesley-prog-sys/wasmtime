@@ -114,6 +114,7 @@ pub enum Compound {
     Primitive(Type),
     Struct(Vec<Field>),
     Enum(Enum),
+    ExtEnum{base: Enum, extra: Vec<Field>},  // new compound type: ExtEnum
     // TODO(mbm): intern name identifier
     Named(Ident),
 }
@@ -299,6 +300,7 @@ impl Compound {
     pub fn as_enum(&self) -> Option<&Enum> {
         match self {
             Compound::Enum(e) => Some(e),
+            Compound::ExtEnum { base, .. } => Some(base),
             _ => None,
         }
     }
@@ -317,6 +319,11 @@ impl Compound {
                     .collect::<Result<_>>()?,
             )),
             Compound::Enum(e) => Ok(Compound::Enum(e.resolve(lookup)?)),
+            Compound::ExtEnum { base, extra } => {
+                let base = base.resolve(lookup)?;
+                let extra = extra.iter().map(|f| f.resolve(lookup)).collect::<Result<_>>()?;
+                Ok(Compound::ExtEnum { base, extra })
+            }
             Compound::Named(name) => {
                 // TODO(mbm): named type model cycle detection
                 let ty = lookup(name)?;
@@ -341,6 +348,18 @@ impl std::fmt::Display for Compound {
             ),
             Compound::Enum(e) => {
                 write!(f, "enum({name})", name = e.name.0,)
+            }
+            Compound::ExtEnum { base, extra } => {
+                // format: "extenum(EnumName { ...extra fields... })"
+                write!(
+                    f,
+                    "extenum({} + [{}])",
+                    base.name.0,
+                    extra.iter()
+                        .map(|f| format!("{}: {}", f.name.0, f.ty))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Compound::Named(name) => write!(f, "{}", name.0),
         }
