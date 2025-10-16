@@ -631,6 +631,18 @@ pub struct SpecEnv {
 }
 
 impl SpecEnv {
+    // collect type helper 
+
+    fn collect_types(&mut self, tyenv: &TypeEnv) {
+        for (i, ty) in tyenv.types.iter().enumerate() {
+            let tid = TypeId(i);
+            if let Some(compound) = crate::types::Compound::from_isle(ty, tyenv) {
+                self.type_model.insert(tid, compound);
+            }
+        }
+    }
+
+
     pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<Self> {
         let mut env = Self {
             term_spec: HashMap::new(),
@@ -644,6 +656,9 @@ impl SpecEnv {
             const_value: HashMap::new(),
             macros: HashMap::new(),
         };
+
+        // populate type_model with enum from TypeEnv first 
+        env.collect_types(tyenv); 
 
         env.collect_models(defs, tyenv);
         env.derive_type_models(tyenv)?;
