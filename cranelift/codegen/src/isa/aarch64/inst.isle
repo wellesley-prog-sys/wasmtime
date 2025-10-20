@@ -2172,6 +2172,9 @@
       )
 )
 
+(spec (u64_into_imm_logic ty a)
+      (provide (= result a))
+      (require (or (= ty 32) (= ty 64))))
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
