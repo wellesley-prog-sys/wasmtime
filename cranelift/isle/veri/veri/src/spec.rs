@@ -662,10 +662,11 @@ impl SpecEnv {
 
         env.collect_models(defs, tyenv);
         env.derive_type_models(tyenv)?;
+        env.collect_specs(defs, termenv, tyenv)?;
         env.derive_enum_variant_specs(termenv, tyenv)?;
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
-        env.collect_specs(defs, termenv, tyenv)?;
+        // env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv)?;
         env.collect_macros(defs);
         env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
@@ -802,13 +803,25 @@ impl SpecEnv {
             .get_type_by_name(name)
             .expect("type name should be defined");
         // TODO(mbm): error on duplicate model
-        assert!(
-            !self.type_model.contains_key(&type_id),
-            "duplicate type model: {name}",
-            name = name.0
-        );
-        self.type_model
-            .insert(type_id, Compound::from_ast(model_type));
+        let compound = Compound::from_ast(model_type);
+
+        if let Some(existing) = self.type_model.get(&type_id) {
+            match (existing, &compound) {
+                (Compound::Enum(_), Compound::ExtEnum { .. }) => {
+                    // replace Enum with ExtEnum
+                    self.type_model.insert(type_id, compound);
+                    return;
+                }
+                (Compound::ExtEnum { .. }, Compound::ExtEnum { .. }) => {
+                    panic!("duplicate ext-enum model: {}", name.0);
+                }
+                _ => {
+                    panic!("duplicate type model: {}", name.0);
+                }
+            }
+        } else {
+            self.type_model.insert(type_id, compound);
+        }
     }
 
     fn collect_state(&mut self, defs: &[Def]) -> Result<()> {

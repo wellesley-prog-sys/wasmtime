@@ -1394,14 +1394,20 @@
 ))
 
 (type SImm7Scaled (primitive SImm7Scaled))
-
+(model SImm7Scaled (type (bv)))
 (type BoxCallInfo (primitive BoxCallInfo))
+(model BoxCallInfo (type (bv)))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(model BoxCallIndInfo (type (bv)))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
+(model BoxReturnCallInfo (type (bv)))
 (type BranchTarget (primitive BranchTarget))
+(model BranchTarget (type (bv)))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type CodeOffset (primitive CodeOffset))
+(model CodeOffset (type (bv)))
 (type VecMachLabel extern (enum))
+(model VecMachLabel (type !))
 
 (type CondBrKind extern
   (enum

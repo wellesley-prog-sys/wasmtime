@@ -48,6 +48,7 @@
 (type VecReg extern (enum))
 (type VecWritableReg extern (enum))
 (type PReg (primitive PReg))
+(model PReg (type (bv)))
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
@@ -235,16 +236,23 @@
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
+(model MachLabel (type !))
 (type ValueLabel (primitive ValueLabel))
 (type UnwindInst (primitive UnwindInst))
+(model UnwindInst (type (bv)))
 (type ExternalName (primitive ExternalName))
+(model ExternalName (type !))
 (type BoxExternalName (primitive BoxExternalName))
+(model BoxExternalName (type (bv)))
 (type RelocDistance (primitive RelocDistance))
 (type VecArgPair extern (enum))
+(model VecArgPair (type !))
 (type VecRetPair extern (enum))
+(model VecRetPair (type !))
 (type CallArgList extern (enum))
 (type MachLabelSlice extern (enum))
 (type BoxVecMachLabel extern (enum))
+(model BoxVecMachLabel (type !))
 
 ;; Extract a the target from a MachLabelSlice with exactly one target.
 (decl single_target (MachLabel) MachLabelSlice)
@@ -502,7 +510,7 @@
                      (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))))
 
 (model ProducesFlags
-      (type
+      (type-ext-enum
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))

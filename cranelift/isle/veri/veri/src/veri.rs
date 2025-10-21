@@ -473,6 +473,7 @@ impl Symbolic {
     fn as_struct(&self) -> Option<&Vec<SymbolicField>> {
         match self {
             Self::Struct(fields) => Some(fields),
+            Self::ExtEnum(_, fields) => Some (fields), 
             _ => None,
         }
     }
@@ -480,7 +481,7 @@ impl Symbolic {
     fn as_enum(&self) -> Option<&SymbolicEnum> {
         match self {
             Self::Enum(e) => Some(e),
-            Self::ExtEnum(e, _) => Some(e), // unwrap ExtEnum 
+            Self::ExtEnum(e, _) => Some(e), 
             _ => None,
         }
     }
