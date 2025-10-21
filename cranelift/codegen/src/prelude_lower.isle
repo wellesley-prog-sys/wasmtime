@@ -62,6 +62,11 @@
 
 ;; Construct a `ValueRegs` of two registers.
 (decl value_regs (Reg Reg) ValueRegs)
+(spec (value_regs arg1 arg2)
+  (provide
+    (= (:lo result) arg1)
+    (= (:hi result) arg2)))
+
 (extern constructor value_regs value_regs)
 
 ;; Construct a `WritableValueRegs` of two registers.
@@ -601,6 +606,13 @@
             (= (:result result) reg)
             (:has_result result)
       )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 res)
+  (provide
+        (= (:flags result) (:flags_in inst1))
+        (:has_result result)
+  )
 )
 
 (spec (ConsumesFlags.ConsumesFlagsSideEffect inst)

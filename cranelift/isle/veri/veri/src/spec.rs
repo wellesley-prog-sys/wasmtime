@@ -515,6 +515,7 @@ impl FieldInit {
 // QUESTION(mbm): should we make the result explicit in the spec syntax?
 static RESULT: &str = "result";
 
+#[derive(Clone)]
 pub struct Spec {
     pub args: Vec<Ident>,
     pub ret: Ident,
@@ -777,13 +778,13 @@ impl SpecEnv {
                                 "could not find variant term {name}",
                                 name = full_name.0
                             ))?;
-
-                    // guard: skip auto-gen if spec already exists for this
+                    
+                    // if user wrote a spec already, do not autogenerate 
                     if self.term_spec.contains_key(&term_id) {
-                        continue;
-                    }
+                                        continue;
+                                    }
 
-                    // Synthesize spec.
+                    // build a fresh synthesize spec for the variant.
                     let pos = variant.name.1;
                     let args: Vec<Ident> = variant.fields.iter().map(|f| f.name.clone()).collect();
                     let constructor = Positioned::new(
@@ -796,11 +797,10 @@ impl SpecEnv {
                     );
 
                     let mut spec = Spec::new();
-                    spec.args = args;
+                    spec.args = args.clone();
                     let ret = var_from_ident(spec.ret.clone());
                     spec.provides
                         .push(Positioned::new(pos, ExprKind::Eq(ret, constructor)));
-                    self.term_spec.insert(term_id, spec);
                     self.term_tags
                         .entry(term_id)
                         .or_default()
@@ -826,9 +826,14 @@ impl SpecEnv {
                     self.type_model.insert(type_id, compound);
                     return;
                 }
-                (Compound::ExtEnum { .. }, Compound::ExtEnum { .. }) => {
-                    panic!("duplicate ext-enum model: {}", name.0);
+                // if already enum and the new one is also enum -> error 
+                (Compound::Enum(_), Compound::Enum(_)) =>{
+                    panic!("duplicate enum model: {}", name.0);
                 }
+                (Compound::ExtEnum{..}, Compound::ExtEnum{..}) =>{
+                    panic!("duplicate extenum model: {}", name.0);
+                }
+                // otherwise: real conflict 
                 _ => {
                     panic!("duplicate type model: {}", name.0);
                 }

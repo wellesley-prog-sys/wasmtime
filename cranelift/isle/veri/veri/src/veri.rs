@@ -2200,6 +2200,36 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.all(equalities))
             }
 
+            (Symbolic::ExtEnum(u, ux), Symbolic::ExtEnum(v, vx)) => {
+                // Discriminant equality
+                let discriminants_eq = self.exprs_equal(u.discriminant, v.discriminant);
+                let mut equalities = vec![discriminants_eq];
+
+                // Variant equality conditions
+                assert_eq!(u.variants.len(), v.variants.len(), "variant count mismatch");
+                let variants_eq: Vec<ExprId> = zip(&u.variants, &v.variants)
+                    .map(|(uv, vv)| {
+                        assert_eq!(uv.name, vv.name, "variant name mismatch");
+                        let ud = self.discriminator(&u, uv);
+                        let eq = self.values_equal(uv.value.clone(), vv.value.clone())?;
+                        Ok(self.dedup_expr(Expr::Imp(ud, eq)))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                equalities.extend(variants_eq);
+
+                // Extra fields equality
+                assert_eq!(ux.len(), vx.len(), "ext-enum field length mismatch");
+                let fields_eq: Vec<ExprId> = zip(ux, vx)
+                    .map(|(fx, fy)| {
+                        assert_eq!(fx.name, fy.name, "field name mismatch");
+                        self.values_equal(fx.value.clone(), fy.value.clone())
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                equalities.extend(fields_eq);
+
+                Ok(self.all(equalities))
+            }
+
             (Symbolic::Tuple(us), Symbolic::Tuple(vs)) => {
                 // Field-wise equality.
                 // TODO(mbm): can we expect that tuples are the same length?

@@ -1070,7 +1070,7 @@
 (attr MInst.LoadAcquire (tag atomics))
 
 (model MInst
-      (type
+      (type-ext-enum
             (struct
                   (flags_in  (named NZCV))
                   (flags_out (named NZCV))
@@ -1297,6 +1297,31 @@
     (SbcS)
 ))
 
+(spec (ALUOp.AndS)
+  (provide
+    (= result (ALUOp.AndS))))
+
+(spec (ALUOp.Orr)
+  (provide
+    (= result (ALUOp.Orr))))
+
+
+(spec (ALUOp.Sub)
+  (provide
+    (= result (ALUOp.Sub))))
+
+(spec (ALUOp.Lsr)
+  (provide
+    (= result (ALUOp.Lsr))))
+
+(spec (ALUOp.OrrNot)
+  (provide
+    (= result (ALUOp.OrrNot))))
+
+(spec (ALUOp.Lsl)
+  (provide
+    (= result (ALUOp.Lsl))))
+
 ;; An ALU operation with three arguments.
 (type ALUOp3
   (enum
@@ -1315,6 +1340,10 @@
     (MovZ)
     (MovN)
 ))
+
+(spec (MoveWideOp.MovZ)
+  (provide
+    (= result (MoveWideOp.MovZ))))
 
 (type UImm5 (primitive UImm5))
 (model UImm5 (type (bv 5)))
@@ -1698,6 +1727,10 @@
     (Al)
     (Nv)
 ))
+
+(spec (Cond.Ne)
+      (provide 
+            ( = result (Cond.Ne))))
 
 (macro (cond_holds cc nzcv)
       (match cc
@@ -3695,6 +3728,10 @@
   (enum
     (Sign)
     (Zero)))
+
+(spec (ImmExtend.Zero)
+  (provide
+    (= result (ImmExtend.Zero))))
 
 ;; Arguments:
 ;; * Immediate type
