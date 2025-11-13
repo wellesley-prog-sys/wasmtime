@@ -473,7 +473,7 @@ impl Symbolic {
     fn as_struct(&self) -> Option<&Vec<SymbolicField>> {
         match self {
             Self::Struct(fields) => Some(fields),
-            Self::ExtEnum(_, fields) => Some (fields), 
+            // Self::ExtEnum(_, fields) => Some (fields),
             _ => None,
         }
     }
@@ -1946,22 +1946,50 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn spec_field(&mut self, name: &Ident, v: Symbolic) -> Result<Symbolic> {
-        log::trace!("access field {name} from {v}", name = name.0);
+        log::trace!("access field {} from {}", name.0, v);
 
-        let fields = v
-            .as_struct()
-            .ok_or(self.error("field access from non-struct value"))?;
+        // 1. If ExtEnum: check extra fields FIRST
+        if let Symbolic::ExtEnum(_base_enum, extra_fields) = &v {
+            if let Some(f) = extra_fields.iter().find(|f| f.name == name.0) {
+                return Ok(f.value.clone());
+            }
 
-        let field = fields
-            .iter()
-            .find(|f| f.name == name.0)
-            .ok_or(self.error(format!(
-                "attempt to access nonexistent struct field: {}",
+            // 2. If not found, fall through to base enum variant payload
+            if let Some(e) = v.as_enum() {
+                for variant in &e.variants {
+                    if let Ok(fields) = variant.fields() {
+                        if let Some(f) = fields.iter().find(|f| f.name == name.0) {
+                            return Ok(f.value.clone());
+                        }
+                    }
+                }
+            }
+
+            // 3. Otherwise: truly nonexistent
+            return Err(self.error(format!(
+                "attempt to access nonexistent field: {}",
                 name.0
-            )))?;
+            )));
+        }
 
-        Ok(field.value.clone())
+        // Normal struct case
+        if let Some(fields) = v.as_struct() {
+            if let Some(f) = fields.iter().find(|f| f.name == name.0) {
+                return Ok(f.value.clone());
+            } else {
+                return Err(self.error(format!(
+                    "attempt to access nonexistent struct field: {}",
+                    name.0
+                )));
+            }
+        }
+
+        Err(self.error(format!(
+            "field access from non-struct value: {}",
+            name.0
+        )))
     }
+
 
     fn spec_discriminator(&mut self, name: &Ident, v: Symbolic) -> Result<Symbolic> {
         let e = v
@@ -2200,35 +2228,27 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.all(equalities))
             }
 
-            (Symbolic::ExtEnum(u, ux), Symbolic::ExtEnum(v, vx)) => {
+            (Symbolic::Enum(u), Symbolic::ExtEnum(v, _extra))
+            | (Symbolic::ExtEnum(v, _extra), Symbolic::Enum(u)) => {
                 // Discriminant equality
                 let discriminants_eq = self.exprs_equal(u.discriminant, v.discriminant);
                 let mut equalities = vec![discriminants_eq];
 
-                // Variant equality conditions
-                assert_eq!(u.variants.len(), v.variants.len(), "variant count mismatch");
-                let variants_eq: Vec<ExprId> = zip(&u.variants, &v.variants)
+                // Compare only the base variant payloads
+                assert_eq!(u.variants.len(), v.variants.len());
+                let variants_eq = zip(&u.variants, &v.variants)
                     .map(|(uv, vv)| {
-                        assert_eq!(uv.name, vv.name, "variant name mismatch");
+                        assert_eq!(uv.name, vv.name);
                         let ud = self.discriminator(&u, uv);
                         let eq = self.values_equal(uv.value.clone(), vv.value.clone())?;
                         Ok(self.dedup_expr(Expr::Imp(ud, eq)))
                     })
                     .collect::<Result<Vec<_>>>()?;
+
                 equalities.extend(variants_eq);
-
-                // Extra fields equality
-                assert_eq!(ux.len(), vx.len(), "ext-enum field length mismatch");
-                let fields_eq: Vec<ExprId> = zip(ux, vx)
-                    .map(|(fx, fy)| {
-                        assert_eq!(fx.name, fy.name, "field name mismatch");
-                        self.values_equal(fx.value.clone(), fy.value.clone())
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                equalities.extend(fields_eq);
-
                 Ok(self.all(equalities))
             }
+
 
             (Symbolic::Tuple(us), Symbolic::Tuple(vs)) => {
                 // Field-wise equality.

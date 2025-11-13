@@ -1070,7 +1070,7 @@
 (attr MInst.LoadAcquire (tag atomics))
 
 (model MInst
-      (type-ext-enum
+      (type
             (struct
                   (flags_in  (named NZCV))
                   (flags_out (named NZCV))
@@ -1344,6 +1344,10 @@
 (spec (MoveWideOp.MovZ)
   (provide
     (= result (MoveWideOp.MovZ))))
+
+(spec (MoveWideOp.MovN)
+  (provide
+    (= result (MoveWideOp.MovN))))
 
 (type UImm5 (primitive UImm5))
 (model UImm5 (type (bv 5)))
