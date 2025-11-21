@@ -337,7 +337,7 @@
 
 (spec (rotl ty x y)
     (provide (= result (rotl x y))))
-(instantiate rotl bv_binary_8_to_64)
+(instantiate rotl bv_binary_8_to_128)
 
 (spec (rotr ty x y)
     (provide (= result (rotr x y))))

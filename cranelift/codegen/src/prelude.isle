@@ -468,6 +468,12 @@
 ;; Get a mask for the width of a given type.
 (decl pure ty_mask (Type) u64)
 (extern constructor ty_mask ty_mask)
+(spec (ty_mask ty) (provide (= result
+       (bvsub
+         (bvshl          
+           (int2bv 64 #x1)
+           (conv_to 64 (:bits ty)))
+         (int2bv 64 #x1)))))
 
 ;; Get a mask that is set for each lane in a given type.
 (decl pure ty_lane_mask (Type) u64)

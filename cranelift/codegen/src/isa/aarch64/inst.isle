@@ -1301,6 +1301,10 @@
   (provide
     (= result (ALUOp.AndS))))
 
+(spec (ALUOp.Asr)
+  (provide
+    (= result (ALUOp.Asr))))
+
 (spec (ALUOp.Orr)
   (provide
     (= result (ALUOp.Orr))))
@@ -1317,6 +1321,14 @@
 (spec (ALUOp.OrrNot)
   (provide
     (= result (ALUOp.OrrNot))))
+
+(spec (ALUOp.Add)
+  (provide
+    (= result (ALUOp.Add))))
+
+(spec (ALUOp.SubS)
+  (provide
+    (= result (ALUOp.SubS))))
 
 (spec (ALUOp.Lsl)
   (provide
@@ -1440,7 +1452,7 @@
 (type CodeOffset (primitive CodeOffset))
 (model CodeOffset (type (bv)))
 (type VecMachLabel extern (enum))
-(model VecMachLabel (type !))
+(model VecMachLabel (type (bv)))
 
 (type CondBrKind extern
   (enum
@@ -1480,7 +1492,7 @@
 ))
 
 (type MemLabel extern (enum))
-(model MemLabel (type !))
+(model MemLabel (type (bv)))
 (type SImm9 extern (enum))
 (model SImm9 (type (bv 9)))
 (type UImm12Scaled extern (enum))
@@ -1642,6 +1654,10 @@
       (enum Size32
             Size64))
 
+(spec (OperandSize.Size32)
+  (provide
+    (= result (OperandSize.Size32))))
+
 (type TestBitAndBranchKind (enum (Z) (NZ)))
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
@@ -1735,6 +1751,11 @@
 (spec (Cond.Ne)
       (provide 
             ( = result (Cond.Ne))))
+
+
+(spec (Cond.Hi)
+      (provide 
+            ( = result (Cond.Hi))))
 
 (macro (cond_holds cc nzcv)
       (match cc
@@ -3736,6 +3757,10 @@
 (spec (ImmExtend.Zero)
   (provide
     (= result (ImmExtend.Zero))))
+
+(spec (ImmExtend.Sign)
+  (provide
+    (= result (ImmExtend.Sign))))
 
 ;; Arguments:
 ;; * Immediate type

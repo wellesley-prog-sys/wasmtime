@@ -241,23 +241,23 @@
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
-(model MachLabel (type !))
+(model MachLabel (type (bv)))
 (type ValueLabel (primitive ValueLabel))
 (type UnwindInst (primitive UnwindInst))
 (model UnwindInst (type (bv)))
 (type ExternalName (primitive ExternalName))
-(model ExternalName (type !))
+(model ExternalName (type (bv)))
 (type BoxExternalName (primitive BoxExternalName))
 (model BoxExternalName (type (bv)))
 (type RelocDistance (primitive RelocDistance))
 (type VecArgPair extern (enum))
-(model VecArgPair (type !))
+(model VecArgPair (type (bv)))
 (type VecRetPair extern (enum))
-(model VecRetPair (type !))
+(model VecRetPair (type (bv)))
 (type CallArgList extern (enum))
 (type MachLabelSlice extern (enum))
 (type BoxVecMachLabel extern (enum))
-(model BoxVecMachLabel (type !))
+(model BoxVecMachLabel (type (bv)))
 
 ;; Extract a the target from a MachLabelSlice with exactly one target.
 (decl single_target (MachLabel) MachLabelSlice)
@@ -438,7 +438,7 @@
 ;; Constant pool emission.
 
 (type VCodeConstant (primitive VCodeConstant))
-(model VCodeConstant (type !))
+(model VCodeConstant (type (bv)))
 
 ;; Add a u64 little-endian constant to the in-memory constant pool and
 ;; return a VCodeConstant index that refers to it. This is
@@ -596,30 +596,46 @@
       (provide
             (= (:flags result) (:flags_in inst))
             (= (:result result) reg)
-            (:has_result result)
+            (= (:has_result result) true)
       )
 )
+
+(spec (ConsumesFlags.ConsumesFlagsSideEffect2 inst1 inst2)
+  (provide
+      (= (:flags result) (:flags_in inst1))   
+      (= (:result result) zero_reg)
+      (= (:has_result result) false)))
 
 (spec (ConsumesFlags.ConsumesFlagsReturnsReg inst reg)
-      (provide
-            (= (:flags result) (:flags_in inst))
-            (= (:result result) reg)
-            (:has_result result)
-      )
-)
-
-(spec (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 res)
   (provide
-        (= (:flags result) (:flags_in inst1))
-        (:has_result result)
+        (= (:flags result) (:flags_in inst))
+        (= (:result result) reg)
+        (= (:has_result result) true)
   )
 )
 
 (spec (ConsumesFlags.ConsumesFlagsSideEffect inst)
-      (provide
-            (= (:flags result) (:flags_in inst))
-            (not (:has_result result))
-      )
+  (provide
+        (= (:flags result) (:flags_in inst))
+        (= (:result result) zero_reg)
+        (= (:has_result result) false)
+  )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 regs)
+  (provide
+        (= (:flags result) (:flags_in inst1))
+        (= (:result result) (:lo regs))
+        (= (:has_result result) true)
+  )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs inst1 inst2 inst3 inst4 regs)
+  (provide
+        (= (:flags result) (:flags_in inst1))
+        (= (:result result) (:lo regs))
+        (= (:has_result result) true)
+  )
 )
 
 ;; Get the produced register out of a ProducesFlags.

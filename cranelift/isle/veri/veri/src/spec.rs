@@ -1,6 +1,6 @@
 use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
-    ast::{self, AttrKind, AttrTarget, Def, Ident, Model, ModelType, Modifies, SpecOp},
+    ast::{self, AttrKind, AttrTarget, Def, Ident, Model, Modifies, SpecOp},
     lexer::Pos,
     sema::{ReturnKind, RuleId, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
