@@ -9,8 +9,8 @@ use std::{
     fmt::Debug,
 };
 
-use crate::types::Field;
 use crate::types::Enum;
+use crate::types::Field;
 use crate::types::{Compound, Const};
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
@@ -636,8 +636,6 @@ pub struct SpecEnv {
 }
 
 impl SpecEnv {
-
-
     pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<Self> {
         let mut env = Self {
             term_spec: HashMap::new(),
@@ -653,12 +651,12 @@ impl SpecEnv {
             macros: HashMap::new(),
         };
 
+        env.collect_specs(defs, termenv, tyenv)?;
         env.derive_type_models(tyenv)?;
         env.collect_models(defs, tyenv);
         env.derive_enum_variant_specs(termenv, tyenv)?;
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
-        env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv)?;
         env.collect_macros(defs);
         env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
@@ -687,10 +685,10 @@ impl SpecEnv {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
                     ast::ModelValue::TypeValue(model_type) => {
-                        // only insert if this name hasn't been seen yet 
+                        // only insert if this name hasn't been seen yet
                         let tid = tyenv.get_type_by_name(name).expect("type should exist");
-                        
-                        // new model compound 
+
+                        // new model compound
                         let new_model = Compound::from_ast(model_type);
 
                         if let Some(_existing) = self.type_model.get(&tid) {
@@ -719,8 +717,6 @@ impl SpecEnv {
                             // first definition
                             self.type_model.insert(tid, new_model);
                         }
-
-
                     }
                     ast::ModelValue::ConstValue(val) => {
                         // TODO(mbm): error on missing constant name rather than panic
@@ -750,7 +746,10 @@ impl SpecEnv {
                             .collect();
 
                         // 4) Build Compound::ExtEnum and overwrite the entry for this TypeId.
-                        let compound = Compound::ExtEnum { base: base_enum, extra };
+                        let compound = Compound::ExtEnum {
+                            base: base_enum,
+                            extra,
+                        };
                         self.type_model.insert(base_tid, compound);
                     }
                 }
@@ -760,11 +759,6 @@ impl SpecEnv {
 
     fn derive_type_models(&mut self, tyenv: &TypeEnv) -> Result<()> {
         for ty in &tyenv.types {
-            // Has an explicit model already been specified?
-            if self.has_model(ty.id()) {
-                continue;
-            }
-
             // Derive a model from ISLE type, if possible.
             if let Some(derived_type) = Compound::from_isle(ty, tyenv) {
                 // register derived type and mark derived
@@ -777,8 +771,7 @@ impl SpecEnv {
 
     fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for model in self.type_model.values() {
-
-            // handle both Enum and ExtEnum 
+            // handle both Enum and ExtEnum
             let enum_ref: Option<&Enum> = match model {
                 Compound::Enum(e) => Some(e),
                 Compound::ExtEnum { base, .. } => Some(base),
@@ -796,11 +789,11 @@ impl SpecEnv {
                                 "could not find variant term {name}",
                                 name = full_name.0
                             ))?;
-                    
-                    // if user wrote a spec already, do not autogenerate 
+
+                    // If the user wrote a spec already, do not autogenerate
                     if self.term_spec.contains_key(&term_id) {
-                                        continue;
-                                    } 
+                        continue;
+                    }
 
                     // build a fresh synthesize spec for the variant.
                     let pos = variant.name.1;
@@ -819,6 +812,7 @@ impl SpecEnv {
                     let ret = var_from_ident(spec.ret.clone());
                     spec.provides
                         .push(Positioned::new(pos, ExprKind::Eq(ret, constructor)));
+                    self.term_spec.insert(term_id, spec);
                     self.term_tags
                         .entry(term_id)
                         .or_default()
@@ -844,14 +838,14 @@ impl SpecEnv {
     //                 self.type_model.insert(type_id, compound);
     //                 return;
     //             }
-    //             // if already enum and the new one is also enum -> error 
+    //             // if already enum and the new one is also enum -> error
     //             (Compound::Enum(_), Compound::Enum(_)) =>{
     //                 panic!("duplicate enum model: {}", name.0);
     //             }
     //             (Compound::ExtEnum{..}, Compound::ExtEnum{..}) =>{
     //                 panic!("duplicate extenum model: {}", name.0);
     //             }
-    //             // otherwise: real conflict 
+    //             // otherwise: real conflict
     //             _ => {
     //                 panic!("duplicate type model: {}", name.0);
     //             }

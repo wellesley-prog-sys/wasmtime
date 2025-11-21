@@ -456,7 +456,7 @@ pub enum Symbolic {
     Scalar(ExprId),
     Struct(Vec<SymbolicField>),
     Enum(SymbolicEnum),
-    ExtEnum(SymbolicEnum, Vec<SymbolicField>), // ext enum with extra fields 
+    ExtEnum(SymbolicEnum, Vec<SymbolicField>), // ext enum with extra fields
     Option(SymbolicOption),
     Tuple(Vec<Symbolic>),
     Macro(Macro),
@@ -481,7 +481,7 @@ impl Symbolic {
     fn as_enum(&self) -> Option<&SymbolicEnum> {
         match self {
             Self::Enum(e) => Some(e),
-            Self::ExtEnum(e, _) => Some(e), 
+            Self::ExtEnum(e, _) => Some(e),
             _ => None,
         }
     }
@@ -753,9 +753,9 @@ pub enum Value {
     Struct(Vec<FieldValue>),
     Enum(Box<VariantValue>),
     ExtEnum {
-        base: Box<Value>, // base enum value
-        extra: Vec<FieldValue>, // evaluated extra fields 
-    }, 
+        base: Box<Value>,       // base enum value
+        extra: Vec<FieldValue>, // evaluated extra fields
+    },
     Option(Option<Box<Value>>),
     Tuple(Vec<Value>),
 }
@@ -1966,10 +1966,7 @@ impl<'a> ConditionsBuilder<'a> {
             }
 
             // 3. Otherwise: truly nonexistent
-            return Err(self.error(format!(
-                "attempt to access nonexistent field: {}",
-                name.0
-            )));
+            return Err(self.error(format!("attempt to access nonexistent field: {}", name.0)));
         }
 
         // Normal struct case
@@ -1984,12 +1981,8 @@ impl<'a> ConditionsBuilder<'a> {
             }
         }
 
-        Err(self.error(format!(
-            "field access from non-struct value: {}",
-            name.0
-        )))
+        Err(self.error(format!("field access from non-struct value: {}", name.0)))
     }
-
 
     fn spec_discriminator(&mut self, name: &Ident, v: Symbolic) -> Result<Symbolic> {
         let e = v
@@ -2249,7 +2242,6 @@ impl<'a> ConditionsBuilder<'a> {
                 Ok(self.all(equalities))
             }
 
-
             (Symbolic::Tuple(us), Symbolic::Tuple(vs)) => {
                 // Field-wise equality.
                 // TODO(mbm): can we expect that tuples are the same length?
@@ -2358,10 +2350,8 @@ impl<'a> ConditionsBuilder<'a> {
                 // Build the SymbolicEnum exactly like the `Enum` arm does.
 
                 // 1) discriminator variable for the enum
-                let discriminant = self.alloc_variable(
-                    Type::Int,
-                    Variable::component_name(&name, "discriminant"),
-                );
+                let discriminant =
+                    self.alloc_variable(Type::Int, Variable::component_name(&name, "discriminant"));
 
                 // 2) per-variant payloads
                 let variants = base
@@ -2383,10 +2373,8 @@ impl<'a> ConditionsBuilder<'a> {
                     .map(|f| {
                         Ok(SymbolicField {
                             name: f.name.0.clone(),
-                            value: self.alloc_value(
-                                &f.ty,
-                                Variable::component_name(&name, &f.name.0),
-                            )?,
+                            value: self
+                                .alloc_value(&f.ty, Variable::component_name(&name, &f.name.0))?,
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -2394,7 +2382,6 @@ impl<'a> ConditionsBuilder<'a> {
                 // `Symbolic::ExtEnum` is a *tuple* variant: (SymbolicEnum, Vec<SymbolicField>)
                 Ok(Symbolic::ExtEnum(sym_enum, extra_syms))
             }
-
 
             Compound::Named(_) => {
                 let ty = self.prog.specenv.resolve_type(ty, &self.prog.tyenv)?;

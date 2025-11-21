@@ -114,7 +114,7 @@ pub enum Compound {
     Primitive(Type),
     Struct(Vec<Field>),
     Enum(Enum),
-    ExtEnum{base: Enum, extra: Vec<Field>},  // new compound type: ExtEnum
+    ExtEnum { base: Enum, extra: Vec<Field> }, // new compound type: ExtEnum
     // TODO(mbm): intern name identifier
     Named(Ident),
 }
@@ -270,7 +270,8 @@ impl Compound {
                     .iter()
                     .enumerate()
                     .map(|(i, mv)| {
-                        let fields = mv.fields
+                        let fields = mv
+                            .fields
                             .iter()
                             .map(|mf| Field {
                                 name: mf.name.clone(),
@@ -353,7 +354,10 @@ impl Compound {
             Compound::Enum(e) => Ok(Compound::Enum(e.resolve(lookup)?)),
             Compound::ExtEnum { base, extra } => {
                 let base = base.resolve(lookup)?;
-                let extra = extra.iter().map(|f| f.resolve(lookup)).collect::<Result<_>>()?;
+                let extra = extra
+                    .iter()
+                    .map(|f| f.resolve(lookup))
+                    .collect::<Result<_>>()?;
                 Ok(Compound::ExtEnum { base, extra })
             }
             Compound::Named(name) => {
@@ -387,7 +391,8 @@ impl std::fmt::Display for Compound {
                     f,
                     "extenum({} + [{}])",
                     base.name.0,
-                    extra.iter()
+                    extra
+                        .iter()
                         .map(|f| format!("{}: {}", f.name.0, f.ty))
                         .collect::<Vec<_>>()
                         .join(", ")

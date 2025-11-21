@@ -914,11 +914,7 @@ impl Solver {
 
                 for (var, tv) in self.assignment.expr_type_value.iter() {
                     if !tv.ty().is_concrete() {
-                        log::debug!(
-                            "   var {:?}: {:?}",
-                            var,
-                            tv.ty()
-                        );
+                        log::debug!("   var {:?}: {:?}", var, tv.ty());
                     }
                 }
                 Status::Underconstrained

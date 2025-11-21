@@ -48,7 +48,7 @@
 (type VecReg extern (enum))
 (type VecWritableReg extern (enum))
 (type PReg (primitive PReg))
-(model PReg (type (bv)))
+(model PReg (type (bv 1)))
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
@@ -241,23 +241,23 @@
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
-(model MachLabel (type (bv)))
+(model MachLabel (type (bv 1)))
 (type ValueLabel (primitive ValueLabel))
 (type UnwindInst (primitive UnwindInst))
-(model UnwindInst (type (bv)))
+(model UnwindInst (type (bv 1)))
 (type ExternalName (primitive ExternalName))
-(model ExternalName (type (bv)))
+(model ExternalName (type (bv 1)))
 (type BoxExternalName (primitive BoxExternalName))
-(model BoxExternalName (type (bv)))
+(model BoxExternalName (type (bv 1)))
 (type RelocDistance (primitive RelocDistance))
 (type VecArgPair extern (enum))
-(model VecArgPair (type (bv)))
+(model VecArgPair (type (bv 1)))
 (type VecRetPair extern (enum))
-(model VecRetPair (type (bv)))
+(model VecRetPair (type (bv 1)))
 (type CallArgList extern (enum))
 (type MachLabelSlice extern (enum))
 (type BoxVecMachLabel extern (enum))
-(model BoxVecMachLabel (type (bv)))
+(model BoxVecMachLabel (type (bv 1)))
 
 ;; Extract a the target from a MachLabelSlice with exactly one target.
 (decl single_target (MachLabel) MachLabelSlice)
@@ -438,7 +438,7 @@
 ;; Constant pool emission.
 
 (type VCodeConstant (primitive VCodeConstant))
-(model VCodeConstant (type (bv)))
+(model VCodeConstant (type (bv 1)))
 
 ;; Add a u64 little-endian constant to the in-memory constant pool and
 ;; return a VCodeConstant index that refers to it. This is
@@ -602,7 +602,7 @@
 
 (spec (ConsumesFlags.ConsumesFlagsSideEffect2 inst1 inst2)
   (provide
-      (= (:flags result) (:flags_in inst1))   
+      (= (:flags result) (:flags_in inst1))
       (= (:result result) zero_reg)
       (= (:has_result result) false)))
 

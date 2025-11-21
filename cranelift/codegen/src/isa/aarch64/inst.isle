@@ -1297,42 +1297,42 @@
     (SbcS)
 ))
 
-(spec (ALUOp.AndS)
-  (provide
-    (= result (ALUOp.AndS))))
+;; (spec (ALUOp.AndS)
+;;   (provide
+;;     (= result (ALUOp.AndS))))
 
-(spec (ALUOp.Asr)
-  (provide
-    (= result (ALUOp.Asr))))
+;; (spec (ALUOp.Asr)
+;;   (provide
+;;     (= result (ALUOp.Asr))))
 
-(spec (ALUOp.Orr)
-  (provide
-    (= result (ALUOp.Orr))))
+;; (spec (ALUOp.Orr)
+;;   (provide
+;;     (= result (ALUOp.Orr))))
 
 
-(spec (ALUOp.Sub)
-  (provide
-    (= result (ALUOp.Sub))))
+;; (spec (ALUOp.Sub)
+;;   (provide
+;;     (= result (ALUOp.Sub))))
 
-(spec (ALUOp.Lsr)
-  (provide
-    (= result (ALUOp.Lsr))))
+;; (spec (ALUOp.Lsr)
+;;   (provide
+;;     (= result (ALUOp.Lsr))))
 
-(spec (ALUOp.OrrNot)
-  (provide
-    (= result (ALUOp.OrrNot))))
+;; (spec (ALUOp.OrrNot)
+;;   (provide
+;;     (= result (ALUOp.OrrNot))))
 
-(spec (ALUOp.Add)
-  (provide
-    (= result (ALUOp.Add))))
+;; (spec (ALUOp.Add)
+;;   (provide
+;;     (= result (ALUOp.Add))))
 
-(spec (ALUOp.SubS)
-  (provide
-    (= result (ALUOp.SubS))))
+;; (spec (ALUOp.SubS)
+;;   (provide
+;;     (= result (ALUOp.SubS))))
 
-(spec (ALUOp.Lsl)
-  (provide
-    (= result (ALUOp.Lsl))))
+;; (spec (ALUOp.Lsl)
+;;   (provide
+;;     (= result (ALUOp.Lsl))))
 
 ;; An ALU operation with three arguments.
 (type ALUOp3
@@ -1439,20 +1439,20 @@
 ))
 
 (type SImm7Scaled (primitive SImm7Scaled))
-(model SImm7Scaled (type (bv)))
+(model SImm7Scaled (type (bv 1)))
 (type BoxCallInfo (primitive BoxCallInfo))
-(model BoxCallInfo (type (bv)))
+(model BoxCallInfo (type (bv 1)))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
-(model BoxCallIndInfo (type (bv)))
+(model BoxCallIndInfo (type (bv 1)))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
-(model BoxReturnCallInfo (type (bv)))
+(model BoxReturnCallInfo (type (bv 1)))
 (type BranchTarget (primitive BranchTarget))
-(model BranchTarget (type (bv)))
+(model BranchTarget (type (bv 1)))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type CodeOffset (primitive CodeOffset))
-(model CodeOffset (type (bv)))
+(model CodeOffset (type (bv 1)))
 (type VecMachLabel extern (enum))
-(model VecMachLabel (type (bv)))
+(model VecMachLabel (type (bv 1)))
 
 (type CondBrKind extern
   (enum
@@ -1492,7 +1492,7 @@
 ))
 
 (type MemLabel extern (enum))
-(model MemLabel (type (bv)))
+(model MemLabel (type (bv 1)))
 (type SImm9 extern (enum))
 (model SImm9 (type (bv 9)))
 (type UImm12Scaled extern (enum))
@@ -1749,12 +1749,12 @@
 ))
 
 (spec (Cond.Ne)
-      (provide 
+      (provide
             ( = result (Cond.Ne))))
 
 
 (spec (Cond.Hi)
-      (provide 
+      (provide
             ( = result (Cond.Hi))))
 
 (macro (cond_holds cc nzcv)
