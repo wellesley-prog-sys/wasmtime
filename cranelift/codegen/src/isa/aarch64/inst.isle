@@ -1297,43 +1297,6 @@
     (SbcS)
 ))
 
-;; (spec (ALUOp.AndS)
-;;   (provide
-;;     (= result (ALUOp.AndS))))
-
-;; (spec (ALUOp.Asr)
-;;   (provide
-;;     (= result (ALUOp.Asr))))
-
-;; (spec (ALUOp.Orr)
-;;   (provide
-;;     (= result (ALUOp.Orr))))
-
-
-;; (spec (ALUOp.Sub)
-;;   (provide
-;;     (= result (ALUOp.Sub))))
-
-;; (spec (ALUOp.Lsr)
-;;   (provide
-;;     (= result (ALUOp.Lsr))))
-
-;; (spec (ALUOp.OrrNot)
-;;   (provide
-;;     (= result (ALUOp.OrrNot))))
-
-;; (spec (ALUOp.Add)
-;;   (provide
-;;     (= result (ALUOp.Add))))
-
-;; (spec (ALUOp.SubS)
-;;   (provide
-;;     (= result (ALUOp.SubS))))
-
-;; (spec (ALUOp.Lsl)
-;;   (provide
-;;     (= result (ALUOp.Lsl))))
-
 ;; An ALU operation with three arguments.
 (type ALUOp3
   (enum
@@ -1654,10 +1617,6 @@
       (enum Size32
             Size64))
 
-(spec (OperandSize.Size32)
-  (provide
-    (= result (OperandSize.Size32))))
-
 (type TestBitAndBranchKind (enum (Z) (NZ)))
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
@@ -1747,15 +1706,6 @@
     (Al)
     (Nv)
 ))
-
-(spec (Cond.Ne)
-      (provide
-            ( = result (Cond.Ne))))
-
-
-(spec (Cond.Hi)
-      (provide
-            ( = result (Cond.Hi))))
 
 (macro (cond_holds cc nzcv)
       (match cc
@@ -3753,14 +3703,6 @@
   (enum
     (Sign)
     (Zero)))
-
-(spec (ImmExtend.Zero)
-  (provide
-    (= result (ImmExtend.Zero))))
-
-(spec (ImmExtend.Sign)
-  (provide
-    (= result (ImmExtend.Sign))))
 
 ;; Arguments:
 ;; * Immediate type

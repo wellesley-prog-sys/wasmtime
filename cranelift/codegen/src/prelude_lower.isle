@@ -596,7 +596,8 @@
       (provide
             (= (:flags result) (:flags_in inst))
             (= (:result result) reg)
-            (= (:has_result result) true)
+            (= (widthof reg) 64)
+            (:has_result result)
       )
 )
 
@@ -610,7 +611,7 @@
   (provide
         (= (:flags result) (:flags_in inst))
         (= (:result result) reg)
-        (= (:has_result result) true)
+        (:has_result result)
   )
 )
 
