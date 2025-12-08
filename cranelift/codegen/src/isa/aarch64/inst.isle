@@ -1316,14 +1316,6 @@
     (MovN)
 ))
 
-(spec (MoveWideOp.MovZ)
-  (provide
-    (= result (MoveWideOp.MovZ))))
-
-(spec (MoveWideOp.MovN)
-  (provide
-    (= result (MoveWideOp.MovN))))
-
 (type UImm5 (primitive UImm5))
 (model UImm5 (type (bv 5)))
 
