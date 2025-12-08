@@ -983,6 +983,13 @@ impl Solver {
                     format!("concrete type error between types:\n\t{existing}\n\t{tv}"),
                 ))
             } else {
+                // debug for inapplicable 
+                log::debug!(
+                    "INAPPLICABLE: failed to merge type values at ExprId({}): existing={:?}, new={:?}",
+                    x.index(),
+                    existing,
+                    tv
+                );
                 Status::Inapplicable(Conflict::new(
                     x,
                     format!("inapplicable set type value: {existing:?} = {tv:?}"),
