@@ -979,6 +979,12 @@ impl Conditions {
             );
         }
 
+        // TODO winnie: this might be a smarter place to print
+
+        // still print everything from before
+        // then print
+        // FAILED ASSERTIONS:
+
         Ok(())
     }
 

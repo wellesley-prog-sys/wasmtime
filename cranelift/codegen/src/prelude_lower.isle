@@ -528,6 +528,7 @@
       (provide
             (= (:flags result) (:flags_out inst))
             (= (:result result) reg)
+            (= (widthof (:result result)) 64)
             (:has_result result)
       )
 )
@@ -640,8 +641,6 @@
   (provide
         (= (:flags result) (:flags_in inst1))
         (= (:result result) (:lo regs))
-        (= (widthof (:lo regs)) 64)
-        (= (widthof (:hi regs)) 64)
         (= (:has_result result) true)
   )
 )

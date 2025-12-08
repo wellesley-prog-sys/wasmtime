@@ -168,7 +168,19 @@ impl<'a> Solver<'a> {
 
         // Check
         let verdict = match self.check()? {
-            Response::Sat => Verification::Failure(self.model()?),
+            Response::Sat => {
+                // Winnie TODO: iterate over &self.conditions.assertions, determine which ones
+                // are False in the SMT model, display them to user
+                let as_exprs: Vec<SExpr> = self.conditions.assertions.iter().map(|x| self.expr_atom(*x)).collect();
+                let vals = self.smt.get_value(as_exprs).unwrap();
+                for (variable, value) in vals {
+                    if value == self.smt.false_() {
+                        // Winnie TODO: try to use the print_model logic to print something useful here
+                        println!("Failed assertion:\n{}", self.smt.display(variable));
+                    }
+                }
+                Verification::Failure(self.model()?)
+            }
             Response::Unsat => Verification::Success,
             Response::Unknown => Verification::Unknown,
         };
