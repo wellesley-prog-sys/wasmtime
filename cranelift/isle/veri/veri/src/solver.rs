@@ -171,14 +171,40 @@ impl<'a> Solver<'a> {
             Response::Sat => {
                 // Winnie TODO: iterate over &self.conditions.assertions, determine which ones
                 // are False in the SMT model, display them to user
-                let as_exprs: Vec<SExpr> = self.conditions.assertions.iter().map(|x| self.expr_atom(*x)).collect();
-                let vals = self.smt.get_value(as_exprs).unwrap();
-                for (variable, value) in vals {
+                // let as_exprs: Vec<SExpr> = self.conditions.assertions.iter().map(|x| self.expr_atom(*x)).collect();
+                
+                // store both original assertion ID and SMT expression created from it 
+                let assertion_exprs: Vec<(ExprId, SExpr)> =
+                    self.conditions.assertions
+                        .iter()
+                        .map(|id| (*id, self.expr_atom(*id)))
+                        .collect();
+
+                // let vals = self.smt.get_value(as_exprs).unwrap();
+                let exprs: Vec<SExpr> = assertion_exprs.iter().map(|(_, e)| e.clone()).collect(); 
+                
+                let vals = self.smt.get_value(exprs)?;
+
+                // for (variable, value) in vals {
+                //     if value == self.smt.false_() {
+                //         // Winnie TODO: try to use the print_model logic to print something useful here
+                //         println!("Failed assertion:\n{}", self.smt.display(variable));
+                //     }
+                // }
+
+                // iterate while keeping context
+                for ((assert_id, _s_expr), (_, value)) in
+                    assertion_exprs.iter().zip(vals.into_iter())
+                {
                     if value == self.smt.false_() {
-                        // Winnie TODO: try to use the print_model logic to print something useful here
-                        println!("Failed assertion:\n{}", self.smt.display(variable));
+                        // Now we know exactly WHICH assertion failed
+                        // let assertion = self.conditions.assertions.get(assert_id.index());
+                        let ir_expr = &self.conditions.exprs[assert_id.index()];
+                        // print human-readable assertion 
+                        println!("Failed assertion: {}", ir_expr); 
                     }
                 }
+
                 Verification::Failure(self.model()?)
             }
             Response::Unsat => Verification::Success,
