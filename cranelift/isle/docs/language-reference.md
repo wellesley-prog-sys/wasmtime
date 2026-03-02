@@ -41,7 +41,7 @@ the real code [here](https://github.com/bytecodealliance/wasmtime/blob/main/cran
       (value_reg (add
                    (put_in_reg x)
                    ;; `y` is a `RegMemImm.Imm`.
-                   y)))
+                   y))))
 ```
 
 ISLE lets the compiler backend developer express this information in a
@@ -495,10 +495,10 @@ operators:
 
 * Wildcards (`_`).
 * Integer constants (decimal/hex/binary/octal, positive/negative: `1`, `-1`,
-  `0x80`, `-0x80`) and boolean constants (`#t`, `#f`). Hex constants can
-  start with either `0x` or `0X`. Binary constants start with `0b`. Octal
-  constants start with `0o`. Integers can also be interspersed with `_` as a
-  separator, for example `1_000` or `0x1234_5678`, for readability.
+  `0x80`, `-0x80`). Hex constants can start with either `0x` or `0X`.
+  Binary constants start with `0b`. Octal constants start with `0o`.
+  Integers can also be interspersed with `_` as a separator, for example
+  `1_000` or `0x1234_5678`, for readability.
 * constants imported from the embedding, of arbitrary type
   (`$MyConst`).
 * Variable captures and matches (bare identifiers like `x`; an
@@ -523,7 +523,6 @@ The expression (right-hand side) is made up of the following
 expression operators:
 
 * Integer and symbolic constants, as above.
-* Boolean constants `#t` and `#f` (following Scheme syntax).
 * Variable uses (bare `x` identifier).
 * Term constructors (`(term EXPR1 EXPR2 ...)`, where each
   subexpression is evaluated first and then the term is constructed).
@@ -906,7 +905,7 @@ This also works in the extractor position: for example, if one writes
 
 ```lisp
     (decl defining_instruction (Inst) Value)
-    (extern extractor definining_instruction ...)
+    (extern extractor defining_instruction ...)
 
     (decl iadd (Value Value) Inst)
 
@@ -953,7 +952,7 @@ and also to use constructors in place of extractors during the match
 phase when this is more convenient.
 
 To introduce the concept, an example follows (this is taken from the
-[RFC](https://github.com/bytecodealliance/rfcs/tree/main/isle-extended-patterns.md)
+[RFC](https://github.com/bytecodealliance/rfcs/tree/main/accepted/isle-extended-patterns.md)
 that proposed if-lets):
 
 ```lisp
@@ -1073,6 +1072,24 @@ following shorthand notation using `if` instead:
       (if (isa_extension_enabled))
       (isa_special_inst ...))
 ```
+
+#### Recursion
+
+ISLE terms may be recursive: a rewrite rule's RHS can reference the term it
+matches on, either directly or via a reference cycle.  However, recursive terms
+present a risk of potentially unbounded term rewriting. In the compilation
+context, it is possible that certain recursive rules could be exploited to
+induce a stack overflow with a malicious input program.  Therefore, ISLE
+disallows recursion by default.
+
+Recursion can still be justified when it can be shown to be bounded, therefore
+ISLE allows certain terms to opt-in to recursive definitions.  To permit
+recursive references in a term's rules, declare the term with the `rec`
+attribute: `(decl rec A ...)`. In the case of a reference cycle, all terms in
+the cycle must have the `rec` attribute. When using the `rec` attribute,
+developers should provide a `; Recursion: ...` comment explaining why this use
+is bounded.
+
 
 ## ISLE to Rust
 
@@ -1414,10 +1431,6 @@ various edges; we can use a Rust `match` statement in the generated
 source and have `O(1)` (or close to it) cost for the dispatch at this
 level.[^8]
 
-Building the trie is a somewhat subtle procedure; see [this block
-comment](https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/isle/isle/src/trie.rs#L15-L166)
-for more information regarding the trie construction algorithm.
-
 [^8]: The worst-case complexity for a single term rewriting operation
       is still the cost of evaluating each rule's left-hand side
       sequentially, because in general there is no guarantee of
@@ -1431,71 +1444,322 @@ for more information regarding the trie construction algorithm.
 
 ## Reference: ISLE Language Grammar
 
-Baseline: allow arbitrary whitespace, and Lisp-style comments (`;` to
-newline). The grammar accepted by the parser is as follows:
+Baseline: allow arbitrary whitespace, and wasm-style comments (`;` to
+newline, or nested block-comments with `(;` and `;)`).
+
+The grammar accepted by the parser is as follows:
 
 ```bnf
+<skip> ::= <whitespace> | <comment>
+
+<whitespace> ::= " "
+               | "\t"
+               | "\n"
+               | "\r"
+
+<comment> ::= <line-comment> | <block-comment>
+
+<line-comment> ::= ";" <line-char>* (<newline> | eof)
+<line-char> ::= <any character other than "\n" or "\r">
+<newline> ::= "\n" | "\r"
+
+<block-comment> ::= "(;" <block-char>* ";)"
+<block-char> ::= <any character other than ";" or "(">
+               | ";" if the next character is not ")"
+               | "(" if the next character is not ";"
+               | <block-comment>
 
 <ISLE> ::= <def>*
 
-<def> ::= "(" "type" <typedecl> ")"
+<def> ::= "(" "pragma" <pragma> ")"
+        | "(" "type" <typedecl> ")"
         | "(" "decl" <decl> ")"
         | "(" "rule" <rule> ")"
-        | "(" "extractor" <etor> ")"
+        | "(" "extractor" <extractor> ")"
         | "(" "extern" <extern> ")"
+        | "(" "convert" <converter> ")"
 
-<typedecl> ::= <ident> [ "extern" ] <typevalue>
+;; No pragmas are defined yet
+<pragma> ::= <ident>
 
-<ident> ::= ( "A".."Z" | "a".."z" | "_" | "$" )
-            ( "A".."Z" | "a".."z" | "_" | "$" | "0".."9" | "." )*
-<const-ident> ::= "$" ( "A".."Z" | "a".."z" | "_" | "$" | "0".."9" | "." )*
+<typedecl> ::= <ident> [ "extern" | "nodebug" ] <type-body>
 
-<int> ::= [ "-" ] ( "0".."9" )+
-        | [ "-" ] "0x" ( "0".."9" "A".."F" "a".."f" )+
-        | [ "-" ] "0o" ( "0".."7" )+
-        | [ "-" ] "0b" ( "0".."1" )+
+<ident> ::= <ident-start> <ident-cont>*
+<const-ident> ::= "$" <ident-cont>*
+<ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")", ";", "#" or "$">
+<ident-cont>  ::= <any non-whitespace character other than "(", ")", ";" or "@">
 
-<typevalue> ::= "(" "primitive" <ident> ")"
-              | "(" "enum" <enumvariant>* ")"
+<type-body> ::= "(" "primitive" <ident> ")"
+              | "(" "enum" <enum-variant>* ")"
 
-<enumvariant> ::= <ident>
-                | "(" <ident> <enumfield>* ")"
+<enum-variant> ::= <ident>
+                 | "(" <ident> <variant-field>* ")"
 
-<enumfield> ::= "(" <ident> <ty> ")"
+<variant-field> ::= "(" <ident> <ty> ")"
 
 <ty> ::= <ident>
 
-<decl> ::= <ident> "(" <ty>* ")" <ty>
+<decl> ::= [ "pure" ] [ "multi" ] [ "partial" ] [ "rec" ] <ident> "(" <ty>* ")" <ty>
 
-<rule> ::= <pattern> <expr>
-         | <prio> <pattern> <expr>
+<rule> ::= [ <ident> ] [ <prio> ] <pattern> <stmt>* <expr>
 
 <prio> ::= <int>
 
-<etor> ::= "(" <ident> <ident>* ")" <pattern>
+<int> ::= [ "-" ] ( "0".."9" ) ( "0".."9" | "_" )*
+        | [ "-" ] "0" ("x" | "X") ( "0".."9" | "A".."F" | "a".."f" | "_" )+
+        | [ "-" ] "0" ("o" | "O") ( "0".."7" | "_" )+
+        | [ "-" ] "0" ("b" | "B") ( "0".."1" | "_" )+
 
 <pattern> ::= <int>
+            | "true" | "false"
             | <const-ident>
             | "_"
             | <ident>
             | <ident> "@" <pattern>
             | "(" "and" <pattern>* ")"
-            | "(" <ident> <pattern-arg>* ")"
+            | "(" <ident> <pattern>* ")"
 
-<pattern-arg> ::= <pattern>
-                | "<" <expr>  ;; in-argument to an extractor
+<stmt> ::= "(" "if-let" <pattern> <expr> ")"
+         | "(" "if" <expr> ")"
 
 <expr> ::= <int>
+         | "true" | "false"
          | <const-ident>
-         | "#t"               ;; Scheme-like "true": shorthand for 1
-         | "#f"               ;; Scheme-like "false": shorthand for 0
          | <ident>
          | "(" "let" "(" <let-binding>* ")" <expr> ")"
          | "(" <ident> <expr>* ")"
 
 <let-binding> ::= "(" <ident> <ty> <expr> ")"
 
+<extractor> ::= "(" <ident> <ident>* ")" <pattern>
+
 <extern> ::= "constructor" <ident> <ident>
            | "extractor" [ "infallible" ] <ident> <ident>
-           | "const" <const-ident> <ident> <ty>
+           | "const" <const-ident> <ty>
+
+<converter> ::= <ty> <ty> <ident>
 ```
+
+
+## ISLE Verification Extensions — Structured Reference
+
+This section documents the verification-specific extensions to the ISLE language. These extensions enrich ISLE with logical specifications, SMT type models, and explicit type instantiation mechanisms used during formal verification.
+
+At the top level of a verification-enabled ISLE file, four new definition forms are supported:
+1. `(spec ...)` - attaches a logical contract to a term
+2. `(model ...)` - gives SMT meaning to ISLE types
+3. `(form ...)` - declares reusable verification type signatures
+4. `(instantiate ...)` - binds a term to concrete signatures
+
+There constructs are parsed in `parse_def()` in `parser.rs` file: 
+
+```rust 
+match self.expect_ident()?.as_str() {
+    "spec" => Def::Spec(self.parse_spec()?),
+    "model" => Def::Model(self.parse_model()?),
+    "form" => Def::Form(self.parse_form()?),
+    "instantiate" => Def::Instantiation(self.parse_instantiation()?),
+    ...
+}
+```
+Each keyword dispatches to a dedicated parser function.
+
+In addition, verification introduces a logical expression sublanguage used within specifications.
+
+### 1. Specification: `(spec ...)` 
+
+#### 1.1. Formal Grammar 
+```bnf
+<spec-def> ::= "(" "spec" <spec-head> <spec-clause>* ")"
+
+<spec-head> ::= "(" <ident> <ident>* ")"
+
+<spec-clause> ::= <provide-clause>
+                | <require-clause>
+                | <match-clause>
+                | <modifies-clause>
+
+<provide-clause> ::= "(" "provide" <spec-expr>* ")"
+<require-clause> ::= "(" "require" <spec-expr>* ")"
+<match-clause>   ::= "(" "match" <spec-expr>* ")"
+
+<modifies-clause> ::= "(" "modifies" <ident> [ <ident> ] ")"
+```
+
+#### 1.2 Semantics 
+A `spec` definition declares a **logical contract** for an ISLE term. 
+
+- The `<spec-head>` identifies the term and its formal parameters. 
+- A `(require ...)` clause encodes preconditions. 
+- A `(provide ...)` clause encodes postconditions. 
+- If `require` is omitted, it defaults to `true`. 
+- `(match ...)` supports pattern-related constraints 
+- `(modifies ...)` describes state mutation effects
+
+Semantically: 
+```lisp
+(require₁ ∧ … ∧ requireₙ) ⇒ (provide₁ ∧ … ∧ provideₖ)
+```
+#### 1.3 Parser Implementation 
+
+In `parse_def`: 
+
+```rust
+"spec" => Def::Spec(self.parse_spec()?),
+```
+
+Core implementation: 
+```rust 
+fn parse_spec(&mut self) -> Result<Spec> {
+    let pos = self.pos();
+    self.expect_lparen()?; 
+    let term = self.parse_ident()?;
+    let mut args = vec![];
+    while !self.is_rparen() {
+        args.push(self.parse_ident()?);
+    }
+    self.expect_rparen()?;
+
+    let mut provides = Vec::new();
+    let mut requires = Vec::new();
+    let mut matches = Vec::new();
+    let mut modifies = Vec::new();
+
+    while self.is_lparen() {
+        self.expect_lparen()?;
+        match &self.expect_symbol()?[..] {
+            "provide" => {
+                while !self.is_rparen() {
+                    provides.push(self.parse_spec_expr()?);
+                }
+            }
+            "require" => {
+                while !self.is_rparen() {
+                    requires.push(self.parse_spec_expr()?);
+                }
+            }
+            "match" => {
+                while !self.is_rparen() {
+                    matches.push(self.parse_spec_expr()?);
+                }
+            }
+            "modifies" => {
+                let state = self.parse_ident()?;
+                let cond = if self.is_sym() {
+                    Some(self.parse_ident()?)
+                } else {
+                    None
+                };
+                modifies.push(Modifies { state, cond });
+            }
+            field => {
+                return Err(self.error(
+                    pos,
+                    format!("Invalid spec field {field}"),
+                ));
+            }
+        }
+        self.expect_rparen()?;
+    }
+
+    Ok(Spec {
+        term,
+        args,
+        provides,
+        requires,
+        matches,
+        modifies,
+        pos,
+    })
+}
+```
+
+#### 1.4 Example
+
+```lisp
+(decl value_regs (Reg Reg) ValueRegs)
+
+(spec (value_regs arg1 arg2)
+  (provide
+    (= (:lo result) arg1)
+    (= (:hi result) arg2)))
+```
+
+**Explanation:**
+- `value_regs` is declared as a term 
+- The specification states that the resulting value has: 
+    - low half equal to `arg1`
+    - high half equal to `arg2`
+- There is no `require` block, so the contract is unconditional. 
+
+### 2. `model` - Giving SMT Meanings to Types 
+
+
+### 3. `form` - Reusable Signature Schemas 
+
+### 4. `instantiate` - Binding Terms to Signatures 
+
+Here is the overall of the entire grammar for verification properties: 
+```bnf
+<def> += "(" "spec" <spec> ")"
+       | "(" "model" <model> ")"
+       | "(" "form" <form> ")"
+       | "(" "instantiate" <instantiation> ")"
+
+<spec> ::= "(" <ident> <ident>* ")" <provide> [ <require> ]
+<provide> ::= "(" "provide" <spec-expr>* ")"
+<require> ::= "(" "require" <spec-expr>* ")"
+
+<model> ::= <ty> "(" "type" <model-ty> ")"
+          | <ty> "(" "enum" <model-variant>* ")"
+
+<model-ty> ::= "Bool"
+             | "Int"
+             | "Unit"
+             | "(" "bv" [ <int> ] ")"
+
+<model-variant> ::= "(" <ident> [ <spec-expr> ] ")"
+
+<form> ::= <ident> <signature>*
+
+<instantiation> ::= <ident> <signature>*
+                  | <ident> <ident>
+
+<spec-expr> ::= <int>
+              | <spec-bv>
+              | "true" | "false"
+              | <ident>
+              | "(" "switch" <spec-expr> <spec-pair>* ")"
+              | "(" <spec-op> <spec-expr>* ")"
+              | "(" <ident> ")"
+              | "(" ")"
+
+<spec-bv> ::= "#b" [ "+" | "-" ] ("0".."1")+
+            | "#x" [ "+" | "-" ] ("0".."9" | "A".."F" | "a".."f")+
+
+<spec-pair> ::= "(" <spec-expr> <spec-expr> ")"
+
+<spec-op> ::= "and" | "not" | "or" | "=>"
+            | "=" | "<=" | "<" | ">=" | ">"
+            | "bvnot" | "bvand" | "bvor" | "bvxor"
+            | "bvneg" | "bvadd" | "bvsub" | "bvmul"
+            | "bvudiv" | "bvurem" | "bvsdiv" | "bvsrem"
+            | "bvshl" | "bvlshr" | "bvashr"
+            | "bvsaddo" | "subs"
+            | "bvule" | "bvult" | "bvugt" | "bvuge"
+            | "bvsle" | "bvslt" | "bvsgt" | "bvsge"
+            | "rotr" | "rotl"
+            | "extract" | "concat" | "conv_to"
+            | "zero_ext" | "sign_ext"
+            | "int2bv" | "bv2int"
+            | "widthof"
+            | "if" | "switch"
+            | "popcnt" | "rev" | "cls" | "clz"
+            | "load_effect" | "store_effect"
+
+<signature>  ::= "(" <sig-args> <sig-ret> <sig-canon> ")"
+<sig-args>   ::= "(" "args" <model-ty>* ")"
+<sig-ret>    ::= "(" "ret" <model-ty>* ")"
+<sig-canon>  ::= "(" "canon" <model-ty>* ")"
+```
+
