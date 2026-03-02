@@ -801,7 +801,7 @@ impl Runner {
         let smt = easy_smt::ContextBuilder::new()
             .solver(binary, &args)
             .replay_file(Some(replay_file))
-            .build()?; // this is where the error message "No such file or directory (os error 2)" comes from 
+            .build()?;
 
         let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
         solver.set_dialect(solver_backend.dialect());
