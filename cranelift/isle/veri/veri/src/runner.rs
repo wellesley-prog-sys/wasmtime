@@ -27,7 +27,7 @@ use crate::{
 
 const LOG_DIR: &str = ".veriisle";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub enum SolverBackend {
     Z3,
     CVC5,
