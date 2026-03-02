@@ -1849,13 +1849,23 @@ This AST is later translated into SMT.
 
 A `model` definition assigns an **SMT interpretation** to an ISLE type. 
 
+This definds 
+```code
+ISLE Type  →  SMT Sort
+```
+
+Without a model a type has no formal meaning in verification. 
+
 This bridges ISLE's type system and the SMT solver. 
 
 #### 2.3 Parser Implementation 
 
+Top-level dispatch:
 ```rust 
 "model" => Def::Model(self.parse_model()?),
 ```
+
+Core parsing logic: 
 ```rust
 fn parse_model(&mut self) -> Result<Model> {
     let pos = self.pos();
@@ -1925,6 +1935,9 @@ fn parse_model_type(&mut self) -> Result<ModelType> {
 ```
 
 **Explanation:**
+```code
+WritableReg ↦ BitVec[w]
+```
 - `WritableReg` is an ISLE type 
 - The model maps it to an SMT bitvector 
 - Since no width is provided, the bitvector width may be inferred later. 
@@ -1935,11 +1948,6 @@ fn parse_model_type(&mut self) -> Result<ModelType> {
 
 ```bnf
 <form> ::= <ident> <signature>*
-
-<signature>  ::= "(" <sig-args> <sig-ret> <sig-canon> ")"
-<sig-args>   ::= "(" "args" <model-ty>* ")"
-<sig-ret>    ::= "(" "ret" <model-ty>* ")"
-<sig-canon>  ::= "(" "canon" <model-ty>* ")"
 ```
 
 #### 3.2 Semantics 
@@ -1948,10 +1956,12 @@ A `form` defines the **admissible type signatures** for a term during verificati
 
 #### 3.3 Parser Implementation 
 
+Top-level dispatch:
 ```rust 
 "form" => Def::Form(self.parse_form()?),
 ```
 
+Core parsing logic: 
 ```rust
 fn parse_form(&mut self) -> Result<Form> {
     let pos = self.pos();
@@ -1984,6 +1994,38 @@ This declares that `fcvt` supports four types of combinations:
 
 The verifier checks that any use of `fcvt` conforms to one of these signatures. 
 
+#### 3.5 Signature Grammar and Parsing 
+
+##### 3.5.1 Formal Grammar 
+```bnf
+<signature>  ::= "(" <sig-args> <sig-ret> <sig-canon> ")"
+<sig-args>   ::= "(" "args" <model-ty>* ")"
+<sig-ret>    ::= "(" "ret" <model-ty>* ")"
+<sig-canon>  ::= "(" "canon" <model-ty>* ")"
+```
+
+##### 3.5.2 Semantic Meaning 
+
+A signature defines 
+- argument SMT sorts
+- return SMT sorts
+- optional canonical type 
+
+It represents a function type: 
+```code
+(args₁ × args₂ × …) → (ret₁ × ret₂ × …)
+```
+
+##### 3.5.3 Parser Structure (Conceptual) 
+
+`parse_signature():`
+1. Parse `(arg ...)`
+2. Parse `(ret ...)`
+3. Optionally parse `(canon ...)`
+4. Builds a `Signature` AST node
+
+Each component becomes a typed verification used during instantiation. 
+
 ### 4. Instantiation: `(instantiate ...)`
 
 #### 4.1 Formal Grammar 
@@ -2004,14 +2046,17 @@ The verifier checks that any use of `fcvt` conforms to one of these signatures.
 - a named `form`, or 
 - explicit signatures 
 
-This creates concrete typing instances used during verification. 
+It produces concrete typed instances for verification.
 
+Each instance generates separate SMT obligations.
 
 #### 4.3 Parser Implementation 
+Top-level dispatch:
 ```rust
 "instantiate" => Def::Instantiation(self.parse_instantiation()?),
 ```
 
+Core parsing logic: 
 ```rust
 fn parse_instantiation(&mut self) -> Result<Instantiation> {
     let term = self.expect_ident()?;
