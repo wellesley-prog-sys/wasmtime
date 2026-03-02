@@ -27,7 +27,7 @@ use crate::{
 
 const LOG_DIR: &str = ".veriisle";
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SolverBackend {
     Z3,
     CVC5,
@@ -742,6 +742,47 @@ impl Runner {
         Ok(self.default_solver_backend)
     }
 
+    // helper function: return a list of solver backends installed and runnable on the system
+    fn available_solvers(&self) -> Vec<SolverBackend> {
+        SolverBackend::all()
+            .into_iter()
+            .filter(|b| {
+                std::process::Command::new(b.prog())
+                    .arg("--version")
+                    .output()
+                    .is_ok()
+            })
+            .collect()
+    }
+
+    // helper function: fallback selection logic 
+    fn resolve_solver_backend(&self, _requested: SolverBackend) -> Result<SolverBackend> {
+        let available = self.available_solvers(); 
+    
+        match available.as_slice(){
+            [] => {
+                bail! (
+                    "Error: no SMT solver backend found.\n\
+                    Please install either 'z3' or 'cvc5' and ensure it is in you PATH. 
+                    "
+                ); 
+            }
+            [only] => {
+                // one install -> warning message, run the sover 
+                eprintln!(
+                    "Warning: only solver '{}' is installed. \
+                    All verification will use this solver.",
+                    only
+                );
+                Ok(*only)
+            }
+            _ => {
+                // both install 
+                Ok(self.default_solver_backend)
+            }
+        }
+    }
+
     fn verify_expansion_type_instantiation(
         &self,
         conditions: &Conditions,
@@ -753,13 +794,14 @@ impl Runner {
         let start = time::Instant::now();
 
         // Solve.
+        let solver_backend = self.resolve_solver_backend(solver_backend)?;
         let binary = solver_backend.prog();
         let args = solver_backend.args(self.timeout);
         let replay_file = Self::open_log_file(log_dir, "solver.smt2")?;
         let smt = easy_smt::ContextBuilder::new()
             .solver(binary, &args)
             .replay_file(Some(replay_file))
-            .build()?;
+            .build()?; // this is where the error message "No such file or directory (os error 2)" comes from 
 
         let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
         solver.set_dialect(solver_backend.dialect());
