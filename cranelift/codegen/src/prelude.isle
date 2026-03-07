@@ -457,7 +457,6 @@
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
-(spec (ty_bits_u16 ty) (provide (= result (int2bv 16 (:bits ty)))))
 (decl pure ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
 
