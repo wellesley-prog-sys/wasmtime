@@ -236,8 +236,6 @@ fn gen_common_isle(
                 (IsleTarget::Lower, _, _, _) => ("Inst", false, "make_inst", "inst_data_value"),
             };
 
-        let has_ty_param = !inst.format.has_value_list && inst.value_results.len() >= 1;
-
         fmtln!(
             fmt,
             "(decl {} ({}{}) {})",
@@ -257,7 +255,6 @@ fn gen_common_isle(
                 .join(" "),
             ret_ty
         );
-        fmtln!(fmt, "(attr {} (tag clif_{}))", inst.name, inst.name);
         fmtln!(fmt, "(extractor");
         fmt.indent(|fmt| {
             fmtln!(

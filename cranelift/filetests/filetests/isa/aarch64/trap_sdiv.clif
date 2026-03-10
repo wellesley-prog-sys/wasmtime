@@ -9,26 +9,46 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
+<<<<<<< HEAD
 ;   sxtb w3, w0
 ;   sxtb w5, w1
 ;   cbz w5, #trap=int_divz
+=======
+;   sxtb x3, w0
+;   sxtb x5, w1
+;   cbz x5, #trap=int_divz
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   lsl w8, w3, #24
 ;   adds wzr, w5, #1
 ;   ccmp w8, #1, #nzcv, eq
 ;   b.vs #trap=int_ovf
+<<<<<<< HEAD
 ;   sdiv w0, w3, w5
+=======
+;   sdiv x0, x3, x5
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+<<<<<<< HEAD
 ;   sxtb w3, w0
 ;   sxtb w5, w1
 ;   cbz w5, #0x24
+=======
+;   sxtb x3, w0
+;   sxtb x5, w1
+;   cbz x5, #0x24
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   lsl w8, w3, #0x18
 ;   cmn w5, #1
 ;   ccmp w8, #1, #0, eq
 ;   b.vs #0x28
+<<<<<<< HEAD
 ;   sdiv w0, w3, w5
+=======
+;   sdiv x0, x3, x5
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
@@ -41,26 +61,46 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
+<<<<<<< HEAD
 ;   sxth w3, w0
 ;   sxth w5, w1
 ;   cbz w5, #trap=int_divz
+=======
+;   sxth x3, w0
+;   sxth x5, w1
+;   cbz x5, #trap=int_divz
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   lsl w8, w3, #16
 ;   adds wzr, w5, #1
 ;   ccmp w8, #1, #nzcv, eq
 ;   b.vs #trap=int_ovf
+<<<<<<< HEAD
 ;   sdiv w0, w3, w5
+=======
+;   sdiv x0, x3, x5
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+<<<<<<< HEAD
 ;   sxth w3, w0
 ;   sxth w5, w1
 ;   cbz w5, #0x24
+=======
+;   sxth x3, w0
+;   sxth x5, w1
+;   cbz x5, #0x24
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   lsl w8, w3, #0x10
 ;   cmn w5, #1
 ;   ccmp w8, #1, #0, eq
 ;   b.vs #0x28
+<<<<<<< HEAD
 ;   sdiv w0, w3, w5
+=======
+;   sdiv x0, x3, x5
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
@@ -73,20 +113,40 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
+<<<<<<< HEAD
 ;   cbz w1, #trap=int_divz
 ;   adds wzr, w1, #1
 ;   ccmp w0, #1, #nzcv, eq
 ;   b.vs #trap=int_ovf
 ;   sdiv w0, w0, w1
+=======
+;   sxtw x3, w0
+;   sxtw x5, w1
+;   cbz x5, #trap=int_divz
+;   adds wzr, w5, #1
+;   ccmp w3, #1, #nzcv, eq
+;   b.vs #trap=int_ovf
+;   sdiv x0, x3, x5
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+<<<<<<< HEAD
 ;   cbz w1, #0x18
 ;   cmn w1, #1
 ;   ccmp w0, #1, #0, eq
 ;   b.vs #0x1c
 ;   sdiv w0, w0, w1
+=======
+;   sxtw x3, w0
+;   sxtw x5, w1
+;   cbz x5, #0x20
+;   cmn w5, #1
+;   ccmp w3, #1, #0, eq
+;   b.vs #0x24
+;   sdiv x0, x3, x5
+>>>>>>> 25bf532133 (big veriisle squash)
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf

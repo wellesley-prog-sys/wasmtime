@@ -70,16 +70,6 @@ impl IsleCompilation {
     }
 }
 
-impl IsleCompilation {
-    pub fn inputs(&self) -> Vec<std::path::PathBuf> {
-        self.inputs
-            .iter()
-            .chain(self.untracked_inputs.iter())
-            .cloned()
-            .collect()
-    }
-}
-
 pub fn shared_isle_lower_paths(codegen_crate_dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
     let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");

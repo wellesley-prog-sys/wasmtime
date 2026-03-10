@@ -52,6 +52,7 @@ rustc-hash = { workspace = true }
 # for all of Cranelift, which would be bad.
 regalloc2 = { workspace = true, features = ["trace-log"] }
 pulley-interpreter = { workspace = true, optional = true }
+pretty = "0.12.5"
 
 [features]
 default = [

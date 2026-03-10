@@ -699,8 +699,6 @@ pub struct Rule {
     pub vars: Vec<BoundVar>,
     /// The priority of this rule, defaulted to 0 if it was missing in the source.
     pub prio: i64,
-    /// Rule name.
-    pub name: Option<Sym>,
     /// The source position where this rule is defined.
     pub pos: Pos,
     /// The optional name for this rule.

@@ -1984,7 +1984,11 @@
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule
   (imm12_from_negated_value (has_type ty (iconst _ n)))
+<<<<<<< HEAD
   (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_wrapping_neg (i64_sextend_imm64 ty n))))
+=======
+  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+>>>>>>> 25bf532133 (big veriisle squash)
   imm)
 
 (decl imm12_from_u64 (Imm12) u64)
@@ -2031,7 +2035,11 @@
 ;; Like imm5_from_value, but first negates the `Value`.
 (decl pure partial imm5_from_negated_value (Value) Imm5)
 (rule (imm5_from_negated_value (has_type ty (iconst _ n)))
+<<<<<<< HEAD
   (if-let (imm5_from_i64 imm) (i64_wrapping_neg (i64_sextend_imm64 ty n)))
+=======
+  (if-let (imm5_from_i64 imm) (i64_neg (i64_sextend_imm64 ty n)))
+>>>>>>> 25bf532133 (big veriisle squash)
   imm)
 
 ;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
@@ -2309,6 +2317,7 @@
 
 ;; When extending our backend always extends to the full register width, so
 ;; there's no need to extend-an-extend.
+<<<<<<< HEAD
 (rule 1 (val_already_extended (ExtendOp.Zero) (uextend _ _)) true)
 (rule 1 (val_already_extended (ExtendOp.Signed) (sextend _ _)) true)
 
@@ -2316,17 +2325,34 @@
 ;; extended to the full register width.
 (rule 1 (val_already_extended _ (icmp _ _ _ _)) true)
 (rule 1 (val_already_extended _ (fcmp _ _ _ _)) true)
+=======
+(rule 1 (val_already_extended (ExtendOp.Zero) (uextend _ _)) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (sextend _ _)) $true)
+
+;; The result of `icmp`/`fcmp` is zero or one, meaning that it's already sign
+;; extended to the full register width.
+(rule 1 (val_already_extended _ (icmp _ _ _ _)) $true)
+(rule 1 (val_already_extended _ (fcmp _ _ _ _)) $true)
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;; The lowering for these operations always sign-extend their results due to the
 ;; use of the `*w` instructions in RV64I. Note that this requires that the
 ;; extension is from 32 to 64, 16/8-bit operations are explicitly excluded here.
 ;; There are no native instructions for the 16/8 bit operations so they must
 ;; fall through to actual sign extension above.
+<<<<<<< HEAD
 (rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _ _))) true)
 (rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _ _))) true)
 (rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _ _))) true)
 (rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _ _))) true)
 (rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _ _))) true)
+=======
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _ _))) $true)
+>>>>>>> 25bf532133 (big veriisle squash)
 
 (type ExtendOp
   (enum
@@ -2419,10 +2445,17 @@
 ;; We can't recurse into `amode` again since that could cause stack overflows.
 ;; See: https://github.com/bytecodealliance/wasmtime/pull/6968
 (rule 1 (amode (iadd _ addr (i32_from_iconst y)) offset)
+<<<<<<< HEAD
   (if-let new_offset (i32_checked_add y offset))
   (amode_inner addr new_offset))
 (rule 2 (amode (iadd _ (i32_from_iconst x) addr) offset)
   (if-let new_offset (i32_checked_add x offset))
+=======
+  (if-let new_offset (s32_add_fallible y offset))
+  (amode_inner addr new_offset))
+(rule 2 (amode (iadd _ (i32_from_iconst x) addr) offset)
+  (if-let new_offset (s32_add_fallible x offset))
+>>>>>>> 25bf532133 (big veriisle squash)
   (amode_inner addr new_offset))
 
 
@@ -2443,7 +2476,11 @@
 
 ;; Similarly if the value is a `stack_addr` we can also turn that into an sp offset.
 (rule 1 (amode_inner (stack_addr _ ss ss_offset) amode_offset)
+<<<<<<< HEAD
   (if-let combined_offset (i32_checked_add ss_offset amode_offset))
+=======
+  (if-let combined_offset (s32_add_fallible ss_offset amode_offset))
+>>>>>>> 25bf532133 (big veriisle squash)
   (gen_stack_slot_amode ss combined_offset))
 
 
@@ -2462,7 +2499,11 @@
 (decl sinkable_load (Inst Type MemFlags Value Offset32) Value)
 (extractor (sinkable_load inst ty flags addr offset)
            (and
+<<<<<<< HEAD
               (load _ (little_or_native_endian flags) addr offset)
+=======
+              (load _ flags addr offset)
+>>>>>>> 25bf532133 (big veriisle squash)
               (sinkable_inst (has_type ty inst))))
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.

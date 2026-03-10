@@ -328,6 +328,49 @@
 
 (type AssemblerInst extern (enum))
 
+(model MInst (type (bv 1)))
+
+; TODO(mbm): AluRmiR must handle memory and immediate forms of src2 operand
+(spec (MInst.AluRmiR size op src1 src2 dst)
+      (provide
+            ; Execute opcode.
+            (=
+                  dst
+                  (switch size
+                        ; 64-bit forms operate on full register
+                        ((OperandSize.Size64)
+                              (switch op
+                                    ((AluRmiROpcode.Add) (bvadd src1 src2))
+                              )
+                        )
+                        ; 32-bit forms zero-extend to full general purpose register.
+                        ((OperandSize.Size32)
+                              (switch op
+                                    ((AluRmiROpcode.Add) (zero_ext 64 (bvadd (extract 31 0 src1) (extract 31 0 src2))))
+                              )
+                        )
+                  )
+            )
+      )
+)
+
+(spec
+      (MInst.LoadEffectiveAddress
+            addr ; SyntheticAmode
+            dst  ; WritableGpr
+            size ; OperandSize
+      )
+      (provide
+            (=
+                  dst
+                  (switch size
+                        ((OperandSize.Size64) addr)
+                        ((OperandSize.Size32) (zero_ext 64 (extract 31 0 addr)))
+                  )
+            )
+      )
+)
+
 (type OperandSize extern
       (enum Size8
             Size16
@@ -346,6 +389,11 @@
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
+(spec (operand_size_of_type_32_64 ty)
+      (provide
+            (= result (if (= (:bits ty) 64) (OperandSize.Size64) (OperandSize.Size32)))
+      )
+)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
 
 ;; Get the true `OperandSize` for a given `Type`, with no rounding.
@@ -359,11 +407,246 @@
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
 
+<<<<<<< HEAD
+=======
+(type AluRmiROpcode extern
+      (enum Add
+            Adc
+            Sub
+            Sbb
+            And
+            Or
+            Xor))
+
+(type AluRmROpcode
+      (enum Andn
+            Sarx
+            Shrx
+            Shlx
+            Bzhi))
+
+(type UnaryRmROpcode extern
+      (enum Bsr
+            Bsf
+            Lzcnt
+            Tzcnt
+            Popcnt))
+
+(type UnaryRmRVexOpcode
+      (enum Blsi
+            Blsmsk
+            Blsr))
+
+(type UnaryRmRImmVexOpcode
+      (enum Rorx))
+
+(type SseOpcode extern
+      (enum Addps
+            Addpd
+            Addss
+            Addsd
+            Andps
+            Andpd
+            Andnps
+            Andnpd
+            Blendvpd
+            Blendvps
+            Comiss
+            Comisd
+            Cmpps
+            Cmppd
+            Cmpss
+            Cmpsd
+            Cvtdq2ps
+            Cvtdq2pd
+            Cvtpd2ps
+            Cvtps2pd
+            Cvtsd2ss
+            Cvtsd2si
+            Cvtsi2ss
+            Cvtsi2sd
+            Cvtss2si
+            Cvtss2sd
+            Cvttpd2dq
+            Cvttps2dq
+            Cvttss2si
+            Cvttsd2si
+            Divps
+            Divpd
+            Divss
+            Divsd
+            Insertps
+            Maxps
+            Maxpd
+            Maxss
+            Maxsd
+            Minps
+            Minpd
+            Minss
+            Minsd
+            Movaps
+            Movapd
+            Movd
+            Movdqa
+            Movdqu
+            Movlhps
+            Movmskps
+            Movmskpd
+            Movq
+            Movss
+            Movsd
+            Movups
+            Movupd
+            Mulps
+            Mulpd
+            Mulss
+            Mulsd
+            Orps
+            Orpd
+            Pabsb
+            Pabsw
+            Pabsd
+            Packssdw
+            Packsswb
+            Packusdw
+            Packuswb
+            Paddb
+            Paddd
+            Paddq
+            Paddw
+            Paddsb
+            Paddsw
+            Paddusb
+            Paddusw
+            Palignr
+            Pand
+            Pandn
+            Pavgb
+            Pavgw
+            Pblendvb
+            Pcmpeqb
+            Pcmpeqw
+            Pcmpeqd
+            Pcmpeqq
+            Pcmpgtb
+            Pcmpgtw
+            Pcmpgtd
+            Pcmpgtq
+            Pextrb
+            Pextrw
+            Pextrd
+            Pextrq
+            Pinsrb
+            Pinsrw
+            Pinsrd
+            Pmaddubsw
+            Pmaddwd
+            Pmaxsb
+            Pmaxsw
+            Pmaxsd
+            Pmaxub
+            Pmaxuw
+            Pmaxud
+            Pminsb
+            Pminsw
+            Pminsd
+            Pminub
+            Pminuw
+            Pminud
+            Pmovmskb
+            Pmovsxbd
+            Pmovsxbw
+            Pmovsxbq
+            Pmovsxwd
+            Pmovsxwq
+            Pmovsxdq
+            Pmovzxbd
+            Pmovzxbw
+            Pmovzxbq
+            Pmovzxwd
+            Pmovzxwq
+            Pmovzxdq
+            Pmuldq
+            Pmulhw
+            Pmulhuw
+            Pmulhrsw
+            Pmulld
+            Pmullw
+            Pmuludq
+            Por
+            Pshufb
+            Pshufd
+            Psllw
+            Pslld
+            Psllq
+            Psraw
+            Psrad
+            Psrlw
+            Psrld
+            Psrlq
+            Psubb
+            Psubd
+            Psubq
+            Psubw
+            Psubsb
+            Psubsw
+            Psubusb
+            Psubusw
+            Ptest
+            Punpckhbw
+            Punpckhwd
+            Punpcklbw
+            Punpcklwd
+            Pxor
+            Rcpss
+            Roundps
+            Roundpd
+            Roundss
+            Roundsd
+            Rsqrtss
+            Shufps
+            Sqrtps
+            Sqrtpd
+            Sqrtss
+            Sqrtsd
+            Subps
+            Subpd
+            Subss
+            Subsd
+            Ucomiss
+            Ucomisd
+            Unpcklps
+            Unpcklpd
+            Unpckhps
+            Xorps
+            Xorpd
+            Phaddw
+            Phaddd
+            Punpckhdq
+            Punpckldq
+            Punpckhqdq
+            Punpcklqdq
+            Pshuflw
+            Pshufhw
+            Pblendw
+            Movddup
+          ))
+
+(type CmpOpcode extern
+      (enum Cmp
+            Test))
+
+;; Registers.
+(model Reg (type (bv)))
+
+>>>>>>> 25bf532133 (big veriisle squash)
 (type RegMemImm extern
       (enum
        (Reg (reg Reg))
        (Mem (addr SyntheticAmode))
        (Imm (simm32 u32))))
+
+(model RegMemImm (type (bv)))
 
 ;; Put the given clif value into a `RegMemImm` operand.
 ;;
@@ -372,6 +655,9 @@
 ;;
 ;; As a side effect, this marks the value as used.
 (decl put_in_reg_mem_imm (Value) RegMemImm)
+(spec (put_in_reg_mem_imm arg)
+      (provide (= result (conv_to (widthof result) arg)))
+)
 (extern constructor put_in_reg_mem_imm put_in_reg_mem_imm)
 
 (type RegMem extern
@@ -398,12 +684,14 @@
 ;; Addressing modes.
 
 (type SyntheticAmode extern (enum))
+(model SyntheticAmode (type (bv 64)))
 
 (decl synthetic_amode_to_reg_mem (SyntheticAmode) RegMem)
 (extern constructor synthetic_amode_to_reg_mem synthetic_amode_to_reg_mem)
 
 (spec (amode_to_synthetic_amode amode) (provide (= result amode)))
 (decl amode_to_synthetic_amode (Amode) SyntheticAmode)
+(spec (amode_to_synthetic_amode amode) (provide (= result (:addr amode))))
 (extern constructor amode_to_synthetic_amode amode_to_synthetic_amode)
 
 (decl synthetic_amode_slot (i32) SyntheticAmode)
@@ -436,6 +724,7 @@
              ;; the given MachLabel.
              (RipRelative (target MachLabel))))
 
+<<<<<<< HEAD
 ;; Model an Amode as a combination of flags and the calculated 64-bit address.
 ;;   16 bits     64 bits
 ;; [ flags  |    address    ]
@@ -461,6 +750,43 @@
        (= (widthof index) 64)
        (= (widthof shift) 8)
        (= (widthof flags) 16)))
+=======
+; Model `Amode` as a computed address with flags.
+(model Amode (type
+      (struct
+            (addr  (bv 64))
+            (flags (named MemFlags))
+      )
+))
+
+; ImmReg addressing mode.
+(spec (Amode.ImmReg simm32 base flags)
+      (provide
+            ; Address calculation.
+            (= (:addr result) (bvadd base (sign_ext 64 simm32)))
+
+            ; Flags passthrough.
+            (= (:flags result) flags)
+      )
+)
+
+; ImmRegRegShift addressing mode.
+(spec (Amode.ImmRegRegShift simm32 base index shift flags)
+      (provide
+            ; Address calculation.
+            (=
+                  (:addr result)
+                  (bvadd
+                        (bvadd base (sign_ext 64 simm32))
+                        (bvshl index (zero_ext 64 shift))
+                  )
+            )
+
+            ; Flags passthrough.
+            (= (:flags result) flags)
+      )
+)
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;; A helper to both check that the `Imm64` and `Offset32` values sum to less
 ;; than 32-bits AND return this summed `u32` value. Also, the `Imm64` will be
@@ -533,8 +859,13 @@
 (instantiate to_amode_add
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
+<<<<<<< HEAD
 
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
+=======
+(attr to_amode_add (veri chain))
+(rule 0 (to_amode_add flags x y offset)
+>>>>>>> 25bf532133 (big veriisle squash)
         (amode_imm_reg_reg_shift flags x y offset))
 (rule to_amode_add_const_rhs 1 (to_amode_add flags x (i32_from_iconst c) offset)
         (if-let sum (i32_checked_add offset c))
@@ -542,6 +873,7 @@
 (rule to_amode_add_const_lhs 2 (to_amode_add flags (i32_from_iconst c) x offset)
         (if-let sum (i32_checked_add offset c))
         (amode_imm_reg flags x sum))
+<<<<<<< HEAD
 (rule to_amode_add_const_fold_iadd_lhs_rhs 3 (to_amode_add flags (iadd _ x (i32_from_iconst c)) y offset)
         (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
@@ -553,6 +885,19 @@
         (amode_imm_reg_reg_shift flags x y sum))
 (rule to_amode_add_const_fold_iadd_rhs_lhs 6 (to_amode_add flags x (iadd _ (i32_from_iconst c) y) offset)
         (if-let sum (i32_checked_add offset c))
+=======
+(rule 3 (to_amode_add flags (iadd _ x (i32_from_iconst c)) y offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 4 (to_amode_add flags (iadd _ (i32_from_iconst c) x) y offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 5 (to_amode_add flags x (iadd _ y (i32_from_iconst c)) offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 6 (to_amode_add flags x (iadd _ (i32_from_iconst c) y) offset)
+        (if-let sum (s32_add_fallible offset c))
+>>>>>>> 25bf532133 (big veriisle squash)
         (amode_imm_reg_reg_shift flags x y sum))
 
 ;; Final cases of amode lowering. Does not hunt for constants and only attempts
@@ -563,9 +908,16 @@
 (instantiate amode_imm_reg
     ((args (bv 16) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl amode_imm_reg (MemFlags Value Offset32) Amode)
+<<<<<<< HEAD
 (rule amode_imm_reg_base 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
 (rule amode_imm_reg_iadd 1 (amode_imm_reg flags (iadd _ x y) offset)
+=======
+(attr amode_imm_reg (veri chain))
+(rule 0 (amode_imm_reg flags base offset)
+        (Amode.ImmReg offset base flags))
+(rule 1 (amode_imm_reg flags (iadd _ x y) offset)
+>>>>>>> 25bf532133 (big veriisle squash)
         (amode_imm_reg_reg_shift flags x y offset))
 
 (spec (amode_imm_reg_reg_shift flags x y offset)
@@ -577,6 +929,7 @@
 (instantiate amode_imm_reg_reg_shift
     ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
 (decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) Amode)
+<<<<<<< HEAD
 (rule amode_imm_reg_reg_shift_no_shift 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
 (rule amode_imm_reg_reg_shift_shl_rhs 1 (amode_imm_reg_reg_shift flags x (ishl _ y (iconst _ (uimm8 shift))) offset)
@@ -584,6 +937,16 @@
         (Amode.ImmRegRegShift offset x y shift flags))
 (rule amode_imm_reg_reg_shift_shl_lhs 2 (amode_imm_reg_reg_shift flags (ishl _ y (iconst _ (uimm8 shift))) x offset)
         (if-let true (u32_lt_eq shift 3))
+=======
+(attr amode_imm_reg_reg_shift (veri chain))
+(rule 0 (amode_imm_reg_reg_shift flags x y offset)
+        (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
+(rule 1 (amode_imm_reg_reg_shift flags x (ishl _ y (iconst _ (uimm8 shift))) offset)
+        (if (u32_lteq (u8_as_u32 shift) 3))
+        (Amode.ImmRegRegShift offset x y shift flags))
+(rule 2 (amode_imm_reg_reg_shift flags (ishl _ y (iconst _ (uimm8 shift))) x offset)
+        (if (u32_lteq (u8_as_u32 shift) 3))
+>>>>>>> 25bf532133 (big veriisle squash)
         (Amode.ImmRegRegShift offset x y shift flags))
 
 ;; Offsetting an Amode. Used when we need to do consecutive
@@ -594,6 +957,7 @@
 ;; Return a zero offset as an `Offset32`.
 (spec (zero_offset) (provide (= result #x00000000)))
 (decl zero_offset () Offset32)
+(spec (zero_offset) (provide (= result #x00000000)))
 (extern constructor zero_offset zero_offset)
 
 ;; Shift kinds.
@@ -680,10 +1044,17 @@
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Gpr (primitive Gpr))
+(model Gpr (type (bv 64)))
 (type WritableGpr (primitive WritableGpr))
+(model WritableGpr (type (bv)))
 (type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
 (type GprMemImm extern (enum))
+<<<<<<< HEAD
+=======
+(model GprMemImm (type (bv)))
+(type Imm8Gpr extern (enum))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 (type Xmm (primitive Xmm))
 (type WritableXmm (primitive WritableXmm))
@@ -711,10 +1082,12 @@
 
 ;; Convert a `WritableGpr` to an `Gpr`.
 (decl writable_gpr_to_gpr (WritableGpr) Gpr)
+(spec (writable_gpr_to_gpr arg) (provide (= result arg)))
 (extern constructor writable_gpr_to_gpr writable_gpr_to_gpr)
 
 ;; Convert an `Gpr` to a `Reg`.
 (decl gpr_to_reg (Gpr) Reg)
+(spec (gpr_to_reg arg) (provide (= result arg)))
 (extern constructor gpr_to_reg gpr_to_reg)
 
 ;; Convert an `Gpr` to a `GprMem`.
@@ -758,6 +1131,7 @@
 
 ;; Allocate a new temporary GPR register.
 (decl temp_writable_gpr () WritableGpr)
+(spec (temp_writable_gpr) (provide true))
 (extern constructor temp_writable_gpr temp_writable_gpr)
 
 ;; Allocate a new temporary XMM register.
@@ -778,6 +1152,7 @@
 ;;
 ;; Asserts that the `RegMemImm`'s register, if any, is an GPR register.
 (decl gpr_mem_imm_new (RegMemImm) GprMemImm)
+(spec (gpr_mem_imm_new arg) (provide (= result arg)))
 (extern constructor gpr_mem_imm_new gpr_mem_imm_new)
 
 ;; Construct a new `XmmMemImm` from the given `RegMemImm`.
@@ -808,6 +1183,7 @@
 ;;
 ;; Asserts that the register is a GPR.
 (decl gpr_new (Reg) Gpr)
+(spec (gpr_new arg) (provide (= result arg)))
 (extern constructor gpr_new gpr_new)
 
 ;; Construct a new `GprMem` from a `RegMem`.
@@ -835,6 +1211,10 @@
 ;; XMM register.
 (spec (put_in_gpr arg) (provide (= result (conv_to 64 arg))))
 (decl put_in_gpr (Value) Gpr)
+
+; REVIEW(mbm): should apply chaining to put_in_gpr, but rules require enum modeling
+; TODO(mbm): modeling extractor matches on non-trivial enum like RegisterClass
+(spec (put_in_gpr arg) (provide (= result (conv_to 64 arg))))
 
 ;; Case for when the value naturally lives in a GPR.
 (rule (put_in_gpr val)
@@ -1258,6 +1638,7 @@
 ;; be a 32-bit operation, will automatically zero the upper 32-bits of the
 ;; destination register that `Value` is placed in.
 (decl pure value32_zeros_upper32 (Value) bool)
+<<<<<<< HEAD
 (rule (value32_zeros_upper32 (iadd _ _ _)) true)
 (rule (value32_zeros_upper32 (isub _ _ _)) true)
 (rule (value32_zeros_upper32 (imul _ _ _)) true)
@@ -1268,6 +1649,18 @@
 (rule (value32_zeros_upper32 (ushr _ _ _)) true)
 (rule (value32_zeros_upper32 (uload32 _ _ _ _)) true)
 (rule -1 (value32_zeros_upper32 _) false)
+=======
+(rule (value32_zeros_upper32 (iadd _ _ _)) $true)
+(rule (value32_zeros_upper32 (isub _ _ _)) $true)
+(rule (value32_zeros_upper32 (imul _ _ _)) $true)
+(rule (value32_zeros_upper32 (band _ _ _)) $true)
+(rule (value32_zeros_upper32 (bor _ _ _)) $true)
+(rule (value32_zeros_upper32 (bxor _ _ _)) $true)
+(rule (value32_zeros_upper32 (ishl _ _ _)) $true)
+(rule (value32_zeros_upper32 (ushr _ _ _)) $true)
+(rule (value32_zeros_upper32 (uload32 _ _ _ _)) $true)
+(rule -1 (value32_zeros_upper32 _) $false)
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;;;; Helpers for Working SSE tidbits ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1633,6 +2026,7 @@
 (rule (x64_add_with_flags_paired ty src1 src2)
       (asm_produce_flags (x64_add_raw ty src1 src2)))
 
+<<<<<<< HEAD
 
 
 ;; Helper for creating raw `adc` instructions; Cranelift only uses the 64-bit
@@ -1642,6 +2036,42 @@
 (rule 2 (x64_adc_raw $I64 src1 (is_simm8 src2))   (x64_adcq_mi_sxb_raw src1 src2))
 (rule 1 (x64_adc_raw $I64 src1 (is_simm32 src2))  (x64_adcq_mi_sxl_raw src1 src2))
 (rule 0 (x64_adc_raw $I64 src1 (is_gpr_mem src2)) (x64_adcq_rm_raw src1 src2))
+=======
+(decl x64_alurmi_with_flags_paired (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(attr x64_alurmi_with_flags_paired (veri chain))
+(rule (x64_alurmi_with_flags_paired opc (fits_in_64 ty) src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRmiR (raw_operand_size_of_type ty)
+                        opc
+                        src1
+                        src2
+                        dst)
+         dst)))
+
+(decl x64_alurmi_flags_side_effect (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(attr x64_alurmi_flags_side_effect (veri chain))
+(rule (x64_alurmi_flags_side_effect opc (fits_in_64 ty) src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRmiR (raw_operand_size_of_type ty)
+                      opc
+                      src1
+                      src2
+                      (temp_writable_gpr))))
+
+;; Should only be used for Adc and Sbb
+(decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
+(attr x64_alurmi_with_flags_chained (veri chain))
+(rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ConsumesAndProducesFlags.ReturnsReg
+         (MInst.AluRmiR (raw_operand_size_of_type ty)
+                        opc
+                        src1
+                        src2
+                        dst)
+         dst)))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Normal use of the `adc` instruction consumes a previously-produced flag.
 (decl x64_adc_paired (Type Gpr GprMemImm) ConsumesFlags)
@@ -3414,11 +3844,19 @@
         ;; Either of the conditions codes must be set.
         (Or (producer ProducesFlags) (cc1 CC) (cc2 CC))))
 
+<<<<<<< HEAD
 ;; Inverts a `CondResult` to have the opposite meaning.
 (decl cond_invert (CondResult) CondResult)
 (rule (cond_invert (CondResult.CC flags cc)) (CondResult.CC flags (cc_invert cc)))
 (rule (cond_invert (CondResult.Or flags cc1 cc2)) (CondResult.And flags (cc_invert cc1) (cc_invert cc2)))
 (rule (cond_invert (CondResult.And flags cc1 cc2)) (CondResult.Or flags (cc_invert cc1) (cc_invert cc2)))
+=======
+;; Lower an Icmp result into a boolean value in a register.
+(decl lower_icmp_bool (IcmpCondResult) ValueRegs)
+(attr lower_icmp_bool (veri chain))
+(rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
+      (with_flags producer (x64_setcc cc)))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Converts a `Value` to a `CondResult` with the condition being tested if
 ;; `Value` is nonzero.

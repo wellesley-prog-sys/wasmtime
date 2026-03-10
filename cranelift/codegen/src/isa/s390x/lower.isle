@@ -139,7 +139,11 @@
 
 ;; Lane-wise integer pairwise addition for 8-/16/32-bit vector registers.
 (rule (lower (has_type ty @ (multi_lane bits _) (iadd_pairwise _ x y)))
+<<<<<<< HEAD
       (let ((size Reg (vec_imm_splat $I8X16 bits)))
+=======
+      (let ((size Reg (vec_imm_splat $I8X16 (u32_as_u64 bits))))
+>>>>>>> 25bf532133 (big veriisle squash)
         (vec_pack_lane_order (vec_widen_type ty)
                              (vec_add ty x (vec_lshr_by_byte x size))
                              (vec_add ty y (vec_lshr_by_byte y size)))))
@@ -221,12 +225,17 @@
 (rule 1 (lower (has_type (ty_vec128 ty) (iabs _ x)))
       (vec_abs ty x))
 
+<<<<<<< HEAD
 ;; Absolute value of a 128-bit integer on z17.
 (rule 4 (lower (has_type (and (vxrs_ext3_enabled) $I128) (iabs _ x)))
       (vec_abs $I128 x))
 
 ;; Absolute value of a 128-bit integer pre-z17.
 (rule 0 (lower (has_type (and (vxrs_ext3_disabled) $I128) (iabs _ x)))
+=======
+;; Absolute value of a 128-bit integer.
+(rule 0 (lower (has_type $I128 (iabs _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((zero Reg (vec_imm $I128 0))
             (pos Reg x)
             (neg Reg (vec_sub $I128 zero pos))
@@ -249,12 +258,17 @@
 (rule 1 (lower (has_type (ty_vec128 ty) (ineg _ x)))
       (vec_neg ty x))
 
+<<<<<<< HEAD
 ;; Negate a 128-bit integer on z17.
 (rule 4 (lower (has_type (and (vxrs_ext3_enabled) $I128) (ineg _ x)))
       (vec_neg $I128 x))
 
 ;; Negate a 128-bit integer pre-z17.
 (rule 0 (lower (has_type (and (vxrs_ext3_disabled) $I128) (ineg _ x)))
+=======
+;; Negate a 128-bit integer.
+(rule 0 (lower (has_type $I128 (ineg _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (vec_sub $I128 (vec_imm $I128 0) x))
 
 
@@ -268,8 +282,13 @@
                                      (intcc_as_cond (IntCC.UnsignedLessThan)))))
         (select_bool_reg ty cond y_ext x_ext)))
 
+<<<<<<< HEAD
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (umax _ x y)))
+=======
+;; Unsigned maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (umax _ x y)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi y_reg x_reg)))
@@ -294,8 +313,13 @@
                                      (intcc_as_cond (IntCC.UnsignedGreaterThan)))))
         (select_bool_reg ty cond y_ext x_ext)))
 
+<<<<<<< HEAD
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (umin _ x y)))
+=======
+;; Unsigned maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (umin _ x y)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi x_reg y_reg)))
@@ -320,8 +344,13 @@
                                      (intcc_as_cond (IntCC.SignedLessThan)))))
         (select_bool_reg ty cond y_ext x_ext)))
 
+<<<<<<< HEAD
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (smax _ x y)))
+=======
+;; Signed maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (smax _ x y)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi y_reg x_reg)))
@@ -346,8 +375,13 @@
                                      (intcc_as_cond (IntCC.SignedGreaterThan)))))
         (select_bool_reg ty cond y_ext x_ext)))
 
+<<<<<<< HEAD
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (smin _ x y)))
+=======
+;; Signed maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (smin _ x y)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi x_reg y_reg)))
@@ -492,7 +526,11 @@
 
 ;; Multiply high part unsigned, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
+<<<<<<< HEAD
 (rule (lower (has_type (and (vxrs_ext3_disabled) $I64X2) (umulhi _ x y)))
+=======
+(rule (lower (has_type $I64X2 (umulhi _ x y)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((pair_0 RegPair (umul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (regpair_hi pair_0))
@@ -533,7 +571,11 @@
 
 ;; Multiply high part signed, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
+<<<<<<< HEAD
 (rule (lower (has_type (and (vxrs_ext3_disabled) $I64X2) (smulhi _ x y)))
+=======
+(rule (lower (has_type $I64X2 (smulhi _ x y)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((pair_0 RegPair (smul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (copy_reg $I64 (regpair_hi pair_0)))
@@ -585,8 +627,12 @@
 
 ;; Implement `udiv`.
 (rule (lower (has_type (fits_in_64 ty) (udiv _ x y)))
+<<<<<<< HEAD
       (let (
             ;; Look at the divisor to determine whether we need to generate
+=======
+      (let (;; Look at the divisor to determine whether we need to generate
+>>>>>>> 25bf532133 (big veriisle squash)
             ;; an explicit division-by zero check.
             ;; Load up the dividend, by loading the input (possibly zero-
             ;; extended) input into the low half of the register pair,
@@ -638,8 +684,12 @@
 
 ;; Implement `sdiv`.
 (rule (lower (has_type (fits_in_64 ty) (sdiv _ x y)))
+<<<<<<< HEAD
       (let (
             ;; Look at the divisor to determine whether we need to generate
+=======
+      (let (;; Look at the divisor to determine whether we need to generate
+>>>>>>> 25bf532133 (big veriisle squash)
             ;; explicit division-by-zero and/or integer-overflow checks.
             (OFcheck bool (div_overflow_check_needed y))
             ;; Load up the dividend (sign-extended to 64-bit)
@@ -1065,12 +1115,20 @@
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a single instruction (NOR).
+<<<<<<< HEAD
 (rule 2 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bnot _ x)))
+=======
+(rule 2 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bnot _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((rx Reg x))
         (not_or_reg ty rx rx)))
 
 ;; z14 version using XOR with -1.
+<<<<<<< HEAD
 (rule 1 (lower (has_type (and (mie3_disabled) (fits_in_64 ty)) (bnot _ x)))
+=======
+(rule 1 (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bnot _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (not_reg ty x))
 
 ;; Vector version using vector NOR.
@@ -1083,7 +1141,11 @@
 
 ;; With z15 (bnot (bxor ...)) can be a single instruction, similar to the
 ;; (bxor _ (bnot _)) lowering.
+<<<<<<< HEAD
 (rule 3 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bnot _ (bxor _ x y))))
+=======
+(rule 3 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bnot _ (bxor _ x y))))
+>>>>>>> 25bf532133 (big veriisle squash)
       (not_xor_reg ty x y))
 
 ;; Combine a not/xor operation of vector types into one.
@@ -1131,9 +1193,15 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
+<<<<<<< HEAD
 (rule 7 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (band _ x (bnot _ y))))
       (and_not_reg ty x y))
 (rule 8 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (band _ (bnot _ y) x)))
+=======
+(rule 7 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band _ x (bnot _ y))))
+      (and_not_reg ty x y))
+(rule 8 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band _ (bnot _ y) x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (and_not_reg ty x y))
 
 ;; And-not two vector registers.
@@ -1233,9 +1301,15 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
+<<<<<<< HEAD
 (rule 7 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bor _ x (bnot _ y))))
       (or_not_reg ty x y))
 (rule 8 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bor _ (bnot _ y) x)))
+=======
+(rule 7 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bor _ x (bnot _ y))))
+      (or_not_reg ty x y))
+(rule 8 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bor _ (bnot _ y) x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (or_not_reg ty x y))
 
 ;; Or-not two vector registers.
@@ -1349,9 +1423,15 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
+<<<<<<< HEAD
 (rule 5 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bxor _ x (bnot _ y))))
       (not_xor_reg ty x y))
 (rule 6 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bxor _ (bnot _ y) x)))
+=======
+(rule 5 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor _ x (bnot _ y))))
+      (not_xor_reg ty x y))
+(rule 6 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor _ (bnot _ y) x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (not_xor_reg ty x y))
 
 ;; Xor-not two vector registers.
@@ -1435,14 +1515,22 @@
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a NAND instruction.
+<<<<<<< HEAD
 (rule 2 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bitselect _ x y z)))
+=======
+(rule 2 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bitselect _ x y z)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
             (if_false Reg (and_not_reg ty z rx)))
         (or_reg ty if_false if_true)))
 
 ;; z14 version using XOR with -1.
+<<<<<<< HEAD
 (rule 1 (lower (has_type (and (mie3_disabled) (fits_in_64 ty)) (bitselect _ x y z)))
+=======
+(rule 1 (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bitselect _ x y z)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
             (if_false Reg (and_reg ty z (not_reg ty rx))))
@@ -1527,15 +1615,24 @@
 
 ;; Count leading zeros pre-z17, via FLOGR on an input zero-extended to 64 bits,
 ;; with the result compensated for the extra bits.
+<<<<<<< HEAD
 (rule 1 (lower (has_type (and (mie4_disabled) (fits_in_64 ty)) (clz _ x)))
+=======
+(rule 1 (lower (has_type (fits_in_64 ty) (clz _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((ext_reg Reg (put_in_reg_zext64 x))
             ;; Ask for a value of 64 in the all-zero 64-bit input case.
             ;; After compensation this will match the expected semantics.
             (clz Reg (clz_flogr_reg 64 ext_reg)))
         (clz_offset ty clz)))
 
+<<<<<<< HEAD
 ;; Count leading zeros, 128-bit full vector pre-z17.
 (rule (lower (has_type (and (vxrs_ext3_disabled) $I128) (clz _ x)))
+=======
+;; Count leading zeros, 128-bit full vector.
+(rule (lower (has_type $I128 (clz _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((clz_vec Reg (vec_clz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (clz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 clz_vec 0))
@@ -1571,15 +1668,24 @@
 ;; i.e. computing
 ;;        cls(x) == clz(x ^ (x >> 63)) - 1
 ;; where x is the sign-extended input.
+<<<<<<< HEAD
 (rule 1 (lower (has_type (and (mie4_disabled) (fits_in_64 ty)) (cls _ x)))
+=======
+(rule 1 (lower (has_type (fits_in_64 ty) (cls _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((ext_reg Reg (put_in_reg_sext64 x))
             (signbit_copies Reg (ashr_imm $I64 ext_reg 63))
             (inv_reg Reg (xor_reg $I64 ext_reg signbit_copies))
             (clz Reg (clz_flogr_reg 64 inv_reg)))
         (cls_offset ty clz)))
 
+<<<<<<< HEAD
 ;; Count leading sign-bit copies, 128-bit full vector pre-z17.
 (rule (lower (has_type (and (vxrs_ext3_disabled) $I128) (cls _ x)))
+=======
+;; Count leading sign-bit copies, 128-bit full vector.
+(rule (lower (has_type $I128 (cls _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((x_reg Reg x)
             (ones Reg (vec_imm_splat $I8X16 255))
             (signbit_copies Reg (vec_ashr_by_bit (vec_ashr_by_byte x_reg ones) ones))
@@ -1624,7 +1730,11 @@
 ;; never zero by setting a "guard bit" in the position corresponding to
 ;; the input type size.  This way the 64-bit algorithm above will handle
 ;; that case correctly automatically.
+<<<<<<< HEAD
 (rule 2 (lower (has_type (and (mie4_disabled) (gpr32_ty ty)) (ctz _ x)))
+=======
+(rule 2 (lower (has_type (gpr32_ty ty) (ctz _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((rx Reg (or_uimm16shifted $I64 x (ctz_guardbit ty)))
             (lastbit Reg (and_reg $I64 rx (neg_reg $I64 rx)))
             (clz Reg (clz_flogr_reg 64 lastbit)))
@@ -1639,14 +1749,23 @@
 ;; via its condition code.  We check for that and replace the instruction
 ;; result with the value -1 via a conditional move, which will then lead to
 ;; the correct result after the final subtraction from 63.
+<<<<<<< HEAD
 (rule 1 (lower (has_type (and (mie4_disabled) (gpr64_ty _ty)) (ctz _ x)))
+=======
+(rule 1 (lower (has_type (gpr64_ty _ty) (ctz _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((rx Reg x)
             (lastbit Reg (and_reg $I64 rx (neg_reg $I64 rx)))
             (clz Reg (clz_flogr_reg -1 lastbit)))
         (sub_reg $I64 (imm $I64 63) clz)))
 
+<<<<<<< HEAD
 ;; Count trailing zeros, 128-bit full vector pre-z17.
 (rule 0 (lower (has_type (and (vxrs_ext3_disabled) $I128) (ctz _ x)))
+=======
+;; Count trailing zeros, 128-bit full vector.
+(rule 0 (lower (has_type $I128 (ctz _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((ctz_vec Reg (vec_ctz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (ctz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 ctz_vec 0))
@@ -1677,7 +1796,11 @@
 
 ;; On z15, the POPCNT instruction has a variant to compute a full 64-bit
 ;; population count, which we also use for 16- and 32-bit types.
+<<<<<<< HEAD
 (rule -1 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (popcnt _ x)))
+=======
+(rule -1 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (popcnt _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (popcnt_reg (put_in_reg_zext64 x)))
 
 ;; On z14, we use the regular POPCNT, which computes the population count
@@ -1688,18 +1811,30 @@
 ;; $I16, where we instead accumulate in the low byte and clear high bits
 ;; via an explicit and operation.)
 
+<<<<<<< HEAD
 (rule (lower (has_type (and (mie3_disabled) $I16) (popcnt _ x)))
+=======
+(rule (lower (has_type (and (mie2_disabled) $I16) (popcnt _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((cnt2 Reg (popcnt_byte x))
             (cnt1 Reg (add_reg $I32 cnt2 (lshr_imm $I32 cnt2 8))))
         (and_uimm16shifted $I32 cnt1 (uimm16shifted 255 0))))
 
+<<<<<<< HEAD
 (rule (lower (has_type (and (mie3_disabled) $I32) (popcnt _ x)))
+=======
+(rule (lower (has_type (and (mie2_disabled) $I32) (popcnt _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((cnt4 Reg (popcnt_byte x))
             (cnt2 Reg (add_reg $I32 cnt4 (lshl_imm $I32 cnt4 16)))
             (cnt1 Reg (add_reg $I32 cnt2 (lshl_imm $I32 cnt2 8))))
         (lshr_imm $I32 cnt1 24)))
 
+<<<<<<< HEAD
 (rule (lower (has_type (and (mie3_disabled) $I64) (popcnt _ x)))
+=======
+(rule (lower (has_type (and (mie2_disabled) $I64) (popcnt _ x)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (let ((cnt8 Reg (popcnt_byte x))
             (cnt4 Reg (add_reg $I64 cnt8 (lshl_imm $I64 cnt8 32)))
             (cnt2 Reg (add_reg $I64 cnt4 (lshl_imm $I64 cnt4 16)))
@@ -1768,9 +1903,12 @@
       (vec_select $F32 x y (imm $F32 2147483647)))
 (rule (lower (has_type $F64 (fcopysign _ x y)))
       (vec_select $F64 x y (imm $F64 9223372036854775807)))
+<<<<<<< HEAD
 (rule (lower (has_type $F128 (fcopysign _ x y)))
       (vec_select $F128 x y (vec_imm $F128 (imm8x16 127 255 255 255 255 255 255 255
                                                     255 255 255 255 255 255 255 255))))
+=======
+>>>>>>> 25bf532133 (big veriisle squash)
 (rule (lower (has_type $F32X4 (fcopysign _ x y)))
       (vec_select $F32X4 x y (vec_imm_bit_mask $F32X4 1 31)))
 (rule (lower (has_type $F64X2 (fcopysign _ x y)))
@@ -1836,7 +1974,11 @@
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Promote a register.
+<<<<<<< HEAD
 (rule (lower (has_type dst_ty (fpromote _ x @ (value_type src_ty))))
+=======
+(rule (lower (has_type (fits_in_64 dst_ty) (fpromote _ x @ (value_type src_ty))))
+>>>>>>> 25bf532133 (big veriisle squash)
       (fpromote_reg dst_ty src_ty x))
 
 (rule 1 (lower (has_type $F128 (fpromote _ x @ (value_type $F32))))
@@ -1853,7 +1995,11 @@
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Demote a register.
+<<<<<<< HEAD
 (rule (lower (has_type dst_ty (fdemote _ x @ (value_type src_ty))))
+=======
+(rule (lower (has_type (fits_in_64 dst_ty) (fdemote _ x @ (value_type src_ty))))
+>>>>>>> 25bf532133 (big veriisle squash)
       (fdemote_reg dst_ty src_ty (FpuRoundMode.Current) x))
 
 (rule 1 (lower (has_type $F32 (fdemote _ x @ (value_type $F128))))
@@ -1875,7 +2021,11 @@
 ;; Convert a 32-bit or smaller unsigned integer to $F32 (z15 instruction).
 (rule 1 (lower (has_type $F32
         (fcvt_from_uint _ x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
+<<<<<<< HEAD
       (fcvt_from_uint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
+=======
+      (fcvt_from_uint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+>>>>>>> 25bf532133 (big veriisle squash)
                           (put_in_reg_zext32 x)))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F32, via an intermediate $F64.
@@ -1886,6 +2036,7 @@
 
 ;; Convert a 64-bit or smaller unsigned integer to $F64.
 (rule (lower (has_type $F64 (fcvt_from_uint _ x @ (value_type (fits_in_64 ty)))))
+<<<<<<< HEAD
       (fcvt_from_uint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext64 x)))
 
@@ -1897,12 +2048,19 @@
 ;; Convert a 64-bit or smaller unsigned integer to $F128.
 (rule (lower (has_type $F128 (fcvt_from_uint _ x @ (value_type (fits_in_64 ty)))))
       (fcvt_from_uint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
+=======
+      (fcvt_from_uint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+>>>>>>> 25bf532133 (big veriisle squash)
                           (put_in_reg_zext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
                        (fcvt_from_uint _ x @ (value_type $I32X4))))
+<<<<<<< HEAD
       (fcvt_from_uint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+=======
+      (fcvt_from_uint_reg $F32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
@@ -1918,7 +2076,11 @@
 
 ;; Convert $I64X2 to $F64X2.
 (rule (lower (has_type $F64X2 (fcvt_from_uint _ x @ (value_type $I64X2))))
+<<<<<<< HEAD
       (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+=======
+      (fcvt_from_uint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 
 ;;;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1926,7 +2088,11 @@
 ;; Convert a 32-bit or smaller signed integer to $F32 (z15 instruction).
 (rule 1 (lower (has_type $F32
         (fcvt_from_sint _ x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
+<<<<<<< HEAD
       (fcvt_from_sint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
+=======
+      (fcvt_from_sint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+>>>>>>> 25bf532133 (big veriisle squash)
                           (put_in_reg_sext32 x)))
 
 ;; Convert a 64-bit or smaller signed integer to $F32, via an intermediate $F64.
@@ -1937,6 +2103,7 @@
 
 ;; Convert a 64-bit or smaller signed integer to $F64.
 (rule (lower (has_type $F64 (fcvt_from_sint _ x @ (value_type (fits_in_64 ty)))))
+<<<<<<< HEAD
       (fcvt_from_sint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext64 x)))
 
@@ -1948,12 +2115,19 @@
 ;; Convert a 64-bit or smaller signed integer to $F128.
 (rule (lower (has_type $F128 (fcvt_from_sint _ x @ (value_type (fits_in_64 ty)))))
       (fcvt_from_sint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
+=======
+      (fcvt_from_sint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+>>>>>>> 25bf532133 (big veriisle squash)
                           (put_in_reg_sext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
                        (fcvt_from_sint _ x @ (value_type $I32X4))))
+<<<<<<< HEAD
       (fcvt_from_sint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+=======
+      (fcvt_from_sint_reg $F32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
@@ -1969,7 +2143,11 @@
 
 ;; Convert $I64X2 to $F64X2.
 (rule (lower (has_type $F64X2 (fcvt_from_sint _ x @ (value_type $I64X2))))
+<<<<<<< HEAD
       (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+=======
+      (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 
 ;;;; Rules for `fcvt_to_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2040,7 +2218,11 @@
 ;; Convert $F32X4 to $I32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $I32X4)
                        (fcvt_to_uint_sat _ x @ (value_type $F32X4))))
+<<<<<<< HEAD
       (fcvt_to_uint_reg $I32X4 $F32X4 (FpuRoundMode.ToZero) x))
+=======
+      (fcvt_to_uint_reg $F32X4 (FpuRoundMode.ToZero) x))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $I32X4)
@@ -2053,7 +2235,11 @@
 
 ;; Convert $F64X2 to $I64X2.
 (rule (lower (has_type $I64X2 (fcvt_to_uint_sat _ x @ (value_type $F64X2))))
+<<<<<<< HEAD
       (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero) x))
+=======
+      (fcvt_to_uint_reg $F64X2 (FpuRoundMode.ToZero) x))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2655,18 +2841,30 @@
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a function, target reachable via PC-relative instruction.
+<<<<<<< HEAD
 (rule 1 (lower (func_addr _ (func_ref_data _ name (RelocDistance.Near) _)))
       (load_addr (memarg_symbol name 0 (memflags_trusted))))
 
 ;; Load the address of a function, general case.
 (rule (lower (func_addr _ (func_ref_data _ name _ _)))
+=======
+(rule 1 (lower (func_addr _ (func_ref_data _ name (reloc_distance_near))))
+      (load_addr (memarg_symbol name 0 (memflags_trusted))))
+
+;; Load the address of a function, general case.
+(rule (lower (func_addr _ (func_ref_data _ name _)))
+>>>>>>> 25bf532133 (big veriisle squash)
       (load_symbol_reloc (SymbolReloc.Absolute name 0)))
 
 
 ;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a symbol, target reachable via PC-relative instruction.
+<<<<<<< HEAD
 (rule 1 (lower (symbol_value _ (symbol_value_data name (RelocDistance.Near)
+=======
+(rule 1 (lower (symbol_value _ (symbol_value_data name (reloc_distance_near)
+>>>>>>> 25bf532133 (big veriisle squash)
                                               off)))
       (if-let offset (memarg_symbol_offset off))
       (load_addr (memarg_symbol name offset (memflags_trusted))))
@@ -3728,7 +3926,11 @@
 ;; integer comparison and immediately lower it to a 0/1 integer result.
 ;; In this case, it is safe to sink memory loads.
 (rule -1 (lower (has_type (fits_in_64 ty) (icmp _ int_cc x y)))
+<<<<<<< HEAD
       (lower_bool ty (icmp_val true int_cc x y)))
+=======
+      (lower_bool ty (icmp_val $true int_cc x y)))
+>>>>>>> 25bf532133 (big veriisle squash)
 
 
 ;; Return a `ProducesBool` to implement any integer comparison.
@@ -4135,7 +4337,11 @@
 ;; instruction, directly use that compare. Note that it is not safe to sink
 ;; memory loads here, see the `icmp` comment.
 (decl value_nonzero (Value) ProducesBool)
+<<<<<<< HEAD
 (rule (value_nonzero (icmp _ int_cc x y)) (icmp_val false int_cc x y))
+=======
+(rule (value_nonzero (icmp _ int_cc x y)) (icmp_val $false int_cc x y))
+>>>>>>> 25bf532133 (big veriisle squash)
 (rule (value_nonzero (fcmp _ float_cc x y)) (fcmp_val float_cc x y))
 (rule -1 (value_nonzero val @ (value_type (gpr32_ty ty)))
       (bool (icmps_simm16 $I32 (put_in_reg_sext32 val) 0)
