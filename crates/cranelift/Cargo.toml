@@ -37,6 +37,7 @@ wasmtime-unwinder = { workspace = true, features = ["cranelift"] }
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]
+trace-log = ["cranelift-codegen/trace-log"]
 host-arch = ["cranelift-codegen/host-arch"]
 pulley = ["cranelift-codegen/pulley", "dep:pulley-interpreter"]
 trace-log = ["cranelift-codegen/trace-log"]

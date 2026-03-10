@@ -16,7 +16,7 @@ use core::slice;
 use smallvec::{SmallVec, smallvec};
 
 pub(crate) mod regs;
-pub(crate) use self::regs::*;
+pub use self::regs::*;
 pub mod imms;
 pub use self::imms::*;
 pub mod args;
@@ -1218,7 +1218,7 @@ fn pretty_print_try_call(info: &TryCallInfo) -> String {
 }
 
 impl Inst {
-    fn print_with_state(&self, state: &mut EmitState) -> String {
+    pub fn print_with_state(&self, state: &mut EmitState) -> String {
         fn op_name(alu_op: ALUOp) -> &'static str {
             match alu_op {
                 ALUOp::Add => "add",
