@@ -27,7 +27,7 @@ use crate::{
 
 const LOG_DIR: &str = ".veriisle";
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SolverBackend {
     Z3,
     CVC5,
@@ -742,7 +742,7 @@ impl Runner {
         Ok(self.default_solver_backend)
     }
 
-       // helper function: return a list of solver backends installed and runnable on the system
+    // Returns list of solver backends installed and runnable on the system
     fn available_solvers(&self) -> Vec<SolverBackend> {
         SolverBackend::all()
             .into_iter()
@@ -755,30 +755,33 @@ impl Runner {
             .collect()
     }
 
-    // helper function: fallback selection logic 
-    fn resolve_solver_backend(&self, _requested: SolverBackend) -> Result<SolverBackend> {
-        let available = self.available_solvers(); 
-    
-        match available.as_slice(){
+    // Fallback selection logic to resolve which solver to use
+    fn resolve_solver_backend(&self, requested: SolverBackend) -> Result<SolverBackend> {
+        let available = self.available_solvers();
+
+        match available.as_slice() {
             [] => {
-                bail! (
-                    "Error: no SMT solver backend found.\n\
-                    Please install either 'z3' or 'cvc5' and ensure it is in you PATH. 
-                    "
-                ); 
+                bail!(
+                    "No SMT solver backend found.\n\
+                    Please install either 'z3' or 'cvc5' and ensure it is available on your PATH.\n\
+                    z3:   https://github.com/Z3Prover/z3\n\
+                    cvc5: https://cvc5.github.io"
+                );
             }
             [only] => {
-                // one install -> warning message, run the sover 
-                eprintln!(
-                    "Warning: only solver '{}' is installed. \
-                    All verification will use this solver.",
-                    only
-                );
+                if (requested != *only) {
+                    // Other one installed -> warning message, run the solver
+                    eprintln!(
+                        "Warning: only '{}' is installed/available on your path. \
+                        Using this solver.",
+                        only
+                    );
+                }
                 Ok(*only)
             }
             _ => {
-                // both install 
-                Ok(self.default_solver_backend)
+                // Both installed
+                Ok(requested)
             }
         }
     }
