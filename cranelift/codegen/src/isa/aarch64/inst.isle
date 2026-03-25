@@ -1009,24 +1009,6 @@
                        (end Reg)
                        (step Imm12))))
 
-<<<<<<< HEAD
-(model ALUOp (enum
-      (Add #x00) ;; 0
-      (Sub #x01)
-      (Orr #x02)
-      (OrrNot #x03)
-      (And #x04)
-      (AndNot #x05)
-      (Eor #x06)
-      (EorNot #x07)
-      (SubS #x08)
-      (SDiv #x09)
-      (UDiv #x0a)
-      (Extr #x0b)
-      (Lsr #x0c)
-      (Asr #x0d)
-      (Lsl #x0e)))
-=======
 (attr MInst.FpuMove32 (tag float))
 (attr MInst.FpuMove64 (tag float))
 (attr MInst.FpuMove128 (tag float))
@@ -1283,7 +1265,6 @@
 
 ;; Registers.
 (model Reg (type (bv)))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1344,17 +1325,6 @@
 ))
 
 (type UImm5 (primitive UImm5))
-<<<<<<< HEAD
-(model Imm12 (type (bv 24)))
-(type Imm12 (primitive Imm12))
-(model ImmLogic (type (bv 64)))
-(type ImmLogic (primitive ImmLogic))
-(model ImmShift (type (bv 6)))
-(type ImmShift (primitive ImmShift))
-(model ShiftOpAndAmt (type (bv 16)))
-(type ShiftOpAndAmt (primitive ShiftOpAndAmt))
-(model MoveWideConst (type (bv 16)))
-=======
 (model UImm5 (type (bv 5)))
 
 (type Imm12 (primitive Imm12))
@@ -1382,7 +1352,6 @@
       )
 )
 
->>>>>>> 25bf532133 (big veriisle squash)
 (type MoveWideConst (primitive MoveWideConst))
 (model MoveWideConst
       (type
@@ -1437,29 +1406,13 @@
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
-<<<<<<< HEAD
 (type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type CondBrKind (primitive CondBrKind))
-=======
->>>>>>> 25bf532133 (big veriisle squash)
 (type BranchTarget (primitive BranchTarget))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type CodeOffset (primitive CodeOffset))
 (type VecMachLabel extern (enum))
 
-<<<<<<< HEAD
-(model ExtendOp (enum
-    (UXTB #b000)
-    (UXTH #b001)
-    (UXTW #b010)
-    (UXTX #b011)
-    (SXTB #b100)
-    (SXTH #b101)
-    (SXTW #b110)
-    (SXTX #b111)
-))
-
-=======
 (type CondBrKind extern
   (enum
     (Zero (r Reg))
@@ -1471,7 +1424,6 @@
 (instantiate CondBrKind.Zero ((args (bv 64)) (ret (named CondBrKind))))
 (instantiate CondBrKind.NotZero ((args (bv 64)) (ret (named CondBrKind))))
 
->>>>>>> 25bf532133 (big veriisle squash)
 (type ExtendOp extern
   (enum
     (UXTB)
@@ -1673,28 +1625,8 @@
             (= result (if (<= ty 32) 32 64)))
       (require
             (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
-(instantiate operand_size
-    ((args Int) (ret Int) (canon (bv 8)))
-    ((args Int) (ret Int) (canon (bv 16)))
-    ((args Int) (ret Int) (canon (bv 32)))
-    ((args Int) (ret Int) (canon (bv 64)))
-)
+
 (decl operand_size (Type) OperandSize)
-<<<<<<< HEAD
-(rule operand_size_32 1 (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
-(rule operand_size_64 (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
-
-(model ScalarSize
-      (enum (Size8 8)
-            (Size16 16)
-            (Size32 32)
-            (Size64 64)
-            (Size128 128)))
-
-;; Difference (32 - ty), useful for narrow calculations with 32-bit
-;; instructions.
-(decl diff_from_32 (Type) u8)
-=======
 (spec (operand_size ty)
       (provide
             (= result (if (<= (:bits ty) 32) (OperandSize.Size32) (OperandSize.Size64))))
@@ -1706,7 +1638,6 @@
 
 (decl diff_from_32 (Type) u8)
 (attr diff_from_32 (veri chain))
->>>>>>> 25bf532133 (big veriisle squash)
 (rule (diff_from_32 $I8) 24)
 (rule (diff_from_32 $I16) 16)
 
@@ -1788,17 +1719,6 @@
     (Nv)
 ))
 
-<<<<<<< HEAD
-(model VectorSize
-  (enum
-    (Size8x8 #x00)
-    (Size8x16 #x01)
-    (Size16x4 #x02)
-    (Size16x8 #x03)
-    (Size32x2 #x04)
-    (Size32x4 #x05)
-    (Size64x2 #x06)))
-=======
 (macro (cond_holds cc nzcv)
       (match cc
             ; EQ	Equal.	Z==1
@@ -1834,7 +1754,6 @@
             ((Nv) false)
       )
 )
->>>>>>> 25bf532133 (big veriisle squash)
 
 (type VectorSize extern
   (enum
@@ -2451,11 +2370,7 @@
 
 (spec (u64_into_imm_logic ty a)
       (provide (= result a))
-<<<<<<< HEAD
-      (require (or (= ty 32) (= ty 64))))
-=======
       (require (or (= (:bits ty) 32) (= (:bits ty) 64))))
->>>>>>> 25bf532133 (big veriisle squash)
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
@@ -2623,20 +2538,10 @@
       )
 )
 
-(instantiate imm12_from_negated_value
-    ((args (bv 8)) (ret (bv 24)) (canon (bv 8)))
-    ((args (bv 16)) (ret (bv 24)) (canon (bv 16)))
-    ((args (bv 32)) (ret (bv 24)) (canon (bv 32)))
-    ((args (bv 64)) (ret (bv 24)) (canon (bv 64)))
-)
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule imm12_from_negated_value
   (imm12_from_negated_value (has_type ty (iconst _ n)))
-<<<<<<< HEAD
-  (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_checked_neg (i64_sextend_imm64 ty n))))
-=======
   (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
->>>>>>> 25bf532133 (big veriisle squash)
   imm)
 (attr imm12_from_negated_value (veri chain))
 

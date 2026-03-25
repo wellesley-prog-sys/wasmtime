@@ -201,7 +201,8 @@ impl BuiltinType {
 }
 
 impl TypeId {
-    const fn builtin(builtin: BuiltinType) -> Self {
+    /// TypeId for builtin type.
+    pub const fn builtin(builtin: BuiltinType) -> Self {
         Self(builtin.to_usize())
     }
 
@@ -275,7 +276,9 @@ impl Type {
     /// Get the ID of this `Type`.
     pub fn id(&self) -> TypeId {
         match self {
-            Self::Primitive(id, _, _) | Self::Enum { id, .. } => *id,
+            Self::Primitive(id, _, _)
+            | Self::Enum { id, .. }=> *id,
+            Self::Builtin(b) => TypeId::builtin(*b)
         }
     }
 
@@ -2056,7 +2059,6 @@ impl TermEnv {
                         prio,
                         name: rule.name.as_ref().map(|i| tyenv.intern_mut(i)),
                         pos,
-                        name: rule.name.as_ref().map(|i| tyenv.intern_mut(i)),
                     });
                 }
                 _ => {}

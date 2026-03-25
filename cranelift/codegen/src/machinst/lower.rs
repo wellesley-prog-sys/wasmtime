@@ -808,7 +808,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // or any of its outputs is used.
             if has_side_effect || value_needed {
                 trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
-<<<<<<< HEAD
                 let temp_regs = match backend.lower(self, inst) {
                     Some(regs) => regs,
                     None => {
@@ -824,60 +823,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         )));
                     }
                 };
-=======
-
-                if cfg!(feature = "trace-log") {
-                    let opcode = self.f.dfg.insts[inst].opcode();
-
-                    // Features.
-                    let mut features = Vec::new();
-                    if opcode.is_terminator() {
-                        features.push("terminator");
-                    }
-                    if opcode.is_branch() {
-                        features.push("branch");
-                    }
-                    if opcode.is_call() {
-                        features.push("call");
-                    }
-                    if opcode.can_load() {
-                        features.push("load");
-                    }
-                    if opcode.can_store() {
-                        features.push("store");
-                    }
-                    if opcode.can_trap() {
-                        features.push("trap");
-                    }
-
-                    // Output types.
-                    let mut output_tys = Vec::new();
-                    for i in 0..self.num_outputs(inst) {
-                        output_tys.push(format!("{}", self.output_ty(inst, i)));
-                    }
-
-                    // Input types.
-                    let mut input_tys = Vec::new();
-                    for i in 0..self.num_inputs(inst) {
-                        input_tys.push(format!("{}", self.input_ty(inst, i)));
-                    }
-
-                    trace!(target: "isle_rule_trace", "inst: {},{},{},{}", opcode, output_tys.join(":"), input_tys.join(":"), features.join(":"));
-                }
-
-                let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
-                    let ty = if self.num_outputs(inst) > 0 {
-                        Some(self.output_ty(inst, 0))
-                    } else {
-                        None
-                    };
-                    panic!(
-                        "should be implemented in ISLE: inst = `{}`, type = `{:?}`",
-                        self.f.dfg.display_inst(inst),
-                        ty
-                    )
-                });
->>>>>>> 25bf532133 (big veriisle squash)
 
                 // The ISLE generated code emits its own registers to define the
                 // instruction's lowered values in. However, other instructions

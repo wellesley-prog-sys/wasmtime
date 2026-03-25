@@ -19,8 +19,8 @@ pub fn parse(lexer: Lexer, files: Arc<Files>) -> Result<Vec<Def>> {
 
 /// Parse without positional information. Provided mainly to support testing, to
 /// enable equality testing on structure alone.
-pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
-    let parser = Parser::new_without_pos_tracking(lexer);
+pub fn parse_without_pos(lexer: Lexer, files: Arc<Files>) -> Result<Vec<Def>> {
+    let mut parser = Parser::new_without_pos_tracking(lexer, files);
     parser.parse_defs()
 }
 
@@ -52,9 +52,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn new_without_pos_tracking(lexer: Lexer<'a>) -> Parser<'a> {
+    fn new_without_pos_tracking(lexer: Lexer<'a>, files: Arc<Files>) -> Parser<'a> {
         Parser {
             lexer,
+            files,
             disable_pos: true,
         }
     }

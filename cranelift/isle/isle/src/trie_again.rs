@@ -285,6 +285,7 @@ impl Binding {
     pub fn term(&self, tyenv: &TypeEnv, termenv: &TermEnv) -> Option<TermId> {
         match self {
             Binding::ConstInt { .. } => None,
+            Binding::ConstBool { .. } => None,
             Binding::ConstPrim { .. } => None,
             Binding::Argument { .. } => None,
             Binding::Extractor { term, .. } => Some(*term),

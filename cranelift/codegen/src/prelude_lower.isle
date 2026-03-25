@@ -105,12 +105,6 @@
 ;; Construct a single-element `InstOutput` from a single register.
 (spec (output_reg arg)
       (provide (= result (conv_to (widthof result) arg))))
-(instantiate output_reg
-    ((args (bv 64)) (ret (bv 8)) (canon (bv 8)))
-    ((args (bv 64)) (ret (bv 16)) (canon (bv 16)))
-    ((args (bv 64)) (ret (bv 32)) (canon (bv 32)))
-    ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
-)
 (decl output_reg (Reg) InstOutput)
 (rule output_reg (output_reg reg) (output (value_reg reg)))
 
