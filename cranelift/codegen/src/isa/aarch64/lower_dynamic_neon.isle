@@ -90,17 +90,9 @@
 ;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty (swiden_high _ x)))
-<<<<<<< HEAD
       (vec_extend (VecExtendOp.Sxtl) x true (lane_size ty)))
-=======
-      (vec_extend (VecExtendOp.Sxtl) x $true (lane_size ty)))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty (uwiden_high _ x)))
-<<<<<<< HEAD
       (vec_extend (VecExtendOp.Uxtl) x true (lane_size ty)))
-=======
-      (vec_extend (VecExtendOp.Uxtl) x $true (lane_size ty)))
->>>>>>> 25bf532133 (big veriisle squash)

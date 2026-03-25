@@ -102,43 +102,8 @@
       (emit_side_effect (pulley_jump label)))
 
 ;; Generic case for conditional branches.
-<<<<<<< HEAD
 (rule -1 (lower_branch (brif c _ _) (two_targets then else))
       (emit_side_effect (pulley_br_if (lower_cond c) then else)))
-=======
-(rule -1 (lower_branch (brif (maybe_uextend c) _ _) (two_targets then else))
-      (emit_side_effect (pulley_br_if c then else)))
-
-;; Conditional branches on `icmp`s.
-(rule (lower_branch (brif (maybe_uextend (icmp _ cc a b @ (value_type $I32))) _ _)
-                    (two_targets then else))
-      (emit_side_effect (lower_brif_of_icmp32 cc a b then else)))
-
-(decl lower_brif_of_icmp32 (IntCC Value Value MachLabel MachLabel) SideEffectNoResult)
-(rule (lower_brif_of_icmp32 (IntCC.Equal) a b then else)
-      (pulley_br_if_xeq32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.NotEqual) a b then else)
-      (pulley_br_if_xneq32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.SignedLessThan) a b then else)
-      (pulley_br_if_xslt32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.SignedLessThanOrEqual) a b then else)
-      (pulley_br_if_xslteq32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedLessThan) a b then else)
-      (pulley_br_if_xult32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedLessThanOrEqual) a b then else)
-      (pulley_br_if_xulteq32 a b then else))
-
-;; Pulley doesn't have instructions for `>` and `>=`, so we have to reverse the
-;; operation.
-(rule (lower_brif_of_icmp32 (IntCC.SignedGreaterThan) a b then else)
-      (lower_brif_of_icmp32 (IntCC.SignedLessThan) b a then else))
-(rule (lower_brif_of_icmp32 (IntCC.SignedGreaterThanOrEqual) a b then else)
-      (lower_brif_of_icmp32 (IntCC.SignedLessThanOrEqual) b a then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedGreaterThan) a b then else)
-      (lower_brif_of_icmp32 (IntCC.UnsignedLessThan) b a then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedGreaterThanOrEqual) a b then else)
-      (lower_brif_of_icmp32 (IntCC.UnsignedLessThanOrEqual) b a then else))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Branch tables.
 (rule (lower_branch (br_table index _) (jump_table_targets default targets))
@@ -160,7 +125,6 @@
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_stack_pointer _))
-<<<<<<< HEAD
       (pulley_get_special (sp_reg)))
 
 ;;;; Rules for `get_frame_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -170,9 +134,6 @@
 ;;;; Rules for `get_return_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_return_address _)) (pulley_xmov_lr))
-=======
-      (pulley_get_sp))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -271,7 +232,6 @@
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-<<<<<<< HEAD
 (rule (lower (has_type ty (iconst _ c))) (imm (i64_sextend_imm64 ty c)))
 
 ;;;; Rules for `f32const`;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -779,31 +739,6 @@
 
 (rule (lower (icmp _ cc a b @ (value_type (ty_int ty))))
       (lower_icmp ty cc a b))
-=======
-(rule (lower (has_type ty (iconst _ (u64_from_imm64 n))))
-      (imm ty n))
-
-;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type $I8 (iadd _ a b)))
-      (pulley_xadd32 a b))
-
-(rule (lower (has_type $I16 (iadd _ a b)))
-      (pulley_xadd32 a b))
-
-(rule (lower (has_type $I32 (iadd _ a b)))
-      (pulley_xadd32 a b))
-
-(rule (lower (has_type $I64 (iadd _ a b)))
-      (pulley_xadd64 a b))
-
-;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 1 (lower (icmp _ cc a b @ (value_type $I64)))
-      (lower_icmp $I64 cc a b))
-(rule (lower (icmp _ cc a b @ (value_type (fits_in_32 _))))
-      (lower_icmp $I32 cc a b))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ; Recursion: bounded since only recursive rules swap condition code order from
 ; greater into less, which can only apply once.
@@ -865,7 +800,6 @@
 ;; integers. In the future if this is a performance bottleneck it should be
 ;; possible to add new opcodes to pulley for 128-bit comparisons.
 
-<<<<<<< HEAD
 (rule (lower_icmp $I128 (IntCC.Equal) x y)
   (let ((lo XReg (pulley_xbxor64 (value_regs_get x 0) (value_regs_get y 0)))
         (hi XReg (pulley_xbxor64 (value_regs_get x 1) (value_regs_get y 1))))
@@ -874,13 +808,6 @@
   (let ((lo XReg (pulley_xbxor64 (value_regs_get x 0) (value_regs_get y 0)))
         (hi XReg (pulley_xbxor64 (value_regs_get x 1) (value_regs_get y 1))))
     (pulley_xneq64 (pulley_xbor64 lo hi) (pulley_xconst8 0))))
-=======
-(rule (lower (has_type ty (load _ flags addr (offset32 offset))))
-      (pulley_load (Amode.RegOffset addr (i32_as_i64 offset))
-                   ty
-                   flags
-                   (ExtKind.Zero)))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; swap args for `>` to use `<` instead
 ;;(rule 1 (lower_icmp $I128 cc @ (IntCC.SignedGreaterThan) x y)

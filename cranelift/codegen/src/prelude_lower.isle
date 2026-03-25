@@ -3,31 +3,15 @@
 
 ;;;; Primitive and External Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `cranelift-entity`-based identifiers.
-(type Inst (primitive Inst))
-(model Inst (type (bv)))
-
 ;; ISLE representation of `Vec<u8>`
 (type VecMask extern (enum))
 
 (type ValueRegs (primitive ValueRegs))
-(model ValueRegs
-      (type
-            (struct
-                  (lo (named Reg))
-                  (hi (named Reg))
-            )
-      )
-)
-
 (type WritableValueRegs (primitive WritableValueRegs))
 (type ValueRegsVec extern (enum))
 
 ;; Instruction lowering result: a vector of `ValueRegs`.
 (type InstOutput (primitive InstOutput))
-(model InstOutput (type (bv)))
-;; (Mutable) builder to incrementally construct an `InstOutput`.
-(type InstOutputBuilder extern (enum))
 
 ;; Type to hold multiple Regs
 (type MultiReg
@@ -43,9 +27,7 @@
 
 (model Reg (type (bv)))
 (type Reg (primitive Reg))
-
 (type WritableReg (primitive WritableReg))
-(model WritableReg (type (bv)))
 (type OptionWritableReg (primitive OptionWritableReg))
 (type VecReg extern (enum))
 (type VecWritableReg extern (enum))
@@ -55,8 +37,6 @@
 (spec (value_reg arg)
     (provide (= result arg)))
 (decl value_reg (Reg) ValueRegs)
-(spec (value_reg arg)
-    (provide (= (:lo result) arg)))
 (extern constructor value_reg value_reg)
 
 ;; Construct a `WritableValueRegs` of one register.
@@ -78,24 +58,11 @@
 ;; Construct an empty `InstOutput`.
 (decl output_none () InstOutput)
 (extern constructor output_none output_none)
-(spec (output_none) (provide (= result #b1)))
 
 ;; Construct a single-element `InstOutput`.
 (spec (output arg)
       (provide (= arg (conv_to (widthof arg) result))))
 (decl output (ValueRegs) InstOutput)
-(spec (output arg)
-      (provide
-            ; Two input registers are the same width.
-            (= (widthof (:lo arg)) (widthof (:hi arg)))
-
-            ; Output is the concatenation of the two registers.
-            (let
-                  ((cat (concat (:hi arg) (:lo arg))))
-                  (= cat (conv_to (widthof cat) result))
-            )
-      )
-)
 (extern constructor output output)
 
 ;; Construct a two-element `InstOutput`.
@@ -105,6 +72,12 @@
 ;; Construct a single-element `InstOutput` from a single register.
 (spec (output_reg arg)
       (provide (= result (conv_to (widthof result) arg))))
+(instantiate output_reg
+    ((args (bv 64)) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 64)) (ret (bv 16)) (canon (bv 16)))
+    ((args (bv 64)) (ret (bv 32)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
 (decl output_reg (Reg) InstOutput)
 (rule output_reg (output_reg reg) (output (value_reg reg)))
 
@@ -118,7 +91,6 @@
 
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
-(spec (temp_writable_reg ty) (provide (= (:bits ty) (widthof result))))
 (extern constructor temp_writable_reg temp_writable_reg)
 
 ;; Get a temporary register for reading.
@@ -151,10 +123,6 @@
 (spec (put_in_reg arg)
       (provide (= result (conv_to 64 arg))))
 (decl put_in_reg (Value) Reg)
-(spec (put_in_reg arg)
-      (provide (= result (conv_to 64 arg)))
-      (require (<= (widthof arg) 64))
-)
 (extern constructor put_in_reg put_in_reg)
 
 ;; Put the given value into one or more registers.
@@ -163,12 +131,6 @@
 (spec (put_in_regs arg) (provide (= (conv_to 64 arg) result)))
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
-(spec (put_in_regs arg)
-      (provide
-            (= (:lo result) (extract  63  0 (conv_to 128 arg)))
-            (= (:hi result) (extract 127 64 (conv_to 128 arg)))
-      )
-)
 
 ;; Put a slice of values into a vector of ValueRegs.
 (decl put_in_regs_vec (ValueSlice) ValueRegsVec)
@@ -183,14 +145,6 @@
 (spec (value_regs_get arg i)
     (provide (= arg result) (= (widthof i) 1)))
 (decl value_regs_get (ValueRegs usize) Reg)
-(spec (value_regs_get regs index)
-      (provide
-            (= result (switch index
-                  (0 (:lo regs))
-                  (1 (:hi regs))
-            ))
-      )
-)
 (extern constructor value_regs_get value_regs_get)
 
 ;; Get the number of registers in a `ValueRegs`.
@@ -217,7 +171,6 @@
 ;; Convert a MultiReg with three registers into an InstOutput containing
 ;; one ValueRegs containing the first two regs and one containing the third reg
 (decl multi_reg_to_pair_and_single (MultiReg) InstOutput)
-(attr multi_reg_to_pair_and_single (veri chain))
 (rule (multi_reg_to_pair_and_single (MultiReg.Three a b c))
       (output_pair (value_regs a b) c))
 
@@ -234,7 +187,6 @@
 ;; Add a range fact to a register, when compiling with
 ;; proof-carrying-code enabled.
 (decl add_range_fact (Reg u16 u64 u64) Reg)
-(spec (add_range_fact reg bit_width min max) (provide (= result reg)))
 (extern constructor add_range_fact add_range_fact)
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -304,7 +256,6 @@
 
 ;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
 (decl pure writable_reg_to_reg (WritableReg) Reg)
-(spec (writable_reg_to_reg reg) (provide (= result reg)))
 (extern constructor writable_reg_to_reg writable_reg_to_reg)
 
 ;; Extract the result values for the given instruction.
@@ -320,8 +271,7 @@
 (decl first_result (Value) Inst)
 (extern extractor first_result first_result)
 
-;; Extract the `InstructionData` and `Type` for an `Inst`. The extracted type is
-;; the value type of the first result when present, or the invalid type otherwise.
+;; Extract the `InstructionData` for an `Inst`.
 (decl inst_data_value (Type InstructionData) Inst)
 (extern extractor infallible inst_data_value inst_data_value)
 
@@ -336,29 +286,35 @@
       (provide (= result arg))
       (require (= ty (widthof arg))))
 (decl has_type (Type Inst) Inst)
-(spec (has_type ty arg)
-      (provide
-            (= result arg)
-            (= (:bits ty) (widthof arg))
-      )
-)
 (extractor (has_type ty inst)
            (and (result_type ty)
                 inst))
 
-;; Match the instruction that defines the given value, if any.
-(decl def_inst (Inst) Value)
-(spec (def_inst arg)
-      (provide (= result arg))
-)
-(extern extractor def_inst def_inst)
+(decl u8_from_iconst (u8) Value)
+(extractor (u8_from_iconst x)
+           (u64_from_iconst (u8_from_u64 x)))
+
+(decl u16_from_iconst (u16) Value)
+(extractor (u16_from_iconst x)
+           (u64_from_iconst (u16_from_u64 x)))
+
+(decl u32_from_iconst (u32) Value)
+(extractor (u32_from_iconst x)
+           (u64_from_iconst (u32_from_u64 x)))
 
 ;; Extract a constant `u64` from a value defined by an `iconst`.
 (spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
            (def_inst (iconst _ (u64_from_imm64 x))))
-(spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
+
+(decl i8_from_iconst (i8) Value)
+(extractor (i8_from_iconst x)
+           (i64_from_iconst (i8_from_i64 x)))
+
+(decl i16_from_iconst (i16) Value)
+(extractor (i16_from_iconst x)
+           (i64_from_iconst (i16_from_i64 x)))
 
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
@@ -366,25 +322,8 @@
       (provide (= arg (extract 31 0 (sign_ext 64 result))))
       (require (= result (sign_ext (widthof result) arg))))
 (decl i32_from_iconst (i32) Value)
-(spec (i32_from_iconst arg)
-      (provide (= arg (extract 31 0 (sign_ext 64 result))))
-      (match
-            ; result <= i32::MAX
-            (bvsle (sign_ext 64 result) #x000000007fffffff)
-            ; i32::MIN <= result
-            (bvsle (bvneg #x0000000080000000) (sign_ext 64 result))
-      )
-)
-(extern extractor i32_from_iconst i32_from_iconst)
-
-; Rust code for i32_from_iconst does not allow for constant values larger than 64 bits.
-; REVIEW(mbm): is an instantiation for i32_from_iconst appropriate?
-(instantiate i32_from_iconst
-    ((args (bv 32)) (ret (bv 8)))
-    ((args (bv 32)) (ret (bv 16)))
-    ((args (bv 32)) (ret (bv 32)))
-    ((args (bv 32)) (ret (bv 64)))
-)
+(extractor (i32_from_iconst x)
+           (i64_from_iconst (i32_from_i64 x)))
 
 ;; Extract a constant `i64` from a value defined by an `iconst`.
 ;; The value is sign extended to 64 bits.
@@ -396,11 +335,8 @@
 (extern constructor zero_value zero_value)
 
 ;; Match a sinkable instruction from a value operand.
-;;
-;; We do not model sinking in the verification domain.
 (decl pure partial is_sinkable_inst (Value) Inst)
 (extern constructor is_sinkable_inst is_sinkable_inst)
-(spec (is_sinkable_inst value) (match true) (provide (= result value)))
 
 ;; Match a uextend or any other instruction, "seeing through" the uextend if
 ;; present.
@@ -413,13 +349,6 @@
     (require (bvslt result #x0000000000000100)
              (= (widthof arg) 8)))
 (decl uimm8 (u8) Imm64)
-(spec (uimm8 arg)
-      (provide (= result (zero_ext 64 arg)))
-      (match
-            (bvsge result #x0000000000000000) ; >= 0
-            (bvslt result #x0000000000000100) ; < 256
-      )
-)
 (extern extractor uimm8 uimm8)
 
 (decl eq (Value Value) Value)
@@ -462,9 +391,8 @@
 ;;
 ;; This is low-level and side-effectful; it should only be used as an
 ;; implementation detail by helpers that preserve the SSA facade themselves.
-; TODO(mbm): what is the right spec for emit?
+
 (decl emit (MInst) Unit)
-(spec (emit inst) (provide (= result #b1)))
 (extern constructor emit emit)
 
 ;; Sink an instruction.
@@ -472,16 +400,12 @@
 ;; This is a side-effectful operation that notifies the context that the
 ;; instruction has been sunk into another instruction, and no longer needs to
 ;; be lowered.
-;;
-;; We do not model sinking in the verification domain.
 (decl sink_inst (Inst) Unit)
 (extern constructor sink_inst sink_inst)
-(spec (sink_inst inst) (provide true))
 
 ;; Constant pool emission.
 
 (type VCodeConstant (primitive VCodeConstant))
-(model VCodeConstant (type !))
 
 ;; Add a u64 little-endian constant to the in-memory constant pool and
 ;; return a VCodeConstant index that refers to it. This is
@@ -525,7 +449,6 @@
 
 ;; Emit given side-effectful instruction.
 (decl emit_side_effect (SideEffectNoResult) Unit)
-(spec (emit_side_effect arg) (provide true))
 (rule (emit_side_effect (SideEffectNoResult.Inst inst))
       (emit inst))
 (rule (emit_side_effect (SideEffectNoResult.Inst2 inst1 inst2))
@@ -580,48 +503,8 @@
                      (ProducesFlagsReturnsReg (inst MInst) (result Reg))
                      (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))))
 
-(model ProducesFlags
-      (type
-            (struct
-                  (flags  (named NZCV))
-                  (result (named Reg))
-                  (has_result Bool)
-            )
-      )
-)
-
-(spec (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst reg)
-      (provide
-            (= (:flags result) (:flags_out inst))
-            (= (:result result) reg)
-            (:has_result result)
-      )
-)
-
-(spec (ProducesFlags.ProducesFlagsSideEffect inst)
-      (provide
-            (= (:flags result) (:flags_out inst))
-            (not (:has_result result))
-      )
-)
-
-(spec (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2)
-      (provide
-            ; Flags output from the first instruction pass to the second's input.
-            (= (:flags_out inst1) (:flags_in inst2))
-
-            ; Result flags of the ProducesFlags wrapper are from the second
-            ; instruction's output.
-            (= (:flags result) (:flags_out inst2))
-
-            ; No value is produced.
-            (not (:has_result result))
-      )
-)
-
 ;; Chain another producer to a `ProducesFlags`.
 (decl produces_flags_concat (ProducesFlags ProducesFlags) ProducesFlags)
-(attr produces_flags_concat (tag TODO))
 (rule (produces_flags_concat (ProducesFlags.ProducesFlagsSideEffect inst1) (ProducesFlags.ProducesFlagsSideEffect inst2))
       (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2))
 
@@ -648,38 +531,7 @@
                                                              (inst4 MInst)
                                                              (result ValueRegs))))
 
-(model ConsumesFlags
-      (type
-            (struct
-                  (flags  (named NZCV))
-                  (result (named Reg))
-                  (has_result Bool)
-            )
-      )
-)
 
-(spec (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer inst reg)
-      (provide
-            (= (:flags result) (:flags_in inst))
-            (= (:result result) reg)
-            (:has_result result)
-      )
-)
-
-(spec (ConsumesFlags.ConsumesFlagsReturnsReg inst reg)
-      (provide
-            (= (:flags result) (:flags_in inst))
-            (= (:result result) reg)
-            (:has_result result)
-      )
-)
-
-(spec (ConsumesFlags.ConsumesFlagsSideEffect inst)
-      (provide
-            (= (:flags result) (:flags_in inst))
-            (not (:has_result result))
-      )
-)
 
 ;; Get the produced register out of a ProducesFlags.
 (decl produces_flags_get_reg (ProducesFlags) Reg)
@@ -726,25 +578,6 @@
 ;;
 ;; See `with_flags_reg` below for a variant that extracts out just the lower Reg.
 (decl with_flags (ProducesFlags ConsumesFlags) ValueRegs)
-(spec (with_flags producer consumer)
-      (provide
-            ; Transfer flags from producer to consumer.
-            (= (:flags producer) (:flags consumer))
-            ; Construct resulting value registers.
-            (=> (and (:has_result producer) (:has_result consumer))
-                  (and
-                        (= (:lo result) (:result producer))
-                        (= (:hi result) (:result consumer))
-                  )
-            )
-            (=> (and (not (:has_result producer)) (:has_result consumer))
-                  (= (:lo result) (:result consumer))
-            )
-            (=> (and (:has_result producer) (not (:has_result consumer)))
-                  (= (:lo result) (:result producer))
-            )
-      )
-)
 
 (rule (with_flags (ProducesFlags.ProducesFlagsReturnsResultWithConsumer producer_inst producer_result)
                   (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer consumer_inst consumer_result))
@@ -1356,23 +1189,6 @@
                 (not (= #x1111111111111111 result))))
 (decl pure partial safe_divisor_from_imm64 (Type Imm64) u64)
 (extern constructor safe_divisor_from_imm64 safe_divisor_from_imm64)
-;; Implemented in the same style as the Rust implementation
-(spec (safe_divisor_from_imm64 ty arg)
-      (match
-            (let (
-                  (minus1 (zero_ext 64 (bvones! (:bits ty))))
-                  (zero (bvzero! 64))
-                  (bits (bvand arg minus1))
-            )
-            (and
-                  (not (= bits minus1))
-                  (not (= bits zero)))))
-      (provide
-            (let (
-                  (minus1 (zero_ext 64 (bvones! (:bits ty))))
-                  (bits (bvand arg minus1))
-            )
-            (= result bits))))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

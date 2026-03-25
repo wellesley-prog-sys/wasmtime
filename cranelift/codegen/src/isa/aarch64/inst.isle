@@ -1009,262 +1009,22 @@
                        (end Reg)
                        (step Imm12))))
 
-(attr MInst.FpuMove32 (tag float))
-(attr MInst.FpuMove64 (tag float))
-(attr MInst.FpuMove128 (tag float))
-(attr MInst.FpuMoveFromVec (tag float))
-(attr MInst.FpuExtend (tag float))
-(attr MInst.FpuRR (tag float))
-(attr MInst.FpuRRR (tag float))
-(attr MInst.FpuRRI (tag float))
-(attr MInst.FpuRRIMod (tag float))
-(attr MInst.FpuRRRR (tag float))
-(attr MInst.FpuCmp (tag float))
-(attr MInst.FpuLoad16 (tag float))
-(attr MInst.FpuLoad16 (tag narrowfloat))
-(attr MInst.FpuStore16 (tag float))
-(attr MInst.FpuStore16 (tag narrowfloat))
-(attr MInst.FpuLoad32 (tag float))
-(attr MInst.FpuStore32 (tag float))
-(attr MInst.FpuLoad64 (tag float))
-(attr MInst.FpuStore64 (tag float))
-(attr MInst.FpuLoad128 (tag float))
-(attr MInst.FpuLoad128 (tag i128))
-(attr MInst.FpuStore128 (tag float))
-(attr MInst.FpuStore128 (tag i128))
-(attr MInst.FpuLoadP64 (tag float))
-(attr MInst.FpuStoreP64 (tag float))
-(attr MInst.FpuLoadP128 (tag float))
-(attr MInst.FpuLoadP128 (tag i128))
-(attr MInst.FpuStoreP128 (tag float))
-(attr MInst.FpuStoreP128 (tag i128))
-(attr MInst.FpuToInt (tag float))
-(attr MInst.IntToFpu (tag float))
-(attr MInst.FpuCSel16 (tag float))
-(attr MInst.FpuCSel32 (tag float))
-(attr MInst.FpuCSel64 (tag float))
-(attr MInst.FpuRound (tag float))
-(attr MInst.MovToFpu (tag float))
-(attr MInst.FpuMoveFPImm (tag float))
-
-(attr MInst.VecDup (tag vector))
-(attr MInst.VecDupFromFpu (tag vector))
-(attr MInst.VecDupFPImm (tag vector))
-(attr MInst.VecDupImm (tag vector))
-(attr MInst.VecExtend (tag vector))
-(attr MInst.VecMovElement (tag vector))
-(attr MInst.VecRRLong (tag vector))
-(attr MInst.VecRRNarrowLow (tag vector))
-(attr MInst.VecRRNarrowHigh (tag vector))
-(attr MInst.VecRRPair (tag vector))
-(attr MInst.VecRRRLong (tag vector))
-(attr MInst.VecRRRLongMod (tag vector))
-(attr MInst.VecRRPairLong (tag vector))
-(attr MInst.VecRRR (tag vector))
-(attr MInst.VecRRRMod (tag vector))
-(attr MInst.VecFmlaElem (tag vector))
-(attr MInst.VecMisc (tag vector))
-(attr MInst.VecLanes (tag vector))
-(attr MInst.VecShiftImm (tag vector))
-(attr MInst.VecShiftImmMod (tag vector))
-(attr MInst.VecExtract (tag vector))
-(attr MInst.VecTbl (tag vector))
-(attr MInst.VecTblExt (tag vector))
-(attr MInst.VecTbl2 (tag vector))
-(attr MInst.VecTbl2Ext (tag vector))
-(attr MInst.VecLoadReplicate (tag vector))
-(attr MInst.VecCSel (tag vector))
-
-(attr MInst.LoadAcquire (tag atomics))
-
-(model MInst
-      (type
-            (struct
-                  (flags_in  (named NZCV))
-                  (flags_out (named NZCV))
-            )
-      )
-)
-
-(spec (MInst.AluRRImmLogic alu_op size rd rn imml)
-      (provide
-            (=>
-                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
-                        (= rd (bvor rn imml))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
-                        (= rd (zero_ext 64 (bvor (extract 31 0 rn) (extract 31 0 imml))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
-                        (= rd (bvor rn (bvnot imml)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
-                        (= rd (zero_ext 64 (bvor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
-                        (= rd (bvand rn imml))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
-                        (= rd (zero_ext 64 (bvand (extract 31 0 rn) (extract 31 0 imml))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
-                        (= rd (bvand rn (bvnot imml)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
-                        (= rd (zero_ext 64 (bvand (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
-                        (= rd (bvxor rn imml))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
-                        (= rd (zero_ext 64 (bvxor (extract 31 0 rn) (extract 31 0 imml))))
-            )
-
-            (=>
-                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
-                        (= rd (bvxor rn (bvnot imml)))
-            )
-            (=>
-                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
-                        (= rd (zero_ext 64 (bvxor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
-            )
-      )
-      (require
-            ; Implemented (opcode, size) combinations.
-            (or
-                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
-            )
-            ; REVIEW(mbm): require properties for logical immediates?
-      )
-)
-
-
-(spec (MInst.AluRRImmShift alu_op size rd rn immshift)
-      (provide
-            (=> (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
-                  (= rd (bvlshr rn (zero_ext 64 immshift)))
-            )
-            (=> (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size32)))
-                  (= rd (zero_ext 64 (bvlshr (extract 31 0 rn) (zero_ext 32 immshift))))
-            )
-
-            (=> (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
-                  (= rd (bvashr rn (zero_ext 64 immshift)))
-            )
-            (=> (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
-                  (= rd (zero_ext 64 (bvashr (extract 31 0 rn) (zero_ext 32 immshift))))
-            )
-
-            (=> (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
-                  (= rd (bvshl rn (zero_ext 64 immshift)))
-            )
-            (=> (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
-                  (= rd (zero_ext 64 (bvshl (extract 31 0 rn) (zero_ext 32 immshift))))
-            )
-
-            (=> (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size32)))
-                (with
-                            (t1 t3 t4 t5)
-                            (and
-                                (= t1 (= (extract 4 0 immshift) #b00000))
-                                (if
-                                    t1
-                                    (= t3 (extract 31 0 rn))
-                                    (and
-                                        (not (= (extract 4 0 immshift) #b00000))
-                                        (=
-                                            t4
-                                            (bvor
-                                                (bvlshr (extract 31 0 rn) (zero_ext 32 (extract 4 0 immshift)))
-                                                (bvshl
-                                                    (extract 31 0 rn)
-                                                    (zero_ext 32 (bvsub #x20 (zero_ext 8 (extract 4 0 immshift)))))))))
-                                (= t5 (if t1 t3 t4))
-                                (= rd (zero_ext 64 t5))))
-            )
-            (=> (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size64)))
-            (with
-                            (t1 t3 t4 t5)
-                            (and
-                                (= t1 (= (extract 5 0 immshift) #b000000))
-                                (if
-                                    t1
-                                    (= t3 rn)
-                                    (and
-                                        (not (= (extract 5 0 immshift) #b000000))
-                                        (=
-                                            t4
-                                            (bvor
-                                                (bvlshr rn (zero_ext 64 (extract 5 0 immshift)))
-                                                (bvshl rn (zero_ext 64 (bvsub #x40 (zero_ext 8 (extract 5 0 immshift)))))))))
-                                (= t5 (if t1 t3 t4))
-                                (= rd t5))))
-      )
-      (require
-            (or
-                  (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
-
-                  (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size64)))
-                  (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size32)))
-            )
-      )
-)
-
-(spec (MInst.TrapIf kind trap_code)
-      (modifies exec_trap trap_cond)
-      (provide
-            ; Conditions under which this instruction traps.
-            (= trap_cond
-                  (match kind
-                        ((Zero r) (bv_is_zero! r))
-                        ((NotZero r) (not (bv_is_zero! r)))
-                        ((Cond cc) (cond_holds! cc (:flags_in result)))
-                  )
-            )
-
-            ; If this instruction traps, set the global trap state.
-            (=> trap_cond exec_trap)
-      )
-)
-
-;; Registers.
-(model Reg (type (bv)))
+(model ALUOp (enum
+      (Add #x00) ;; 0
+      (Sub #x01)
+      (Orr #x02)
+      (OrrNot #x03)
+      (And #x04)
+      (AndNot #x05)
+      (Eor #x06)
+      (EorNot #x07)
+      (SubS #x08)
+      (SDiv #x09)
+      (UDiv #x0a)
+      (Extr #x0b)
+      (Lsr #x0c)
+      (Asr #x0d)
+      (Lsl #x0e)))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1325,82 +1085,19 @@
 ))
 
 (type UImm5 (primitive UImm5))
-(model UImm5 (type (bv 5)))
-
+(model Imm12 (type (bv 24)))
 (type Imm12 (primitive Imm12))
-(model Imm12
-      (type
-            (struct
-                  (bits (bv 12))
-                  (shift12 Bool)
-            )
-      )
-)
-
-(type ImmLogic (primitive ImmLogic))
 (model ImmLogic (type (bv 64)))
-(type ImmShift (primitive ImmShift))
+(type ImmLogic (primitive ImmLogic))
 (model ImmShift (type (bv 6)))
-
+(type ImmShift (primitive ImmShift))
+(model ShiftOpAndAmt (type (bv 16)))
 (type ShiftOpAndAmt (primitive ShiftOpAndAmt))
-(model ShiftOpAndAmt
-      (type
-            (struct
-                  (op (named ALUOp))
-                  (amt (bv 8))
-            )
-      )
-)
-
+(model MoveWideConst (type (bv 16)))
 (type MoveWideConst (primitive MoveWideConst))
-(model MoveWideConst
-      (type
-            (struct
-                  (shift (bv 2))
-                  (bits (bv 16))
-            )
-      )
-)
-
 (type NZCV (primitive NZCV))
-(model NZCV
-      (type
-            (struct
-                  (N (bv 1))
-                  (Z (bv 1))
-                  (C (bv 1))
-                  (V (bv 1))
-            )
-      )
-)
-
-(macro (n_set nzcv) (= (:N nzcv) #b1))
-(macro (n_clear nzcv) (= (:N nzcv) #b0))
-(macro (z_set nzcv) (= (:Z nzcv) #b1))
-(macro (z_clear nzcv) (= (:Z nzcv) #b0))
-(macro (c_set nzcv) (= (:C nzcv) #b1))
-(macro (c_clear nzcv) (= (:C nzcv) #b0))
-(macro (v_set nzcv) (= (:V nzcv) #b1))
-(macro (v_clear nzcv) (= (:V nzcv) #b0))
-
 (type ASIMDFPModImm (primitive ASIMDFPModImm))
-(model ASIMDFPModImm (type
-      (struct
-            (imm (bv 8))
-            (size (named ScalarSize))
-      )
-))
-
 (type ASIMDMovModImm (primitive ASIMDMovModImm))
-(model ASIMDMovModImm (type
-      (struct
-            (imm (bv 8))
-            ; TODO: shift: u8,
-            ; TODO: is_64bit: bool,
-            ; TODO: shift_ones: bool,
-      )
-))
-
 (type SImm7Scaled (primitive SImm7Scaled))
 
 (type BoxCallInfo (primitive BoxCallInfo))
@@ -1413,16 +1110,16 @@
 (type CodeOffset (primitive CodeOffset))
 (type VecMachLabel extern (enum))
 
-(type CondBrKind extern
-  (enum
-    (Zero (r Reg))
-    (NotZero (r Reg))
-    (Cond (cc Cond))
+(model ExtendOp (enum
+    (UXTB #b000)
+    (UXTH #b001)
+    (UXTW #b010)
+    (UXTX #b011)
+    (SXTB #b100)
+    (SXTH #b101)
+    (SXTW #b110)
+    (SXTX #b111)
 ))
-
-; Expect that branched on registers will be general-purpose registers.
-(instantiate CondBrKind.Zero ((args (bv 64)) (ret (named CondBrKind))))
-(instantiate CondBrKind.NotZero ((args (bv 64)) (ret (named CondBrKind))))
 
 (type ExtendOp extern
   (enum
@@ -1451,11 +1148,8 @@
 ))
 
 (type MemLabel extern (enum))
-(model MemLabel (type !))
 (type SImm9 extern (enum))
-(model SImm9 (type (bv 9)))
 (type UImm12Scaled extern (enum))
-(model UImm12Scaled (type (bv 12)))
 
 ;; An addressing mode specified for a load/store operation.
 (type AMode
@@ -1559,25 +1253,6 @@
         (SlotOffset
          (off i64))))
 
-; TODO: handle loads from function's constant pool
-(attr AMode.Const (tag amode_const))
-
-; Type instantiations for register addressing modes.
-;
-; Register type is an unspecified bit-vector to support both general-purpose and
-; vector register types. When the `Reg` type is used as an addressing mode we
-; face two problems.  Firstly, acted on in a way that type inference cannot
-; always deduce the width. For example, some addressing registers only have bits
-; extracted.  Secondly, some variants such as `RegOffset` are only ever used
-; from Rust. Type inference has no information to use to deduce the width of
-; `Reg` fields in these cases.  For these reasons we specify explicitly that
-; addressing modes are general purpose registers, therefore 64-bit.
-(instantiate AMode.RegReg                 ((args (bv 64) (bv 64)) (ret (named AMode))))
-(instantiate AMode.RegScaled              ((args (bv 64) (bv 64)) (ret (named AMode))))
-(instantiate AMode.RegScaledExtended      ((args (bv 64) (bv 64) (named ExtendOp)) (ret (named AMode))))
-(instantiate AMode.RegExtended            ((args (bv 64) (bv 64) (named ExtendOp)) (ret (named AMode))))
-(instantiate AMode.RegOffset              ((args (bv 64) (named i64)) (ret (named AMode))))
-
 ;; A memory argument to a load/store-pair.
 (type PairAMode (enum
   ;; Signed, scaled 7-bit offset from a register.
@@ -1593,21 +1268,7 @@
 ))
 
 (type FPUOpRI extern (enum))
-(model FPUOpRI (type
-      (struct
-            (size (bv 8))
-            (amount (bv 8))
-            (lane_size_in_bits (bv 8))
-      )
-))
 (type FPUOpRIMod extern (enum))
-(model FPUOpRIMod (type
-      (struct
-            (size (bv 8))
-            (amount (bv 8))
-            (lane_size_in_bits (bv 8))
-      )
-))
 
 (model OperandSize
       (enum (Size32 32)
@@ -1625,19 +1286,26 @@
             (= result (if (<= ty 32) 32 64)))
       (require
             (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
-
+(instantiate operand_size
+    ((args Int) (ret Int) (canon (bv 8)))
+    ((args Int) (ret Int) (canon (bv 16)))
+    ((args Int) (ret Int) (canon (bv 32)))
+    ((args Int) (ret Int) (canon (bv 64)))
+)
 (decl operand_size (Type) OperandSize)
-(spec (operand_size ty)
-      (provide
-            (= result (if (<= (:bits ty) 32) (OperandSize.Size32) (OperandSize.Size64))))
-      (require
-            (or (= (:bits ty) 8) (= (:bits ty) 16) (= (:bits ty) 32) (= (:bits ty) 64))))
-(attr rule operand_size_32 (veri priority))
 (rule operand_size_32 1 (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
 (rule operand_size_64 (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
 
+(model ScalarSize
+      (enum (Size8 8)
+            (Size16 16)
+            (Size32 32)
+            (Size64 64)
+            (Size128 128)))
+
+;; Difference (32 - ty), useful for narrow calculations with 32-bit
+;; instructions.
 (decl diff_from_32 (Type) u8)
-(attr diff_from_32 (veri chain))
 (rule (diff_from_32 $I8) 24)
 (rule (diff_from_32 $I16) 16)
 
@@ -1650,29 +1318,17 @@
 
 ;; Helper for calculating the `ScalarSize` corresponding to a type
 (decl scalar_size (Type) ScalarSize)
-(spec (scalar_size ty)
-      (provide (= result
-            (switch (:bits ty)
-                  (8   (ScalarSize.Size8))
-                  (16  (ScalarSize.Size16))
-                  (32  (ScalarSize.Size32))
-                  (64  (ScalarSize.Size64))
-                  (128 (ScalarSize.Size128))
-            )
-      ))
-)
 
-(rule scalar_size_i8 (scalar_size $I8) (ScalarSize.Size8))
-(rule scalar_size_i16 (scalar_size $I16) (ScalarSize.Size16))
-(rule scalar_size_i32 (scalar_size $I32) (ScalarSize.Size32))
-(rule scalar_size_i64 (scalar_size $I64) (ScalarSize.Size64))
-(rule scalar_size_i128 (scalar_size $I128) (ScalarSize.Size128))
+(rule (scalar_size $I8) (ScalarSize.Size8))
+(rule (scalar_size $I16) (ScalarSize.Size16))
+(rule (scalar_size $I32) (ScalarSize.Size32))
+(rule (scalar_size $I64) (ScalarSize.Size64))
+(rule (scalar_size $I128) (ScalarSize.Size128))
 
-(rule scalar_size_f32 (scalar_size $F32) (ScalarSize.Size32))
-(rule scalar_size_f64 (scalar_size $F64) (ScalarSize.Size64))
+(rule (scalar_size $F32) (ScalarSize.Size32))
+(rule (scalar_size $F64) (ScalarSize.Size64))
 
 ;; Helper for calculating the `ScalarSize` lane type from vector type
-(attr lane_size (tag vector))
 (decl lane_size (Type) ScalarSize)
 (rule 1 (lane_size (multi_lane 8 _)) (ScalarSize.Size8))
 (rule 1 (lane_size (multi_lane 16 _)) (ScalarSize.Size16))
@@ -1719,41 +1375,15 @@
     (Nv)
 ))
 
-(macro (cond_holds cc nzcv)
-      (match cc
-            ; EQ	Equal.	Z==1
-            ((Eq) (z_set! nzcv))
-            ; NE	Not equal.	Z==0
-            ((Ne) (z_clear! nzcv))
-            ; HS	Unsigned higher or same (or carry set).	C==1
-            ((Hs) (c_set! nzcv))
-            ; LO	Unsigned lower (or carry clear).	C==0
-            ((Lo) (c_clear! nzcv))
-            ; MI	Negative. The mnemonic stands for "minus".	N==1
-            ((Mi) (n_set! nzcv))
-            ; PL	Positive or zero. The mnemonic stands for "plus".	N==0
-            ((Pl) (n_clear! nzcv))
-            ; VS	Signed overflow. The mnemonic stands for "V set".	V==1
-            ((Vs) (v_set! nzcv))
-            ; VC	No signed overflow. The mnemonic stands for "V clear".	V==0
-            ((Vc) (v_clear! nzcv))
-            ; HI	Unsigned higher.	(C==1) && (Z==0)
-            ((Hi) (and (c_set! nzcv) (z_clear! nzcv)))
-            ; LS	Unsigned lower or same.	(C==0) || (Z==1)
-            ((Ls) (or (c_clear! nzcv) (z_set! nzcv)))
-            ; GE	Signed greater than or equal.	N==V
-            ((Ge) (= (:N nzcv) (:V nzcv)))
-            ; LT	Signed less than.	N!=V
-            ((Lt) (not (= (:N nzcv) (:V nzcv))))
-            ; GT	Signed greater than.	(Z==0) && (N==V)
-            ((Gt) (and (z_clear! nzcv) (= (:N nzcv) (:V nzcv))))
-            ; LE	Signed less than or equal.	(Z==1) || (N!=V)
-            ((Le) (or (z_set! nzcv) (not (= (:N nzcv) (:V nzcv)))))
-            ; AL (or omitted)	Always executed.	None tested.
-            ((Al) true)
-            ((Nv) false)
-      )
-)
+(model VectorSize
+  (enum
+    (Size8x8 #x00)
+    (Size8x16 #x01)
+    (Size16x4 #x02)
+    (Size16x8 #x03)
+    (Size32x2 #x04)
+    (Size32x4 #x05)
+    (Size64x2 #x06)))
 
 (type VectorSize extern
   (enum
@@ -1767,7 +1397,6 @@
 ))
 
 ;; Helper for calculating the `VectorSize` corresponding to a type
-(attr vector_size (tag vector))
 (decl vector_size (Type) VectorSize)
 (rule 1 (vector_size (multi_lane 8 8)) (VectorSize.Size8x8))
 (rule 1 (vector_size (multi_lane 8 16)) (VectorSize.Size8x16))
@@ -2192,104 +1821,23 @@
 
 (decl pure use_fp16 () bool)
 (extern constructor use_fp16 use_fp16)
-(spec (use_fp16) (provide (not result)))
 
 ;; Extractor helpers for various immediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; equals_move_wide_value expresses the property that the value n equals the
-; computed value of the move wide immediate.
-(macro (equals_move_wide_value n mov_wide_const)
-      (and
-            ; n equals the computed value
-            (= n
-                  ; bits << (16 * shift)
-                  (bvshl
-                        (zero_ext 64 (:bits mov_wide_const))
-                        (bvmul (int2bv 64 16) (zero_ext 64 (:shift mov_wide_const)))
-                  )
-            )
-
-            ; The zero case can be expressed in multiple ways. Assert that it
-            ; must be the zero shift value, matching the Rust implementation.
-            (=> (bv_is_zero! n) (= (:shift mov_wide_const) #b00))
-      )
-)
-
 (decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)
 (extern constructor move_wide_const_from_u64 move_wide_const_from_u64)
-(spec (move_wide_const_from_u64 ty n)
-      (provide
-            (let
-                  (
-                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
-                  )
-                  (equals_move_wide_value! nlow result)
-            )
-      )
-      (match
-            (let
-                  (
-                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
-                  )
-                  (or
-                        (= nlow (bvand nlow #x000000000000ffff))
-                        (= nlow (bvand nlow #x00000000ffff0000))
-                        (= nlow (bvand nlow #x0000ffff00000000))
-                        (= nlow (bvand nlow #xffff000000000000))
-                  )
-            )
-      )
-)
 
 (decl pure partial move_wide_const_from_inverted_u64 (Type u64) MoveWideConst)
 (extern constructor move_wide_const_from_inverted_u64 move_wide_const_from_inverted_u64)
-(spec (move_wide_const_from_inverted_u64 ty n_inverted)
-      (provide
-            (let
-                  (
-                        (n (bvnot n_inverted))
-                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
-                  )
-                  (equals_move_wide_value! nlow result)
-            )
-      )
-      (match
-            (let
-                  (
-                        (n (bvnot n_inverted))
-                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
-                  )
-                  (or
-                        (= nlow (bvand nlow #x000000000000ffff))
-                        (= nlow (bvand nlow #x00000000ffff0000))
-                        (= nlow (bvand nlow #x0000ffff00000000))
-                        (= nlow (bvand nlow #xffff000000000000))
-                  )
-            )
-      )
-)
 
 (decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
-; REVIEW(mbm): actually specify the requirements of logical immediates?
-(spec (imm_logic_from_u64 ty n)
-      (provide (= result n))
-      (match (or (= (:bits ty) 32) (= (:bits ty) 64)))
-)
 
 (decl pure partial imm_size_from_type (Type) u16)
 (extern constructor imm_size_from_type imm_size_from_type)
-(spec (imm_size_from_type ty)
-      (match (or (= (:bits ty) 32) (= (:bits ty) 64)))
-      (provide (= result (int2bv 16 (:bits ty))))
-)
 
 (decl pure partial imm_logic_from_imm64 (Type Imm64) ImmLogic)
 (extern constructor imm_logic_from_imm64 imm_logic_from_imm64)
-; REVIEW(mbm): actually specify the requirements of logical immediates?
-(spec (imm_logic_from_imm64 ty imm64)
-      (provide (= result imm64))
-      (match (or (= (:bits ty) 32) (= (:bits ty) 64))))
 
 (spec (imm_shift_from_imm64 ty x)
       (provide (= result (extract 5 0 (bvand x (bvsub (int2bv 64 ty) #x0000000000000001)))))
@@ -2297,27 +1845,9 @@
 
 (decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
-(spec (imm_shift_from_imm64 ty v)
-      (provide
-            (let
-                  ((imm_value (bvand v (shift_mask! 64 (:bits ty)))))
-                  (= result (extract 5 0 imm_value))
-            )
-      )
-      (match
-            (let
-                  ((imm_value (bvand v (shift_mask! 64 (:bits ty)))))
-                  (bvult imm_value (int2bv 64 64))
-            )
-      )
-)
 
 (decl imm_shift_from_u8 (u8) ImmShift)
 (extern constructor imm_shift_from_u8 imm_shift_from_u8)
-(spec (imm_shift_from_u8 n)
-      (provide (= result (extract 5 0 n)))
-      (require (bvult n #x40))
-)
 
 (spec (imm12_from_u64 imm12)
       (provide (= result (zero_ext 64 imm12)))
@@ -2331,46 +1861,18 @@
 )
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
-(spec (imm12_from_u64 imm12)
-      (provide
-            (= result
-                  (zero_ext 64
-                        (if (:shift12 imm12)
-                              (concat (:bits imm12) #x000)
-                              (concat #x000 (:bits imm12))
-                        )
-                  )
-            )
-      )
-      (match
-            (or
-                  (= result (bvand result (zero_ext 64 #x000fff)))
-                  (= result (bvand result (zero_ext 64 #xfff000)))
-            )
-      )
-)
 
 (decl u8_into_uimm5 (u8) UImm5)
 (extern constructor u8_into_uimm5 u8_into_uimm5)
-(spec (u8_into_uimm5 n)
-      (provide (= result (extract 4 0 n)))
-      (require (bvult n #x20))
-)
 
 (spec (u8_into_imm12 arg)
       (provide (= result (zero_ext 24 arg))))
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
-(spec (u8_into_imm12 n)
-      (provide
-            (not (:shift12 result))
-            (= (:bits result) (zero_ext 12 n))
-      )
-)
 
 (spec (u64_into_imm_logic ty a)
       (provide (= result a))
-      (require (or (= (:bits ty) 32) (= (:bits ty) 64))))
+      (require (or (= ty 32) (= ty 64))))
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
@@ -2401,25 +1903,11 @@
 ;; and the amount to shift by.
 (decl fpu_op_ri_ushr (u8 u8) FPUOpRI)
 (extern constructor fpu_op_ri_ushr fpu_op_ri_ushr)
-(spec (fpu_op_ri_ushr ty_bits shift)
-      (provide
-            (= (:size result) ty_bits)
-            (= (:amount result) shift)
-            (= (:lane_size_in_bits result) ty_bits)
-      )
-)
 
 ;; Constructs an FPUOpRIMod.Sli* given the size in bits of the value (or lane)
 ;; and the amount to shift by.
 (decl fpu_op_ri_sli (u8 u8) FPUOpRIMod)
 (extern constructor fpu_op_ri_sli fpu_op_ri_sli)
-(spec (fpu_op_ri_sli ty_bits shift)
-      (provide
-            (= (:size result) ty_bits)
-            (= (:amount result) shift)
-            (= (:lane_size_in_bits result) ty_bits)
-      )
-)
 
 (decl pure partial lshr_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshr_from_u64 lshr_from_u64)
@@ -2428,24 +1916,6 @@
     (provide (= result (concat #x0e (extract 7 0 a))))
     (require (= (extract 63 8 a) #b00000000000000000000000000000000000000000000000000000000)))
 (decl pure partial lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
-(spec (lshl_from_imm64 ty imm)
-      (provide
-            (= (:op result) (ALUOp.Lsl))
-            (= (:amt result)
-                  ; imm & (ty - 1)
-                  (bvand
-                        (extract 7 0 imm)
-                        (bvsub (int2bv 8 (:bits ty)) #x01)
-                  )
-            )
-      )
-      (match
-            ; imm < 64
-            (bvult imm #x0000000000000040)
-            ; ty <= 255
-            (<= (:bits ty) 255)
-      )
-)
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 
 (decl pure partial lshl_from_u64 (Type u64) ShiftOpAndAmt)
@@ -2456,13 +1926,6 @@
 
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
-(spec (integral_ty ty)
-      (provide (= result ty))
-      (match (or
-            (= (:bits result) 8)
-            (= (:bits result) 16)
-            (= (:bits result) 32)
-            (= (:bits result) 64))))
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
@@ -2474,7 +1937,6 @@
 (extern constructor is_zero_uimm12 is_zero_uimm12)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
-<<<<<<< HEAD
 ; REVIEW(mbm): is imm12_from_value spec correct?
 ; NOTE(mbm): compare with https://github.com/avanhatt/wasmtime/blob/94ccb9d4d55a479893cb04bc796ec620ed24cee2/cranelift/codegen/src/isa/aarch64/inst.isle#L1867-L1874
 (spec (imm12_from_value imm12)
@@ -2488,30 +1950,6 @@
             (or
                   (= imm12 (bvand imm12 #x000fff))
                   (= imm12 (bvand imm12 #xfff000))
-=======
-(spec (imm12_from_value imm12)
-      (provide
-            (=
-                  (zero_ext 128 result)
-                  (zero_ext 128
-                        (if (:shift12 imm12)
-                              (concat (:bits imm12) #x000)
-                              (concat #x000 (:bits imm12))
-                        )
-                  )
-            )
-      )
-      (match
-            (let
-                  (
-                        (width 128)
-                        (r (zero_ext width result))
-                  )
-                  (or
-                        (= r (bvand r (zero_ext width #x000fff)))
-                        (= r (bvand r (zero_ext width #xfff000)))
-                  )
->>>>>>> 25bf532133 (big veriisle squash)
             )
       )
 )
@@ -2519,10 +1957,6 @@
 (extractor
   (imm12_from_value n)
   (iconst _ (u64_from_imm64 (imm12_from_u64 n))))
-<<<<<<< HEAD
-=======
-
->>>>>>> 25bf532133 (big veriisle squash)
 ;; Conceptually the same as `imm12_from_value`, but tries negating the constant
 ;; value (first sign-extending to handle narrow widths).
 (spec (imm12_from_negated_value arg)
@@ -2538,17 +1972,21 @@
       )
 )
 
+(instantiate imm12_from_negated_value
+    ((args (bv 8)) (ret (bv 24)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 24)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 24)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 24)) (canon (bv 64)))
+)
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule imm12_from_negated_value
   (imm12_from_negated_value (has_type ty (iconst _ n)))
-  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+  (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_checked_neg (i64_sextend_imm64 ty n))))
   imm)
-(attr imm12_from_negated_value (veri chain))
 
 ;; Helper type to represent a value and an extend operation fused together.
 (model ExtendedValue (type (bv 67)))
 (type ExtendedValue extern (enum))
-<<<<<<< HEAD
 ;; Only including the i8 to i32 opcodes, based on the impl of extended_value_from_value
 (spec (extended_value_from_value x)
   (provide
@@ -2564,130 +2002,31 @@
     (not (= (extract 66 64 x) #b011))
     (= result (conv_to (widthof result) x))
     (or (= 8 (widthof result)) (= 16 (widthof result)) (= 32 (widthof result)))))
-=======
-(model ExtendedValue (type
-      (struct
-            (val (named Value))
-            (extend (named ExtendOp))
-      )
-))
-
-(macro (extend_op_src_width extend)
-      (match extend
-            ((UXTB) 8)
-            ((UXTH) 16)
-            ((UXTW) 32)
-            ((UXTX) 64)
-            ((SXTB) 8)
-            ((SXTH) 16)
-            ((SXTW) 32)
-            ((SXTX) 64)
-      )
-)
-
-(macro (extend_op_signed extend)
-      (match extend
-            ((UXTB) false)
-            ((UXTH) false)
-            ((UXTW) false)
-            ((UXTX) false)
-            ((SXTB) true)
-            ((SXTH) true)
-            ((SXTW) true)
-            ((SXTX) true)
-      )
-)
-
-(macro (is_zero_ext dst src)
-      (and
-            (>= (widthof dst) (widthof src))
-            (= dst (conv_to (widthof dst) (zero_ext 64 src)))
-      )
-)
-
-(macro (is_sign_ext dst src)
-      (and
-            (>= (widthof dst) (widthof src))
-            (= dst (conv_to (widthof dst) (sign_ext 64 src)))
-      )
-)
-
-(macro (is_ext dst src) (or (is_zero_ext! dst src) (is_sign_ext! dst src)))
-
->>>>>>> 25bf532133 (big veriisle squash)
 (decl extended_value_from_value (ExtendedValue) Value)
 (extern extractor extended_value_from_value extended_value_from_value)
-(spec (extended_value_from_value x)
-      ; Match when the result can be represented as an extend.
-      (match
-            (or
-                  (with (b) (is_ext! result (as b (bv 8))))
-                  (with (h) (is_ext! result (as h (bv 16))))
-                  (with (w) (is_ext! result (as w (bv 32))))
-                  (with (x) (is_ext! result (as x (bv 64))))
-            )
-      )
-
-      ; Determine the ExtendedValue parameters.
-      (provide
-            ; Width of the input.
-            (= (widthof (:val x)) (extend_op_src_width! (:extend x)))
-
-            ; Result equals the extension.
-            (if (extend_op_signed! (:extend x))
-                  (is_sign_ext! result (:val x))
-                  (is_zero_ext! result (:val x))
-            )
-      )
-)
-(instantiate extended_value_from_value
-      ((args (struct (val (bv  8)) (extend (named ExtendOp)))) (ret (named Value)))
-      ((args (struct (val (bv 16)) (extend (named ExtendOp)))) (ret (named Value)))
-      ((args (struct (val (bv 32)) (extend (named ExtendOp)))) (ret (named Value)))
-      ((args (struct (val (bv 64)) (extend (named ExtendOp)))) (ret (named Value)))
-)
 
 ;; Constructors used to poke at the fields of an `ExtendedValue`.
 (decl put_extended_in_reg (ExtendedValue) Reg)
 (extern constructor put_extended_in_reg put_extended_in_reg)
-(spec (put_extended_in_reg x)
-      (provide (= result (conv_to (widthof result) (:val x))))
-)
-
 (decl get_extended_op (ExtendedValue) ExtendOp)
 (extern constructor get_extended_op get_extended_op)
-(spec (get_extended_op x) (provide (= result (:extend x))))
 
 (decl nzcv (bool bool bool bool) NZCV)
 (extern constructor nzcv nzcv)
-(spec (nzcv n z c v)
-      (provide
-            (= (:N result) (bool2bit! n))
-            (= (:Z result) (bool2bit! z))
-            (= (:C result) (bool2bit! c))
-            (= (:V result) (bool2bit! v))
-      )
-)
 
 (decl cond_br_zero (Reg OperandSize) CondBrKind)
 (extern constructor cond_br_zero cond_br_zero)
-(spec (cond_br_zero r) (provide (= result (CondBrKind.Zero r))))
 
 (decl cond_br_not_zero (Reg OperandSize) CondBrKind)
 (extern constructor cond_br_not_zero cond_br_not_zero)
 
 (decl cond_br_cond (Cond) CondBrKind)
 (extern constructor cond_br_cond cond_br_cond)
-(spec (cond_br_cond cc) (provide (= result (CondBrKind.Cond cc))))
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for creating the zero register.
-<<<<<<< HEAD
 (spec (zero_reg) (provide (= result #x0000000000000000)))
-=======
-(spec (zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
->>>>>>> 25bf532133 (big veriisle squash)
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
@@ -2701,7 +2040,6 @@
 (extern constructor writable_link_reg writable_link_reg)
 
 (decl writable_zero_reg () WritableReg)
-(spec (writable_zero_reg) (provide true)) ; zero register is just a write sink
 (extern constructor writable_zero_reg writable_zero_reg)
 
 (decl value_regs_zero () ValueRegs)
@@ -2784,7 +2122,7 @@
       (or (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
       (or (= t 8) (= t 16) (= t 32) (= t 64))))
 (decl alu_rrr (ALUOp Type Reg Reg) Reg)
-(rule alu_rrr_to_emit (alu_rrr op ty src1 src2)
+(rule (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op (operand_size ty) dst src1 src2))))
         dst))
@@ -2888,7 +2226,7 @@
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
 (decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
-(rule alu_rr_imm12_to_emit (alu_rr_imm12 op ty src imm)
+(rule (alu_rr_imm12 op ty src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImm12 op (operand_size ty) dst src imm))))
         dst))
@@ -2908,12 +2246,10 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
         src1 src2 shift)))
-(attr cmp_rr_shift (veri chain))
 
 ;; Helper for emitting `cmp` instructions, setting flags, with an arithmetic right-shifted
 ;; second operand register.
 (decl cmp_rr_shift_asr (OperandSize Reg Reg u64) ProducesFlags)
-(attr cmp_rr_shift_asr (veri chain))
 (rule (cmp_rr_shift_asr size src1 src2 shift_amount)
       (if-let shift (ashr_from_u64 $I64 shift_amount))
       (ProducesFlags.ProducesFlagsSideEffect
@@ -3144,14 +2480,8 @@
 (rule (fpu_csel $F16 cond if_true if_false)
         (fpu_csel $F32 cond if_true if_false))
 
-<<<<<<< HEAD
 (rule 1 (fpu_csel $F16 cond if_true if_false)
         (if-let true (use_fp16))
-=======
-(attr rule fpu_csel_f16 (tag narrowfloat))
-(rule fpu_csel_f16 1 (fpu_csel $F16 cond if_true if_false)
-        (if-let $true (use_fp16))
->>>>>>> 25bf532133 (big veriisle squash)
         (let ((dst WritableReg (temp_writable_reg $F16)))
           (ConsumesFlags.ConsumesFlagsReturnsReg
            (MInst.FpuCSel16 dst if_true if_false cond)
@@ -3196,7 +2526,6 @@
         dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
-<<<<<<< HEAD
 ;;
 ;; Recursion: may recurse once to downgrade from F16 to F32 when FP16 is not enabled.
 (spec (mov_to_fpu x s)
@@ -3209,20 +2538,6 @@
 (rule 1 (mov_to_fpu x (ScalarSize.Size16))
         (if-let false (use_fp16))
         (mov_to_fpu x (ScalarSize.Size32)))
-=======
-(decl mov_to_fpu (Reg ScalarSize) Reg)
-(attr mov_to_fpu (veri chain))
-(rule mov_to_fpu_base_case (mov_to_fpu x size)
-      (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.MovToFpu dst x size))))
-        dst))
-(attr rule mov_to_fpu_16 (tag narrowfloat))
-(rule mov_to_fpu_16 1 (mov_to_fpu x (ScalarSize.Size16))
-        (if-let $false (use_fp16))
-        (let ((dst WritableReg (temp_writable_reg $I8X16))
-             (_ Unit (emit (MInst.MovToFpu dst x (ScalarSize.Size32)))))
-         dst))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Helper for emitting `MInst.FpuMoveFPImm` instructions.
 (decl fpu_move_fp_imm (ASIMDFPModImm ScalarSize) Reg)
@@ -3414,7 +2729,7 @@
            (conv_to 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
            (bvadd a b)))))
 (decl add (Type Reg Reg) Reg)
-(rule add_to_alu_rrr (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
+(rule (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
 
 (spec (add_imm ty a b)
   (provide
@@ -3427,7 +2742,7 @@
             (= b (bvand b #x000fff))
             (= b (bvand b #xfff000)))))
 (decl add_imm (Type Reg Imm12) Reg)
-(rule add_imm_to_alu_rr_imm12 (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))
+(rule (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))
 
 (spec (add_extend ty x y)
     (provide
@@ -3996,7 +3311,6 @@
 (rule (sshr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Sshr) amt x size))
 
 ;; Helpers for generating `rotr` instructions.
-<<<<<<< HEAD
 ;;
 ;; Note that the `Extr` opcode is used here as `rotr` is an alias for that
 ;; instruction where two operands are the same register.
@@ -4007,8 +3321,6 @@
            (zero_ext 64 (rotr (extract 31 0 x) (extract 31 0 y)))
            (rotr x y))))
   (require (or (= ty 32) (= ty 64))))
-=======
->>>>>>> 25bf532133 (big veriisle squash)
 (decl a64_rotr (Type Reg Reg) Reg)
 (rule (a64_rotr ty x y) (alu_rrr (ALUOp.Extr) ty x y))
 
@@ -4301,18 +3613,15 @@
     ((args Int (bv 64)) (ret (bv 64)) (canon (bv 64)))
 )
 (decl imm (Type ImmExtend u64) Reg)
-(attr imm (veri chain))
 
 ;; Move wide immediate instructions; to simplify, we only match when we
 ;; are zero-extending the value.
-(rule imm_move_wide
-      3 (imm (integral_ty ty) (ImmExtend.Zero) k)
+(rule 3 (imm (integral_ty ty) (ImmExtend.Zero) k)
       (if-let n (move_wide_const_from_u64 ty k))
       (add_range_fact
        (movz n (operand_size ty))
        64 k k))
-(rule imm_move_wide_inverted
-      2 (imm (integral_ty (ty_32_or_64 ty)) (ImmExtend.Zero) k)
+(rule 2 (imm (integral_ty (ty_32_or_64 ty)) (ImmExtend.Zero) k)
       (if-let n (move_wide_const_from_inverted_u64 ty k))
       (add_range_fact
        (movn n (operand_size ty))
@@ -4320,15 +3629,13 @@
 
 ;; Weird logical-instruction immediate in ORI using zero register; to simplify,
 ;; we only match when we are zero-extending the value.
-(rule imm_zero_extend_imm_logic
-      1 (imm (integral_ty ty) (ImmExtend.Zero) k)
+(rule 1 (imm (integral_ty ty) (ImmExtend.Zero) k)
       (if-let n (imm_logic_from_u64 ty k))
       (if-let m (imm_size_from_type ty))
       (add_range_fact
        (orr_imm ty (zero_reg) n)
        m k k))
 
-<<<<<<< HEAD
 (decl load_constant_full (Type ImmExtend OperandSize u64) Reg)
 (extern constructor load_constant_full load_constant_full)
 
@@ -4340,27 +3647,10 @@
 (rule -1 (imm (integral_ty $I64) extend n)
       (load_constant_full $I64 extend (operand_size $I64) n))
 
-=======
-(decl load_constant64_full (Type ImmExtend u64) Reg)
-(extern constructor load_constant64_full load_constant64_full)
-(spec (load_constant64_full ty extend value)
-      (provide
-            (= result (match extend
-                  ((Sign) (sign_ext 64 (conv_to (:bits ty) value)))
-                  ((Zero) (zero_ext 64 (conv_to (:bits ty) value)))
-            ))
-      )
-)
-
-;; Fallback for integral 64-bit constants
-(rule imm_load_constant64_full (imm (integral_ty ty) extend n)
-      (load_constant64_full ty extend n))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Place a `Value` into a register, sign extending it to 32-bits
-<<<<<<< HEAD
 (spec (put_in_reg_sext32 arg)
   (provide
     (= result
@@ -4370,18 +3660,10 @@
 (decl put_in_reg_sext32 (Value) Reg)
 (rule -1 (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
       (extend val true (ty_bits ty) 32))
-=======
-(attr put_in_reg_sext32 (veri chain))
-(decl put_in_reg_sext32 (Value) Reg)
-(attr put_in_reg_sext32 (veri chain))
-(rule put_in_reg_sext32_extend
-      -1 (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
-      (extend val $true (ty_bits ty) 32))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; 32/64-bit passthrough.
-(rule put_in_reg_sext32_passthrough32 (put_in_reg_sext32 val @ (value_type $I32)) val)
-(rule put_in_reg_sext32_passthrough64 (put_in_reg_sext32 val @ (value_type $I64)) val)
+(rule (put_in_reg_sext32 val @ (value_type $I32)) val)
+(rule (put_in_reg_sext32 val @ (value_type $I64)) val)
 
 ;; Place a `Value` into a register, zero extending it to 32-bits
 (spec (put_in_reg_zext32 arg)
@@ -4391,51 +3673,32 @@
            (conv_to 64 (zero_ext 32 arg))
            (conv_to 64 arg)))))
 (decl put_in_reg_zext32 (Value) Reg)
-<<<<<<< HEAD
 (rule -1 (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
       (extend val false (ty_bits ty) 32))
-=======
-(attr put_in_reg_zext32 (veri chain))
-(rule put_in_reg_zext32_extend
-      -1 (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
-      (extend val $false (ty_bits ty) 32))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; 32/64-bit passthrough.
-(rule put_in_reg_zext32_passthrough32 (put_in_reg_zext32 val @ (value_type $I32)) val)
-(rule put_in_reg_zext32_passthrough64 (put_in_reg_zext32 val @ (value_type $I64)) val)
+(rule (put_in_reg_zext32 val @ (value_type $I32)) val)
+(rule (put_in_reg_zext32 val @ (value_type $I64)) val)
 
 ;; Place a `Value` into a register, sign extending it to 64-bits
 (spec (put_in_reg_sext64 x)
       (provide (= (sign_ext 64 x) result)))
 (decl put_in_reg_sext64 (Value) Reg)
-<<<<<<< HEAD
 (rule 1 (put_in_reg_sext64 val @ (value_type (fits_in_32 ty)))
       (extend val true (ty_bits ty) 64))
-=======
-(attr put_in_reg_sext64 (veri chain))
-(rule put_in_reg_sext64_extend 1 (put_in_reg_sext64 val @ (value_type (fits_in_32 ty)))
-      (extend val $true (ty_bits ty) 64))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; 64-bit passthrough.
-(rule put_in_reg_sext64_passthrough (put_in_reg_sext64 val @ (value_type $I64)) val)
+(rule (put_in_reg_sext64 val @ (value_type $I64)) val)
 
 ;; Place a `Value` into a register, zero extending it to 64-bits
 (spec (put_in_reg_zext64 x)
       (provide (= result (zero_ext 64 x))))
 (decl put_in_reg_zext64 (Value) Reg)
-<<<<<<< HEAD
 (rule 1 (put_in_reg_zext64 val @ (value_type (fits_in_32 ty)))
       (extend val false (ty_bits ty) 64))
-=======
-(attr put_in_reg_zext64 (veri chain))
-(rule put_in_reg_zext64_extend 1 (put_in_reg_zext64 val @ (value_type (fits_in_32 ty)))
-      (extend val $false (ty_bits ty) 64))
->>>>>>> 25bf532133 (big veriisle squash)
 
 ;; 64-bit passthrough.
-(rule put_in_reg_zext64_passthrough (put_in_reg_zext64 val @ (value_type $I64)) val)
+(rule (put_in_reg_zext64 val @ (value_type $I64)) val)
 
 ;; Misc instruction helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4445,35 +3708,19 @@
         reg))
 
 (decl size_from_ty (Type) OperandSize)
-(spec (size_from_ty ty)
-      (provide
-            (= result (if (<= (:bits ty) 32) (OperandSize.Size32) (OperandSize.Size64))))
-      (require
-            (or
-                  (= (:bits ty) 8)
-                  (= (:bits ty) 16)
-                  (= (:bits ty) 32)
-                  (= (:bits ty) 64))))
-(rule size_from_ty_32 1 (size_from_ty (fits_in_32 _ty)) (OperandSize.Size32))
-(rule size_from_ty_64 (size_from_ty $I64) (OperandSize.Size64))
+(rule 1 (size_from_ty (fits_in_32 _ty)) (OperandSize.Size32))
+(rule (size_from_ty $I64) (OperandSize.Size64))
 
 ;; Check for signed overflow. The only case is min_value / -1.
 ;; The following checks must be done in 32-bit or 64-bit, depending
-<<<<<<< HEAD
 ;; on the input type. For 8- and 16- bit, the check for x == min_value
 ;; must use a possibly-shifted value, xcheck, to overflow as expected.
 (decl trap_if_div_overflow (Type Reg Reg Reg) Reg)
-=======
-;; on the input type.
-(decl trap_if_div_overflow (Type Reg Reg Reg) Reg)
-(attr trap_if_div_overflow (veri chain))
->>>>>>> 25bf532133 (big veriisle squash)
 (rule (trap_if_div_overflow ty xcheck x y)
       (let (
           ;; Check RHS is -1.
-          (check_rhs MInst (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1)))
+          (_ Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
 
-<<<<<<< HEAD
           ;; Check LHS is min_value, by subtracting 1 from the possibly-shifted
           ;; value and branching if there is overflow.
           (_ Unit (emit (MInst.CCmpImm (size_from_ty ty)
@@ -4483,38 +3730,8 @@
                                        (Cond.Eq))))
           (_ Unit (emit (MInst.TrapIf (cond_br_cond (Cond.Vs))
                                       (trap_code_integer_overflow))))
-=======
-          ;; Check LHS is min_value, by subtracting 1 and branching if
-          ;; there is overflow.
-          (check_lhs MInst (MInst.CCmpImm (size_from_ty ty)
-                                    xcheck
-                                    (u8_into_uimm5 1)
-                                    (nzcv $false $false $false $false)
-                                    (Cond.Eq)))
-          (trap_if MInst (MInst.TrapIf (cond_br_cond (Cond.Vs))
-                                 (trap_code_integer_overflow)))
->>>>>>> 25bf532133 (big veriisle squash)
         )
-        (with_flags_reg
-            (ProducesFlags.ProducesFlagsTwiceSideEffect check_rhs check_lhs)
-            (ConsumesFlags.ConsumesFlagsReturnsReg trap_if x)
-        )))
-
-;; In the cases narrower than a register width, subtracting 1 from the
-;; min_value will not cause overflow (e.g., I8's min_value of -128 stored in
-;; a 32-bit register produces -129 with no overflow). However, if we left shift
-;; x by (32 - ty), we then produce the 32-bit min_value for the respective min
-;; values of I8 and I16.
-;; E.g., I8's 0x00000080 left-shifted by 24 is 0x80000000, which overflows.
-(decl intmin_check (Type Reg) Reg)
-(attr intmin_check (veri chain))
-
-(attr rule intmin_check_fits_in_16 (veri priority))
-(rule intmin_check_fits_in_16 (intmin_check (fits_in_16 ty) x)
-      (alu_rr_imm_shift (ALUOp.Lsl) ty x (imm_shift_from_u8 (diff_from_32 ty))))
-
-;; In the I32 or I64 case, checking x itself against the min_value is fine.
-(rule -1 (intmin_check ty x) x)
+        x))
 
 ;; In the cases narrower than a register width, subtracting 1 from the
 ;; min_value will not cause overflow (e.g., I8's min_value of -128 stored in
@@ -4541,7 +3758,6 @@
 (rule (sink_atomic_load x @ (atomic_load _ _ addr))
       (let ((_ Unit (sink_inst x)))
            (put_in_reg addr)))
-(attr sink_atomic_load (veri chain))
 
 ;; Helper for generating either an `AluRRR`, `AluRRRShift`, or `AluRRImmLogic`
 ;; instruction depending on the input. Note that this requires that the `ALUOp`
@@ -4555,7 +3771,6 @@
              ((ALUOp.And) (bvand a b))
              ((ALUOp.Eor) (bvxor a b)))))))
 (decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
-(attr alu_rs_imm_logic_commutative (veri chain))
 
 ;; Base case of operating on registers.
 (rule -1 (alu_rs_imm_logic_commutative op ty x y)
@@ -4588,7 +3803,6 @@
              ((ALUOp.EorNot) (bvxor a (bvnot b)))
              ((ALUOp.AndNot) (bvand a (bvnot b))))))))
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
-(attr alu_rs_imm_logic (veri chain))
 (rule -1 (alu_rs_imm_logic op ty x y)
       (alu_rrr op ty x y))
 (rule (alu_rs_imm_logic op ty x (iconst _ k))
@@ -4597,7 +3811,6 @@
 (rule (alu_rs_imm_logic op ty x (ishl _ y (iconst _ k)))
       (if-let amt (lshl_from_imm64 ty k))
       (alu_rrr_shift op ty x y amt))
-
 
 ;; Helper for generating i128 bitops which simply do the same operation to the
 ;; hi/lo registers.
@@ -4616,7 +3829,6 @@
         (value_regs
           (alu_rrr op ty x_lo y_lo)
           (alu_rrr op ty x_hi y_hi))))
-(attr rule i128_alu_bitop (tag i128))
 
 ;; Helper for emitting `MInst.VecLoadReplicate` instructions.
 (decl ld1r (Reg VectorSize MemFlags) Reg)
@@ -4687,7 +3899,6 @@
 ;; mid-end optimizations that fold constants into load/store immediate offsets
 ;; instead, but for now each backend needs to do this.
 (decl amode (Type Value i32) AMode)
-<<<<<<< HEAD
 (spec (amode ty val offset)
     (provide (= result (bvadd val (sign_ext 64 offset))))
     (require (= 64 (widthof val))))
@@ -4699,19 +3910,6 @@
         (amode_no_more_iconst ty x new_offset))
 (rule 2 (amode ty (iadd _ (i32_from_iconst x) y) offset)
         (if-let new_offset (i32_checked_add x offset))
-=======
-(attr amode (veri chain))
-(rule amode_base_case
-      0 (amode ty val offset)
-        (amode_no_more_iconst ty val offset))
-(rule amode_iadd_const_right
-      1 (amode ty (iadd _ x (i32_from_iconst y)) offset)
-        (if-let new_offset (s32_add_fallible y offset))
-        (amode_no_more_iconst ty x new_offset))
-(rule amode_iadd_const_left
-      2 (amode ty (iadd _ (i32_from_iconst x) y) offset)
-        (if-let new_offset (s32_add_fallible x offset))
->>>>>>> 25bf532133 (big veriisle squash)
         (amode_no_more_iconst ty y new_offset))
 
 (rule 3
@@ -4720,7 +3918,6 @@
        (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
 
 (decl amode_no_more_iconst (Type Value i32) AMode)
-(attr amode_no_more_iconst (veri chain))
 ;; Base case: move the `offset` into a register and add it to `val` via the
 ;; amode
 (rule 0 (amode_no_more_iconst ty val offset)
@@ -4728,12 +3925,10 @@
 
 ;; Optimize cases where the `offset` provided fits into a immediates of
 ;; various kinds of addressing modes.
-(rule amode_no_more_iconst_unscaled
-      1 (amode_no_more_iconst ty val offset)
+(rule 1 (amode_no_more_iconst ty val offset)
         (if-let simm9 (simm9_from_i64 offset))
         (AMode.Unscaled val simm9))
-(rule amode_no_more_iconst_unsigned_offset
-      2 (amode_no_more_iconst ty val offset)
+(rule 2 (amode_no_more_iconst ty val offset)
         (if-let uimm12 (uimm12_scaled_from_i64 offset ty))
         (AMode.UnsignedOffset val uimm12))
 
@@ -4744,7 +3939,6 @@
 ;; instructions. Constants on the other hand added to the amode represent only
 ;; a single instruction folded in, so fewer instructions should be generated
 ;; with these higher priority than the rules above.
-<<<<<<< HEAD
 (rule 3 (amode_no_more_iconst ty (iadd _ x y) offset)
         (AMode.RegReg (amode_add x offset) y))
 (rule 4 (amode_no_more_iconst ty (iadd _ x (uextend _ y @ (value_type $I32))) offset)
@@ -4754,22 +3948,6 @@
 (rule 5 (amode_no_more_iconst ty (iadd _ (uextend _ x @ (value_type $I32)) y) offset)
         (AMode.RegExtended (amode_add y offset) x (ExtendOp.UXTW)))
 (rule 5 (amode_no_more_iconst ty (iadd _ (sextend _ x @ (value_type $I32)) y) offset)
-=======
-(rule amode_no_more_iconst_iadd
-      3 (amode_no_more_iconst ty (iadd _ x y) offset)
-        (AMode.RegReg (amode_add x offset) y))
-(rule amode_no_more_iconst_iadd_uextend_right
-      4 (amode_no_more_iconst ty (iadd _ x (uextend _ y @ (value_type $I32))) offset)
-        (AMode.RegExtended (amode_add x offset) y (ExtendOp.UXTW)))
-(rule amode_no_more_iconst_iadd_sextend_right
-      4 (amode_no_more_iconst ty (iadd _ x (sextend _ y @ (value_type $I32))) offset)
-        (AMode.RegExtended (amode_add x offset) y (ExtendOp.SXTW)))
-(rule amode_no_more_iconst_iadd_uextend_left
-      5 (amode_no_more_iconst ty (iadd _ (uextend _ x @ (value_type $I32)) y) offset)
-        (AMode.RegExtended (amode_add y offset) x (ExtendOp.UXTW)))
-(rule amode_no_more_iconst_iadd_sextend_left
-      5 (amode_no_more_iconst ty (iadd _ (sextend _ x @ (value_type $I32)) y) offset)
->>>>>>> 25bf532133 (big veriisle squash)
         (AMode.RegExtended (amode_add y offset) x (ExtendOp.SXTW)))
 
 ;; `RegScaled*` rules where this matches an addition of an "index register" to a
@@ -4779,61 +3957,30 @@
 ;; Note that this can additionally bundle an extending operation but the
 ;; extension must happen before the shift. This will pattern-match the shift
 ;; first and then if that succeeds afterwards try to find an extend.
-<<<<<<< HEAD
 (rule 6 (amode_no_more_iconst ty (iadd _ x (ishl _ y (iconst _ (u64_from_imm64 n)))) offset)
         (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm ty n))))
         (amode_reg_scaled (amode_add x offset) y))
 (rule 7 (amode_no_more_iconst ty (iadd _ (ishl _ y (iconst _ (u64_from_imm64 n))) x) offset)
         (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm ty n))))
-=======
-(rule amode_no_more_iconst_reg_scaled_right
-      6 (amode_no_more_iconst ty (iadd _ x (ishl _ y (iconst _ (u64_from_imm64 n)))) offset)
-        (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
-        (amode_reg_scaled (amode_add x offset) y))
-(rule amode_no_more_iconst_reg_scaled_left
-      7 (amode_no_more_iconst ty (iadd _ (ishl _ y (iconst _ (u64_from_imm64 n))) x) offset)
-        (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
->>>>>>> 25bf532133 (big veriisle squash)
         (amode_reg_scaled (amode_add x offset) y))
 
 (decl amode_reg_scaled (Reg Value) AMode)
-(attr amode_reg_scaled (veri chain))
-(rule amode_reg_scaled_base
-      0 (amode_reg_scaled base index)
+(rule 0 (amode_reg_scaled base index)
         (AMode.RegScaled base index))
-<<<<<<< HEAD
 (rule 1 (amode_reg_scaled base (uextend _ index @ (value_type $I32)))
         (AMode.RegScaledExtended base index (ExtendOp.UXTW)))
 (rule 1 (amode_reg_scaled base (sextend _ index @ (value_type $I32)))
-=======
-(rule amode_reg_scaled_uextend
-      1 (amode_reg_scaled base (uextend _ index @ (value_type $I32)))
-        (AMode.RegScaledExtended base index (ExtendOp.UXTW)))
-(rule amode_reg_scaled_sextend
-      1 (amode_reg_scaled base (sextend _ index @ (value_type $I32)))
->>>>>>> 25bf532133 (big veriisle squash)
         (AMode.RegScaledExtended base index (ExtendOp.SXTW)))
 
 ;; Helper to add a 32-bit signed immediate to the register provided. This will
 ;; select an appropriate `add` instruction to use.
 (decl amode_add (Reg i32) Reg)
-<<<<<<< HEAD
 (rule 0 (amode_add x y)
         (add $I64 x (imm $I64 (ImmExtend.Zero) (i64_cast_unsigned y))))
 (rule 1 (amode_add x y)
         (if-let (imm12_from_u64 imm12) (i64_cast_unsigned y))
-=======
-(attr amode_add (veri chain))
-(rule amode_add_base
-      0 (amode_add x y)
-        (add $I64 x (imm $I64 (ImmExtend.Zero) (i64_as_u64 y))))
-(rule amode_add_imm12
-      1 (amode_add x y)
-        (if-let (imm12_from_u64 imm12) (i64_as_u64 y))
->>>>>>> 25bf532133 (big veriisle squash)
         (add_imm $I64 x imm12))
-(rule amode_add_zero
-      2 (amode_add x 0) x)
+(rule 2 (amode_add x 0) x)
 
 ;; Creates a `PairAMode` for the `Value` provided plus the `i32` constant
 ;; offset provided.
@@ -4854,42 +4001,12 @@
 
 (decl pure partial uimm12_scaled_from_i64 (i64 Type) UImm12Scaled)
 (extern constructor uimm12_scaled_from_i64 uimm12_scaled_from_i64)
-(spec (uimm12_scaled_from_i64 value ty)
-      (match
-            (let
-                  (
-                        (scale (bits2bytes! (int2bv 64 (:bits ty))))
-                        (limit (bvmul (int2bv 64 4095) scale))
-                  )
-                  (and
-                        (bvsge value (bvzero! 64))
-                        (bvsle value limit)
-                        (bv_is_zero! (bvand value (bvsub scale (bvone! 64))))
-                  )
-            )
-      )
-      (provide
-            (= result (extract 11 0 (bvudiv value (bits2bytes! (int2bv 64 (:bits ty))))))
-      )
-)
 
 (decl pure partial simm9_from_i64 (i64) SImm9)
 (extern constructor simm9_from_i64 simm9_from_i64)
-(spec (simm9_from_i64 value)
-      (provide (= value (sign_ext 64 result)))
-      (match
-            ; value >= -256
-            (bvsge value (bvneg (int2bv 64 256)))
-            ; value <= 255
-            (bvsle value (int2bv 64 255))
-      )
-)
+
 
 (decl sink_load_into_addr (Type Inst) Reg)
-<<<<<<< HEAD
-=======
-(attr sink_load_into_addr (veri chain))
->>>>>>> 25bf532133 (big veriisle squash)
 (rule (sink_load_into_addr ty x @ (load _ _ addr (offset32 offset)))
       (let ((_ Unit (sink_inst x)))
         (add_imm_to_addr addr (i64_cast_unsigned offset))))
@@ -4908,26 +4025,16 @@
 ;; Recursion: forms cycle with `constant_f32`. Invokes 32-bit case when FP16 is not supported.
 (decl rec constant_f16 (u16) Reg)
 (rule 3 (constant_f16 n)
-<<<<<<< HEAD
         (if-let false (use_fp16))
         (constant_f32 n))
 (rule 2 (constant_f16 0)
-=======
-        (if-let $false (use_fp16))
-        (lower_constant_f32 n))
-(rule 0 (constant_f16 n) (lower_constant_f16 n))
-
-(decl lower_constant_f16 (u16) Reg)
-(attr lower_constant_f16 (veri chain))
-(rule 2 (lower_constant_f16 0)
->>>>>>> 25bf532133 (big veriisle squash)
         (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
                      false
                      (VectorSize.Size32x2)))
-(rule lower_constant_f16_fpu_move_fp_imm 1 (lower_constant_f16 n)
+(rule 1 (constant_f16 n)
         (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size16)))
         (fpu_move_fp_imm imm (ScalarSize.Size16)))
-(rule lower_constant_f16_mov_to_fpu (lower_constant_f16 n)
+(rule (constant_f16 n)
       (mov_to_fpu (imm $I16 (ImmExtend.Zero) n) (ScalarSize.Size16)))
 
 ;; Lower a constant f32.
@@ -4935,37 +4042,20 @@
 ;; Note that we must make sure that all bits outside the lowest 32 are set to 0
 ;; because this function is also used to load wider constants (that have zeros
 ;; in their most significant bits).
-<<<<<<< HEAD
 ;;
 ;; Recursion: forms cycle with `constant_f16`. Invokes 16-bit case when FP16 is supported.
 (decl rec constant_f32 (u32) Reg)
 (rule 3 (constant_f32 0)
-=======
-(decl constant_f32 (u32) Reg)
-(attr constant_f32 (veri chain))
-(rule constant_f32_lower_constant_f16 1 (constant_f32 (u32_as_u16 n))
-        (if-let $true (use_fp16))
-        (lower_constant_f16 n))
-(rule constant_f32_base_case 0 (constant_f32 n) (lower_constant_f32 n))
-
-(decl lower_constant_f32 (u32) Reg)
-(attr lower_constant_f32 (veri chain))
-(rule 3 (lower_constant_f32 0)
->>>>>>> 25bf532133 (big veriisle squash)
         (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
                      false
                      (VectorSize.Size32x2)))
-(rule lower_constant_f32_fpu_move_fp_imm 2 (lower_constant_f32 n)
+(rule 2 (constant_f32 n)
         (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size32)))
         (fpu_move_fp_imm imm (ScalarSize.Size32)))
-<<<<<<< HEAD
 (rule 1 (constant_f32 (u16_from_u32 n))
         (if-let true (use_fp16))
         (constant_f16 n))
 (rule (constant_f32 n)
-=======
-(rule (lower_constant_f32 n)
->>>>>>> 25bf532133 (big veriisle squash)
       (mov_to_fpu (imm $I32 (ImmExtend.Zero) n) (ScalarSize.Size32)))
 
 ;; Lower a constant f64.
@@ -4976,7 +4066,6 @@
 ;; TODO: Treat as half of a 128 bit vector and consider replicated patterns.
 ;; Scalar MOVI might also be an option.
 (decl constant_f64 (u64) Reg)
-(attr constant_f64 (veri chain))
 (rule 4 (constant_f64 0)
         (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
                      false
@@ -4994,10 +4083,6 @@
 ;; Tests whether the low 32 bits in the input are all zero.
 (decl u64_low32_bits_unset (u64) u64)
 (extern extractor u64_low32_bits_unset u64_low32_bits_unset)
-(spec (u64_low32_bits_unset n)
-      (match (bv_is_zero! (bvand result #x00000000ffffffff)))
-      (provide (= n result))
-)
 
 ;; Lower a constant f128.
 (decl constant_f128 (u128) Reg)
@@ -5077,46 +4162,11 @@
 ;; TODO: Port lower_fp_condcode() to ISLE.
 (extern constructor fp_cond_code fp_cond_code)
 
-;; Ported from lower_fp_condcode. Note nontrivial mapping for lt and lte.
-(spec (fp_cond_code cc)
-      (provide
-            (= result
-                  (match cc
-                        ((Equal) (Cond.Eq))
-                        ((NotEqual) (Cond.Ne))
-                        ((GreaterThanOrEqual) (Cond.Ge))
-                        ((GreaterThan) (Cond.Gt))
-                        ((LessThanOrEqual) (Cond.Ls))
-                        ((LessThan) (Cond.Mi))
-                  )
-            )
-      )
-)
-
 ;; Lower an integer cond code.
 (spec (cond_code a) (provide (= a result)))
 (decl cond_code (IntCC) Cond)
 ;; TODO: Port lower_condcode() to ISLE.
 (extern constructor cond_code cond_code)
-
-(spec (cond_code cc)
-      (provide
-            (= result
-                  (match cc
-                        ((Equal) (Cond.Eq))
-                        ((NotEqual) (Cond.Ne))
-                        ((SignedGreaterThanOrEqual) (Cond.Ge))
-                        ((SignedGreaterThan) (Cond.Gt))
-                        ((SignedLessThanOrEqual) (Cond.Le))
-                        ((SignedLessThan) (Cond.Lt))
-                        ((UnsignedGreaterThanOrEqual) (Cond.Hs))
-                        ((UnsignedGreaterThan) (Cond.Hi))
-                        ((UnsignedLessThanOrEqual) (Cond.Ls))
-                        ((UnsignedLessThan) (Cond.Lo))
-                  )
-            )
-      )
-)
 
 ;; Invert a condition code.
 (decl invert_cond (Cond) Cond)
@@ -5294,22 +4344,20 @@
 (decl max_shift (Type) u8)
 (rule (max_shift $F64) 63)
 (rule (max_shift $F32) 31)
-(attr max_shift (veri chain))
 
 ;; Helper for generating `fcopysign` instruction sequences.
+
 (decl fcopy_sign (Reg Reg Type) Reg)
 (rule 1 (fcopy_sign x y (ty_scalar_float ty))
       (let ((dst WritableReg (temp_writable_reg $F64))
             (tmp Reg (fpu_rri (fpu_op_ri_ushr (ty_bits ty) (max_shift ty)) y))
             (_ Unit (emit (MInst.FpuRRIMod (fpu_op_ri_sli (ty_bits ty) (max_shift ty)) dst x tmp))))
        dst))
-(rule fcopy_sign_vec (fcopy_sign x y ty @ (multi_lane _ _))
+(rule (fcopy_sign x y ty @ (multi_lane _ _))
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (tmp Reg (ushr_vec_imm y (max_shift (lane_type ty)) (vector_size ty)))
             (_ Unit (emit (MInst.VecShiftImmMod (VecShiftImmModOp.Sli) dst x tmp (vector_size ty) (max_shift (lane_type ty))))))
        dst))
-(attr fcopy_sign (veri chain))
-(attr rule fcopy_sign_vec (tag vector))
 
 ;; Helpers for generating `MInst.FpuToInt` instructions.
 
@@ -5326,7 +4374,6 @@
 ;; Checks that the value is not less than the minimum bound,
 ;; accepting a boolean (whether the type is signed), input type,
 ;; output type, and registers containing the source and minimum bound.
-(attr fpu_to_int_underflow_check (veri chain))
 (decl fpu_to_int_underflow_check (bool Type Type Reg Reg) Reg)
 (rule (fpu_to_int_underflow_check true $F32 (fits_in_16 out_ty) src min)
       (let ((r ValueRegs
@@ -5336,12 +4383,7 @@
                         (trap_code_integer_overflow))
                     src))))
        (value_regs_get r 0)))
-<<<<<<< HEAD
 (rule (fpu_to_int_underflow_check true $F64 (fits_in_32 out_ty) src min)
-=======
-(rule fpu_to_int_underflow_check_signed_f64_fits_in_32
-      (fpu_to_int_underflow_check $true $F64 (fits_in_32 out_ty) src min)
->>>>>>> 25bf532133 (big veriisle squash)
       (let ((r ValueRegs
                   (with_flags (fpu_cmp (ScalarSize.Size64) src min)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -5349,12 +4391,7 @@
                         (trap_code_integer_overflow))
                     src))))
        (value_regs_get r 0)))
-<<<<<<< HEAD
 (rule -1 (fpu_to_int_underflow_check true in_ty _out_ty src min)
-=======
-(attr rule fpu_to_int_underflow_check_signed_f64_fits_in_32 (veri priority))
-(rule -1 (fpu_to_int_underflow_check $true in_ty _out_ty src min)
->>>>>>> 25bf532133 (big veriisle squash)
       (let ((r ValueRegs
                   (with_flags (fpu_cmp (scalar_size in_ty) src min)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -5507,7 +4544,6 @@
        dst))
 
 (decl vec_cmp (Reg Reg Type Cond) Reg)
-(attr vec_cmp (tag vector))
 
 ;; Floating point Vs / Vc
 (rule (vec_cmp rn rm ty (Cond.Vc))
@@ -5662,18 +4698,15 @@
                   (= (extract 7 0 a) (IntCC.SignedLessThan)))))
 ;; Materialize a `FlagsAndCC` into a boolean `ValueRegs`.
 (decl flags_and_cc_to_bool (FlagsAndCC) ValueRegs)
-(attr flags_and_cc_to_bool (veri chain))
 (rule (flags_and_cc_to_bool (FlagsAndCC.FlagsAndCC flags cc))
       (with_flags flags (materialize_bool_result (cond_code cc))))
 
 ;; Get the `ProducesFlags` out of a `FlagsAndCC`.
 (decl flags_and_cc_flags (FlagsAndCC) ProducesFlags)
-(attr flags_and_cc_flags (veri chain))
 (rule (flags_and_cc_flags (FlagsAndCC.FlagsAndCC flags _cc)) flags)
 
 ;; Get the `IntCC` out of a `FlagsAndCC`.
 (decl flags_and_cc_cc (FlagsAndCC) IntCC)
-(attr flags_and_cc_cc (veri chain))
 (rule (flags_and_cc_cc (FlagsAndCC.FlagsAndCC _flags cc)) cc)
 
 ;; Helpers for lowering `icmp` sequences.
@@ -5720,7 +4753,6 @@
     ((args (bv 8) (bv 64) (bv 64) Int) (ret (bv 12)) (canon (bv 64)))
 )
 (decl lower_icmp (IntCC Value Value Type) FlagsAndCC)
-<<<<<<< HEAD
 
 (spec (lower_icmp_into_reg c x y in_ty out_ty)
       (provide
@@ -5761,11 +4793,7 @@
     ((args (bv 8) (bv 32) (bv 32) Int Int) (ret (bv 8)) (canon (bv 32)))
     ((args (bv 8) (bv 64) (bv 64) Int Int) (ret (bv 8)) (canon (bv 64)))
 )
-=======
-(attr lower_icmp (veri chain))
->>>>>>> 25bf532133 (big veriisle squash)
 (decl lower_icmp_into_reg (IntCC Value Value Type Type) ValueRegs)
-(attr lower_icmp_into_reg (veri chain))
 (decl lower_icmp_into_flags (IntCC Value Value Type) FlagsAndCC)
 
 (spec (lower_icmp_const c x y in_ty)
@@ -5804,15 +4832,13 @@
     ((args (bv 8) (bv 64) (bv 64) Int) (ret (bv 12)) (canon (bv 64)))
 )
 (decl lower_icmp_const (IntCC Value u64 Type) FlagsAndCC)
-(attr lower_icmp_const (veri chain))
 ;; For most cases, `lower_icmp_into_flags` is the same as `lower_icmp`,
 ;; except for some I128 cases (see below).
 (rule -1 (lower_icmp_into_flags cond x y ty) (lower_icmp cond x y ty))
 
 ;; Vectors.
 ;; `icmp` into flags for vectors is invalid.
-(rule lower_icmp_into_reg_vec
-      1 (lower_icmp_into_reg cond x y in_ty @ (multi_lane _ _) _out_ty)
+(rule 1 (lower_icmp_into_reg cond x y in_ty @ (multi_lane _ _) _out_ty)
       (let ((cond Cond (cond_code cond))
             (rn Reg (put_in_reg x))
             (rm Reg (put_in_reg y)))
@@ -5829,24 +4855,17 @@
                                      ((ArgumentExtension.Uext) (ExtendOp.UXTH)))))))
       (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 (decl lower_extend_op (Type ArgumentExtension) ExtendOp)
-(attr lower_extend_op (veri chain))
-(rule lower_extend_op_8s (lower_extend_op $I8 (ArgumentExtension.Sext)) (ExtendOp.SXTB))
-(rule lower_extend_op_16s (lower_extend_op $I16 (ArgumentExtension.Sext)) (ExtendOp.SXTH))
-(rule lower_extend_op_8u (lower_extend_op $I8 (ArgumentExtension.Uext)) (ExtendOp.UXTB))
-(rule lower_extend_op_16u (lower_extend_op $I16 (ArgumentExtension.Uext)) (ExtendOp.UXTH))
+(rule (lower_extend_op $I8 (ArgumentExtension.Sext)) (ExtendOp.SXTB))
+(rule (lower_extend_op $I16 (ArgumentExtension.Sext)) (ExtendOp.SXTH))
+(rule (lower_extend_op $I8 (ArgumentExtension.Uext)) (ExtendOp.UXTB))
+(rule (lower_extend_op $I16 (ArgumentExtension.Uext)) (ExtendOp.UXTH))
 
 ;; Integers <= 64-bits.
-<<<<<<< HEAD
 (rule lower_icmp_into_reg_8_16_32_64 -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
-=======
-(rule lower_icmp_into_reg_int_to_64
-      -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
->>>>>>> 25bf532133 (big veriisle squash)
       (if (ty_int_ref_scalar_64 in_ty))
       (let ((cc Cond (cond_code cond)))
         (flags_and_cc_to_bool (lower_icmp cond rn rm in_ty))))
 
-<<<<<<< HEAD
 (rule lower_icmp_8_16_signed 1 (lower_icmp cond rn rm (fits_in_16 ty))
       (if (signed_cond_code cond))
       (let ((rn Reg (put_in_reg_sext32 rn)))
@@ -5861,33 +4880,6 @@
       (if (ty_int_ref_scalar_64 ty))
       (lower_icmp_const cond rn c ty))
 (rule lower_icmp_32_64 -4 (lower_icmp cond rn rm ty)
-=======
-(rule lower_icmp_16_signed
-      1 (lower_icmp cond rn rm (fits_in_16 ty))
-      (if (signed_cond_code cond))
-      (let ((rn Reg (put_in_reg_sext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Sext))) cond)))
-(attr rule lower_icmp_16_signed (veri priority))
-
-(rule lower_icmp_16_imm12
-      -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
-      (let ((rn Reg (put_in_reg_zext32 rn)))
-      (flags_and_cc (cmp_imm (operand_size ty) rn rm) cond)))
-
-(rule lower_icmp_16_extend
-      -2 (lower_icmp cond rn rm (fits_in_16 ty))
-      (let ((rn Reg (put_in_reg_zext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Uext))) cond)))
-(attr rule lower_icmp_16_extend (veri priority))
-
-(rule lower_icmp_const
-      -3 (lower_icmp cond rn (u64_from_iconst c) ty)
-      (if (ty_int_ref_scalar_64 ty))
-      (lower_icmp_const cond rn c ty))
-
-(rule lower_icmp_base
-      -4 (lower_icmp cond rn rm ty)
->>>>>>> 25bf532133 (big veriisle squash)
       (if (ty_int_ref_scalar_64 ty))
       (flags_and_cc (cmp (operand_size ty) rn rm) cond))
 
@@ -5897,41 +4889,22 @@
 ;;         A >= B + 1
 ;;     ==> A - 1 >= B
 ;;     ==> A > B
-<<<<<<< HEAD
 (rule lower_icmp_const_32_64_ugte (lower_icmp_const (IntCC.UnsignedGreaterThanOrEqual) a b ty)
-=======
-(rule lower_icmp_const_uge_odd
-      (lower_icmp_const (IntCC.UnsignedGreaterThanOrEqual) a b ty)
->>>>>>> 25bf532133 (big veriisle squash)
       (if (ty_int_ref_scalar_64 ty))
       (if-let true (u64_is_odd b))
       (if-let (imm12_from_u64 imm) (u64_wrapping_sub b 1))
   (flags_and_cc (cmp_imm (operand_size ty) a imm) (IntCC.UnsignedGreaterThan)))
-<<<<<<< HEAD
 
 (rule lower_icmp_const_32_64_sgte (lower_icmp_const (IntCC.SignedGreaterThanOrEqual) a b ty)
-=======
-(rule lower_icmp_const_sge_odd
-      (lower_icmp_const (IntCC.SignedGreaterThanOrEqual) a b ty)
->>>>>>> 25bf532133 (big veriisle squash)
       (if (ty_int_ref_scalar_64 ty))
       (if-let true (u64_is_odd b))
       (if-let (imm12_from_u64 imm) (u64_wrapping_sub b 1))
   (flags_and_cc (cmp_imm (operand_size ty) a imm) (IntCC.SignedGreaterThan)))
 
-<<<<<<< HEAD
 (rule lower_icmp_const_32_64_imm -1 (lower_icmp_const cond rn (imm12_from_u64 c) ty)
       (if (ty_int_ref_scalar_64 ty))
   (flags_and_cc (cmp_imm (operand_size ty) rn c) cond))
 (rule lower_icmp_const_32_64 -2 (lower_icmp_const cond rn c ty)
-=======
-(rule lower_icmp_const_imm12
-      -1 (lower_icmp_const cond rn (imm12_from_u64 c) ty)
-      (if (ty_int_ref_scalar_64 ty))
-  (flags_and_cc (cmp_imm (operand_size ty) rn c) cond))
-(rule lower_icmp_const_base
-      -2 (lower_icmp_const cond rn c ty)
->>>>>>> 25bf532133 (big veriisle squash)
       (if (ty_int_ref_scalar_64 ty))
   (flags_and_cc (cmp (operand_size ty) rn (imm ty (ImmExtend.Zero) c)) cond))
 
@@ -5960,14 +4933,10 @@
        (ccmp (OperandSize.Size64) lhs_hi rhs_hi
         (nzcv false false false false) (Cond.Eq) cmp_inst)))
 
-(rule lower_icmp_eq_i128
-      (lower_icmp (IntCC.Equal) lhs rhs $I128)
+(rule (lower_icmp (IntCC.Equal) lhs rhs $I128)
       (flags_and_cc (lower_icmp_i128_eq_ne lhs rhs) (IntCC.Equal)))
-(attr rule lower_icmp_eq_i128 (tag i128))
-(rule lower_icmp_ne_i128
-      (lower_icmp (IntCC.NotEqual) lhs rhs $I128)
+(rule (lower_icmp (IntCC.NotEqual) lhs rhs $I128)
       (flags_and_cc (lower_icmp_i128_eq_ne lhs rhs) (IntCC.NotEqual)))
-(attr rule lower_icmp_ne_i128 (tag i128))
 
 ;; cmp      lhs_lo, rhs_lo
 ;; cset     tmp1, unsigned_cond
@@ -5996,7 +4965,6 @@
         (MInst.CSet tmp2 cond)
         (MInst.CSel dst (Cond.Eq) tmp1 tmp2)
         (value_reg dst))))
-(attr rule lower_icmp_i128_consumer (tag i128))
 
 ; Recursion: bounded since recursive calls reduce type width (128-bit to 64-bit).
 (decl rec lower_bmask (Type Type ValueRegs) ValueRegs)
@@ -6219,7 +5187,6 @@
 ;; Helper for creating a zero value `ASIMDMovModImm` immediate.
 (decl asimd_mov_mod_imm_zero (ScalarSize) ASIMDMovModImm)
 (extern constructor asimd_mov_mod_imm_zero asimd_mov_mod_imm_zero)
-(spec (asimd_mov_mod_imm_zero size) (provide (= (:imm result) #x00)))
 
 ;; Helper for fallibly creating an `ASIMDMovModImm` immediate from its parts.
 (decl pure partial asimd_mov_mod_imm_from_u64 (u64 ScalarSize) ASIMDMovModImm)
@@ -6228,88 +5195,6 @@
 ;; Helper for fallibly creating an `ASIMDFPModImm` immediate from its parts.
 (decl pure partial asimd_fp_mod_imm_from_u64 (u64 ScalarSize) ASIMDFPModImm)
 (extern constructor asimd_fp_mod_imm_from_u64 asimd_fp_mod_imm_from_u64)
-
-; Compute the 32-bit value that corresponds to an 8-bit ASIMDFPModImm encoding.
-(macro (asimd_fp_mod_imm_value32 imm)
-      (let (
-            ;  let imm = imm as u32;
-            (v       (zero_ext 32 imm))
-            ;  let b0_5 = imm & 0b111111;
-            (b0_5    (bvand v #x0000003f))
-            ;  let b6 = (imm >> 6) & 1;
-            (b6      (bvand (bvlshr_int! v 6) #x00000001))
-            ;  let b6_inv = b6 ^ 1;
-            (b6_inv  (bvxor b6 #x00000001))
-            ;  let b7 = (imm >> 7) & 1;
-            (b7      (bvand (bvlshr_int! v 7) #x00000001))
-      )
-      ;  b0_5 << 19 | (b6 * 0b11111) << 25 | b6_inv << 30 | b7 << 31
-      (bvor (bvshl_int! b0_5 19)
-      (bvor (bvshl_int! (bvmul b6 #x0000001f) 25)
-      (bvor (bvshl_int! b6_inv 30)
-            (bvshl_int! b7 31))))))
-
-; Compute the 64-bit value that corresponds to an 8-bit ASIMDFPModImm encoding.
-(macro (asimd_fp_mod_imm_value64 imm)
-      (let (
-            ; let imm = imm as u64;
-            (v       (zero_ext 64 imm))
-            ; let b0_5 = imm & 0b111111;
-            (b0_5    (bvand v #x000000000000003f))
-            ; let b6 = (imm >> 6) & 1;
-            (b6      (bvand (bvlshr_int! v 6) #x0000000000000001))
-            ; let b6_inv = b6 ^ 1;
-            (b6_inv  (bvxor b6 #x0000000000000001))
-            ; let b7 = (imm >> 7) & 1;
-            (b7      (bvand (bvlshr_int! v 7) #x0000000000000001))
-      )
-      ; b0_5 << 48 | (b6 * 0b11111111) << 54 | b6_inv << 62 | b7 << 63
-      (bvor (bvshl_int! b0_5 48)
-      (bvor (bvshl_int! (bvmul b6 #x00000000000000ff) 54)
-      (bvor (bvshl_int! b6_inv 62)
-            (bvshl_int! b7 63))))))
-
-(spec (asimd_fp_mod_imm_from_u64 value size)
-      (provide
-            (= (:size result) size)
-            (= (:imm result)
-                  (switch size
-                  ((ScalarSize.Size32)
-                        (let (
-                              (v    (extract 31 0 value))
-                              (b0_5 (bvand (bvlshr_int! v 19) #x0000003f))
-                              (b6   (bvand (bvlshr_int! v 19) #x00000040))
-                              (b7   (bvand (bvlshr_int! v 24) #x00000080))
-                              (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
-                        )
-                        imm))
-                  ((ScalarSize.Size64)
-                        (let (
-                              (b0_5 (bvand (bvlshr_int! value 48) #x000000000000003f))
-                              (b6   (bvand (bvlshr_int! value 48) #x0000000000000040))
-                              (b7   (bvand (bvlshr_int! value 56) #x0000000000000080))
-                              (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
-                        )
-                        imm)))))
-      (match
-            (switch size
-            ((ScalarSize.Size32)
-                  (let (
-                        (v    (extract 31 0 value))
-                        (b0_5 (bvand (bvlshr_int! v 19) #x0000003f))
-                        (b6   (bvand (bvlshr_int! v 19) #x00000040))
-                        (b7   (bvand (bvlshr_int! v 24) #x00000080))
-                        (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
-                  )
-                  (= v (asimd_fp_mod_imm_value32! imm))))
-            ((ScalarSize.Size64)
-                  (let (
-                        (b0_5 (bvand (bvlshr_int! value 48) #x000000000000003f))
-                        (b6   (bvand (bvlshr_int! value 48) #x0000000000000040))
-                        (b7   (bvand (bvlshr_int! value 56) #x0000000000000080))
-                        (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
-                  )
-                  (= value (asimd_fp_mod_imm_value64! imm)))))))
 
 ;; Helper for creating a `VecDupFPImm` instruction
 (decl vec_dup_fp_imm (ASIMDFPModImm VectorSize) Reg)
