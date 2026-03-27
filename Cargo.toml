@@ -154,8 +154,11 @@ members = [
   "cranelift/assembler-x64/fuzz",
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
-  "cranelift/isle/veri/veri_engine",
-  "cranelift/isle/veri/veri_ir",
+  "cranelift/isle/veri/aslp",
+  "cranelift/isle/veri/isaspec",
+  "cranelift/isle/veri/meta",
+  "cranelift/isle/veri/test-macros",
+  "cranelift/isle/veri/veri",
   "cranelift/serde",
   "crates/bench-api",
   "crates/c-api/artifact",
@@ -440,6 +443,9 @@ rayon = "1.5.3"
 regex = "1.9.1"
 pin-project-lite = "0.2.14"
 sha2 = { version = "0.10.2", default-features = false }
+reqwest = "0.11"
+pretty_env_logger = "0.5.0"
+humantime = "2.0.0"
 
 # =============================================================================
 #
