@@ -3188,7 +3188,7 @@
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add mem, reg
-(rule (lower
+(rule 3 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (iadd _ (and
