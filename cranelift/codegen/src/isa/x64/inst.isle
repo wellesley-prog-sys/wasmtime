@@ -1746,11 +1746,11 @@
 (model WritableGpr (type (bv)))
 (type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
-(type GprMemImm extern (enum))
 (model GprMem (type
   (struct (data (bv 64))
           (isMem Bool)))
 )
+(type GprMemImm extern (enum))
 (model GprMemImm (type (bv)))
 (type Imm8Gpr extern (enum))
 (model Imm8Gpr (type 
