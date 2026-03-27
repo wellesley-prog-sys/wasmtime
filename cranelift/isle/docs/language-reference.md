@@ -1772,7 +1772,7 @@ concrete verification instance
 
 For example, 
 ```lisp
-(bv w)
+(bv)
 ```
 may be instantiated as 
 
@@ -1827,9 +1827,9 @@ It represents a function type:
 
 A `form` defines a reusable collection of verification signatures for a term.
 
-It does not define behavior. Instead, it restricts which type combinations are valid during verification.
+It does not define behavior; rather, it constrains which combinations of types are considered valid during verification. Forms provide a way to declare a family of related type instantiations once and reuse them across multiple terms. 
 
-Forms allow a set of related instantiations to be declared once and reused across multiple terms.
+For example, many binary operations on integers can be expressed as taking two bit-vector arguments and producing a bit-vector result of the same size, where the size ranges over powers of two (e.g., 8, 16, 32, 64, up to 128 bits). A form captures this pattern abstractly, allowing all such instances to be represented uniformly without redefining each case individually.
 
 #### 2.5.3 Example (form)
 ```lisp
