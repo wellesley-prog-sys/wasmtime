@@ -1663,7 +1663,19 @@ Two modelling strategies are supposed:
 
 This maps an ISLE type directly to an SMT sort. 
 
-2. Enumeration Model 
+2. Struct (composite) model 
+
+```lisp
+(model T (struct
+            (field₁ <type₁>)
+            (field₂ <type₂>)
+            ...
+        ))
+```
+
+This encodes an ISLE type as a composite SMT structure with fixed fields. Unlike enums, structs do not have variants — every instance has all the specified fields.
+
+3. Enumeration Model 
 
 ```lisp
 (model T (enum (Variant₁ ...) (Variant₂ ...) ...))
