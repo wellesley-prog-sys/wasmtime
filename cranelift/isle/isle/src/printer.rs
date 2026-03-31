@@ -179,9 +179,9 @@ impl ToSExpr for Def {
             Def::Instantiation(instantiation) => instantiation.to_sexpr(),
             Def::Extern(ext) => ext.to_sexpr(),
             Def::Converter(converter) => converter.to_sexpr(),
-            Def::Attr(attr) => todo!(),
-            Def::SpecMacro(spec_macro) => todo!(),
-            Def::State(state) => todo!(),
+            Def::Attr(attr) => attr.to_sexpr(),
+            Def::SpecMacro(spec_macro) => spec_macro.to_sexpr(),
+            Def::State(state) => state.to_sexpr(),
         }
     }
 }
@@ -674,5 +674,72 @@ impl ToSExpr for Ident {
     fn to_sexpr(&self) -> SExpr {
         let Ident(name, _) = self;
         SExpr::atom(name.clone())
+    }
+}
+
+impl ToSExpr for AttrKind {
+    fn to_sexpr(&self) -> SExpr {
+        match self {
+            AttrKind::Chain => SExpr::List(vec![
+                SExpr::atom("veri"),
+                SExpr::atom("chain"),
+            ]),
+            AttrKind::Priority => SExpr::List(vec![
+                SExpr::atom("veri"),
+                SExpr::atom("priority"),
+            ]),
+            AttrKind::Tag(tag) => SExpr::List(vec![
+                SExpr::atom("tag"),
+                tag.to_sexpr(),
+            ]),
+        }
+    }
+}
+
+impl ToSExpr for Attr {
+    fn to_sexpr(&self) -> SExpr {
+        let mut parts = vec![SExpr::atom("attr")];
+        match &self.target {
+            AttrTarget::Rule(name) => {
+                parts.push(SExpr::atom("rule"));
+                parts.push(name.to_sexpr());
+            }
+            AttrTarget::Term(name) => {
+                parts.push(name.to_sexpr());
+            }
+        }
+        parts.extend(self.kinds.iter().map(ToSExpr::to_sexpr));
+        SExpr::List(parts)
+    }
+}
+
+
+impl ToSExpr for SpecMacro {
+    fn to_sexpr(&self) -> SExpr {
+        let mut sig = vec![self.name.to_sexpr()];
+        sig.extend(self.params.iter().map(ToSExpr::to_sexpr));
+
+        SExpr::List(vec![
+            SExpr::atom("macro"),
+            SExpr::List(sig),
+            self.body.to_sexpr(),
+        ])
+    }
+}
+
+impl ToSExpr for State {
+    fn to_sexpr(&self) -> SExpr {
+        SExpr::List(vec![
+            SExpr::atom("state"),
+            self.name.to_sexpr(),
+            SExpr::List(vec![
+                SExpr::atom("type"),
+                self.ty.to_sexpr(),
+            ]),
+            SExpr::List(vec![
+                SExpr::atom("default"),
+                self.default.to_sexpr(),
+            ]),
+        ])
     }
 }
