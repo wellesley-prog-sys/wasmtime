@@ -448,11 +448,16 @@ impl ToSExpr for ModelType {
                 SExpr::List(vec![SExpr::atom("bv"), SExpr::atom(size)])
             }
             ModelType::BitVec(None) => SExpr::List(vec![SExpr::atom("bv")]),
-            ModelType::Struct(fields) => todo!(),
-            ModelType::Named(id) => todo!(),
-            ModelType::Unspecified => todo!(),
-            ModelType::Auto => todo!(),
-
+            ModelType::Struct(fields) => {
+                let mut parts = vec![SExpr::atom("struct")];
+                parts.extend(fields.iter().map(ToSExpr::to_sexpr));
+                SExpr::List(parts)
+            }
+            ModelType::Named(id) => {
+                SExpr::List(vec![SExpr::atom("named"), id.to_sexpr()])
+            }
+            ModelType::Unspecified => SExpr::atom("!"),
+            ModelType::Auto =>  SExpr::atom("_"),
         }
     }
 }
@@ -740,6 +745,15 @@ impl ToSExpr for State {
                 SExpr::atom("default"),
                 self.default.to_sexpr(),
             ]),
+        ])
+    }
+}
+
+impl ToSExpr for ModelField {
+    fn to_sexpr(&self) -> SExpr {
+        SExpr::List(vec![
+            self.name.to_sexpr(),
+            self.ty.to_sexpr(),
         ])
     }
 }
