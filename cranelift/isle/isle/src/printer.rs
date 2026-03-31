@@ -288,9 +288,9 @@ impl ToSExpr for Spec {
             args,
             provides,
             requires,
-            matches,
-            modifies,
-            pos } = self;
+            matches: _,
+            modifies: _,
+            pos: _ } = self;
         let mut sig = vec![term.to_sexpr()];
         sig.extend(args.iter().map(ToSExpr::to_sexpr));
 
@@ -492,11 +492,34 @@ impl ToSExpr for SpecExpr {
                 parts.extend(args.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
-            SpecExpr::As { x, ty, pos } => todo!(),
-            SpecExpr::Field { field, x, pos } => todo!(),
-            SpecExpr::Discriminator { variant, x, pos } => todo!(),
-            SpecExpr::Match { x, arms, pos } => todo!(),
-            SpecExpr::Let { defs, body, pos } => todo!(),
+            SpecExpr::As { x, ty, pos:_ } => SExpr::List(vec![
+                SExpr::atom("as"),
+                x.to_sexpr(),
+                ty.to_sexpr(),
+            ]),
+            SpecExpr::Field { field, x, pos:_ } => SExpr::List(vec![
+                SExpr::atom(format!(":{}", field.0)), 
+                x.to_sexpr(),
+            ]),
+            SpecExpr::Discriminator { variant, x, pos:_ } => SExpr::List(vec![
+                SExpr::atom(format!(":{}", variant.0)), 
+                x.to_sexpr(), 
+            ]), 
+            SpecExpr::Match { x, arms, pos:_ } => {
+                let mut parts = vec![SExpr::atom("match"), x.to_sexpr()];
+                parts.extend(arms.iter().map(ToSExpr::to_sexpr));
+                SExpr::List(parts)
+            }
+            SpecExpr::Let { defs, body, pos:_ } => {
+                let defs = defs.iter().map(|(name, expr)| SExpr::List(
+                    vec![name.to_sexpr(), expr.to_sexpr()]
+                )).collect::<Vec<_>>(); 
+
+                SExpr::List(vec![
+                    SExpr::atom("let"), 
+                    SExpr::List(defs), 
+                    body.to_sexpr(), 
+                ])}
             _ => todo!(),
         }
     }
@@ -754,6 +777,18 @@ impl ToSExpr for ModelField {
         SExpr::List(vec![
             self.name.to_sexpr(),
             self.ty.to_sexpr(),
+        ])
+    }
+}
+
+impl ToSExpr for Arm {
+    fn to_sexpr(&self) -> SExpr {
+        let mut head = vec![self.variant.to_sexpr()];
+        head.extend(self.args.iter().map(ToSExpr::to_sexpr));
+
+        SExpr::List(vec![
+            SExpr::List(head),
+            self.body.to_sexpr(),
         ])
     }
 }
