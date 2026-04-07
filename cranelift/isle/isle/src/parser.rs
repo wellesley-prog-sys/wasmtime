@@ -1,6 +1,6 @@
 //! Parser for ISLE language.
 
-#![allow(missing_docs)]
+#![allow(missing_docs, reason = "internal crate, docs not required")]
 
 use crate::error::{Error, Span};
 use crate::files::Files;
