@@ -179,9 +179,9 @@ impl ToSExpr for Def {
             Def::Instantiation(instantiation) => instantiation.to_sexpr(),
             Def::Extern(ext) => ext.to_sexpr(),
             Def::Converter(converter) => converter.to_sexpr(),
-            Def::Attr(attr) => todo!(),
-            Def::SpecMacro(spec_macro) => todo!(),
-            Def::State(state) => todo!(),
+            Def::Attr(attr) => attr.to_sexpr(),
+            Def::SpecMacro(spec_macro) => spec_macro.to_sexpr(),
+            Def::State(state) => state.to_sexpr(),
         }
     }
 }
@@ -288,9 +288,9 @@ impl ToSExpr for Spec {
             args,
             provides,
             requires,
-            matches,
-            modifies,
-            pos } = self;
+            matches: _,
+            modifies: _,
+            pos: _ } = self;
         let mut sig = vec![term.to_sexpr()];
         sig.extend(args.iter().map(ToSExpr::to_sexpr));
 
@@ -448,11 +448,16 @@ impl ToSExpr for ModelType {
                 SExpr::List(vec![SExpr::atom("bv"), SExpr::atom(size)])
             }
             ModelType::BitVec(None) => SExpr::List(vec![SExpr::atom("bv")]),
-            ModelType::Struct(fields) => todo!(),
-            ModelType::Named(id) => todo!(),
-            ModelType::Unspecified => todo!(),
-            ModelType::Auto => todo!(),
-
+            ModelType::Struct(fields) => {
+                let mut parts = vec![SExpr::atom("struct")];
+                parts.extend(fields.iter().map(ToSExpr::to_sexpr));
+                SExpr::List(parts)
+            }
+            ModelType::Named(id) => {
+                SExpr::List(vec![SExpr::atom("named"), id.to_sexpr()])
+            }
+            ModelType::Unspecified => SExpr::atom("!"),
+            ModelType::Auto =>  SExpr::atom("_"),
         }
     }
 }
@@ -487,11 +492,34 @@ impl ToSExpr for SpecExpr {
                 parts.extend(args.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
-            SpecExpr::As { x, ty, pos } => todo!(),
-            SpecExpr::Field { field, x, pos } => todo!(),
-            SpecExpr::Discriminator { variant, x, pos } => todo!(),
-            SpecExpr::Match { x, arms, pos } => todo!(),
-            SpecExpr::Let { defs, body, pos } => todo!(),
+            SpecExpr::As { x, ty, pos:_ } => SExpr::List(vec![
+                SExpr::atom("as"),
+                x.to_sexpr(),
+                ty.to_sexpr(),
+            ]),
+            SpecExpr::Field { field, x, pos:_ } => SExpr::List(vec![
+                SExpr::atom(format!(":{}", field.0)), 
+                x.to_sexpr(),
+            ]),
+            SpecExpr::Discriminator { variant, x, pos:_ } => SExpr::List(vec![
+                SExpr::atom(format!(":{}", variant.0)), 
+                x.to_sexpr(), 
+            ]), 
+            SpecExpr::Match { x, arms, pos:_ } => {
+                let mut parts = vec![SExpr::atom("match"), x.to_sexpr()];
+                parts.extend(arms.iter().map(ToSExpr::to_sexpr));
+                SExpr::List(parts)
+            }
+            SpecExpr::Let { defs, body, pos:_ } => {
+                let defs = defs.iter().map(|(name, expr)| SExpr::List(
+                    vec![name.to_sexpr(), expr.to_sexpr()]
+                )).collect::<Vec<_>>(); 
+
+                SExpr::List(vec![
+                    SExpr::atom("let"), 
+                    SExpr::List(defs), 
+                    body.to_sexpr(), 
+                ])}
             _ => todo!(),
         }
     }
@@ -674,5 +702,93 @@ impl ToSExpr for Ident {
     fn to_sexpr(&self) -> SExpr {
         let Ident(name, _) = self;
         SExpr::atom(name.clone())
+    }
+}
+
+impl ToSExpr for AttrKind {
+    fn to_sexpr(&self) -> SExpr {
+        match self {
+            AttrKind::Chain => SExpr::List(vec![
+                SExpr::atom("veri"),
+                SExpr::atom("chain"),
+            ]),
+            AttrKind::Priority => SExpr::List(vec![
+                SExpr::atom("veri"),
+                SExpr::atom("priority"),
+            ]),
+            AttrKind::Tag(tag) => SExpr::List(vec![
+                SExpr::atom("tag"),
+                tag.to_sexpr(),
+            ]),
+        }
+    }
+}
+
+impl ToSExpr for Attr {
+    fn to_sexpr(&self) -> SExpr {
+        let mut parts = vec![SExpr::atom("attr")];
+        match &self.target {
+            AttrTarget::Rule(name) => {
+                parts.push(SExpr::atom("rule"));
+                parts.push(name.to_sexpr());
+            }
+            AttrTarget::Term(name) => {
+                parts.push(name.to_sexpr());
+            }
+        }
+        parts.extend(self.kinds.iter().map(ToSExpr::to_sexpr));
+        SExpr::List(parts)
+    }
+}
+
+
+impl ToSExpr for SpecMacro {
+    fn to_sexpr(&self) -> SExpr {
+        let mut sig = vec![self.name.to_sexpr()];
+        sig.extend(self.params.iter().map(ToSExpr::to_sexpr));
+
+        SExpr::List(vec![
+            SExpr::atom("macro"),
+            SExpr::List(sig),
+            self.body.to_sexpr(),
+        ])
+    }
+}
+
+impl ToSExpr for State {
+    fn to_sexpr(&self) -> SExpr {
+        SExpr::List(vec![
+            SExpr::atom("state"),
+            self.name.to_sexpr(),
+            SExpr::List(vec![
+                SExpr::atom("type"),
+                self.ty.to_sexpr(),
+            ]),
+            SExpr::List(vec![
+                SExpr::atom("default"),
+                self.default.to_sexpr(),
+            ]),
+        ])
+    }
+}
+
+impl ToSExpr for ModelField {
+    fn to_sexpr(&self) -> SExpr {
+        SExpr::List(vec![
+            self.name.to_sexpr(),
+            self.ty.to_sexpr(),
+        ])
+    }
+}
+
+impl ToSExpr for Arm {
+    fn to_sexpr(&self) -> SExpr {
+        let mut head = vec![self.variant.to_sexpr()];
+        head.extend(self.args.iter().map(ToSExpr::to_sexpr));
+
+        SExpr::List(vec![
+            SExpr::List(head),
+            self.body.to_sexpr(),
+        ])
     }
 }
