@@ -635,7 +635,6 @@ impl<'a> Parser<'a> {
                     Err(self.error(pos, "Unexpected spec expression".into()))
                 }
             } else {
-                // TODO(mbm): support Unit
                 Err(self.error(pos, "Unexpected spec expression".into()))
             }
         } else {

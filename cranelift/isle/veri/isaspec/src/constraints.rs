@@ -490,72 +490,60 @@ impl Translator {
                 Ok(spec_if(self.expr(c)?, self.expr(t)?, self.expr(e)?))
             }
             "and_bool" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::And, lhs, rhs))
             }
             "eq_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::Eq, lhs, rhs))
             }
             "ne_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_unary(SpecOp::Not, spec_binary(SpecOp::Eq, lhs, rhs)))
             }
             "add_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): check type annotation on function matches type of operands?
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVAdd, lhs, rhs))
             }
             "sub_bits" => {
-                // TODO(mbm): binary op helper
-                // TODO(mbm): check type annotation on function matches type of operands?
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVSub, lhs, rhs))
             }
             "or_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVOr, lhs, rhs))
             }
             "and_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVAnd, lhs, rhs))
             }
             "eor_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVXor, lhs, rhs))
             }
             "mul_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVMul, lhs, rhs))
             }
             "sdiv_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
@@ -565,14 +553,12 @@ impl Translator {
             "asr_bits" => self.shift(SpecOp::BVAshr, types, args),
             "lsl_bits" => self.shift(SpecOp::BVShl, types, args),
             "sle_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;
                 Ok(spec_binary(SpecOp::BVSle, lhs, rhs))
             }
             "slt_bits" => {
-                // TODO(mbm): binary op helper
                 let (lhs, rhs) = expect_binary(args)?;
                 let lhs = self.expr(lhs)?;
                 let rhs = self.expr(rhs)?;

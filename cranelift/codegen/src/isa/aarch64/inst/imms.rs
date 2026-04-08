@@ -624,9 +624,13 @@ impl MoveWideConst {
 /// Advanced SIMD modified immediate as used by MOVI/MVNI.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ASIMDMovModImm {
+    /// Immediate
     pub imm: u8,
+    /// Shift
     pub shift: u8,
+    /// Is 64 bit
     pub is_64bit: bool,
+    /// Shift ones
     pub shift_ones: bool,
 }
 
@@ -747,7 +751,9 @@ impl ASIMDMovModImm {
 /// Advanced SIMD modified immediate as used by the vector variant of FMOV.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ASIMDFPModImm {
+    /// Immediate
     pub imm: u8,
+    /// Scalar size
     pub size: ScalarSize,
 }
 

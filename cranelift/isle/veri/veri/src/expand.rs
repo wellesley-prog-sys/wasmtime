@@ -39,7 +39,6 @@ pub struct Expansion {
     pub rules: Vec<RuleId>,
     pub negated: Vec<RuleId>,
     pub bindings: Vec<Option<Binding>>,
-    // QUESTION(mbm): are multiple constraints per binding necessary?
     pub constraints: Vec<Constrain>,
     pub equals: DisjointSets<BindingId>,
     pub parameters: Vec<BindingId>,

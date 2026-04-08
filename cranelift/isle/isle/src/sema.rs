@@ -613,9 +613,6 @@ impl Term {
             } => {
                 let (func_name, full_name, infallible) = match kind {
                     ExtractorKind::InternalExtractor { .. } => {
-                        // TODO(mbm): what's the correct signature for an internal extractor?
-                        // TODO(mbm): is an internal extractor fallible?
-                        // TODO(mbm): do we need to consider the pattern field of an internal extractor?
                         let name = format!("extractor_{}", tyenv.syms[self.name.index()]);
                         (name.clone(), name, false)
                     }
@@ -894,7 +891,6 @@ impl Pattern {
                         // Evaluate all `input` args.
                         let output_tys = args.iter().map(|arg| arg.ty()).collect();
 
-                        // TODO(mbm): is an internal extractor fallible?
                         let infallible = match extractor_kind {
                             Some(ExtractorKind::ExternalExtractor { infallible, .. }) => {
                                 *infallible

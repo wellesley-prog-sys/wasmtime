@@ -571,8 +571,6 @@
         ; Activate the CLIF store effect
         (:active clif_store)
 
-        ; TODO(mbm): store flags
-
         ; Store size is the width of the stored value.
         (= (:size_bits clif_store) (widthof value))
 

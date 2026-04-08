@@ -1,8 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-// QUESTION(mbm): is it okay to derive Default for ID types?
-
 macro_rules! declare_id {
     (
         $(#[$attr:meta])*

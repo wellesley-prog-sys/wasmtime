@@ -535,7 +535,6 @@ impl<'a> Solver<'a> {
                 Ok(self.smt.concat(padding, self.expr_atom(x)))
             }
             Ordering::Less => {
-                // QUESTION(mbm): conv_to smaller destination: safe to discard high bits?
                 let high_bit = dst.checked_sub(1).unwrap();
                 Ok(self.extract(high_bit, 0, self.expr_atom(x)))
             }
@@ -557,8 +556,6 @@ impl<'a> Solver<'a> {
     }
 
     fn width_of(&self, x: ExprId) -> Result<SExpr> {
-        // QUESTION(mbm): should width_of expressions be elided or replaced after type inference?
-
         // Expression type should be a bit-vector of known width.
         let width = self
             .assignment

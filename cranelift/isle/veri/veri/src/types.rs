@@ -347,7 +347,6 @@ impl std::fmt::Display for Compound {
     }
 }
 
-// QUESTION(mbm): can this be deduped with the corresponding spec constant type?
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Const {
     Bool(bool),

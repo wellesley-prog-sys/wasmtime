@@ -341,10 +341,8 @@ impl std::fmt::Display for Expr {
     }
 }
 
-// QUESTION(mbm): can we merge `Model` and `Assignment` from type inference?
 pub type Model = HashMap<ExprId, Const>;
 
-// QUESTION(mbm): does the distinction between expressions and variables make sense?
 #[derive(Debug)]
 pub struct Variable {
     pub ty: Type,
@@ -741,7 +739,6 @@ impl std::fmt::Display for Value {
     }
 }
 
-// QUESTION(mbm): is `Call` the right name? consider `Term`, `TermInstance`, ...?
 #[derive(Debug)]
 pub struct Call {
     pub term: TermId,
@@ -1834,7 +1831,6 @@ impl<'a> ConditionsBuilder<'a> {
                     .map(|v| {
                         // For all except the variant under construction, allocate an undefined variant.
                         if v.id != variant.id {
-                            // QUESTION(mbm): use undef variant or IfThen and fresh bits in solver?
                             return self.alloc_variant(v, "undef".to_string());
                         }
 
@@ -2008,7 +2004,6 @@ impl<'a> ConditionsBuilder<'a> {
         // Declare new variables.
         let mut with_vars = vars.clone();
         for name in decls {
-            // QUESTION(mbm): allow with scopes to optionally specify types?
             let expr = Symbolic::Scalar(self.alloc_variable(Type::Unknown, name.0.clone()));
             with_vars.set(name.0.clone(), expr)?;
         }
@@ -2042,7 +2037,6 @@ impl<'a> ConditionsBuilder<'a> {
         };
 
         // Build macro expansion scope.
-        // QUESTION(mbm): should macros be able to access global state?
         let mut macro_vars = Variables::new();
         if params.len() != args.len() {
             bail!(

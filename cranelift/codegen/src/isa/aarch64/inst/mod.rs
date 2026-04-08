@@ -1218,6 +1218,7 @@ fn pretty_print_try_call(info: &TryCallInfo) -> String {
 }
 
 impl Inst {
+    /// Print instruction with state
     pub fn print_with_state(&self, state: &mut EmitState) -> String {
         fn op_name(alu_op: ALUOp) -> &'static str {
             match alu_op {

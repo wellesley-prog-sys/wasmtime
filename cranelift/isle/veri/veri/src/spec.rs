@@ -11,7 +11,6 @@ use std::{
 
 use crate::types::{Compound, Const};
 
-// QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
 
 /// Positioned attaches positional information to a wrapped object.
 #[derive(Clone)]
@@ -54,7 +53,6 @@ pub enum ExprKind {
     WidthOf(Expr),
 
     // Boolean operations
-    // QUESTION(mbm): would it be preferable to use the Binary(Opcode, ExprBox, ExprBox) form instead?
     Not(Expr),
     And(Vec<Expr>),
     Or(Vec<Expr>),
@@ -432,7 +430,6 @@ impl ExprKind {
                 ExprKind::With(decls, body)
             }
             ast::SpecExpr::Pair { l, r, pos: _ } => {
-                // QUESTION(mbm): is there a cleaner way to handle switch statements without the pair type?
                 unreachable!(
                     "pairs must only occur in switch expressions, {:?} {:?}",
                     l, r
@@ -510,7 +507,6 @@ impl FieldInit {
     }
 }
 
-// QUESTION(mbm): should we make the result explicit in the spec syntax?
 static RESULT: &str = "result";
 
 pub struct Spec {

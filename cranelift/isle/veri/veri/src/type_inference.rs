@@ -420,7 +420,6 @@ impl<'a> SystemBuilder<'a> {
 
                 self.same_type(x, *y);
             }
-            // QUESTION(mbm): should we assert in type inference that FP ops are 32 or 64-bit?
             Expr::FPIsZero(y)
             | Expr::FPIsInfinite(y)
             | Expr::FPIsNaN(y)
@@ -553,7 +552,6 @@ impl<'a> SystemBuilder<'a> {
                     self.symbolic(&variant.value, variant_ty.ty());
                 }
             }
-            // QUESTION(mbm): should Option and Tuple be in a different enum so they don't appear in type inference?
             (Symbolic::Option(_), _) => unimplemented!("option types unsupported"),
             (Symbolic::Tuple(_), _) => unimplemented!("tuple types unsupported"),
             (v, ty) => unreachable!("type mismatch: {v} of type {ty}"),

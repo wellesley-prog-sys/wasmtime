@@ -29,7 +29,6 @@ pub enum Stmt {
     If {
         cond: Expr,
         then_block: Block,
-        // TODO(mbm): else if
         else_block: Block,
     },
     Call {

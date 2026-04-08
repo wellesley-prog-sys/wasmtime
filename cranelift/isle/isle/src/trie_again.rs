@@ -281,7 +281,6 @@ impl Binding {
     }
 
     /// Returns the term referenced by this binding.
-    // QUESTION(mbm): does Binding::term method make sense here?
     pub fn term(&self, tyenv: &TypeEnv, termenv: &TermEnv) -> Option<TermId> {
         match self {
             Binding::ConstInt { .. } => None,
@@ -292,7 +291,6 @@ impl Binding {
             Binding::Constructor { term, .. } => Some(*term),
             Binding::Iterator { .. } => None,
             Binding::MakeVariant { ty, variant, .. } => {
-                // QUESTION(mbm): include variant terms in Binding::term output?
                 Some(termenv.get_variant_term(tyenv, *ty, *variant))
             }
             Binding::MatchVariant { .. } => None,
