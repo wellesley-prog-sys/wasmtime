@@ -601,7 +601,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         ret_kind: ReturnKind,
         last_expr: &str,
         scope: StableSet<BindingId>,
-        options: &CodegenOptions,
+        _options: &CodegenOptions,
     ) -> std::fmt::Result {
         ctx.begin_block()?;
         self.emit_block_contents(ctx, block, ret_kind, last_expr, scope)
@@ -749,7 +749,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                             stack.push((Self::validate_block(ret_kind, body), "", scope));
                         }
 
-                        &ControlFlow::Return { pos, result, name } => {
+                        &ControlFlow::Return { pos, result, name: _ } => {
                             writeln!(
                                 ctx.out,
                                 "{}// Rule at {}.",

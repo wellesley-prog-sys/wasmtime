@@ -276,9 +276,8 @@ impl Type {
     /// Get the ID of this `Type`.
     pub fn id(&self) -> TypeId {
         match self {
-            Self::Primitive(id, _, _)
-            | Self::Enum { id, .. }=> *id,
-            Self::Builtin(b) => TypeId::builtin(*b)
+            Self::Primitive(id, _, _) | Self::Enum { id, .. } => *id,
+            Self::Builtin(b) => TypeId::builtin(*b),
         }
     }
 
@@ -2831,7 +2830,7 @@ mod test {
                         ],
                         pos: Pos {
                             file: 0,
-                            offset: 73,
+                            offset: 77,
                         },
                     },
                     Variant {
@@ -2845,7 +2844,7 @@ mod test {
                         }],
                         pos: Pos {
                             file: 0,
-                            offset: 95,
+                            offset: 99,
                         },
                     },
                 ],
