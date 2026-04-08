@@ -1049,6 +1049,15 @@
     (SbcS)
 ))
 
+(model MInst
+      (type
+            (struct
+                  (flags_in  (named NZCV))
+                  (flags_out (named NZCV))
+            )
+      )
+)
+
 ;; An ALU operation with three arguments.
 (type ALUOp3
   (enum
