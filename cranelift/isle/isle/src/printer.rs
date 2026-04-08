@@ -179,6 +179,9 @@ impl ToSExpr for Def {
             Def::Instantiation(instantiation) => instantiation.to_sexpr(),
             Def::Extern(ext) => ext.to_sexpr(),
             Def::Converter(converter) => converter.to_sexpr(),
+            Def::Attr(attr) => todo!(),
+            Def::SpecMacro(spec_macro) => todo!(),
+            Def::State(state) => todo!(),
         }
     }
 }
@@ -285,7 +288,9 @@ impl ToSExpr for Spec {
             args,
             provides,
             requires,
-        } = self;
+            matches,
+            modifies,
+            pos } = self;
         let mut sig = vec![term.to_sexpr()];
         sig.extend(args.iter().map(ToSExpr::to_sexpr));
 
@@ -428,13 +433,7 @@ impl ToSExpr for ModelValue {
     fn to_sexpr(&self) -> SExpr {
         match self {
             ModelValue::TypeValue(mt) => SExpr::List(vec![SExpr::atom("type"), mt.to_sexpr()]),
-            ModelValue::EnumValues(enumerators) => {
-                let mut parts = vec![SExpr::atom("enum")];
-                for (variant, value) in enumerators {
-                    parts.push(SExpr::List(vec![variant.to_sexpr(), value.to_sexpr()]));
-                }
-                SExpr::List(parts)
-            }
+            ModelValue::ConstValue(e) => e.to_sexpr()
         }
     }
 }
@@ -449,6 +448,11 @@ impl ToSExpr for ModelType {
                 SExpr::List(vec![SExpr::atom("bv"), SExpr::atom(size)])
             }
             ModelType::BitVec(None) => SExpr::List(vec![SExpr::atom("bv")]),
+            ModelType::Struct(fields) => todo!(),
+            ModelType::Named(id) => todo!(),
+            ModelType::Unspecified => todo!(),
+            ModelType::Auto => todo!(),
+
         }
     }
 }
@@ -458,13 +462,11 @@ impl ToSExpr for Signature {
         let Signature {
             args,
             ret,
-            canonical,
             pos: _,
         } = self;
         SExpr::List(vec![
             SExpr::tagged("args", args),
             SExpr::tagged("ret", std::slice::from_ref(ret)),
-            SExpr::tagged("canon", std::slice::from_ref(canonical)),
         ])
     }
 }
@@ -474,20 +476,23 @@ impl ToSExpr for SpecExpr {
         match self {
             SpecExpr::ConstInt { val, pos: _ } => SExpr::atom(val),
             SpecExpr::ConstBitVec { val, width, pos: _ } => SExpr::atom(if *width % 4 == 0 {
-                format!("#x{val:0width$x}", width = *width as usize / 4)
+                format!("#x{val:0width$x}", width = *width / 4)
             } else {
-                format!("#b{val:0width$b}", width = *width as usize)
+                format!("#b{val:0width$b}", width = *width)
             }),
             SpecExpr::ConstBool { val, pos: _ } => SExpr::atom(if *val { "true" } else { "false" }),
-            SpecExpr::ConstUnit { pos: _ } => SExpr::List(Vec::new()),
             SpecExpr::Var { var, pos: _ } => var.to_sexpr(),
             SpecExpr::Op { op, args, pos: _ } => {
                 let mut parts = vec![op.to_sexpr()];
                 parts.extend(args.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
-            SpecExpr::Pair { l, r } => SExpr::List(vec![l.to_sexpr(), r.to_sexpr()]),
-            SpecExpr::Enum { name } => SExpr::List(vec![name.to_sexpr()]),
+            SpecExpr::As { x, ty, pos } => todo!(),
+            SpecExpr::Field { field, x, pos } => todo!(),
+            SpecExpr::Discriminator { variant, x, pos } => todo!(),
+            SpecExpr::Match { x, arms, pos } => todo!(),
+            SpecExpr::Let { defs, body, pos } => todo!(),
+            _ => todo!(),
         }
     }
 }
@@ -500,6 +505,9 @@ impl ToSExpr for SpecOp {
             SpecOp::Not => "not",
             SpecOp::Imp => "=>",
             SpecOp::Or => "or",
+            SpecOp::Add => "+",
+            SpecOp::Sub => "-",
+            SpecOp::Mul => "*",
             SpecOp::Lte => "<=",
             SpecOp::Lt => "<",
             SpecOp::Gte => ">=",
@@ -534,8 +542,15 @@ impl ToSExpr for SpecOp {
             SpecOp::ZeroExt => "zero_ext",
             SpecOp::SignExt => "sign_ext",
             SpecOp::Concat => "concat",
+            SpecOp::Replicate => "replicate",
             SpecOp::ConvTo => "conv_to",
             SpecOp::Int2BV => "int2bv",
+            SpecOp::BV2Nat => "bv2nat",
+            SpecOp::ToFP => "to_fp",
+            SpecOp::FPToUBV => "fp.to_ubv",
+            SpecOp::FPToSBV => "fp.to_sbv",
+            SpecOp::ToFPUnsigned => "to_fp_unsigned",
+            SpecOp::ToFPFromFP => "to_fp_from_fp",
             SpecOp::WidthOf => "widthof",
             SpecOp::If => "if",
             SpecOp::Switch => "switch",
@@ -543,10 +558,34 @@ impl ToSExpr for SpecOp {
             SpecOp::Rev => "rev",
             SpecOp::Cls => "cls",
             SpecOp::Clz => "clz",
-            SpecOp::Subs => "subs",
-            SpecOp::BV2Int => "bv2int",
-            SpecOp::LoadEffect => "load_effect",
-            SpecOp::StoreEffect => "store_effect",
+            SpecOp::FPPositiveInfinity => "fp.+oo",
+            SpecOp::FPNegativeInfinity => "fp.-oo",
+            SpecOp::FPPositiveZero => "fp.+zero",
+            SpecOp::FPNegativeZero => "fp.-zero",
+            SpecOp::FPNaN => "fp.NaN",
+            SpecOp::FPEq => "fp.eq",
+            SpecOp::FPNe => "fp.ne",
+            SpecOp::FPLt => "fp.lt",
+            SpecOp::FPGt => "fp.gt",
+            SpecOp::FPLe => "fp.le",
+            SpecOp::FPGe => "fp.ge",
+            SpecOp::FPAdd => "fp.add",
+            SpecOp::FPSub => "fp.sub",
+            SpecOp::FPMul => "fp.mul",
+            SpecOp::FPDiv => "fp.div",
+            SpecOp::FPMin => "fp.min",
+            SpecOp::FPMax => "fp.max",
+            SpecOp::FPNeg => "fp.neg",
+            SpecOp::FPCeil => "fp.ceil",
+            SpecOp::FPFloor => "fp.floor",
+            SpecOp::FPSqrt => "fp.sqrt",
+            SpecOp::FPTrunc => "fp.trunc",
+            SpecOp::FPNearest => "fp.nearest",
+            SpecOp::FPIsZero => "fp.isZero",
+            SpecOp::FPIsInfinite => "fp.isInfinite",
+            SpecOp::FPIsNaN => "fp.isNaN",
+            SpecOp::FPIsNegative => "fp.isNegative",
+            SpecOp::FPIsPositive => "fp.isPositive",
         })
     }
 }
