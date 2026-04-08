@@ -1,7 +1,7 @@
 use crate::{
     expand::{Constrain, Expansion},
     program::Program,
-    trie::{binding_type, BindingType},
+    trie::{BindingType, binding_type},
 };
 use cranelift_isle::{
     sema::{TermId, Type, TypeEnv},
@@ -156,6 +156,10 @@ pub fn binding_string(
             let ty = &prog.tyenv.types[ty.index()];
             format!("const_int({val}, {name})", name = ty.name(&prog.tyenv))
         }
+        Binding::ConstBool { val, ty } => {
+            let ty = &prog.tyenv.types[ty.index()];
+            format!("const_bool({val}, {name})", name = ty.name(&prog.tyenv))
+        }
         Binding::ConstPrim { val } => format!("const_prim({})", prog.tyenv.syms[val.index()]),
         Binding::Constructor {
             term,
@@ -274,9 +278,13 @@ pub fn constraint_string(constraint: &Constraint, tyenv: &TypeEnv) -> String {
                     let variant_name = &tyenv.syms[variant.name.index()];
                     format!("variant({name}::{variant_name})")
                 }
+                Type::Builtin(b) => {
+                    format!("variant({})", b.name())
+                }
             }
         }
         Constraint::ConstInt { val, .. } => format!("const_int({val})"),
+        Constraint::ConstBool { val, .. } => format!("const_bool({val})"),
         Constraint::ConstPrim { val } => format!("const_prim({})", tyenv.syms[val.index()]),
         Constraint::Some => "some".to_string(),
     }

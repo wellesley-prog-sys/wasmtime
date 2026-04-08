@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, iter::zip};
 
-use anyhow::{bail, format_err, Context as _, Error, Result};
+use anyhow::{Context as _, Error, Result, bail, format_err};
 use easy_smt::{Context, Response, SExpr, SExprData};
 use num_bigint::BigUint;
 use num_traits::Num as _;
@@ -885,6 +885,7 @@ impl<'a> Solver<'a> {
         match self.smt.get(sexpr) {
             SExprData::Atom(a) => Self::const_from_literal(a),
             SExprData::List(exprs) => self.const_from_qualified_abstract_value(exprs),
+            SExprData::String(s) => bail!("unsupported smt const: {s}"),
         }
     }
 
@@ -919,7 +920,7 @@ impl<'a> Solver<'a> {
             .iter()
             .map(|e| match self.smt.get(*e) {
                 SExprData::Atom(a) => Ok(a),
-                SExprData::List(_) => bail!("expected atom in qualified identifier"),
+                _ => bail!("expected atom in qualified identifier"),
             })
             .collect::<Result<Vec<_>>>()?;
 

@@ -1,5 +1,5 @@
 use crate::{program::Program, reachability::Reachability};
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use cranelift_isle::{
     disjointsets::DisjointSets,
     sema::{RuleId, TermId},
@@ -549,7 +549,7 @@ impl<'a> Expander<'a> {
         self.complete.push(expansion);
     }
 
-    pub fn chaining(&self) -> &Chaining {
+    pub fn chaining(&self) -> &Chaining<'_> {
         &self.chaining
     }
 
@@ -819,9 +819,10 @@ impl Reindex {
 
     fn binding(&self, binding: &Binding) -> Binding {
         match binding {
-            Binding::Argument { .. } | Binding::ConstInt { .. } | Binding::ConstPrim { .. } => {
-                binding.clone()
-            }
+            Binding::Argument { .. }
+            | Binding::ConstInt { .. }
+            | Binding::ConstBool { .. }
+            | Binding::ConstPrim { .. } => binding.clone(),
 
             Binding::Extractor { term, parameter } => Binding::Extractor {
                 term: *term,

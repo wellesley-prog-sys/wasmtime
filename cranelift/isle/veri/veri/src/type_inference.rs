@@ -1,11 +1,11 @@
 use std::{
     cmp::Ordering,
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     iter::zip,
     vec,
 };
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use cranelift_isle::{files::Files, sema::TermId};
 
 use crate::{

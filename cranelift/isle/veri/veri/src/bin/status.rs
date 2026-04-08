@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{format_err, Result};
+use anyhow::{Result, format_err};
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::sema::TermId;

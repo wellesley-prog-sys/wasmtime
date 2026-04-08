@@ -1,6 +1,6 @@
 use crate::spec::{self, SpecEnv};
 use crate::trie;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use cranelift_isle::ast::{Def, Ident};
 use cranelift_isle::error::{self, Errors, Span};
 use cranelift_isle::files::Files;
@@ -26,7 +26,7 @@ impl Program {
         paths: &Vec<std::path::PathBuf>,
         expand_internal_extractors: bool,
     ) -> Result<Self> {
-        let files = match Files::from_paths(paths) {
+        let files = match Files::from_paths(paths, Default::default()) {
             Ok(files) => files,
             Err((path, err)) => {
                 bail!(Errors::from_io(

@@ -4,7 +4,7 @@ use anyhow::Result;
 use cranelift_isle::{
     ast::{Ident, ModelType},
     lexer::Pos,
-    sema::{self, Sym, TypeEnv, TypeId, VariantId},
+    sema::{self, BuiltinType, Sym, TypeEnv, TypeId, VariantId},
 };
 use num_bigint::BigUint;
 
@@ -286,7 +286,16 @@ impl Compound {
 
     /// Build a named reference to the given ISLE type.
     pub fn named_from_isle(ty: &sema::Type, tyenv: &TypeEnv) -> Self {
-        Self::Named(Ident(ty.name(tyenv).to_string(), ty.pos()))
+        match ty {
+            sema::Type::Builtin(BuiltinType::Bool) => Self::Primitive(Type::Bool),
+            sema::Type::Builtin(b) => {
+                Self::Primitive(Type::BitVector(Width::Bits(b.to_usize())))
+            }
+            _ => Self::Named(Ident(
+                ty.name(tyenv).to_string(),
+                ty.pos().expect("expected position"),
+            )),
+        }
     }
 
     pub fn as_primitive(&self) -> Option<&Type> {

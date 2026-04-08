@@ -7,7 +7,7 @@ use std::{
     time::{self, Duration},
 };
 
-use anyhow::{bail, format_err, Context as _, Error, Result};
+use anyhow::{Context as _, Error, Result, bail, format_err};
 use cranelift_isle::{
     sema::{Term, TermId},
     trie_again::RuleSet,
@@ -16,13 +16,13 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::{
+    BUILD_PROFILE, GIT_VERSION,
     debug::print_expansion,
     expand::{Chaining, Expander, Expansion},
     program::Program,
     solver::{Applicability, Dialect, Solver, Verification},
-    type_inference::{self, type_constraint_system, Assignment, Choice},
+    type_inference::{self, Assignment, Choice, type_constraint_system},
     veri::Conditions,
-    BUILD_PROFILE, GIT_VERSION,
 };
 
 const LOG_DIR: &str = ".veriisle";
@@ -780,7 +780,7 @@ impl Runner {
                     init_time,
                     applicable_time,
                     verify_time: None,
-                })
+                });
             }
             Applicability::Unknown => bail!("could not prove applicability"),
         };

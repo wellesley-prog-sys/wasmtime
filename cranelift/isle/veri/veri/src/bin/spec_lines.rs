@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use clap::Parser;
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle::{error::Errors, files::Files, lexer, parser};

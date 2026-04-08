@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use cranelift_isle::{
     lexer::Pos,
     sema::{RuleId, TermId, TypeId},
@@ -9,7 +9,7 @@ use crate::{
     debug::{binding_string, constrain_string},
     expand::{Chaining, Expansion},
     program::Program,
-    trie::{binding_type, BindingType},
+    trie::{BindingType, binding_type},
 };
 use std::{
     fs::File,
@@ -193,11 +193,14 @@ impl<'a> ExplorerWriter<'a> {
             writeln!(output, r"<td>{name}</td>", name = ty.name(&self.prog.tyenv))?;
 
             // Location.
-            writeln!(output, "<td>{pos}</td>", pos = self.pos(ty.pos()))?;
+            if let Some(pos) = ty.pos() {
+                writeln!(output, "<td>{pos}</td>", pos = self.pos(pos))?;
+            } else {
+                writeln!(output, "<td>builtin</td>")?;
+            }
 
             // Model.
             if let Some(model) = self.prog.specenv.type_model.get(&ty.id()) {
-                // TODO(mbm): link type model to source position
                 writeln!(output, "<td>{model}</td>")?;
             } else {
                 writeln!(output, "<td></td>")?;
@@ -653,7 +656,7 @@ impl<'a> ExplorerWriter<'a> {
         let ty = self.prog.ty(type_id);
         format!(
             r#"<a href="{href}">{name}</a>"#,
-            href = self.pos_href(ty.pos()),
+            href = self.pos_href(ty.pos().expect("expected position")),
             name = self.prog.type_name(ty.id())
         )
     }

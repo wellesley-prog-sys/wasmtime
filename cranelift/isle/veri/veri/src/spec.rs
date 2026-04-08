@@ -1,16 +1,15 @@
-use anyhow::{bail, format_err, Ok, Result};
+use anyhow::{Ok, Result, bail, format_err};
 use cranelift_isle::{
     ast::{self, AttrKind, AttrTarget, Def, Ident, Model, ModelType, Modifies, SpecOp},
     lexer::Pos,
     sema::{ReturnKind, RuleId, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     fmt::Debug,
 };
 
 use crate::types::{Compound, Const};
-
 
 /// Positioned attaches positional information to a wrapped object.
 #[derive(Clone)]

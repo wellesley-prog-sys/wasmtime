@@ -192,7 +192,8 @@ impl BuiltinType {
         }
     }
 
-    const fn to_usize(&self) -> usize {
+    /// Get the built-in type's size.
+    pub const fn to_usize(&self) -> usize {
         match self {
             Self::Bool => 0,
             Self::Int(ty) => *ty as usize + 1,

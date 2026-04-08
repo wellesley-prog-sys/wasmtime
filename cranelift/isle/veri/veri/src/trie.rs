@@ -56,7 +56,9 @@ pub fn binding_type(
     lookup_binding: impl Fn(BindingId) -> Binding,
 ) -> BindingType {
     match binding {
-        Binding::ConstInt { ty, .. } | Binding::MakeVariant { ty, .. } => BindingType::Base(*ty),
+        Binding::ConstInt { ty, .. }
+        | Binding::ConstBool { ty, .. }
+        | Binding::MakeVariant { ty, .. } => BindingType::Base(*ty),
 
         Binding::ConstPrim { val } => BindingType::Base(prog.tyenv.const_types[val]),
 

@@ -2,10 +2,10 @@ use crate::{
     expand::{Constrain, Expansion},
     program::Program,
     spec::{self, Arm, Constructor, Signature, State},
-    trie::{binding_type, BindingType},
+    trie::{BindingType, binding_type},
     types::{Compound, Const, Type, Variant, Width},
 };
-use anyhow::{bail, format_err, Context, Error, Result};
+use anyhow::{Context, Error, Result, bail, format_err};
 use cranelift_isle::{
     ast::Ident,
     lexer::Pos,
@@ -13,7 +13,7 @@ use cranelift_isle::{
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     iter::zip,
 };
 
@@ -1095,6 +1095,8 @@ impl<'a> ConditionsBuilder<'a> {
         match binding {
             Binding::ConstInt { val, ty } => self.const_int(id, *val, *ty),
 
+            Binding::ConstBool { val, .. } => self.const_bool(id, *val),
+
             Binding::ConstPrim { val } => self.const_prim(id, *val),
 
             // Argument binding has no associated constraints.
@@ -1130,6 +1132,12 @@ impl<'a> ConditionsBuilder<'a> {
 
     fn const_int(&mut self, id: BindingId, val: i128, ty: TypeId) -> Result<()> {
         let eq = self.equals_const_int(id, val, ty)?;
+        self.conditions.assumptions.push(eq);
+        Ok(())
+    }
+
+    fn const_bool(&mut self, id: BindingId, val: bool) -> Result<()> {
+        let eq = self.equals_const_bool(id, val)?;
         self.conditions.assumptions.push(eq);
         Ok(())
     }
@@ -1174,6 +1182,13 @@ impl<'a> ConditionsBuilder<'a> {
         let value = self.spec_expr_no_vars(spec_value)?;
 
         // Destination binding equals constant value.
+        let eq = self.values_equal(self.binding_value[&id].clone(), value)?;
+        Ok(eq)
+    }
+
+    fn equals_const_bool(&mut self, id: BindingId, val: bool) -> Result<ExprId> {
+        // Destination binding equals constant value.
+        let value = Symbolic::Scalar(self.boolean(val));
         let eq = self.values_equal(self.binding_value[&id].clone(), value)?;
         Ok(eq)
     }
@@ -1530,6 +1545,7 @@ impl<'a> ConditionsBuilder<'a> {
         match constraint {
             Constraint::Some => self.constraint_some(binding_id),
             Constraint::ConstPrim { val } => self.equals_const_prim(binding_id, *val),
+            Constraint::ConstBool { val, .. } => self.equals_const_bool(binding_id, *val),
             Constraint::ConstInt { val, ty } => self.equals_const_int(binding_id, *val, *ty),
             Constraint::Variant {
                 ty,
