@@ -1049,15 +1049,6 @@
     (SbcS)
 ))
 
-(model MInst
-      (type
-            (struct
-                  (flags_in  (named NZCV))
-                  (flags_out (named NZCV))
-            )
-      )
-)
-
 ;; An ALU operation with three arguments.
 (type ALUOp3
   (enum
@@ -2326,7 +2317,7 @@
 ;;
 ;; Recursion: may recurse once to downgrade from F16 to F32 when FP16 is not enabled.
 (decl rec fpu_csel (Type Cond Reg Reg) ConsumesFlags)
-(rule (fpu_csel $F16 cond if_true if_false)
+(rule fpu_csel_f16 (fpu_csel $F16 cond if_true if_false)
         (fpu_csel $F32 cond if_true if_false))
 
 (rule 1 (fpu_csel $F16 cond if_true if_false)
@@ -2383,7 +2374,7 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.MovToFpu dst x size))))
         dst))
-(rule 1 (mov_to_fpu x (ScalarSize.Size16))
+(rule mov_to_fpu_16 1 (mov_to_fpu x (ScalarSize.Size16))
         (if-let false (use_fp16))
         (mov_to_fpu x (ScalarSize.Size32)))
 
@@ -3831,7 +3822,7 @@
             (tmp Reg (fpu_rri (fpu_op_ri_ushr (ty_bits ty) (max_shift ty)) y))
             (_ Unit (emit (MInst.FpuRRIMod (fpu_op_ri_sli (ty_bits ty) (max_shift ty)) dst x tmp))))
        dst))
-(rule (fcopy_sign x y ty @ (multi_lane _ _))
+(rule fcopy_sign_vec (fcopy_sign x y ty @ (multi_lane _ _))
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (tmp Reg (ushr_vec_imm y (max_shift (lane_type ty)) (vector_size ty)))
             (_ Unit (emit (MInst.VecShiftImmMod (VecShiftImmModOp.Sli) dst x tmp (vector_size ty) (max_shift (lane_type ty))))))
@@ -3853,7 +3844,7 @@
 ;; accepting a boolean (whether the type is signed), input type,
 ;; output type, and registers containing the source and minimum bound.
 (decl fpu_to_int_underflow_check (bool Type Type Reg Reg) Reg)
-(rule (fpu_to_int_underflow_check true $F32 (fits_in_16 out_ty) src min)
+(rule fpu_to_int_underflow_check_signed_f64_fits_in_32 (fpu_to_int_underflow_check true $F32 (fits_in_16 out_ty) src min)
       (let ((r ValueRegs
                   (with_flags (fpu_cmp (ScalarSize.Size32) src min)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -4189,20 +4180,20 @@
       (let ((cc Cond (cond_code cond)))
         (flags_and_cc_to_bool (lower_icmp cond rn rm in_ty))))
 
-(rule lower_icmp_8_16_signed 1 (lower_icmp cond rn rm (fits_in_16 ty))
+(rule lower_icmp_16_signed 1 (lower_icmp cond rn rm (fits_in_16 ty))
       (if (signed_cond_code cond))
       (let ((rn Reg (put_in_reg_sext32 rn)))
       (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Sext))) cond)))
-(rule lower_icmp_8_16_unsigned_imm -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
+(rule lower_icmp_16_imm12 -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (flags_and_cc (cmp_imm (operand_size ty) rn rm) cond)))
-(rule lower_icmp_8_16_unsigned -2 (lower_icmp cond rn rm (fits_in_16 ty))
+(rule lower_icmp_16_extend -2 (lower_icmp cond rn rm (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Uext))) cond)))
-(rule lower_icmp_32_64_const -3 (lower_icmp cond rn (u64_from_iconst c) ty)
+(rule lower_icmp_const -3 (lower_icmp cond rn (u64_from_iconst c) ty)
       (if (ty_int_ref_scalar_64 ty))
       (lower_icmp_const cond rn c ty))
-(rule lower_icmp_32_64 -4 (lower_icmp cond rn rm ty)
+(rule lower_icmp_base -4 (lower_icmp cond rn rm ty)
       (if (ty_int_ref_scalar_64 ty))
       (flags_and_cc (cmp (operand_size ty) rn rm) cond))
 
@@ -4256,9 +4247,9 @@
        (ccmp (OperandSize.Size64) lhs_hi rhs_hi
         (nzcv false false false false) (Cond.Eq) cmp_inst)))
 
-(rule (lower_icmp (IntCC.Equal) lhs rhs $I128)
+(rule lower_icmp_eq_i128 (lower_icmp (IntCC.Equal) lhs rhs $I128)
       (flags_and_cc (lower_icmp_i128_eq_ne lhs rhs) (IntCC.Equal)))
-(rule (lower_icmp (IntCC.NotEqual) lhs rhs $I128)
+(rule lower_icmp_ne_i128 (lower_icmp (IntCC.NotEqual) lhs rhs $I128)
       (flags_and_cc (lower_icmp_i128_eq_ne lhs rhs) (IntCC.NotEqual)))
 
 ;; cmp      lhs_lo, rhs_lo
@@ -4551,3 +4542,1055 @@
 (decl a64_sequence_point () SideEffectNoResult)
 (rule (a64_sequence_point)
       (SideEffectNoResult.Inst (MInst.SequencePoint)))
+
+;;;; Verification terms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(attr MInst.FpuMove32 (tag float))
+
+(attr MInst.FpuMove64 (tag float))
+
+(attr MInst.FpuMove128 (tag float))
+
+(attr MInst.FpuMoveFromVec (tag float))
+
+(attr MInst.FpuExtend (tag float))
+
+(attr MInst.FpuRR (tag float))
+
+(attr MInst.FpuRRR (tag float))
+
+(attr MInst.FpuRRI (tag float))
+
+(attr MInst.FpuRRIMod (tag float))
+
+(attr MInst.FpuRRRR (tag float))
+
+(attr MInst.FpuCmp (tag float))
+
+(attr MInst.FpuLoad16 (tag float))
+
+(attr MInst.FpuLoad16 (tag narrowfloat))
+
+(attr MInst.FpuStore16 (tag float))
+
+(attr MInst.FpuStore16 (tag narrowfloat))
+
+(attr MInst.FpuLoad32 (tag float))
+
+(attr MInst.FpuStore32 (tag float))
+
+(attr MInst.FpuLoad64 (tag float))
+
+(attr MInst.FpuStore64 (tag float))
+
+(attr MInst.FpuLoad128 (tag float))
+
+(attr MInst.FpuLoad128 (tag i128))
+
+(attr MInst.FpuStore128 (tag float))
+
+(attr MInst.FpuStore128 (tag i128))
+
+(attr MInst.FpuLoadP64 (tag float))
+
+(attr MInst.FpuStoreP64 (tag float))
+
+(attr MInst.FpuLoadP128 (tag float))
+
+(attr MInst.FpuLoadP128 (tag i128))
+
+(attr MInst.FpuStoreP128 (tag float))
+
+(attr MInst.FpuStoreP128 (tag i128))
+
+(attr MInst.FpuToInt (tag float))
+
+(attr MInst.IntToFpu (tag float))
+
+(attr MInst.FpuCSel16 (tag float))
+
+(attr MInst.FpuCSel32 (tag float))
+
+(attr MInst.FpuCSel64 (tag float))
+
+(attr MInst.FpuRound (tag float))
+
+(attr MInst.MovToFpu (tag float))
+
+(attr MInst.FpuMoveFPImm (tag float))
+
+(attr MInst.VecDup (tag vector))
+
+(attr MInst.VecDupFromFpu (tag vector))
+
+(attr MInst.VecDupFPImm (tag vector))
+
+(attr MInst.VecDupImm (tag vector))
+
+(attr MInst.VecExtend (tag vector))
+
+(attr MInst.VecMovElement (tag vector))
+
+(attr MInst.VecRRLong (tag vector))
+
+(attr MInst.VecRRNarrowLow (tag vector))
+
+(attr MInst.VecRRNarrowHigh (tag vector))
+
+(attr MInst.VecRRPair (tag vector))
+
+(attr MInst.VecRRRLong (tag vector))
+
+(attr MInst.VecRRRLongMod (tag vector))
+
+(attr MInst.VecRRPairLong (tag vector))
+
+(attr MInst.VecRRR (tag vector))
+
+(attr MInst.VecRRRMod (tag vector))
+
+(attr MInst.VecFmlaElem (tag vector))
+
+(attr MInst.VecMisc (tag vector))
+
+(attr MInst.VecLanes (tag vector))
+
+(attr MInst.VecShiftImm (tag vector))
+
+(attr MInst.VecShiftImmMod (tag vector))
+
+(attr MInst.VecExtract (tag vector))
+
+(attr MInst.VecTbl (tag vector))
+
+(attr MInst.VecTblExt (tag vector))
+
+(attr MInst.VecTbl2 (tag vector))
+
+(attr MInst.VecTbl2Ext (tag vector))
+
+(attr MInst.VecLoadReplicate (tag vector))
+
+(attr MInst.VecCSel (tag vector))
+
+(attr MInst.LoadAcquire (tag atomics))
+
+(model MInst
+      (type
+            (struct
+                  (flags_in  (named NZCV))
+                  (flags_out (named NZCV))
+            )
+      )
+)
+
+(spec (MInst.AluRRImmLogic alu_op size rd rn imml)
+      (provide
+            (=>
+                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
+                        (= rd (bvor rn imml))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvor (extract 31 0 rn) (extract 31 0 imml))))
+            )
+
+            (=>
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvor rn (bvnot imml)))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
+            )
+
+            (=>
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                        (= rd (bvand rn imml))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvand (extract 31 0 rn) (extract 31 0 imml))))
+            )
+
+            (=>
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvand rn (bvnot imml)))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvand (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
+            )
+
+            (=>
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
+                        (= rd (bvxor rn imml))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvxor (extract 31 0 rn) (extract 31 0 imml))))
+            )
+
+            (=>
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
+                        (= rd (bvxor rn (bvnot imml)))
+            )
+            (=>
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
+                        (= rd (zero_ext 64 (bvxor (extract 31 0 rn) (bvnot (extract 31 0 imml)))))
+            )
+      )
+      (require
+            ; Implemented (opcode, size) combinations.
+            (or
+                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Orr)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.OrrNot)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.And)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.AndNot)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Eor)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.EorNot)) (= size (OperandSize.Size32)))
+            )
+            ; REVIEW(mbm): require properties for logical immediates?
+      )
+)
+
+(spec (MInst.AluRRImmShift alu_op size rd rn immshift)
+      (provide
+            (=> (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
+                  (= rd (bvlshr rn (zero_ext 64 immshift)))
+            )
+            (=> (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size32)))
+                  (= rd (zero_ext 64 (bvlshr (extract 31 0 rn) (zero_ext 32 immshift))))
+            )
+
+            (=> (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
+                  (= rd (bvashr rn (zero_ext 64 immshift)))
+            )
+            (=> (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
+                  (= rd (zero_ext 64 (bvashr (extract 31 0 rn) (zero_ext 32 immshift))))
+            )
+
+            (=> (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
+                  (= rd (bvshl rn (zero_ext 64 immshift)))
+            )
+            (=> (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
+                  (= rd (zero_ext 64 (bvshl (extract 31 0 rn) (zero_ext 32 immshift))))
+            )
+
+            (=> (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size32)))
+                (with
+                            (t1 t3 t4 t5)
+                            (and
+                                (= t1 (= (extract 4 0 immshift) #b00000))
+                                (if
+                                    t1
+                                    (= t3 (extract 31 0 rn))
+                                    (and
+                                        (not (= (extract 4 0 immshift) #b00000))
+                                        (=
+                                            t4
+                                            (bvor
+                                                (bvlshr (extract 31 0 rn) (zero_ext 32 (extract 4 0 immshift)))
+                                                (bvshl
+                                                    (extract 31 0 rn)
+                                                    (zero_ext 32 (bvsub #x20 (zero_ext 8 (extract 4 0 immshift)))))))))
+                                (= t5 (if t1 t3 t4))
+                                (= rd (zero_ext 64 t5))))
+            )
+            (=> (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size64)))
+            (with
+                            (t1 t3 t4 t5)
+                            (and
+                                (= t1 (= (extract 5 0 immshift) #b000000))
+                                (if
+                                    t1
+                                    (= t3 rn)
+                                    (and
+                                        (not (= (extract 5 0 immshift) #b000000))
+                                        (=
+                                            t4
+                                            (bvor
+                                                (bvlshr rn (zero_ext 64 (extract 5 0 immshift)))
+                                                (bvshl rn (zero_ext 64 (bvsub #x40 (zero_ext 8 (extract 5 0 immshift)))))))))
+                                (= t5 (if t1 t3 t4))
+                                (= rd t5))))
+      )
+      (require
+            (or
+                  (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
+
+                  (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size64)))
+                  (and (= alu_op (ALUOp.RotR)) (= size (OperandSize.Size32)))
+            )
+      )
+)
+
+(spec (MInst.TrapIf kind trap_code)
+      (modifies exec_trap trap_cond)
+      (provide
+            ; Conditions under which this instruction traps.
+            (= trap_cond
+                  (match kind
+                        ((Zero r) (bv_is_zero! r))
+                        ((NotZero r) (not (bv_is_zero! r)))
+                        ((Cond cc) (cond_holds! cc (:flags_in result)))
+                  )
+            )
+
+            ; If this instruction traps, set the global trap state.
+            (=> trap_cond exec_trap)
+      )
+)
+
+(model Reg (type (bv)))
+
+(model UImm5 (type (bv 5)))
+
+(model Imm12
+      (type
+            (struct
+                  (bits (bv 12))
+                  (shift12 Bool)
+            )
+      )
+)
+
+(model ImmLogic (type (bv 64)))
+
+(model ImmShift (type (bv 6)))
+
+(model ShiftOpAndAmt
+      (type
+            (struct
+                  (op (named ALUOp))
+                  (amt (bv 8))
+            )
+      )
+)
+
+(model MoveWideConst
+      (type
+            (struct
+                  (shift (bv 2))
+                  (bits (bv 16))
+            )
+      )
+)
+
+(model NZCV
+      (type
+            (struct
+                  (N (bv 1))
+                  (Z (bv 1))
+                  (C (bv 1))
+                  (V (bv 1))
+            )
+      )
+)
+
+(macro (n_set nzcv) (= (:N nzcv) #b1))
+
+(macro (n_clear nzcv) (= (:N nzcv) #b0))
+
+(macro (z_set nzcv) (= (:Z nzcv) #b1))
+
+(macro (z_clear nzcv) (= (:Z nzcv) #b0))
+
+(macro (c_set nzcv) (= (:C nzcv) #b1))
+
+(macro (c_clear nzcv) (= (:C nzcv) #b0))
+
+(macro (v_set nzcv) (= (:V nzcv) #b1))
+
+(macro (v_clear nzcv) (= (:V nzcv) #b0))
+
+(model ASIMDFPModImm (type
+      (struct
+            (imm (bv 8))
+            (size (named ScalarSize))
+      )
+))
+
+(model ASIMDMovModImm (type
+      (struct
+            (imm (bv 8))
+            ; TODO: shift: u8,
+            ; TODO: is_64bit: bool,
+            ; TODO: shift_ones: bool,
+      )
+))
+
+;; (instantiate CondBrKind.Zero ((args (bv 64)) (ret (named CondBrKind))))
+;; (instantiate CondBrKind.NotZero ((args (bv 64)) (ret (named CondBrKind))))
+
+(model MemLabel (type !))
+
+(model SImm9 (type (bv 9)))
+
+(model UImm12Scaled (type (bv 12)))
+
+(attr AMode.Const (tag amode_const))
+
+(instantiate AMode.RegReg                 ((args (bv 64) (bv 64)) (ret (named AMode))))
+
+(instantiate AMode.RegScaled              ((args (bv 64) (bv 64)) (ret (named AMode))))
+
+(instantiate AMode.RegScaledExtended      ((args (bv 64) (bv 64) (named ExtendOp)) (ret (named AMode))))
+
+(instantiate AMode.RegExtended            ((args (bv 64) (bv 64) (named ExtendOp)) (ret (named AMode))))
+
+(instantiate AMode.RegOffset              ((args (bv 64) (named i64)) (ret (named AMode))))
+
+(model FPUOpRI (type
+      (struct
+            (size (bv 8))
+            (amount (bv 8))
+            (lane_size_in_bits (bv 8))
+      )
+))
+
+(model FPUOpRIMod (type
+      (struct
+            (size (bv 8))
+            (amount (bv 8))
+            (lane_size_in_bits (bv 8))
+      )
+))
+
+(spec (operand_size ty)
+      (provide
+            (= result (if (<= (:bits ty) 32) (OperandSize.Size32) (OperandSize.Size64))))
+      (require
+            (or (= (:bits ty) 8) (= (:bits ty) 16) (= (:bits ty) 32) (= (:bits ty) 64))))
+
+(attr rule operand_size_32 (veri priority))
+
+(attr diff_from_32 (veri chain))
+
+(spec (scalar_size ty)
+      (provide (= result
+            (switch (:bits ty)
+                  (8   (ScalarSize.Size8))
+                  (16  (ScalarSize.Size16))
+                  (32  (ScalarSize.Size32))
+                  (64  (ScalarSize.Size64))
+                  (128 (ScalarSize.Size128))
+            )
+      ))
+)
+
+(attr lane_size (tag vector))
+
+(macro (cond_holds cc nzcv)
+      (match cc
+            ; EQ	Equal.	Z==1
+            ((Eq) (z_set! nzcv))
+            ; NE	Not equal.	Z==0
+            ((Ne) (z_clear! nzcv))
+            ; HS	Unsigned higher or same (or carry set).	C==1
+            ((Hs) (c_set! nzcv))
+            ; LO	Unsigned lower (or carry clear).	C==0
+            ((Lo) (c_clear! nzcv))
+            ; MI	Negative. The mnemonic stands for "minus".	N==1
+            ((Mi) (n_set! nzcv))
+            ; PL	Positive or zero. The mnemonic stands for "plus".	N==0
+            ((Pl) (n_clear! nzcv))
+            ; VS	Signed overflow. The mnemonic stands for "V set".	V==1
+            ((Vs) (v_set! nzcv))
+            ; VC	No signed overflow. The mnemonic stands for "V clear".	V==0
+            ((Vc) (v_clear! nzcv))
+            ; HI	Unsigned higher.	(C==1) && (Z==0)
+            ((Hi) (and (c_set! nzcv) (z_clear! nzcv)))
+            ; LS	Unsigned lower or same.	(C==0) || (Z==1)
+            ((Ls) (or (c_clear! nzcv) (z_set! nzcv)))
+            ; GE	Signed greater than or equal.	N==V
+            ((Ge) (= (:N nzcv) (:V nzcv)))
+            ; LT	Signed less than.	N!=V
+            ((Lt) (not (= (:N nzcv) (:V nzcv))))
+            ; GT	Signed greater than.	(Z==0) && (N==V)
+            ((Gt) (and (z_clear! nzcv) (= (:N nzcv) (:V nzcv))))
+            ; LE	Signed less than or equal.	(Z==1) || (N!=V)
+            ((Le) (or (z_set! nzcv) (not (= (:N nzcv) (:V nzcv)))))
+            ; AL (or omitted)	Always executed.	None tested.
+            ((Al) true)
+            ((Nv) false)
+      )
+)
+
+(attr vector_size (tag vector))
+
+(spec (use_fp16) (provide (not result)))
+
+(macro (equals_move_wide_value n mov_wide_const)
+      (and
+            ; n equals the computed value
+            (= n
+                  ; bits << (16 * shift)
+                  (bvshl
+                        (zero_ext 64 (:bits mov_wide_const))
+                        (bvmul (int2bv 64 16) (zero_ext 64 (:shift mov_wide_const)))
+                  )
+            )
+
+            ; The zero case can be expressed in multiple ways. Assert that it
+            ; must be the zero shift value, matching the Rust implementation.
+            (=> (bv_is_zero! n) (= (:shift mov_wide_const) #b00))
+      )
+)
+
+(spec (move_wide_const_from_u64 ty n)
+      (provide
+            (let
+                  (
+                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
+                  )
+                  (equals_move_wide_value! nlow result)
+            )
+      )
+      (match
+            (let
+                  (
+                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
+                  )
+                  (or
+                        (= nlow (bvand nlow #x000000000000ffff))
+                        (= nlow (bvand nlow #x00000000ffff0000))
+                        (= nlow (bvand nlow #x0000ffff00000000))
+                        (= nlow (bvand nlow #xffff000000000000))
+                  )
+            )
+      )
+)
+
+(spec (move_wide_const_from_inverted_u64 ty n_inverted)
+      (provide
+            (let
+                  (
+                        (n (bvnot n_inverted))
+                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
+                  )
+                  (equals_move_wide_value! nlow result)
+            )
+      )
+      (match
+            (let
+                  (
+                        (n (bvnot n_inverted))
+                        (nlow (bvand n (low_bits_mask! 64 (:bits ty))))
+                  )
+                  (or
+                        (= nlow (bvand nlow #x000000000000ffff))
+                        (= nlow (bvand nlow #x00000000ffff0000))
+                        (= nlow (bvand nlow #x0000ffff00000000))
+                        (= nlow (bvand nlow #xffff000000000000))
+                  )
+            )
+      )
+)
+
+(spec (imm_logic_from_u64 ty n)
+      (provide (= result n))
+      (match (or (= (:bits ty) 32) (= (:bits ty) 64)))
+)
+
+(spec (imm_size_from_type ty)
+      (match (or (= (:bits ty) 32) (= (:bits ty) 64)))
+      (provide (= result (int2bv 16 (:bits ty))))
+)
+
+(spec (imm_logic_from_imm64 ty imm64)
+      (provide (= result imm64))
+      (match (or (= (:bits ty) 32) (= (:bits ty) 64))))
+
+(spec (imm_shift_from_imm64 ty v)
+      (provide
+            (let
+                  ((imm_value (bvand v (shift_mask! 64 (:bits ty)))))
+                  (= result (extract 5 0 imm_value))
+            )
+      )
+      (match
+            (let
+                  ((imm_value (bvand v (shift_mask! 64 (:bits ty)))))
+                  (bvult imm_value (int2bv 64 64))
+            )
+      )
+)
+
+(spec (imm_shift_from_u8 n)
+      (provide (= result (extract 5 0 n)))
+      (require (bvult n #x40))
+)
+
+(spec (imm12_from_u64 imm12)
+      (provide
+            (= result
+                  (zero_ext 64
+                        (if (:shift12 imm12)
+                              (concat (:bits imm12) #x000)
+                              (concat #x000 (:bits imm12))
+                        )
+                  )
+            )
+      )
+      (match
+            (or
+                  (= result (bvand result (zero_ext 64 #x000fff)))
+                  (= result (bvand result (zero_ext 64 #xfff000)))
+            )
+      )
+)
+
+(spec (u8_into_uimm5 n)
+      (provide (= result (extract 4 0 n)))
+      (require (bvult n #x20))
+)
+
+(spec (u8_into_imm12 n)
+      (provide
+            (not (:shift12 result))
+            (= (:bits result) (zero_ext 12 n))
+      )
+)
+
+(spec (u64_into_imm_logic ty a)
+      (provide (= result a))
+      (require (or (= (:bits ty) 32) (= (:bits ty) 64))))
+
+(spec (fpu_op_ri_ushr ty_bits shift)
+      (provide
+            (= (:size result) ty_bits)
+            (= (:amount result) shift)
+            (= (:lane_size_in_bits result) ty_bits)
+      )
+)
+
+(spec (fpu_op_ri_sli ty_bits shift)
+      (provide
+            (= (:size result) ty_bits)
+            (= (:amount result) shift)
+            (= (:lane_size_in_bits result) ty_bits)
+      )
+)
+
+(spec (lshl_from_imm64 ty imm)
+      (provide
+            (= (:op result) (ALUOp.Lsl))
+            (= (:amt result)
+                  ; imm & (ty - 1)
+                  (bvand
+                        (extract 7 0 imm)
+                        (bvsub (int2bv 8 (:bits ty)) #x01)
+                  )
+            )
+      )
+      (match
+            ; imm < 64
+            (bvult imm #x0000000000000040)
+            ; ty <= 255
+            (<= (:bits ty) 255)
+      )
+)
+
+(spec (integral_ty ty)
+      (provide (= result ty))
+      (match (or
+            (= (:bits result) 8)
+            (= (:bits result) 16)
+            (= (:bits result) 32)
+            (= (:bits result) 64))))
+
+(spec (imm12_from_value imm12)
+      (provide
+            (=
+                  (zero_ext 128 result)
+                  (zero_ext 128
+                        (if (:shift12 imm12)
+                              (concat (:bits imm12) #x000)
+                              (concat #x000 (:bits imm12))
+                        )
+                  )
+            )
+      )
+      (match
+            (let
+                  (
+                        (width 128)
+                        (r (zero_ext width result))
+                  )
+                  (or
+                        (= r (bvand r (zero_ext width #x000fff)))
+                        (= r (bvand r (zero_ext width #xfff000)))
+                  )
+            )
+      )
+)
+
+(attr imm12_from_negated_value (veri chain))
+
+(model ExtendedValue (type
+      (struct
+            (val (named Value))
+            (extend (named ExtendOp))
+      )
+))
+
+(macro (extend_op_src_width extend)
+      (match extend
+            ((UXTB) 8)
+            ((UXTH) 16)
+            ((UXTW) 32)
+            ((UXTX) 64)
+            ((SXTB) 8)
+            ((SXTH) 16)
+            ((SXTW) 32)
+            ((SXTX) 64)
+      )
+)
+
+(macro (extend_op_signed extend)
+      (match extend
+            ((UXTB) false)
+            ((UXTH) false)
+            ((UXTW) false)
+            ((UXTX) false)
+            ((SXTB) true)
+            ((SXTH) true)
+            ((SXTW) true)
+            ((SXTX) true)
+      )
+)
+
+(macro (is_zero_ext dst src)
+      (and
+            (>= (widthof dst) (widthof src))
+            (= dst (conv_to (widthof dst) (zero_ext 64 src)))
+      )
+)
+
+(macro (is_sign_ext dst src)
+      (and
+            (>= (widthof dst) (widthof src))
+            (= dst (conv_to (widthof dst) (sign_ext 64 src)))
+      )
+)
+
+(macro (is_ext dst src) (or (is_zero_ext! dst src) (is_sign_ext! dst src)))
+
+(spec (extended_value_from_value x)
+      ; Match when the result can be represented as an extend.
+      (match
+            (or
+                  (with (b) (is_ext! result (as b (bv 8))))
+                  (with (h) (is_ext! result (as h (bv 16))))
+                  (with (w) (is_ext! result (as w (bv 32))))
+                  (with (x) (is_ext! result (as x (bv 64))))
+            )
+      )
+
+      ; Determine the ExtendedValue parameters.
+      (provide
+            ; Width of the input.
+            (= (widthof (:val x)) (extend_op_src_width! (:extend x)))
+
+            ; Result equals the extension.
+            (if (extend_op_signed! (:extend x))
+                  (is_sign_ext! result (:val x))
+                  (is_zero_ext! result (:val x))
+            )
+      )
+)
+
+(instantiate extended_value_from_value
+      ((args (struct (val (bv  8)) (extend (named ExtendOp)))) (ret (named Value)))
+      ((args (struct (val (bv 16)) (extend (named ExtendOp)))) (ret (named Value)))
+      ((args (struct (val (bv 32)) (extend (named ExtendOp)))) (ret (named Value)))
+      ((args (struct (val (bv 64)) (extend (named ExtendOp)))) (ret (named Value)))
+)
+
+(spec (put_extended_in_reg x)
+      (provide (= result (conv_to (widthof result) (:val x))))
+)
+
+(spec (get_extended_op x) (provide (= result (:extend x))))
+
+(spec (nzcv n z c v)
+      (provide
+            (= (:N result) (bool2bit! n))
+            (= (:Z result) (bool2bit! z))
+            (= (:C result) (bool2bit! c))
+            (= (:V result) (bool2bit! v))
+      )
+)
+
+(spec (cond_br_zero r) (provide (= result (CondBrKind.Zero r))))
+
+(spec (cond_br_cond cc) (provide (= result (CondBrKind.Cond cc))))
+
+(spec (zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
+
+(spec (writable_zero_reg) (provide true))
+
+(attr cmp_rr_shift (veri chain))
+
+(attr cmp_rr_shift_asr (veri chain))
+
+(attr rule fpu_csel_f16 (tag narrowfloat))
+
+(attr mov_to_fpu (veri chain))
+
+(attr rule mov_to_fpu_16 (tag narrowfloat))
+
+(attr imm (veri chain))
+
+(attr put_in_reg_sext32 (veri chain))
+
+(attr put_in_reg_sext32 (veri chain))
+
+(attr put_in_reg_zext32 (veri chain))
+
+(attr put_in_reg_sext64 (veri chain))
+
+(attr put_in_reg_zext64 (veri chain))
+
+(spec (size_from_ty ty)
+      (provide
+            (= result (if (<= (:bits ty) 32) (OperandSize.Size32) (OperandSize.Size64))))
+      (require
+            (or
+                  (= (:bits ty) 8)
+                  (= (:bits ty) 16)
+                  (= (:bits ty) 32)
+                  (= (:bits ty) 64))))
+
+(attr trap_if_div_overflow (veri chain))
+
+(attr intmin_check (veri chain))
+
+(attr rule intmin_check_fits_in_16 (veri priority))
+
+(attr sink_atomic_load (veri chain))
+
+(attr alu_rs_imm_logic_commutative (veri chain))
+
+(attr alu_rs_imm_logic (veri chain))
+
+(attr rule i128_alu_bitop (tag i128))
+
+(attr amode (veri chain))
+
+(attr amode_no_more_iconst (veri chain))
+
+(attr amode_reg_scaled (veri chain))
+
+(attr amode_add (veri chain))
+
+(spec (uimm12_scaled_from_i64 value ty)
+      (match
+            (let
+                  (
+                        (scale (bits2bytes! (int2bv 64 (:bits ty))))
+                        (limit (bvmul (int2bv 64 4095) scale))
+                  )
+                  (and
+                        (bvsge value (bvzero! 64))
+                        (bvsle value limit)
+                        (bv_is_zero! (bvand value (bvsub scale (bvone! 64))))
+                  )
+            )
+      )
+      (provide
+            (= result (extract 11 0 (bvudiv value (bits2bytes! (int2bv 64 (:bits ty))))))
+      )
+)
+
+(spec (simm9_from_i64 value)
+      (provide (= value (sign_ext 64 result)))
+      (match
+            ; value >= -256
+            (bvsge value (bvneg (int2bv 64 256)))
+            ; value <= 255
+            (bvsle value (int2bv 64 255))
+      )
+)
+
+(attr sink_load_into_addr (veri chain))
+
+(attr constant_f32 (veri chain))
+
+(attr constant_f64 (veri chain))
+
+(spec (u64_low32_bits_unset n)
+      (match (bv_is_zero! (bvand result #x00000000ffffffff)))
+      (provide (= n result))
+)
+
+(spec (fp_cond_code cc)
+      (provide
+            (= result
+                  (match cc
+                        ((Equal) (Cond.Eq))
+                        ((NotEqual) (Cond.Ne))
+                        ((GreaterThanOrEqual) (Cond.Ge))
+                        ((GreaterThan) (Cond.Gt))
+                        ((LessThanOrEqual) (Cond.Ls))
+                        ((LessThan) (Cond.Mi))
+                  )
+            )
+      )
+)
+
+(spec (cond_code cc)
+      (provide
+            (= result
+                  (match cc
+                        ((Equal) (Cond.Eq))
+                        ((NotEqual) (Cond.Ne))
+                        ((SignedGreaterThanOrEqual) (Cond.Ge))
+                        ((SignedGreaterThan) (Cond.Gt))
+                        ((SignedLessThanOrEqual) (Cond.Le))
+                        ((SignedLessThan) (Cond.Lt))
+                        ((UnsignedGreaterThanOrEqual) (Cond.Hs))
+                        ((UnsignedGreaterThan) (Cond.Hi))
+                        ((UnsignedLessThanOrEqual) (Cond.Ls))
+                        ((UnsignedLessThan) (Cond.Lo))
+                  )
+            )
+      )
+)
+
+(attr max_shift (veri chain))
+
+(attr fcopy_sign (veri chain))
+
+(attr rule fcopy_sign_vec (tag vector))
+
+(attr fpu_to_int_underflow_check (veri chain))
+
+(attr rule fpu_to_int_underflow_check_signed_f64_fits_in_32 (veri priority))
+
+(attr vec_cmp (tag vector))
+
+(attr flags_and_cc_to_bool (veri chain))
+
+(attr flags_and_cc_flags (veri chain))
+
+(attr flags_and_cc_cc (veri chain))
+
+(attr lower_icmp (veri chain))
+
+(attr lower_icmp_into_reg (veri chain))
+
+(attr lower_icmp_const (veri chain))
+
+(attr lower_extend_op (veri chain))
+
+(attr rule lower_icmp_16_signed (veri priority))
+
+(attr rule lower_icmp_16_extend (veri priority))
+
+(attr rule lower_icmp_eq_i128 (tag i128))
+
+(attr rule lower_icmp_ne_i128 (tag i128))
+
+(attr rule lower_icmp_i128_consumer (tag i128))
+
+(spec (asimd_mov_mod_imm_zero size) (provide (= (:imm result) #x00)))
+
+(macro (asimd_fp_mod_imm_value32 imm)
+      (let (
+            ;  let imm = imm as u32;
+            (v       (zero_ext 32 imm))
+            ;  let b0_5 = imm & 0b111111;
+            (b0_5    (bvand v #x0000003f))
+            ;  let b6 = (imm >> 6) & 1;
+            (b6      (bvand (bvlshr_int! v 6) #x00000001))
+            ;  let b6_inv = b6 ^ 1;
+            (b6_inv  (bvxor b6 #x00000001))
+            ;  let b7 = (imm >> 7) & 1;
+            (b7      (bvand (bvlshr_int! v 7) #x00000001))
+      )
+      ;  b0_5 << 19 | (b6 * 0b11111) << 25 | b6_inv << 30 | b7 << 31
+      (bvor (bvshl_int! b0_5 19)
+      (bvor (bvshl_int! (bvmul b6 #x0000001f) 25)
+      (bvor (bvshl_int! b6_inv 30)
+            (bvshl_int! b7 31))))))
+
+(macro (asimd_fp_mod_imm_value64 imm)
+      (let (
+            ; let imm = imm as u64;
+            (v       (zero_ext 64 imm))
+            ; let b0_5 = imm & 0b111111;
+            (b0_5    (bvand v #x000000000000003f))
+            ; let b6 = (imm >> 6) & 1;
+            (b6      (bvand (bvlshr_int! v 6) #x0000000000000001))
+            ; let b6_inv = b6 ^ 1;
+            (b6_inv  (bvxor b6 #x0000000000000001))
+            ; let b7 = (imm >> 7) & 1;
+            (b7      (bvand (bvlshr_int! v 7) #x0000000000000001))
+      )
+      ; b0_5 << 48 | (b6 * 0b11111111) << 54 | b6_inv << 62 | b7 << 63
+      (bvor (bvshl_int! b0_5 48)
+      (bvor (bvshl_int! (bvmul b6 #x00000000000000ff) 54)
+      (bvor (bvshl_int! b6_inv 62)
+            (bvshl_int! b7 63))))))
+
+(spec (asimd_fp_mod_imm_from_u64 value size)
+      (provide
+            (= (:size result) size)
+            (= (:imm result)
+                  (switch size
+                  ((ScalarSize.Size32)
+                        (let (
+                              (v    (extract 31 0 value))
+                              (b0_5 (bvand (bvlshr_int! v 19) #x0000003f))
+                              (b6   (bvand (bvlshr_int! v 19) #x00000040))
+                              (b7   (bvand (bvlshr_int! v 24) #x00000080))
+                              (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
+                        )
+                        imm))
+                  ((ScalarSize.Size64)
+                        (let (
+                              (b0_5 (bvand (bvlshr_int! value 48) #x000000000000003f))
+                              (b6   (bvand (bvlshr_int! value 48) #x0000000000000040))
+                              (b7   (bvand (bvlshr_int! value 56) #x0000000000000080))
+                              (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
+                        )
+                        imm)))))
+      (match
+            (switch size
+            ((ScalarSize.Size32)
+                  (let (
+                        (v    (extract 31 0 value))
+                        (b0_5 (bvand (bvlshr_int! v 19) #x0000003f))
+                        (b6   (bvand (bvlshr_int! v 19) #x00000040))
+                        (b7   (bvand (bvlshr_int! v 24) #x00000080))
+                        (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
+                  )
+                  (= v (asimd_fp_mod_imm_value32! imm))))
+            ((ScalarSize.Size64)
+                  (let (
+                        (b0_5 (bvand (bvlshr_int! value 48) #x000000000000003f))
+                        (b6   (bvand (bvlshr_int! value 48) #x0000000000000040))
+                        (b7   (bvand (bvlshr_int! value 56) #x0000000000000080))
+                        (imm  (extract 7 0 (bvor b0_5 (bvor b6 b7))))
+                  )
+                  (= value (asimd_fp_mod_imm_value64! imm)))))))

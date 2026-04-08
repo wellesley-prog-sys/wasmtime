@@ -5108,3 +5108,15 @@
 (rule (lower (sequence_point))
       (side_effect
        (x64_sequence_point)))
+
+;;;; Verification terms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(spec (lower arg)
+      (provide (= result arg)))
+
+(attr cmp_and_choose (veri chain))
+
+(attr lower_select_icmp (veri chain))
+
+(attr do_bitrev64 (veri chain))
+
+(attr cmp_zero_i128 (veri chain))
