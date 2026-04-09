@@ -1,6 +1,6 @@
 use anyhow::{bail, format_err, Ok, Result};
 use cranelift_isle::{
-    ast::{self, AttrKind, AttrTarget, Def, Ident, Model, ModelType, Modifies, SpecOp},
+    ast::{self, AttrKind, AttrTarget, Def, Ident, Model, Modifies, SpecOp},
     lexer::Pos,
     sema::{ReturnKind, RuleId, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
@@ -9,6 +9,8 @@ use std::{
     fmt::Debug,
 };
 
+use crate::types::Enum;
+use crate::types::Field;
 use crate::types::{Compound, Const};
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
@@ -513,6 +515,7 @@ impl FieldInit {
 // QUESTION(mbm): should we make the result explicit in the spec syntax?
 static RESULT: &str = "result";
 
+#[derive(Clone)]
 pub struct Spec {
     pub args: Vec<Ident>,
     pub ret: Ident,
@@ -622,6 +625,9 @@ pub struct SpecEnv {
     /// Model for the given type.
     pub type_model: HashMap<TypeId, Compound>,
 
+    // Track which types are derived (auto-generated)
+    pub derived_types: HashSet<TypeId>,
+
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
 
@@ -640,16 +646,17 @@ impl SpecEnv {
             priority: HashSet::new(),
             rule_tags: HashMap::new(),
             type_model: HashMap::new(),
+            derived_types: HashSet::new(),
             const_value: HashMap::new(),
             macros: HashMap::new(),
         };
 
-        env.collect_models(defs, tyenv);
+        env.collect_specs(defs, termenv, tyenv)?;
         env.derive_type_models(tyenv)?;
+        env.collect_models(defs, tyenv);
         env.derive_enum_variant_specs(termenv, tyenv)?;
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
-        env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv)?;
         env.collect_macros(defs);
         env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
@@ -658,12 +665,58 @@ impl SpecEnv {
         Ok(env)
     }
 
+    // helper function for ExtEnum
+    /// Borrow the base enum for a TypeId if present.
+    fn get_enum_from_typeid(&self, tid: TypeId) -> Option<&crate::types::Enum> {
+        match self.type_model.get(&tid)? {
+            crate::types::Compound::Enum(e) => Some(e),
+            crate::types::Compound::ExtEnum { base, .. } => Some(base),
+            _ => None,
+        }
+    }
+
+    /// Clone out an owned Enum for a TypeId (useful when constructing ExtEnum).
+    fn clone_enum_from_typeid(&self, tid: TypeId) -> Option<crate::types::Enum> {
+        self.get_enum_from_typeid(tid).cloned()
+    }
+
     fn collect_models(&mut self, defs: &[Def], tyenv: &TypeEnv) {
         for def in defs {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
                     ast::ModelValue::TypeValue(model_type) => {
-                        self.set_model_type(name, model_type, tyenv);
+                        // only insert if this name hasn't been seen yet
+                        let tid = tyenv.get_type_by_name(name).expect("type should exist");
+
+                        // new model compound
+                        let new_model = Compound::from_ast(model_type);
+
+                        if let Some(_existing) = self.type_model.get(&tid) {
+                            // --- CASE 1: ext-enum ---
+                            if let Compound::ExtEnum { .. } = new_model {
+                                if self.derived_types.contains(&tid) {
+                                    // good: upgrade derived enum → ext-enum
+                                    self.type_model.insert(tid, new_model);
+                                    self.derived_types.remove(&tid);
+                                    continue;
+                                } else {
+                                    panic!("cannot ext-enum a non-enum type: {}", name.0);
+                                }
+                            }
+
+                            // --- CASE 2: replacing a derived enum ---
+                            if self.derived_types.contains(&tid) {
+                                self.type_model.insert(tid, new_model);
+                                self.derived_types.remove(&tid);
+                                continue;
+                            }
+
+                            // --- CASE 3: any other duplicate ---
+                            panic!("duplicate type model: {}", name.0);
+                        } else {
+                            // first definition
+                            self.type_model.insert(tid, new_model);
+                        }
                     }
                     ast::ModelValue::ConstValue(val) => {
                         // TODO(mbm): error on missing constant name rather than panic
@@ -672,6 +725,33 @@ impl SpecEnv {
                         // TODO(mbm): ensure the type of the expression matches the type of the
                         self.const_value.insert(sym, expr_from_ast(val));
                     }
+                    ast::ModelValue::ExtEnumValue(fields) => {
+                        // 1) Resolve the base type to a TypeId.
+                        let base_tid = tyenv
+                            .get_type_by_name(name)
+                            .expect("ext-enum base type should exist");
+
+                        // 2) Clone the existing base enum compound.
+                        let base_enum = self
+                            .clone_enum_from_typeid(base_tid)
+                            .expect("expected base enum to be defined for type-ext-enum");
+
+                        // 3) Lower the extra fields to veri types::Field.
+                        let extra: Vec<Field> = fields
+                            .iter()
+                            .map(|mf| Field {
+                                name: mf.name.clone(),
+                                ty: Compound::from_ast(&mf.ty),
+                            })
+                            .collect();
+
+                        // 4) Build Compound::ExtEnum and overwrite the entry for this TypeId.
+                        let compound = Compound::ExtEnum {
+                            base: base_enum,
+                            extra,
+                        };
+                        self.type_model.insert(base_tid, compound);
+                    }
                 }
             }
         }
@@ -679,25 +759,26 @@ impl SpecEnv {
 
     fn derive_type_models(&mut self, tyenv: &TypeEnv) -> Result<()> {
         for ty in &tyenv.types {
-            // Has an explicit model already been specified?
-            if self.has_model(ty.id()) {
-                continue;
-            }
-
             // Derive a model from ISLE type, if possible.
-            let Some(derived_type) = Compound::from_isle(ty, tyenv) else {
-                continue;
+            if let Some(derived_type) = Compound::from_isle(ty, tyenv) {
+                // register derived type and mark derived
+                self.type_model.insert(ty.id(), derived_type);
+                self.derived_types.insert(ty.id());
             };
-
-            // Register derived.
-            self.type_model.insert(ty.id(), derived_type);
         }
         Ok(())
     }
 
     fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for model in self.type_model.values() {
-            if let Compound::Enum(e) = model {
+            // handle both Enum and ExtEnum
+            let enum_ref: Option<&Enum> = match model {
+                Compound::Enum(e) => Some(e),
+                Compound::ExtEnum { base, .. } => Some(base),
+                _ => None,
+            };
+
+            if let Some(e) = enum_ref {
                 for variant in &e.variants {
                     // Lookup the corresponding term.
                     let full_name = ast::Variant::full_name(&e.name, &variant.name);
@@ -709,7 +790,12 @@ impl SpecEnv {
                                 name = full_name.0
                             ))?;
 
-                    // Synthesize spec.
+                    // If the user wrote a spec already, do not autogenerate
+                    if self.term_spec.contains_key(&term_id) {
+                        continue;
+                    }
+
+                    // build a fresh synthesize spec for the variant.
                     let pos = variant.name.1;
                     let args: Vec<Ident> = variant.fields.iter().map(|f| f.name.clone()).collect();
                     let constructor = Positioned::new(
@@ -722,7 +808,7 @@ impl SpecEnv {
                     );
 
                     let mut spec = Spec::new();
-                    spec.args = args;
+                    spec.args = args.clone();
                     let ret = var_from_ident(spec.ret.clone());
                     spec.provides
                         .push(Positioned::new(pos, ExprKind::Eq(ret, constructor)));
@@ -737,20 +823,37 @@ impl SpecEnv {
         Ok(())
     }
 
-    fn set_model_type(&mut self, name: &Ident, model_type: &ModelType, tyenv: &TypeEnv) {
-        // TODO(mbm): error on missing type rather than panic
-        let type_id = tyenv
-            .get_type_by_name(name)
-            .expect("type name should be defined");
-        // TODO(mbm): error on duplicate model
-        assert!(
-            !self.type_model.contains_key(&type_id),
-            "duplicate type model: {name}",
-            name = name.0
-        );
-        self.type_model
-            .insert(type_id, Compound::from_ast(model_type));
-    }
+    // fn set_model_type(&mut self, name: &Ident, model_type: &ModelType, tyenv: &TypeEnv) {
+    //     // TODO(mbm): error on missing type rather than panic
+    //     let type_id = tyenv
+    //         .get_type_by_name(name)
+    //         .expect("type name should be defined");
+    //     // TODO(mbm): error on duplicate model
+    //     let compound = Compound::from_ast(model_type);
+
+    //     if let Some(existing) = self.type_model.get(&type_id) {
+    //         match (existing, &compound) {
+    //             (Compound::Enum(_), Compound::ExtEnum { .. }) => {
+    //                 // replace Enum with ExtEnum
+    //                 self.type_model.insert(type_id, compound);
+    //                 return;
+    //             }
+    //             // if already enum and the new one is also enum -> error
+    //             (Compound::Enum(_), Compound::Enum(_)) =>{
+    //                 panic!("duplicate enum model: {}", name.0);
+    //             }
+    //             (Compound::ExtEnum{..}, Compound::ExtEnum{..}) =>{
+    //                 panic!("duplicate extenum model: {}", name.0);
+    //             }
+    //             // otherwise: real conflict
+    //             _ => {
+    //                 panic!("duplicate type model: {}", name.0);
+    //             }
+    //         }
+    //     } else {
+    //         self.type_model.insert(type_id, compound);
+    //     }
+    // }
 
     fn collect_state(&mut self, defs: &[Def]) -> Result<()> {
         // Collect states.

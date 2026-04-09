@@ -802,8 +802,26 @@ impl<'a> Parser<'a> {
         } else if self.eat_sym_str("const")? {
             let val = self.parse_spec_expr()?;
             ModelValue::ConstValue(val)
+        } else if self.eat_sym_str("type-ext-enum")? {
+            // Now we should be sitting right before (struct …)
+            self.expect_lparen()?;
+            if !self.eat_sym_str("struct")? {
+                return Err(self.error(pos, "expected (struct ...) inside type-ext-enum".to_string()));
+            }
+
+            let mut fields = Vec::new();
+            while !self.is_rparen() {
+                self.expect_lparen()?;
+                let fname = self.parse_ident()?;
+                let fty   = self.parse_model_type()?;
+                self.expect_rparen()?;
+                fields.push(ModelField { name: fname, ty: fty });
+            }
+            self.expect_rparen()?; 
+
+            ModelValue::ExtEnumValue(fields) 
         } else {
-            return Err(self.error(pos, "Model must be a type, enum or const".to_string()));
+            return Err(self.error(pos, "Model must be a type, enum, type-ext-enum, or const".to_string()));
         };
 
         self.expect_rparen()?; // end body

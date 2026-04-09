@@ -48,6 +48,7 @@
 (type VecReg extern (enum))
 (type VecWritableReg extern (enum))
 (type PReg (primitive PReg))
+(model PReg (type (bv 1)))
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
@@ -61,6 +62,11 @@
 
 ;; Construct a `ValueRegs` of two registers.
 (decl value_regs (Reg Reg) ValueRegs)
+(spec (value_regs arg1 arg2)
+  (provide
+    (= (:lo result) arg1)
+    (= (:hi result) arg2)))
+
 (extern constructor value_regs value_regs)
 
 ;; Construct a `WritableValueRegs` of two registers.
@@ -235,16 +241,23 @@
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
+(model MachLabel (type (bv 1)))
 (type ValueLabel (primitive ValueLabel))
 (type UnwindInst (primitive UnwindInst))
+(model UnwindInst (type (bv 1)))
 (type ExternalName (primitive ExternalName))
+(model ExternalName (type (bv 1)))
 (type BoxExternalName (primitive BoxExternalName))
+(model BoxExternalName (type (bv 1)))
 (type RelocDistance (primitive RelocDistance))
 (type VecArgPair extern (enum))
+(model VecArgPair (type (bv 1)))
 (type VecRetPair extern (enum))
+(model VecRetPair (type (bv 1)))
 (type CallArgList extern (enum))
 (type MachLabelSlice extern (enum))
 (type BoxVecMachLabel extern (enum))
+(model BoxVecMachLabel (type (bv 1)))
 
 ;; Extract a the target from a MachLabelSlice with exactly one target.
 (decl single_target (MachLabel) MachLabelSlice)
@@ -425,7 +438,7 @@
 ;; Constant pool emission.
 
 (type VCodeConstant (primitive VCodeConstant))
-(model VCodeConstant (type !))
+(model VCodeConstant (type (bv 1)))
 
 ;; Add a u64 little-endian constant to the in-memory constant pool and
 ;; return a VCodeConstant index that refers to it. This is
@@ -502,7 +515,7 @@
                      (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))))
 
 (model ProducesFlags
-      (type
+      (type-ext-enum
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
@@ -515,6 +528,7 @@
       (provide
             (= (:flags result) (:flags_out inst))
             (= (:result result) reg)
+            (= (widthof (:result result)) 64)
             (:has_result result)
       )
 )
@@ -570,7 +584,7 @@
                                                              (result ValueRegs))))
 
 (model ConsumesFlags
-      (type
+      (type-ext-enum
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
@@ -583,23 +597,52 @@
       (provide
             (= (:flags result) (:flags_in inst))
             (= (:result result) reg)
+            (= (widthof reg) 64)
             (:has_result result)
       )
 )
 
+(spec (ConsumesFlags.ConsumesFlagsSideEffect2 inst1 inst2)
+  (provide
+      (= (:flags result) (:flags_in inst1))
+      (= (:result result) zero_reg)
+      (= (widthof zero_reg) 64)
+      (= (:has_result result) false)))
+
 (spec (ConsumesFlags.ConsumesFlagsReturnsReg inst reg)
-      (provide
-            (= (:flags result) (:flags_in inst))
-            (= (:result result) reg)
-            (:has_result result)
-      )
+  (provide
+        (= (:flags result) (:flags_in inst))
+        (= (:result result) reg)
+        (= (widthof reg) 64)
+        (:has_result result)
+  )
 )
 
 (spec (ConsumesFlags.ConsumesFlagsSideEffect inst)
-      (provide
-            (= (:flags result) (:flags_in inst))
-            (not (:has_result result))
-      )
+  (provide
+        (= (:flags result) (:flags_in inst))
+        (= (:result result) zero_reg)
+        (= (widthof zero_reg) 64)
+        (= (:has_result result) false)
+  )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 regs)
+  (provide
+        (= (:flags result) (:flags_in inst1))
+        (= (:result result) (:lo regs))
+        (= (widthof (:lo regs)) 64)
+        (= (widthof (:hi regs)) 64)
+        (= (:has_result result) true)
+  )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs inst1 inst2 inst3 inst4 regs)
+  (provide
+        (= (:flags result) (:flags_in inst1))
+        (= (:result result) (:lo regs))
+        (= (:has_result result) true)
+  )
 )
 
 ;; Get the produced register out of a ProducesFlags.
@@ -618,6 +661,7 @@
 ;; Helper for combining two flags-consumer instructions that return a
 ;; single Reg, giving a ConsumesFlags that returns both values in a
 ;; ValueRegs.
+(attr consumes_flags_concat (veri chain))
 (decl consumes_flags_concat (ConsumesFlags ConsumesFlags) ConsumesFlags)
 (rule (consumes_flags_concat (ConsumesFlags.ConsumesFlagsReturnsReg inst1 reg1)
                              (ConsumesFlags.ConsumesFlagsReturnsReg inst2 reg2))

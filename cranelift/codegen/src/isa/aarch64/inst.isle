@@ -1256,7 +1256,7 @@
 )
 
 ;; Registers.
-(model Reg (type (bv)))
+(model Reg (type (bv 64)))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1394,14 +1394,20 @@
 ))
 
 (type SImm7Scaled (primitive SImm7Scaled))
-
+(model SImm7Scaled (type (bv 1)))
 (type BoxCallInfo (primitive BoxCallInfo))
+(model BoxCallInfo (type (bv 1)))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(model BoxCallIndInfo (type (bv 1)))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
+(model BoxReturnCallInfo (type (bv 1)))
 (type BranchTarget (primitive BranchTarget))
+(model BranchTarget (type (bv 1)))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type CodeOffset (primitive CodeOffset))
+(model CodeOffset (type (bv 1)))
 (type VecMachLabel extern (enum))
+(model VecMachLabel (type (bv 1)))
 
 (type CondBrKind extern
   (enum
@@ -1441,7 +1447,7 @@
 ))
 
 (type MemLabel extern (enum))
-(model MemLabel (type !))
+(model MemLabel (type (bv 1)))
 (type SImm9 extern (enum))
 (model SImm9 (type (bv 9)))
 (type UImm12Scaled extern (enum))

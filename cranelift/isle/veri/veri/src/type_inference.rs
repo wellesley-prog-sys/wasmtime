@@ -910,6 +910,13 @@ impl Solver {
             let status = if self.assignment.is_concrete() {
                 Status::Solved
             } else {
+                log::debug!("Underconstrained: listing all non-concrete type variables:");
+
+                for (var, tv) in self.assignment.expr_type_value.iter() {
+                    if !tv.ty().is_concrete() {
+                        log::debug!("   var {:?}: {:?}", var, tv.ty());
+                    }
+                }
                 Status::Underconstrained
             };
             return vec![Solution {
@@ -976,6 +983,13 @@ impl Solver {
                     format!("concrete type error between types:\n\t{existing}\n\t{tv}"),
                 ))
             } else {
+                // debug for inapplicable 
+                log::debug!(
+                    "INAPPLICABLE: failed to merge type values at ExprId({}): existing={:?}, new={:?}",
+                    x.index(),
+                    existing,
+                    tv
+                );
                 Status::Inapplicable(Conflict::new(
                     x,
                     format!("inapplicable set type value: {existing:?} = {tv:?}"),
