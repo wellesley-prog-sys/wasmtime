@@ -2366,17 +2366,19 @@
         dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
-;;
-;; Recursion: may recurse once to downgrade from F16 to F32 when FP16 is not enabled.
-
-(decl rec mov_to_fpu (Reg ScalarSize) Reg)
+(decl mov_to_fpu (Reg ScalarSize) Reg)
 (rule (mov_to_fpu x size)
-      (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.MovToFpu dst x size))))
+      (let ((s ScalarSize (size_for_mov_to_fpu size))
+            (dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.MovToFpu dst x s))))
         dst))
-(rule mov_to_fpu_16 1 (mov_to_fpu x (ScalarSize.Size16))
+
+;; Helper to to downgrade mov_to_fpu from F16 to F32 when FP16 is not enabled.
+(decl rec size_for_mov_to_fpu (ScalarSize) ScalarSize)
+(rule (size_for_mov_to_fpu size) size)
+(rule mov_to_fpu_16 1 (size_for_mov_to_fpu (ScalarSize.Size16))
         (if-let false (use_fp16))
-        (mov_to_fpu x (ScalarSize.Size32)))
+        (ScalarSize.Size32))
 
 ;; Helper for emitting `MInst.FpuMoveFPImm` instructions.
 (decl fpu_move_fp_imm (ASIMDFPModImm ScalarSize) Reg)
@@ -3135,6 +3137,8 @@
 
 (decl load_constant_full (Type ImmExtend OperandSize u64) Reg)
 (extern constructor load_constant_full load_constant_full)
+(spec (load_constant_full ty imm size const)
+      (provide (= result const)))
 
 ;; Fallback for integral 32-bit constants
 (rule (imm (fits_in_32 (integral_ty ty)) extend n)
@@ -4985,6 +4989,8 @@
 
 (attr diff_from_32 (veri chain))
 
+(attr size_for_mov_to_fpu (veri chain))
+
 (spec (scalar_size ty)
       (provide (= result
             (switch (:bits ty)
@@ -5433,8 +5439,6 @@
 )
 
 (attr sink_load_into_addr (veri chain))
-
-(attr constant_f32 (veri chain))
 
 (attr constant_f64 (veri chain))
 

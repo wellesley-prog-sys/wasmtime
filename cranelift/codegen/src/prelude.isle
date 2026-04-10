@@ -585,3 +585,169 @@
 
 (convert Offset32 i32 offset32_to_i32)
 (convert i32 Offset32 i32_to_offset32)
+
+(model Unit (type (bv 1)))
+
+(model bool (type Bool))
+
+(model u8 (type (bv 8)))
+
+(model u16 (type (bv 16)))
+
+(model u32 (type (bv 32)))
+
+(model u64 (type (bv 64)))
+
+(model usize (type Int))
+
+(model i8 (type (bv 8)))
+
+(model i16 (type (bv 16)))
+
+(model i32 (type (bv 32)))
+
+(model i64 (type (bv 64)))
+
+(model isize (type Int))
+
+(model Type (type (struct (bits Int))))
+
+(model Value (type (bv)))
+
+(spec (i64_neg x) (provide (= result (bvneg x))))
+
+(spec (u64_sub x y) (provide (= result (bvsub x y))))
+
+(spec (u64_shl x y) (provide (= result (bvshl x y))))
+
+(spec (u64_eq x y) (provide (= result (= x y))))
+
+(spec (i64_sextend_imm64 ty a) (provide (= result (sign_ext 64 (conv_to (:bits ty) a)))))
+
+(spec (u64_is_odd x) (provide (= result (= (conv_to 1 x) #b1))))
+
+(model I8 (const (struct (bits 8))))
+
+(model I16 (const (struct (bits 16))))
+
+(model I32 (const (struct (bits 32))))
+
+(model I64 (const (struct (bits 64))))
+
+(model I128 (const (struct (bits 128))))
+
+(model F32 (const (struct (bits 32))))
+
+(model F64 (const (struct (bits 64))))
+
+(model I8X16 (const (struct (bits 128))))
+
+(spec (ty_bits ty) (provide (= result (int2bv 8 (:bits ty)))))
+
+(spec (ty_bits_u16 ty) (provide (= result (int2bv 16 (:bits ty)))))
+
+(spec (ty_bytes ty) (provide (= result (bits2bytes! (int2bv 16 (:bits ty))))))
+
+(spec (mem_flags_trusted)
+      (provide (:aligned result) (= (:trapcode result) #b1111))
+)
+
+(spec (fits_in_16 ty)
+      (provide (= result ty))
+      (match (<= (:bits result) 16)))
+
+(spec (fits_in_32 ty)
+      (provide (= result ty))
+      (match (<= (:bits result) 32)))
+
+(spec (fits_in_64 ty)
+      (provide (= result ty))
+      (match (<= (:bits result) 64)))
+
+(spec (ty_int_ref_scalar_64 ty)
+      (provide (= result ty))
+      (match
+            (or
+                  (= (:bits result) 8)
+                  (= (:bits result) 16)
+                  (= (:bits result) 32)
+                  (= (:bits result) 64))))
+
+(spec (ty_32_or_64 ty)
+      (provide (= result ty))
+      (match (or (= (:bits result) 32) (= (:bits result) 64))))
+
+(spec (ty_int arg) (provide (= arg result)))
+
+(spec (ty_scalar_float ty)
+      (provide (= result ty))
+      (match (or (= (:bits result) 32) (= (:bits result) 64))))
+
+(spec (ty_float_or_vec ty)
+      (provide (= result ty))
+      (match (or (= (:bits result) 32) (= (:bits result) 64) (= (:bits result) 128))))
+
+(attr ty_vec64 (tag vector))
+
+(attr ty_vec128 (tag vector))
+
+(attr ty_dyn_vec64 (tag vector))
+
+(spec (u64_from_imm64 arg) (provide (= arg result)))
+
+(spec (nonzero_u64_from_imm64 n)
+      (provide (= n result))
+      (match (not (bv_is_zero! result)))
+)
+
+(spec (u32_from_ieee32 arg) (provide (= result arg)))
+
+(spec (u64_from_ieee64 arg) (provide (= result arg)))
+
+(spec (offset32_to_i32 offset) (provide (= result offset)))
+
+(spec (i32_to_offset32 x) (provide (= result x)))
+
+(spec (intcc_unsigned cc)
+      (provide
+            (= result
+                  (match cc
+                        ((Equal) (IntCC.Equal))
+                        ((NotEqual) (IntCC.NotEqual))
+                        ((SignedGreaterThanOrEqual) (IntCC.UnsignedGreaterThanOrEqual))
+                        ((SignedGreaterThan) (IntCC.UnsignedGreaterThan))
+                        ((SignedLessThanOrEqual) (IntCC.UnsignedLessThanOrEqual))
+                        ((SignedLessThan) (IntCC.UnsignedLessThan))
+                        ((UnsignedGreaterThanOrEqual) (IntCC.UnsignedGreaterThanOrEqual))
+                        ((UnsignedGreaterThan) (IntCC.UnsignedGreaterThan))
+                        ((UnsignedLessThanOrEqual) (IntCC.UnsignedLessThanOrEqual))
+                        ((UnsignedLessThan) (IntCC.UnsignedLessThan))
+                  )
+            )
+      )
+)
+
+(spec (signed_cond_code cc)
+      (match
+            (match cc
+                  ((Equal) false)
+                  ((NotEqual) false)
+                  ((SignedGreaterThanOrEqual) true)
+                  ((SignedGreaterThan) true)
+                  ((SignedLessThanOrEqual) true)
+                  ((SignedLessThan) true)
+                  ((UnsignedGreaterThanOrEqual) false)
+                  ((UnsignedGreaterThan) false)
+                  ((UnsignedLessThanOrEqual) false)
+                  ((UnsignedLessThan) false)
+            )
+      )
+      (provide (= result cc))
+)
+
+(spec (trap_code_division_by_zero) (provide (= result (TrapCode.IntegerDivisionByZero))))
+
+(spec (trap_code_integer_overflow) (provide (= result (TrapCode.IntegerOverflow))))
+
+(spec (trap_code_bad_conversion_to_integer)
+      (provide (= result (TrapCode.BadConversionToInteger))))

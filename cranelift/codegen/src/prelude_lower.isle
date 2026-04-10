@@ -1151,7 +1151,7 @@
 (extern constructor try_call_none try_call_none)
 
 ;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
- 
+
 (decl pure partial safe_divisor_from_imm64 (Type Imm64) u64)
 (extern constructor safe_divisor_from_imm64 safe_divisor_from_imm64)
 
@@ -1170,3 +1170,222 @@
 (convert ValueRegsVec InstOutput output_vec)
 (convert ExternalName BoxExternalName box_external_name)
 (convert PReg Reg preg_to_reg)
+
+(model Inst (type (bv)))
+
+(model ValueRegs
+      (type
+            (struct
+                  (lo (named Reg))
+                  (hi (named Reg))
+            )
+      )
+)
+
+(model InstOutput (type (bv)))
+
+(model WritableReg (type (bv)))
+
+(spec (value_reg arg)
+    (provide (= (:lo result) arg)))
+
+(spec (output_none) (provide (= result #b1)))
+
+(spec (output arg)
+      (provide
+            ; Two input registers are the same width.
+            (= (widthof (:lo arg)) (widthof (:hi arg)))
+
+            ; Output is the concatenation of the two registers.
+            (let
+                  ((cat (concat (:hi arg) (:lo arg))))
+                  (= cat (conv_to (widthof cat) result))
+            )
+      )
+)
+
+(spec (temp_writable_reg ty) (provide (= (:bits ty) (widthof result))))
+
+(spec (put_in_reg arg)
+      (provide (= result (conv_to 64 arg)))
+      (require (<= (widthof arg) 64))
+)
+
+(spec (put_in_regs arg)
+      (provide
+            (= (:lo result) (extract  63  0 (conv_to 128 arg)))
+            (= (:hi result) (extract 127 64 (conv_to 128 arg)))
+      )
+)
+
+(spec (value_regs_get regs index)
+      (provide
+            (= result (switch index
+                  (0 (:lo regs))
+                  (1 (:hi regs))
+            ))
+      )
+)
+
+(attr multi_reg_to_pair_and_single (veri chain))
+
+(spec (writable_reg_to_reg reg) (provide (= result reg)))
+
+(spec (has_type ty arg)
+      (provide
+            (= result arg)
+            (= (:bits ty) (widthof arg))
+      )
+)
+
+(spec (def_inst arg)
+      (provide (= result arg))
+)
+
+(spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
+
+(spec (i32_from_iconst arg)
+      (provide (= arg (extract 31 0 (sign_ext 64 result))))
+      (match
+            ; result <= i32::MAX
+            (bvsle (sign_ext 64 result) #x000000007fffffff)
+            ; i32::MIN <= result
+            (bvsle (bvneg #x0000000080000000) (sign_ext 64 result))
+      )
+)
+
+(instantiate i32_from_iconst
+    ((args (bv 32)) (ret (bv 8)))
+    ((args (bv 32)) (ret (bv 16)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 32)) (ret (bv 64)))
+)
+
+(spec (is_sinkable_inst value) (match true) (provide (= result value)))
+
+(spec (uimm8 arg)
+      (provide (= result (zero_ext 64 arg)))
+      (match
+            (bvsge result #x0000000000000000) ; >= 0
+            (bvslt result #x0000000000000100) ; < 256
+      )
+)
+
+(spec (emit inst) (provide (= result #b1)))
+
+(spec (sink_inst inst) (provide true))
+
+(model VCodeConstant (type !))
+
+(spec (emit_side_effect arg) (provide true))
+
+(model ProducesFlags
+      (type
+            (struct
+                  (flags  (named NZCV))
+                  (result (named Reg))
+                  (has_result Bool)
+            )
+      )
+)
+
+(spec (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst reg)
+      (provide
+            (= (:flags result) (:flags_out inst))
+            (= (:result result) reg)
+            (:has_result result)
+      )
+)
+
+(spec (ProducesFlags.ProducesFlagsSideEffect inst)
+      (provide
+            (= (:flags result) (:flags_out inst))
+            (not (:has_result result))
+      )
+)
+
+(spec (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2)
+      (provide
+            ; Flags output from the first instruction pass to the second's input.
+            (= (:flags_out inst1) (:flags_in inst2))
+
+            ; Result flags of the ProducesFlags wrapper are from the second
+            ; instruction's output.
+            (= (:flags result) (:flags_out inst2))
+
+            ; No value is produced.
+            (not (:has_result result))
+      )
+)
+
+(attr produces_flags_concat (tag TODO))
+
+(model ConsumesFlags
+      (type
+            (struct
+                  (flags  (named NZCV))
+                  (result (named Reg))
+                  (has_result Bool)
+            )
+      )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer inst reg)
+      (provide
+            (= (:flags result) (:flags_in inst))
+            (= (:result result) reg)
+            (:has_result result)
+      )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsReturnsReg inst reg)
+      (provide
+            (= (:flags result) (:flags_in inst))
+            (= (:result result) reg)
+            (:has_result result)
+      )
+)
+
+(spec (ConsumesFlags.ConsumesFlagsSideEffect inst)
+      (provide
+            (= (:flags result) (:flags_in inst))
+            (not (:has_result result))
+      )
+)
+
+(spec (with_flags producer consumer)
+      (provide
+            ; Transfer flags from producer to consumer.
+            (= (:flags producer) (:flags consumer))
+            ; Construct resulting value registers.
+            (=> (and (:has_result producer) (:has_result consumer))
+                  (and
+                        (= (:lo result) (:result producer))
+                        (= (:hi result) (:result consumer))
+                  )
+            )
+            (=> (and (not (:has_result producer)) (:has_result consumer))
+                  (= (:lo result) (:result consumer))
+            )
+            (=> (and (:has_result producer) (not (:has_result consumer)))
+                  (= (:lo result) (:result producer))
+            )
+      )
+)
+
+(spec (safe_divisor_from_imm64 ty arg)
+      (match
+            (let (
+                  (minus1 (zero_ext 64 (bvones! (:bits ty))))
+                  (zero (bvzero! 64))
+                  (bits (bvand arg minus1))
+            )
+            (and
+                  (not (= bits minus1))
+                  (not (= bits zero)))))
+      (provide
+            (let (
+                  (minus1 (zero_ext 64 (bvones! (:bits ty))))
+                  (bits (bvand arg minus1))
+            )
+            (= result bits))))

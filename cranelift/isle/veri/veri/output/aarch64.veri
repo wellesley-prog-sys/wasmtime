@@ -1,0 +1,83 @@
+#0	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+		applicability = applicable
+		verification = success
+#1	operand_size_32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+#2	operand_size_64
+		type solution status = solved
+		applicability = applicable
+		verification = success
+#3	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+		applicability = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+		applicability = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+		applicability = applicable
+		verification = success
+#4	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+		applicability = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+		applicability = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+		applicability = applicable
+		verification = success
+#5	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+		applicability = inapplicable
+#6	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+		applicability = applicable
+		verification = success
+#78	iadd_base_case
