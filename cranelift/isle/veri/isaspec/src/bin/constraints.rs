@@ -4,9 +4,9 @@ use anyhow::Result;
 use clap::Parser as ClapParser;
 use cranelift_codegen::ir::types::I64;
 use cranelift_codegen::isa::aarch64::inst::{
-    vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, BitOp, Cond, FPUOp1, FPUOp2, Imm12,
-    ImmLogic, ImmShift, Inst, MoveWideConst, MoveWideOp, OperandSize, ScalarSize, ShiftOp,
-    ShiftOpAndAmt, ShiftOpShiftImm, VecALUOp, VecMisc2, VectorSize, NZCV,
+    ALUOp, ALUOp3, BitOp, Cond, FPUOp1, FPUOp2, Imm12, ImmLogic, ImmShift, Inst, MoveWideConst,
+    MoveWideOp, NZCV, OperandSize, ScalarSize, ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm, VecALUOp,
+    VecMisc2, VectorSize, vreg, writable_vreg, writable_xreg, xreg,
 };
 use cranelift_isle::printer;
 use cranelift_isle_veri_aslp::ast::Block;
@@ -95,7 +95,7 @@ fn define_insts() -> Vec<Inst> {
         ALUOp::Lsr,
         ALUOp::Asr,
         ALUOp::Lsl,
-        ALUOp::RotR,
+        ALUOp::Extr,
         ALUOp::SDiv,
         ALUOp::UDiv,
     ];

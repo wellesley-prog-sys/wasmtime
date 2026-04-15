@@ -16,15 +16,15 @@ use crate::{
 };
 use anyhow::Result;
 use cranelift_codegen::{
-    ir::{types::I8, MemFlags},
-    isa::aarch64::inst::{
-        vreg, writable_vreg, writable_xreg, xreg, ALUOp, ALUOp3, AMode, ASIMDFPModImm,
-        ASIMDMovModImm, BitOp, Cond, ExtendOp, FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI,
-        FPUOpRIMod, FPURightShiftImm, FpuRoundMode, FpuToIntOp, Imm12, Inst, IntToFpuOp,
-        MoveWideConst, MoveWideOp, OperandSize, SImm9, ScalarSize, ShiftOp, ShiftOpAndAmt,
-        ShiftOpShiftImm, UImm12Scaled, UImm5, VecALUOp, VecLanesOp, VecMisc2, VectorSize, NZCV,
-    },
     Reg, Writable,
+    ir::{MemFlags, types::I8},
+    isa::aarch64::inst::{
+        ALUOp, ALUOp3, AMode, ASIMDFPModImm, ASIMDMovModImm, BitOp, Cond, ExtendOp,
+        FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
+        FpuToIntOp, Imm12, Inst, IntToFpuOp, MoveWideConst, MoveWideOp, NZCV, OperandSize, SImm9,
+        ScalarSize, ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm, UImm5, UImm12Scaled, VecALUOp,
+        VecLanesOp, VecMisc2, VectorSize, vreg, writable_vreg, writable_xreg, xreg,
+    },
 };
 use cranelift_isle::ast::{SpecExpr, SpecOp};
 use itertools::Itertools;
@@ -166,7 +166,7 @@ fn define_alu_rrr() -> SpecConfig {
         ALUOp::UMulH,
         ALUOp::SDiv,
         ALUOp::UDiv,
-        ALUOp::RotR,
+        ALUOp::Extr,
         ALUOp::Lsr,
         ALUOp::Asr,
         ALUOp::Lsl,
@@ -554,7 +554,7 @@ fn alu_op_from_shiftop(op: ShiftOp) -> ALUOp {
         ShiftOp::LSL => ALUOp::Lsl,
         ShiftOp::LSR => ALUOp::Lsr,
         ShiftOp::ASR => ALUOp::Asr,
-        ShiftOp::ROR => ALUOp::RotR,
+        ShiftOp::ROR => ALUOp::Extr,
     }
 }
 

@@ -498,13 +498,13 @@ impl ToSExpr for SpecExpr {
                 ty.to_sexpr(),
             ]),
             SpecExpr::Field { field, x, pos:_ } => SExpr::List(vec![
-                SExpr::atom(format!(":{}", field.0)), 
+                SExpr::atom(format!(":{}", field.0)),
                 x.to_sexpr(),
             ]),
             SpecExpr::Discriminator { variant, x, pos:_ } => SExpr::List(vec![
-                SExpr::atom(format!(":{}", variant.0)), 
-                x.to_sexpr(), 
-            ]), 
+                SExpr::atom(format!(":{}", variant.0)),
+                x.to_sexpr(),
+            ]),
             SpecExpr::Match { x, arms, pos:_ } => {
                 let mut parts = vec![SExpr::atom("match"), x.to_sexpr()];
                 parts.extend(arms.iter().map(ToSExpr::to_sexpr));
@@ -513,12 +513,12 @@ impl ToSExpr for SpecExpr {
             SpecExpr::Let { defs, body, pos:_ } => {
                 let defs = defs.iter().map(|(name, expr)| SExpr::List(
                     vec![name.to_sexpr(), expr.to_sexpr()]
-                )).collect::<Vec<_>>(); 
+                )).collect::<Vec<_>>();
 
                 SExpr::List(vec![
-                    SExpr::atom("let"), 
-                    SExpr::List(defs), 
-                    body.to_sexpr(), 
+                    SExpr::atom("let"),
+                    SExpr::List(defs),
+                    body.to_sexpr(),
                 ])}
             SpecExpr::With {decls, body, pos: _ } => {
                 let decls = decls.iter().map(ToSExpr::to_sexpr).collect::<Vec<_>>();

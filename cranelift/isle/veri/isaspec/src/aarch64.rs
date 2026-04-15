@@ -1,9 +1,11 @@
 use cranelift_codegen::{
+    MachBuffer, MachInstEmit,
     isa::aarch64::inst::{
-        emit::{EmitInfo, EmitState},
         Inst,
+        emit::{EmitInfo, EmitState},
     },
-    settings, MachBuffer, MachInstEmit,
+    isa::aarch64,
+    settings,
 };
 
 use crate::{
@@ -80,7 +82,8 @@ pub fn state() -> Scope {
 /// Assemble the instruction to machine code bytes.
 pub fn assemble(inst: &Inst) -> Vec<u8> {
     let flags = settings::Flags::new(settings::builder());
-    let emit_info = EmitInfo::new(flags);
+    let isa_flags = aarch64::settings::Flags::new(&flags, &aarch64::settings::builder());
+    let emit_info = EmitInfo::new(flags, isa_flags);
     let mut buffer = MachBuffer::new();
     inst.emit(&mut buffer, &emit_info, &mut Default::default());
     let buffer = buffer.finish(&Default::default(), &mut Default::default());

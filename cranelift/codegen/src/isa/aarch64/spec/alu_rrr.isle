@@ -97,7 +97,7 @@
                                     (= t2 #x0000000000000000)
                                     (= t4 (extract 63 0 (bvsdiv (zero_ext 128 rn) (zero_ext 128 rm)))))
                                 (= rd (if t1 t2 t4)))))
-                    ((RotR)
+                    ((Extr)
                         (with
                             (t1 t3 t4 t5)
                             (and
@@ -192,7 +192,7 @@
                                 (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
                                 (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
                                 (= rd t4))))
-                    ((RotR)
+                    ((Extr)
                         (with
                             (t1 t3 t4 t5)
                             (and
@@ -242,7 +242,7 @@
                     ((UMulH) true)
                     ((SDiv) true)
                     ((UDiv) true)
-                    ((RotR) true)
+                    ((Extr) true)
                     ((Lsr) true)
                     ((Asr) true)
                     ((Lsl) true)
@@ -260,7 +260,7 @@
                     ((EorNot) true)
                     ((AddS) true)
                     ((SubS) true)
-                    ((RotR) true)
+                    ((Extr) true)
                     ((Lsr) true)
                     ((Asr) true)
                     ((Lsl) true)

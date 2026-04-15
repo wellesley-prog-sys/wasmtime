@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
-use cranelift_codegen::{isa::aarch64::inst::Inst, Reg, RegClass};
+use anyhow::{Result, bail};
+use cranelift_codegen::{Reg, RegClass, isa::aarch64::inst::Inst};
 
 use crate::{
     aarch64::{self, pstate_field},

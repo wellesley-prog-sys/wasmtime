@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use cranelift_isle::ast::{Arm, FieldInit, Ident, ModelType, SpecExpr, SpecOp};
 use cranelift_isle::lexer::Pos;
@@ -61,11 +61,7 @@ pub fn spec_eq(x: SpecExpr, y: SpecExpr) -> SpecExpr {
 }
 
 pub fn spec_eq_bool(x: SpecExpr, val: bool) -> SpecExpr {
-    if val {
-        x
-    } else {
-        spec_not(x)
-    }
+    if val { x } else { spec_not(x) }
 }
 
 pub fn spec_or(args: Vec<SpecExpr>) -> SpecExpr {

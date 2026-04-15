@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use itertools::Itertools;
 
 use cranelift_codegen::isa::aarch64::inst::Inst;
@@ -16,7 +16,7 @@ use crate::constraints::{Binding, Scope, Target, Translator};
 use crate::spec::spec_field;
 use crate::{
     aarch64,
-    spec::{spec_all, spec_ident, spec_idents, spec_var, spec_with, substitute, Conditions},
+    spec::{Conditions, spec_all, spec_ident, spec_idents, spec_var, spec_with, substitute},
 };
 
 pub struct SpecConfig {

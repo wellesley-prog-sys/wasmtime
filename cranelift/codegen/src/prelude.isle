@@ -751,3 +751,9 @@
 
 (spec (trap_code_bad_conversion_to_integer)
       (provide (= result (TrapCode.BadConversionToInteger))))
+
+(spec (i64_checked_neg x)
+      (match (not (= x #x8000000000000000)))
+      (provide (= result (bvneg x))))
+
+(spec (i64_cast_unsigned x) (provide (= result x)))

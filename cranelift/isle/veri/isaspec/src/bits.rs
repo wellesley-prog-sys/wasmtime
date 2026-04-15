@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ops::Range};
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use cranelift_isle_veri_aslp::opcode::{self, Opcode};
 
 #[derive(Clone)]

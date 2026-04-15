@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::vec;
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use cranelift_isle::ast::{SpecExpr, SpecOp};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle_veri_aslp::ast::{Block, Expr, Func, LExpr, Slice, Stmt};
