@@ -23,17 +23,14 @@
                             (t2)
                             (and
                                 (= t2 (bvadd rn rm))
-                                (=
-                                    (:V (:flags_out result))
-                                    (bvnot
-                                        (if (= (sign_ext 128 t2) (bvadd (sign_ext 128 rn) (sign_ext 128 rm))) #b1 #b0)))
-                                (=
-                                    (:C (:flags_out result))
-                                    (bvnot
-                                        (if (= (zero_ext 128 t2) (bvadd (zero_ext 128 rn) (zero_ext 128 rm))) #b1 #b0)))
+                                (= (:V (:flags_out result)) (bvnot (if (= (sign_ext 128 t2) (bvadd (sign_ext 128 rn) (sign_ext 128 rm))) #b1 #b0)))
+                                (= (:C (:flags_out result)) (bvnot (if (= (zero_ext 128 t2) (bvadd (zero_ext 128 rn) (zero_ext 128 rm))) #b1 #b0)))
                                 (= (:Z (:flags_out result)) (if (= t2 #x0000000000000000) #b1 #b0))
                                 (= (:N (:flags_out result)) (extract 63 63 t2))
-                                (= rd t2))))
+                                (= rd t2)
+                            )
+                        )
+                    )
                     ((SubS)
                         (with
                             (t1 t3)
@@ -46,27 +43,32 @@
                                         (if
                                             (=
                                                 (sign_ext 128 (bvadd t3 #x0000000000000001))
-                                                (bvadd
-                                                    (bvadd (sign_ext 128 rn) (sign_ext 128 t1))
-                                                    #x00000000000000000000000000000001))
+                                                (bvadd (bvadd (sign_ext 128 rn) (sign_ext 128 t1)) #x00000000000000000000000000000001)
+                                            )
                                             #b1
-                                            #b0)))
+                                            #b0
+                                        )
+                                    )
+                                )
                                 (=
                                     (:C (:flags_out result))
                                     (bvnot
                                         (if
                                             (=
                                                 (zero_ext 128 (bvadd t3 #x0000000000000001))
-                                                (bvadd
-                                                    (bvadd (zero_ext 128 rn) (zero_ext 128 t1))
-                                                    #x00000000000000000000000000000001))
+                                                (bvadd (bvadd (zero_ext 128 rn) (zero_ext 128 t1)) #x00000000000000000000000000000001)
+                                            )
                                             #b1
-                                            #b0)))
-                                (=
-                                    (:Z (:flags_out result))
-                                    (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
+                                            #b0
+                                        )
+                                    )
+                                )
+                                (= (:Z (:flags_out result)) (if (= (bvadd t3 #x0000000000000001) #x0000000000000000) #b1 #b0))
                                 (= (:N (:flags_out result)) (extract 63 63 (bvadd t3 #x0000000000000001)))
-                                (= rd (bvadd t3 #x0000000000000001)))))
+                                (= rd (bvadd t3 #x0000000000000001))
+                            )
+                        )
+                    )
                     ((SMulH) (= rd (extract 127 64 (bvmul (sign_ext 128 rn) (sign_ext 128 rm)))))
                     ((UMulH) (= rd (extract 127 64 (bvmul (zero_ext 128 rn) (zero_ext 128 rm)))))
                     ((SDiv)
@@ -85,18 +87,25 @@
                                             (if
                                                 (and (= rn #x8000000000000000) (= rm #xffffffffffffffff))
                                                 #x00000000000000008000000000000000
-                                                (sign_ext 128 (bvsdiv rn rm))))))
-                                (= rd (if t1 t2 t4)))))
+                                                (sign_ext 128 (bvsdiv rn rm))
+                                            )
+                                        )
+                                    )
+                                )
+                                (= rd (if t1 t2 t4))
+                            )
+                        )
+                    )
                     ((UDiv)
                         (with
                             (t1 t2 t4)
                             (and
                                 (= t1 (= rm #x0000000000000000))
-                                (if
-                                    t1
-                                    (= t2 #x0000000000000000)
-                                    (= t4 (extract 63 0 (bvsdiv (zero_ext 128 rn) (zero_ext 128 rm)))))
-                                (= rd (if t1 t2 t4)))))
+                                (if t1 (= t2 #x0000000000000000) (= t4 (extract 63 0 (bvsdiv (zero_ext 128 rn) (zero_ext 128 rm)))))
+                                (= rd (if t1 t2 t4))
+                            )
+                        )
+                    )
                     ((Extr)
                         (with
                             (t1 t3 t4 t5)
@@ -109,15 +118,21 @@
                                         (not (= (extract 5 0 rm) #b000000))
                                         (=
                                             t4
-                                            (bvor
-                                                (bvlshr rn (zero_ext 64 (extract 5 0 rm)))
-                                                (bvshl rn (zero_ext 64 (bvsub #x40 (zero_ext 8 (extract 5 0 rm)))))))))
+                                            (bvor (bvlshr rn (zero_ext 64 (extract 5 0 rm))) (bvshl rn (zero_ext 64 (bvsub #x40 (zero_ext 8 (extract 5 0 rm))))))
+                                        )
+                                    )
+                                )
                                 (= t5 (if t1 t3 t4))
-                                (= rd t5))))
+                                (= rd t5)
+                            )
+                        )
+                    )
                     ((Lsr) (= rd (bvlshr rn (zero_ext 64 (extract 5 0 rm)))))
                     ((Asr) (= rd (bvashr rn (zero_ext 64 (extract 5 0 rm)))))
                     ((Lsl) (= rd (bvshl rn (zero_ext 64 (extract 5 0 rm)))))
-                    ((Adc) (= rd (bvadd (bvadd rn rm) (zero_ext 64 (extract 0 0 (:C (:flags_in result)))))))))
+                    ((Adc) (= rd (bvadd (bvadd rn rm) (zero_ext 64 (extract 0 0 (:C (:flags_in result)))))))
+                )
+            )
             ((Size32)
                 (match
                     alu_op
@@ -137,61 +152,48 @@
                                 (= t3 (zero_ext 64 (bvadd (extract 31 0 rn) (extract 31 0 rm))))
                                 (=
                                     (:V (:flags_out result))
-                                    (bvnot
-                                        (if
-                                            (=
-                                                (sign_ext 64 t2)
-                                                (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 (extract 31 0 rm))))
-                                            #b1
-                                            #b0)))
+                                    (bvnot (if (= (sign_ext 64 t2) (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 (extract 31 0 rm)))) #b1 #b0))
+                                )
                                 (=
                                     (:C (:flags_out result))
-                                    (bvnot
-                                        (if
-                                            (=
-                                                t3
-                                                (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 (extract 31 0 rm))))
-                                            #b1
-                                            #b0)))
+                                    (bvnot (if (= t3 (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 (extract 31 0 rm)))) #b1 #b0))
+                                )
                                 (= (:Z (:flags_out result)) (if (= t2 #x00000000) #b1 #b0))
                                 (= (:N (:flags_out result)) (extract 31 31 t2))
-                                (= rd t3))))
+                                (= rd t3)
+                            )
+                        )
+                    )
                     ((SubS)
                         (with
                             (t1 t3 t4)
                             (and
                                 (= t1 (bvnot (extract 31 0 rm)))
                                 (= t3 (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))))
-                                (=
-                                    t4
-                                    (zero_ext
-                                        64
-                                        (bvadd (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))) #x00000001)))
+                                (= t4 (zero_ext 64 (bvadd (bvadd (extract 31 0 rn) (bvnot (extract 31 0 rm))) #x00000001)))
                                 (=
                                     (:V (:flags_out result))
                                     (bvnot
                                         (if
                                             (=
                                                 (sign_ext 64 (bvadd t3 #x00000001))
-                                                (bvadd
-                                                    (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1))
-                                                    #x0000000000000001))
+                                                (bvadd (bvadd (sign_ext 64 (extract 31 0 rn)) (sign_ext 64 t1)) #x0000000000000001)
+                                            )
                                             #b1
-                                            #b0)))
+                                            #b0
+                                        )
+                                    )
+                                )
                                 (=
                                     (:C (:flags_out result))
-                                    (bvnot
-                                        (if
-                                            (=
-                                                t4
-                                                (bvadd
-                                                    (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1))
-                                                    #x0000000000000001))
-                                            #b1
-                                            #b0)))
+                                    (bvnot (if (= t4 (bvadd (bvadd (zero_ext 64 (extract 31 0 rn)) (zero_ext 64 t1)) #x0000000000000001)) #b1 #b0))
+                                )
                                 (= (:Z (:flags_out result)) (if (= (bvadd t3 #x00000001) #x00000000) #b1 #b0))
                                 (= (:N (:flags_out result)) (extract 31 31 (bvadd t3 #x00000001)))
-                                (= rd t4))))
+                                (= rd t4)
+                            )
+                        )
+                    )
                     ((Extr)
                         (with
                             (t1 t3 t4 t5)
@@ -206,22 +208,29 @@
                                             t4
                                             (bvor
                                                 (bvlshr (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm)))
-                                                (bvshl
-                                                    (extract 31 0 rn)
-                                                    (zero_ext 32 (bvsub #x20 (zero_ext 8 (extract 4 0 rm)))))))))
+                                                (bvshl (extract 31 0 rn) (zero_ext 32 (bvsub #x20 (zero_ext 8 (extract 4 0 rm)))))
+                                            )
+                                        )
+                                    )
+                                )
                                 (= t5 (if t1 t3 t4))
-                                (= rd (zero_ext 64 t5)))))
+                                (= rd (zero_ext 64 t5))
+                            )
+                        )
+                    )
                     ((Lsr) (= rd (zero_ext 64 (bvlshr (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm))))))
                     ((Asr) (= rd (zero_ext 64 (bvashr (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm))))))
                     ((Lsl) (= rd (zero_ext 64 (bvshl (extract 31 0 rn) (zero_ext 32 (extract 4 0 rm))))))
                     ((Adc)
                         (=
                             rd
-                            (zero_ext
-                                64
-                                (bvadd
-                                    (bvadd (extract 31 0 rn) (extract 31 0 rm))
-                                    (zero_ext 32 (extract 0 0 (:C (:flags_in result))))))))))))
+                            (zero_ext 64 (bvadd (bvadd (extract 31 0 rn) (extract 31 0 rm)) (zero_ext 32 (extract 0 0 (:C (:flags_in result))))))
+                        )
+                    )
+                )
+            )
+        )
+    )
     (require
         (match
             size
@@ -246,7 +255,9 @@
                     ((Lsr) true)
                     ((Asr) true)
                     ((Lsl) true)
-                    ((Adc) true)))
+                    ((Adc) true)
+                )
+            )
             ((Size32)
                 (match
                     alu_op
@@ -264,4 +275,9 @@
                     ((Lsr) true)
                     ((Asr) true)
                     ((Lsl) true)
-                    ((Adc) true))))))
+                    ((Adc) true)
+                )
+            )
+        )
+    )
+)

@@ -4,7 +4,6 @@
 
 (spec
     (MInst.Store8 rd mem flags)
-    (modifies isa_store)
     (provide
         (match
             mem
@@ -13,13 +12,17 @@
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 8)
                     (= (:addr isa_store) (bvadd rn rm))
-                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))
+                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                )
+            )
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 8)
                     (= (:addr isa_store) (bvadd rn rm))
-                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))
+                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                )
+            )
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -28,19 +31,27 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 8)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))
+                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 8)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))
+                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 8)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 rm)))
-                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))))
+                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                        )
+                    )
+                )
+            )
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -49,31 +60,45 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 8)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))
+                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 8)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))
+                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 8)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 rm)))
-                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))))
+                            (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                        )
+                    )
+                )
+            )
             ((Unscaled rn simm9)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 8)
                     (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
-                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))
+                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                )
+            )
             ((UnsignedOffset rn uimm12)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 8)
                     (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 11 0 uimm12))))
-                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))))))
+                    (= (conv_to 8 (:value isa_store)) (extract 7 0 (as rd (bv 64))))
+                )
+            )
+        )
+    )
     (require
         (match
             mem
@@ -82,13 +107,15 @@
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((Unscaled rn simm9) true)
-            ((UnsignedOffset rn uimm12) true))))
+            ((UnsignedOffset rn uimm12) true)
+        )
+    )
+)
 
 (attr MInst.Store16 (tag isaspec_generated))
 
 (spec
     (MInst.Store16 rd mem flags)
-    (modifies isa_store)
     (provide
         (match
             mem
@@ -97,13 +124,17 @@
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 16)
                     (= (:addr isa_store) (bvadd rn rm))
-                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))
+                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                )
+            )
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 16)
                     (= (:addr isa_store) (bvadd rn (concat (extract 62 0 rm) #b0)))
-                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))
+                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                )
+            )
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -112,19 +143,27 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 16)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b0))))
-                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))
+                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 16)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b0))))
-                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))
+                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 16)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 62 0 rm) #b0))))
-                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))))
+                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                        )
+                    )
+                )
+            )
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -133,31 +172,45 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 16)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))
+                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 16)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))
+                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 16)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 rm)))
-                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))))
+                            (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                        )
+                    )
+                )
+            )
             ((Unscaled rn simm9)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 16)
                     (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
-                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))
+                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                )
+            )
             ((UnsignedOffset rn uimm12)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 16)
                     (= (:addr isa_store) (bvadd rn (concat (zero_ext 63 (extract 11 0 uimm12)) #b0)))
-                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))))))
+                    (= (conv_to 16 (:value isa_store)) (extract 15 0 (as rd (bv 64))))
+                )
+            )
+        )
+    )
     (require
         (match
             mem
@@ -166,13 +219,15 @@
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((Unscaled rn simm9) true)
-            ((UnsignedOffset rn uimm12) true))))
+            ((UnsignedOffset rn uimm12) true)
+        )
+    )
+)
 
 (attr MInst.Store32 (tag isaspec_generated))
 
 (spec
     (MInst.Store32 rd mem flags)
-    (modifies isa_store)
     (provide
         (match
             mem
@@ -181,13 +236,17 @@
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn rm))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                )
+            )
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn (concat (extract 61 0 rm) #b00)))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                )
+            )
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -196,19 +255,27 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b00))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b00))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 61 0 rm) #b00))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                        )
+                    )
+                )
+            )
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -217,31 +284,45 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 rm)))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                        )
+                    )
+                )
+            )
             ((Unscaled rn simm9)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                )
+            )
             ((UnsignedOffset rn uimm12)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn (concat (zero_ext 62 (extract 11 0 uimm12)) #b00)))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (as rd (bv 64))))
+                )
+            )
+        )
+    )
     (require
         (match
             mem
@@ -250,13 +331,15 @@
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((Unscaled rn simm9) true)
-            ((UnsignedOffset rn uimm12) true))))
+            ((UnsignedOffset rn uimm12) true)
+        )
+    )
+)
 
 (attr MInst.Store64 (tag isaspec_generated))
 
 (spec
     (MInst.Store64 rd mem flags)
-    (modifies isa_store)
     (provide
         (match
             mem
@@ -265,13 +348,17 @@
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn rm))
-                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))
+                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                )
+            )
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn (concat (extract 60 0 rm) #b000)))
-                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))
+                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                )
+            )
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -280,19 +367,27 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b000))))
-                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))
+                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b000))))
-                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))
+                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 60 0 rm) #b000))))
-                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))))
+                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                        )
+                    )
+                )
+            )
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -301,31 +396,45 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))
+                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))
+                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 rm)))
-                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))))
+                            (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                        )
+                    )
+                )
+            )
             ((Unscaled rn simm9)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
-                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))
+                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                )
+            )
             ((UnsignedOffset rn uimm12)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn (concat (zero_ext 61 (extract 11 0 uimm12)) #b000)))
-                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))))))
+                    (= (conv_to 64 (:value isa_store)) (as rd (bv 64)))
+                )
+            )
+        )
+    )
     (require
         (match
             mem
@@ -334,13 +443,15 @@
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((Unscaled rn simm9) true)
-            ((UnsignedOffset rn uimm12) true))))
+            ((UnsignedOffset rn uimm12) true)
+        )
+    )
+)
 
 (attr MInst.FpuStore32 (tag isaspec_generated))
 
 (spec
     (MInst.FpuStore32 rd mem flags)
-    (modifies isa_store)
     (provide
         (match
             mem
@@ -349,13 +460,17 @@
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn rm))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn (concat (extract 61 0 rm) #b00)))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -364,19 +479,27 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b00))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b00))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 61 0 rm) #b00))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
+                )
+            )
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -385,31 +508,45 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 32)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 rm)))
-                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))))
+                            (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
+                )
+            )
             ((Unscaled rn simm9)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
             ((UnsignedOffset rn uimm12)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 32)
                     (= (:addr isa_store) (bvadd rn (concat (zero_ext 62 (extract 11 0 uimm12)) #b00)))
-                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))))))
+                    (= (conv_to 32 (:value isa_store)) (extract 31 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
+        )
+    )
     (require
         (match
             mem
@@ -418,13 +555,15 @@
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((Unscaled rn simm9) true)
-            ((UnsignedOffset rn uimm12) true))))
+            ((UnsignedOffset rn uimm12) true)
+        )
+    )
+)
 
 (attr MInst.FpuStore64 (tag isaspec_generated))
 
 (spec
     (MInst.FpuStore64 rd mem flags)
-    (modifies isa_store)
     (provide
         (match
             mem
@@ -433,13 +572,17 @@
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn rm))
-                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))
+                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
             ((RegScaled rn rm)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn (concat (extract 60 0 rm) #b000)))
-                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))
+                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
             ((RegScaledExtended rn rm extendop)
                 (match
                     extendop
@@ -448,19 +591,27 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (concat (extract 31 0 rm) #b000))))
-                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 31 0 rm) #b000))))
-                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (concat (extract 60 0 rm) #b000))))
-                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))))
+                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
+                )
+            )
             ((RegExtended rn rm extendop)
                 (match
                     extendop
@@ -469,31 +620,45 @@
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (zero_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTW)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 31 0 rm))))
-                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))
+                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
                     ((SXTX)
                         (and
                             (= (:active isa_store) true)
                             (= (:size_bits isa_store) 64)
                             (= (:addr isa_store) (bvadd rn (sign_ext 64 rm)))
-                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))))
+                            (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                        )
+                    )
+                )
+            )
             ((Unscaled rn simm9)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn (sign_ext 64 (extract 8 0 simm9))))
-                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))
+                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
             ((UnsignedOffset rn uimm12)
                 (and
                     (= (:active isa_store) true)
                     (= (:size_bits isa_store) 64)
                     (= (:addr isa_store) (bvadd rn (concat (zero_ext 61 (extract 11 0 uimm12)) #b000)))
-                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))))))
+                    (= (conv_to 64 (:value isa_store)) (extract 63 0 (conv_to 128 (as rd (bv 64)))))
+                )
+            )
+        )
+    )
     (require
         (match
             mem
@@ -502,4 +667,7 @@
             ((RegScaledExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((RegExtended rn rm extendop) (match extendop ((UXTW) true) ((SXTW) true) ((SXTX) true)))
             ((Unscaled rn simm9) true)
-            ((UnsignedOffset rn uimm12) true))))
+            ((UnsignedOffset rn uimm12) true)
+        )
+    )
+)

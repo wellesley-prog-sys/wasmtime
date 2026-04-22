@@ -411,7 +411,8 @@
                                 t96
                                 t97
                                 t98
-                                t99)
+                                t99
+                            )
                             (and
                                 (= t0 #x0)
                                 (= t2 (= (extract 0 0 rn) #b1))
@@ -839,15 +840,25 @@
                                                                                 (zero_ext 8 t150)
                                                                                 (concat
                                                                                     (zero_ext 8 t125)
-                                                                                    (concat
-                                                                                        (zero_ext 8 t100)
-                                                                                        (concat
-                                                                                            (zero_ext 8 t75)
-                                                                                            (concat
-                                                                                                (zero_ext 8 t50)
-                                                                                                (zero_ext
-                                                                                                    8
-                                                                                                    t25))))))))))))))))))))))
+                                                                                    (concat (zero_ext 8 t100) (concat (zero_ext 8 t75) (concat (zero_ext 8 t50) (zero_ext 8 t25))))
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                    )
+                                                                )
+                                                            )
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
             ((Size8x8)
                 (match
                     op
@@ -1052,7 +1063,8 @@
                                 t96
                                 t97
                                 t98
-                                t99)
+                                t99
+                            )
                             (and
                                 (= t0 #x0)
                                 (= t2 (= (extract 0 0 rn) #b1))
@@ -1266,11 +1278,19 @@
                                                     (zero_ext 8 t150)
                                                     (concat
                                                         (zero_ext 8 t125)
-                                                        (concat
-                                                            (zero_ext 8 t100)
-                                                            (concat
-                                                                (zero_ext 8 t75)
-                                                                (concat
-                                                                    (zero_ext 8 t50)
-                                                                    (zero_ext 8 t25)))))))))))))))))
-    (require (match size ((Size8x16) (match op ((Cnt) true))) ((Size8x8) (match op ((Cnt) true))))))
+                                                        (concat (zero_ext 8 t100) (concat (zero_ext 8 t75) (concat (zero_ext 8 t50) (zero_ext 8 t25))))
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+    (require (match size ((Size8x16) (match op ((Cnt) true))) ((Size8x8) (match op ((Cnt) true)))))
+)

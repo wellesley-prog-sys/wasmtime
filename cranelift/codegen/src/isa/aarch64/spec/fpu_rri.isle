@@ -9,12 +9,9 @@
             (= (:lane_size_in_bits fpu_op) #x40)
             (=
                 (conv_to 128 (as rd (bv 64)))
-                (zero_ext
-                    128
-                    (extract
-                        63
-                        0
-                        (bvashr (zero_ext 128 (extract 63 0 (conv_to 128 (as rn (bv 64))))) (zero_ext 128 #x003f))))))
+                (zero_ext 128 (extract 63 0 (bvashr (zero_ext 128 (extract 63 0 (conv_to 128 (as rn (bv 64))))) (zero_ext 128 #x003f))))
+            )
+        )
         (=>
             (= (:lane_size_in_bits fpu_op) #x20)
             (=
@@ -22,14 +19,12 @@
                 (zero_ext
                     128
                     (concat
-                        (extract
-                            31
-                            0
-                            (bvashr (zero_ext 64 (extract 63 32 (conv_to 128 (as rn (bv 64))))) (zero_ext 64 #x001f)))
-                        (extract
-                            31
-                            0
-                            (bvashr
-                                (zero_ext 64 (extract 31 0 (conv_to 128 (as rn (bv 64)))))
-                                (zero_ext 64 #x001f))))))))
-    (require (or (= (:lane_size_in_bits fpu_op) #x40) (= (:lane_size_in_bits fpu_op) #x20))))
+                        (extract 31 0 (bvashr (zero_ext 64 (extract 63 32 (conv_to 128 (as rn (bv 64))))) (zero_ext 64 #x001f)))
+                        (extract 31 0 (bvashr (zero_ext 64 (extract 31 0 (conv_to 128 (as rn (bv 64))))) (zero_ext 64 #x001f)))
+                    )
+                )
+            )
+        )
+    )
+    (require (or (= (:lane_size_in_bits fpu_op) #x40) (= (:lane_size_in_bits fpu_op) #x20)))
+)

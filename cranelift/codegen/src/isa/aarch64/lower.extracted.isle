@@ -1,0 +1,132 @@
+(spec (lower arg)
+      (match true)
+      (provide
+            ; On successful execution, computation results match.
+            (if (not clif_trap)
+                  ; Results agree.
+                  (= result arg)
+                  ; If we expect a CLIF trap, it should happen in execution
+                  ; also.
+                  exec_trap
+            )
+
+            ; Should trap on both sides, or neither.
+            (= clif_trap exec_trap)
+
+            ; Load effects
+
+            ; Either both active, or both not.
+            (= (:active clif_load) (:active isa_load))
+
+            ; If active, their parameters must match.
+            (=> (:active clif_load) (= clif_load isa_load))
+
+            ; Store effects
+
+            ; Either both active, or both not.
+            (= (:active clif_store) (:active isa_store))
+            ; If active, their parameters must agree.
+            (=> (:active clif_store)
+                  (and
+                        (= (:size_bits clif_store) (:size_bits isa_store))
+                        (= (:addr clif_store) (:addr isa_store))
+                        (=
+                              (conv_to (:size_bits clif_store) (:value clif_store))
+                              (conv_to (:size_bits clif_store) (:value isa_store))
+                        )
+                  )
+            )
+      )
+)
+
+(attr rule iadd_i128 (tag i128))
+
+(attr rule iconcat_i128 (tag i128))
+
+(attr get_fneg_value (veri chain))
+
+(attr rule fma (tag vector))
+
+(attr lower_fmla (tag vector))
+
+(attr rule isub_i128 (tag i128))
+
+(attr rule imul_i128 (tag i128))
+
+(attr put_nonzero_in_reg_zext64 (veri chain))
+
+(attr put_nonzero_in_reg_sext64 (veri chain))
+
+(attr cmp_and_choose (veri chain))
+
+(attr rule cmp_and_choose_8_16 (veri priority))
+
+(attr rule uextend_i128 (tag i128))
+
+(attr rule uextend_load (tag slow))
+
+(attr aarch64_uload (veri chain))
+
+(attr rule sextend_i128 (tag i128))
+
+(attr rule sextend_load (tag slow))
+
+(attr aarch64_sload (veri chain))
+
+(attr rule lower_shl128 (tag i128))
+
+(attr do_shift (veri chain))
+
+(spec (shift_mask ty) (provide (= result (shift_mask! 64 (:bits ty)))))
+
+(attr rule lower_ushr128 (tag i128))
+
+(attr rule lower_sshr128 (tag i128))
+
+(spec (negate_imm_shift ty x)
+   (provide
+     (= result (bvand (bvsub (int2bv 6 (:bits ty)) x) (bvsub (int2bv 6 (:bits ty)) #b000001)))))
+
+(spec (rotr_mask ty) (provide (= (bvsub (int2bv 64 (:bits ty)) #x0000000000000001) result)))
+
+(spec (rotr_opposite_amount ty x)
+   (provide
+    (= (bvsub (int2bv 6 (:bits ty)) (bvand x (bvsub (int2bv 6 (:bits ty)) #b000001))) result)))
+
+(attr rule clz_8 (veri priority))
+
+(attr rule clz_16 (veri priority))
+
+(attr rule lower_clz128 (tag i128))
+
+(attr rule ctz_8 (veri priority))
+
+(attr rule ctz_16 (veri priority))
+
+(attr rule cls_8 (veri priority))
+
+(attr rule cls_16 (veri priority))
+
+(attr rule popcnt_i128 (tag i128))
+
+(attr rule popcnt_8x16 (tag vector))
+
+(attr rule load_f128 (tag i128))
+
+(attr rule load_i128 (tag i128))
+
+(attr rule load_i128 (tag vector))
+
+(attr rule load_ty_vec128 (tag vector))
+
+(attr rule load_ty_dyn_vec64 (tag vector))
+
+(attr rule load_ty_dyn_vec128 (tag vector))
+
+(attr rule bitcast_i128_simdfp (tag i128))
+
+(attr rule bitcast_simdfp_i128 (tag i128))
+
+(attr rule bitcast_i128 (tag i128))
+
+(attr extractlane (tag vector))

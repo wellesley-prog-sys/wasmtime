@@ -25,17 +25,27 @@
                                                         (concat
                                                             (concat
                                                                 (concat
-                                                                    (concat
-                                                                        (extract 2 2 (extract 7 5 (:imm imm)))
-                                                                        (extract 1 1 (extract 7 5 (:imm imm))))
-                                                                    (extract 0 0 (extract 7 5 (:imm imm))))
-                                                                (extract 4 4 (extract 4 0 (:imm imm))))
-                                                            (extract 3 3 (extract 4 0 (:imm imm))))
-                                                        (extract 2 2 (extract 4 0 (:imm imm))))
-                                                    (extract 1 1 (extract 4 0 (:imm imm))))
-                                                (extract 0 0 (extract 4 0 (:imm imm)))))
-                                        2)
-                                    1))))
+                                                                    (concat (extract 2 2 (extract 7 5 (:imm imm))) (extract 1 1 (extract 7 5 (:imm imm))))
+                                                                    (extract 0 0 (extract 7 5 (:imm imm)))
+                                                                )
+                                                                (extract 4 4 (extract 4 0 (:imm imm)))
+                                                            )
+                                                            (extract 3 3 (extract 4 0 (:imm imm)))
+                                                        )
+                                                        (extract 2 2 (extract 4 0 (:imm imm)))
+                                                    )
+                                                    (extract 1 1 (extract 4 0 (:imm imm)))
+                                                )
+                                                (extract 0 0 (extract 4 0 (:imm imm)))
+                                            )
+                                        )
+                                        2
+                                    )
+                                    1
+                                )
+                            )
+                        )
+                    )
                     (=>
                         invert
                         (=
@@ -53,15 +63,31 @@
                                                             (concat
                                                                 (concat
                                                                     (concat
-                                                                        (concat
-                                                                            (extract 2 2 (extract 7 5 (:imm imm)))
-                                                                            (extract 1 1 (extract 7 5 (:imm imm))))
-                                                                        (extract 0 0 (extract 7 5 (:imm imm))))
-                                                                    (extract 4 4 (extract 4 0 (:imm imm))))
-                                                                (extract 3 3 (extract 4 0 (:imm imm))))
-                                                            (extract 2 2 (extract 4 0 (:imm imm))))
-                                                        (extract 1 1 (extract 4 0 (:imm imm))))
-                                                    (extract 0 0 (extract 4 0 (:imm imm)))))
-                                            2)
-                                        1)))))))))
-    (require (match size ((Size32x2) (or (not invert) invert)))))
+                                                                        (concat (extract 2 2 (extract 7 5 (:imm imm))) (extract 1 1 (extract 7 5 (:imm imm))))
+                                                                        (extract 0 0 (extract 7 5 (:imm imm)))
+                                                                    )
+                                                                    (extract 4 4 (extract 4 0 (:imm imm)))
+                                                                )
+                                                                (extract 3 3 (extract 4 0 (:imm imm)))
+                                                            )
+                                                            (extract 2 2 (extract 4 0 (:imm imm)))
+                                                        )
+                                                        (extract 1 1 (extract 4 0 (:imm imm)))
+                                                    )
+                                                    (extract 0 0 (extract 4 0 (:imm imm)))
+                                                )
+                                            )
+                                            2
+                                        )
+                                        1
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+    (require (match size ((Size32x2) (or (not invert) invert))))
+)

@@ -23,48 +23,24 @@
                                 (= t9 (bvsle (zero_ext 64 t8) (zero_ext 64 (extract 127 96 rn))))
                                 (if t9 (= t10 t8) (= t11 (extract 127 96 rn)))
                                 (= t12 (if t9 t10 t11))
-                                (= rd (zero_ext 128 t12)))))
+                                (= rd (zero_ext 128 t12))
+                            )
+                        )
+                    )
                     ((Addv)
                         (=
                             rd
-                            (zero_ext
-                                128
-                                (bvadd
-                                    (bvadd (extract 31 0 rn) (extract 63 32 rn))
-                                    (bvadd (extract 95 64 rn) (extract 127 96 rn))))))))
+                            (zero_ext 128 (bvadd (bvadd (extract 31 0 rn) (extract 63 32 rn)) (bvadd (extract 95 64 rn) (extract 127 96 rn))))
+                        )
+                    )
+                )
+            )
             ((Size16x8)
                 (match
                     op
                     ((Uminv)
                         (with
-                            (t1
-                                t10
-                                t11
-                                t12
-                                t13
-                                t14
-                                t15
-                                t16
-                                t17
-                                t18
-                                t19
-                                t2
-                                t20
-                                t21
-                                t22
-                                t23
-                                t24
-                                t25
-                                t26
-                                t27
-                                t28
-                                t3
-                                t4
-                                t5
-                                t6
-                                t7
-                                t8
-                                t9)
+                            (t1 t10 t11 t12 t13 t14 t15 t16 t17 t18 t19 t2 t20 t21 t22 t23 t24 t25 t26 t27 t28 t3 t4 t5 t6 t7 t8 t9)
                             (and
                                 (= t1 (bvsle (zero_ext 32 (extract 15 0 rn)) (zero_ext 32 (extract 31 16 rn))))
                                 (if t1 (= t2 (extract 15 0 rn)) (= t3 (extract 31 16 rn)))
@@ -87,19 +63,24 @@
                                 (= t25 (bvsle (zero_ext 32 t24) (zero_ext 32 (extract 127 112 rn))))
                                 (if t25 (= t26 t24) (= t27 (extract 127 112 rn)))
                                 (= t28 (if t25 t26 t27))
-                                (= rd (zero_ext 128 t28)))))
+                                (= rd (zero_ext 128 t28))
+                            )
+                        )
+                    )
                     ((Addv)
                         (=
                             rd
                             (zero_ext
                                 128
                                 (bvadd
-                                    (bvadd
-                                        (bvadd (extract 15 0 rn) (extract 31 16 rn))
-                                        (bvadd (extract 47 32 rn) (extract 63 48 rn)))
-                                    (bvadd
-                                        (bvadd (extract 79 64 rn) (extract 95 80 rn))
-                                        (bvadd (extract 111 96 rn) (extract 127 112 rn)))))))))
+                                    (bvadd (bvadd (extract 15 0 rn) (extract 31 16 rn)) (bvadd (extract 47 32 rn) (extract 63 48 rn)))
+                                    (bvadd (bvadd (extract 79 64 rn) (extract 95 80 rn)) (bvadd (extract 111 96 rn) (extract 127 112 rn)))
+                                )
+                            )
+                        )
+                    )
+                )
+            )
             ((Size16x4)
                 (match
                     op
@@ -116,15 +97,15 @@
                                 (= t9 (bvsle (zero_ext 32 t8) (zero_ext 32 (extract 63 48 rn))))
                                 (if t9 (= t10 t8) (= t11 (extract 63 48 rn)))
                                 (= t12 (if t9 t10 t11))
-                                (= rd (zero_ext 128 t12)))))
+                                (= rd (zero_ext 128 t12))
+                            )
+                        )
+                    )
                     ((Addv)
-                        (=
-                            rd
-                            (zero_ext
-                                128
-                                (bvadd
-                                    (bvadd (extract 15 0 rn) (extract 31 16 rn))
-                                    (bvadd (extract 47 32 rn) (extract 63 48 rn))))))))
+                        (= rd (zero_ext 128 (bvadd (bvadd (extract 15 0 rn) (extract 31 16 rn)) (bvadd (extract 47 32 rn) (extract 63 48 rn)))))
+                    )
+                )
+            )
             ((Size8x16)
                 (match
                     op
@@ -189,7 +170,8 @@
                                 t60
                                 t7
                                 t8
-                                t9)
+                                t9
+                            )
                             (and
                                 (= t1 (bvsle (zero_ext 16 (extract 7 0 rn)) (zero_ext 16 (extract 15 8 rn))))
                                 (if t1 (= t2 (extract 7 0 rn)) (= t3 (extract 15 8 rn)))
@@ -236,7 +218,10 @@
                                 (= t57 (bvsle (zero_ext 16 t56) (zero_ext 16 (extract 127 120 rn))))
                                 (if t57 (= t58 t56) (= t59 (extract 127 120 rn)))
                                 (= t60 (if t57 t58 t59))
-                                (= rd (zero_ext 128 t60)))))
+                                (= rd (zero_ext 128 t60))
+                            )
+                        )
+                    )
                     ((Addv)
                         (=
                             rd
@@ -244,52 +229,25 @@
                                 128
                                 (bvadd
                                     (bvadd
-                                        (bvadd
-                                            (bvadd (extract 7 0 rn) (extract 15 8 rn))
-                                            (bvadd (extract 23 16 rn) (extract 31 24 rn)))
-                                        (bvadd
-                                            (bvadd (extract 39 32 rn) (extract 47 40 rn))
-                                            (bvadd (extract 55 48 rn) (extract 63 56 rn))))
+                                        (bvadd (bvadd (extract 7 0 rn) (extract 15 8 rn)) (bvadd (extract 23 16 rn) (extract 31 24 rn)))
+                                        (bvadd (bvadd (extract 39 32 rn) (extract 47 40 rn)) (bvadd (extract 55 48 rn) (extract 63 56 rn)))
+                                    )
                                     (bvadd
-                                        (bvadd
-                                            (bvadd (extract 71 64 rn) (extract 79 72 rn))
-                                            (bvadd (extract 87 80 rn) (extract 95 88 rn)))
-                                        (bvadd
-                                            (bvadd (extract 103 96 rn) (extract 111 104 rn))
-                                            (bvadd (extract 119 112 rn) (extract 127 120 rn))))))))))
+                                        (bvadd (bvadd (extract 71 64 rn) (extract 79 72 rn)) (bvadd (extract 87 80 rn) (extract 95 88 rn)))
+                                        (bvadd (bvadd (extract 103 96 rn) (extract 111 104 rn)) (bvadd (extract 119 112 rn) (extract 127 120 rn)))
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
             ((Size8x8)
                 (match
                     op
                     ((Uminv)
                         (with
-                            (t1
-                                t10
-                                t11
-                                t12
-                                t13
-                                t14
-                                t15
-                                t16
-                                t17
-                                t18
-                                t19
-                                t2
-                                t20
-                                t21
-                                t22
-                                t23
-                                t24
-                                t25
-                                t26
-                                t27
-                                t28
-                                t3
-                                t4
-                                t5
-                                t6
-                                t7
-                                t8
-                                t9)
+                            (t1 t10 t11 t12 t13 t14 t15 t16 t17 t18 t19 t2 t20 t21 t22 t23 t24 t25 t26 t27 t28 t3 t4 t5 t6 t7 t8 t9)
                             (and
                                 (= t1 (bvsle (zero_ext 16 (extract 7 0 rn)) (zero_ext 16 (extract 15 8 rn))))
                                 (if t1 (= t2 (extract 7 0 rn)) (= t3 (extract 15 8 rn)))
@@ -312,19 +270,26 @@
                                 (= t25 (bvsle (zero_ext 16 t24) (zero_ext 16 (extract 63 56 rn))))
                                 (if t25 (= t26 t24) (= t27 (extract 63 56 rn)))
                                 (= t28 (if t25 t26 t27))
-                                (= rd (zero_ext 128 t28)))))
+                                (= rd (zero_ext 128 t28))
+                            )
+                        )
+                    )
                     ((Addv)
                         (=
                             rd
                             (zero_ext
                                 128
                                 (bvadd
-                                    (bvadd
-                                        (bvadd (extract 7 0 rn) (extract 15 8 rn))
-                                        (bvadd (extract 23 16 rn) (extract 31 24 rn)))
-                                    (bvadd
-                                        (bvadd (extract 39 32 rn) (extract 47 40 rn))
-                                        (bvadd (extract 55 48 rn) (extract 63 56 rn)))))))))))
+                                    (bvadd (bvadd (extract 7 0 rn) (extract 15 8 rn)) (bvadd (extract 23 16 rn) (extract 31 24 rn)))
+                                    (bvadd (bvadd (extract 39 32 rn) (extract 47 40 rn)) (bvadd (extract 55 48 rn) (extract 63 56 rn)))
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
     (require
         (match
             size
@@ -332,4 +297,7 @@
             ((Size16x8) (match op ((Uminv) true) ((Addv) true)))
             ((Size16x4) (match op ((Uminv) true) ((Addv) true)))
             ((Size8x16) (match op ((Uminv) true) ((Addv) true)))
-            ((Size8x8) (match op ((Uminv) true) ((Addv) true))))))
+            ((Size8x8) (match op ((Uminv) true) ((Addv) true)))
+        )
+    )
+)

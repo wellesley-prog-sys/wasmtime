@@ -36,27 +36,30 @@
                                                                     (concat
                                                                         (bvadd (extract 87 80 rn) (extract 95 88 rn))
                                                                         (concat
-                                                                            (bvadd
-                                                                                (extract 71 64 rn)
-                                                                                (extract 79 72 rn))
+                                                                            (bvadd (extract 71 64 rn) (extract 79 72 rn))
                                                                             (concat
-                                                                                (bvadd
-                                                                                    (extract 55 48 rn)
-                                                                                    (extract 63 56 rn))
+                                                                                (bvadd (extract 55 48 rn) (extract 63 56 rn))
                                                                                 (concat
-                                                                                    (bvadd
-                                                                                        (extract 39 32 rn)
-                                                                                        (extract 47 40 rn))
-                                                                                    (concat
-                                                                                        (bvadd
-                                                                                            (extract 23 16 rn)
-                                                                                            (extract 31 24 rn))
-                                                                                        (bvadd
-                                                                                            (extract 7 0 rn)
-                                                                                            (extract
-                                                                                                15
-                                                                                                8
-                                                                                                rn)))))))))))))))))))))
+                                                                                    (bvadd (extract 39 32 rn) (extract 47 40 rn))
+                                                                                    (concat (bvadd (extract 23 16 rn) (extract 31 24 rn)) (bvadd (extract 7 0 rn) (extract 15 8 rn)))
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                    )
+                                                                )
+                                                            )
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
             ((Size8x8)
                 (match
                     alu_op
@@ -77,7 +80,19 @@
                                                     (bvadd (extract 55 48 rn) (extract 63 56 rn))
                                                     (concat
                                                         (bvadd (extract 39 32 rn) (extract 47 40 rn))
-                                                        (concat
-                                                            (bvadd (extract 23 16 rn) (extract 31 24 rn))
-                                                            (bvadd (extract 7 0 rn) (extract 15 8 rn))))))))))))))))
-    (require (match size ((Size8x16) (match alu_op ((Addp) true))) ((Size8x8) (match alu_op ((Addp) true))))))
+                                                        (concat (bvadd (extract 23 16 rn) (extract 31 24 rn)) (bvadd (extract 7 0 rn) (extract 15 8 rn)))
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+    (require (match size ((Size8x16) (match alu_op ((Addp) true))) ((Size8x8) (match alu_op ((Addp) true)))))
+)
