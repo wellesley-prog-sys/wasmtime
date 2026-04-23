@@ -9,6 +9,8 @@ use std::{
     fmt::Debug,
 };
 
+use crate::types::Field;
+use crate::types::Enum;
 use crate::types::{Compound, Const};
 
 // QUESTION(mbm): do we need this layer independent of AST spec types and Veri-IR?
@@ -630,6 +632,18 @@ pub struct SpecEnv {
 }
 
 impl SpecEnv {
+    // collect type helper 
+
+    fn collect_types(&mut self, tyenv: &TypeEnv) {
+        for (i, ty) in tyenv.types.iter().enumerate() {
+            let tid = TypeId(i);
+            if let Some(compound) = crate::types::Compound::from_isle(ty, tyenv) {
+                self.type_model.insert(tid, compound);
+            }
+        }
+    }
+
+
     pub fn from_ast(defs: &[Def], termenv: &TermEnv, tyenv: &TypeEnv) -> Result<Self> {
         let mut env = Self {
             term_spec: HashMap::new(),
@@ -644,12 +658,16 @@ impl SpecEnv {
             macros: HashMap::new(),
         };
 
+        // populate type_model with enum from TypeEnv first 
+        env.collect_types(tyenv); 
+
         env.collect_models(defs, tyenv);
         env.derive_type_models(tyenv)?;
+        env.collect_specs(defs, termenv, tyenv)?;
         env.derive_enum_variant_specs(termenv, tyenv)?;
         env.collect_state(defs)?;
         env.collect_instantiations(defs, termenv, tyenv);
-        env.collect_specs(defs, termenv, tyenv)?;
+        // env.collect_specs(defs, termenv, tyenv)?;
         env.collect_attrs(defs, termenv, tyenv)?;
         env.collect_macros(defs);
         env.check_option_return_term_specs_uses_matches(termenv, tyenv)?;
@@ -658,12 +676,31 @@ impl SpecEnv {
         Ok(env)
     }
 
+    // helper function for ExtEnum
+    /// Borrow the base enum for a TypeId if present.
+    fn get_enum_from_typeid(&self, tid: TypeId) -> Option<&crate::types::Enum> {
+        match self.type_model.get(&tid)? {
+            crate::types::Compound::Enum(e) => Some(e),
+            crate::types::Compound::ExtEnum { base, .. } => Some(base),
+            _ => None,
+        }
+    }
+
+    /// Clone out an owned Enum for a TypeId (useful when constructing ExtEnum).
+    fn clone_enum_from_typeid(&self, tid: TypeId) -> Option<crate::types::Enum> {
+        self.get_enum_from_typeid(tid).cloned()
+    }
+
     fn collect_models(&mut self, defs: &[Def], tyenv: &TypeEnv) {
         for def in defs {
             if let ast::Def::Model(Model { name, val }) = def {
                 match val {
                     ast::ModelValue::TypeValue(model_type) => {
-                        self.set_model_type(name, model_type, tyenv);
+                        // only insert if this name hasn't been seen yet 
+                        let tid = tyenv.get_type_by_name(name).expect("type should exist");
+                        if !self.type_model.contains_key(&tid) {
+                            self.set_model_type(name, model_type, tyenv);
+                        }
                     }
                     ast::ModelValue::ConstValue(val) => {
                         // TODO(mbm): error on missing constant name rather than panic
@@ -671,6 +708,30 @@ impl SpecEnv {
                         // TODO(mbm): enforce that the expression is constant.
                         // TODO(mbm): ensure the type of the expression matches the type of the
                         self.const_value.insert(sym, expr_from_ast(val));
+                    }
+                    ast::ModelValue::ExtEnumValue(fields) => {
+                        // 1) Resolve the base type to a TypeId.
+                        let base_tid = tyenv
+                            .get_type_by_name(name)
+                            .expect("ext-enum base type should exist");
+
+                        // 2) Clone the existing base enum compound.
+                        let base_enum = self
+                            .clone_enum_from_typeid(base_tid)
+                            .expect("expected base enum to be defined for type-ext-enum");
+
+                        // 3) Lower the extra fields to veri types::Field.
+                        let extra: Vec<Field> = fields
+                            .iter()
+                            .map(|mf| Field {
+                                name: mf.name.clone(),
+                                ty: Compound::from_ast(&mf.ty),
+                            })
+                            .collect();
+
+                        // 4) Build Compound::ExtEnum and overwrite the entry for this TypeId.
+                        let compound = Compound::ExtEnum { base: base_enum, extra };
+                        self.type_model.insert(base_tid, compound);
                     }
                 }
             }
@@ -697,7 +758,15 @@ impl SpecEnv {
 
     fn derive_enum_variant_specs(&mut self, termenv: &TermEnv, tyenv: &TypeEnv) -> Result<()> {
         for model in self.type_model.values() {
-            if let Compound::Enum(e) = model {
+
+            // handle both Enum and ExtEnum 
+            let enum_ref: Option<&Enum> = match model {
+                Compound::Enum(e) => Some(e),
+                Compound::ExtEnum { base, .. } => Some(base),
+                _ => None,
+            };
+
+            if let Some(e) = enum_ref {
                 for variant in &e.variants {
                     // Lookup the corresponding term.
                     let full_name = ast::Variant::full_name(&e.name, &variant.name);
@@ -708,6 +777,11 @@ impl SpecEnv {
                                 "could not find variant term {name}",
                                 name = full_name.0
                             ))?;
+                    
+                    // guard: skip auto-gen if spec already exists for this
+                    if self.term_spec.contains_key(&term_id) {
+                        continue;
+                    }
 
                     // Synthesize spec.
                     let pos = variant.name.1;

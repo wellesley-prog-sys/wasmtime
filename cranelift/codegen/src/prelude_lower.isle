@@ -570,7 +570,7 @@
                                                              (result ValueRegs))))
 
 (model ConsumesFlags
-      (type
+      (type-ext-enum
             (struct
                   (flags  (named NZCV))
                   (result (named Reg))
@@ -618,6 +618,7 @@
 ;; Helper for combining two flags-consumer instructions that return a
 ;; single Reg, giving a ConsumesFlags that returns both values in a
 ;; ValueRegs.
+(attr consumes_flags_concat (veri chain))
 (decl consumes_flags_concat (ConsumesFlags ConsumesFlags) ConsumesFlags)
 (rule (consumes_flags_concat (ConsumesFlags.ConsumesFlagsReturnsReg inst1 reg1)
                              (ConsumesFlags.ConsumesFlagsReturnsReg inst2 reg2))

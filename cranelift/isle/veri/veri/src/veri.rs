@@ -456,6 +456,7 @@ pub enum Symbolic {
     Scalar(ExprId),
     Struct(Vec<SymbolicField>),
     Enum(SymbolicEnum),
+    ExtEnum(SymbolicEnum, Vec<SymbolicField>), // ext enum with extra fields 
     Option(SymbolicOption),
     Tuple(Vec<Symbolic>),
     Macro(Macro),
@@ -479,6 +480,7 @@ impl Symbolic {
     fn as_enum(&self) -> Option<&SymbolicEnum> {
         match self {
             Self::Enum(e) => Some(e),
+            Self::ExtEnum(e, _) => Some(e), // unwrap ExtEnum 
             _ => None,
         }
     }
@@ -539,6 +541,41 @@ impl Symbolic {
                     value: variant.value.eval(model)?,
                 })))
             }
+            Symbolic::ExtEnum(e, extra) => {
+                // 1. Same as Enum: resolve discriminant and variant
+                let discriminant: usize = model
+                    .get(&e.discriminant)
+                    .ok_or(format_err!("undefined discriminant in model"))?
+                    .as_int()
+                    .ok_or(format_err!(
+                        "model value for discriminant is not an integer"
+                    ))?
+                    .try_into()
+                    .unwrap();
+                let variant = e
+                    .variants
+                    .iter()
+                    .find(|v| v.discriminant == discriminant)
+                    .ok_or(format_err!("no variant with discriminant {discriminant}"))?;
+
+                let base_value = Value::Enum(Box::new(VariantValue {
+                    name: variant.name.clone(),
+                    value: variant.value.eval(model)?,
+                }));
+
+                // 2. Evaluate extra fields like a struct
+                let extra_values = extra
+                    .iter()
+                    .map(|f| f.eval(model))
+                    .collect::<Result<Vec<_>>>()?;
+
+                // 3. Wrap into a new Value variant (you’ll need a `Value::ExtEnum` to store this)
+                Ok(Value::ExtEnum {
+                    base: Box::new(base_value),
+                    extra: extra_values,
+                })
+            }
+
             Symbolic::Option(opt) => match model.get(&opt.some) {
                 Some(Const::Bool(true)) => {
                     Ok(Value::Option(Some(Box::new(opt.inner.eval(model)?))))
@@ -674,6 +711,24 @@ impl std::fmt::Display for Symbolic {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Symbolic::ExtEnum(base_enum, extra_fields) => {
+                write!(
+                    f,
+                    "extenum({discriminant}, {variants}, extras: {{{extras}}})",
+                    discriminant = base_enum.discriminant.index(),
+                    variants = base_enum
+                        .variants
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    extras = extra_fields
+                        .iter()
+                        .map(|f| format!("{}: {}", f.name, f.value))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Symbolic::Option(SymbolicOption { some, inner }) => {
                 write!(f, "Option{{some: {}, inner: {inner}}}", some.index())
             }
@@ -696,6 +751,10 @@ pub enum Value {
     Const(Const),
     Struct(Vec<FieldValue>),
     Enum(Box<VariantValue>),
+    ExtEnum {
+        base: Box<Value>, // base enum value
+        extra: Vec<FieldValue>, // evaluated extra fields 
+    }, 
     Option(Option<Box<Value>>),
     Tuple(Vec<Value>),
 }
@@ -726,6 +785,18 @@ impl std::fmt::Display for Value {
                     .join(", ")
             ),
             Value::Enum(v) => write!(f, "{name} {value}", name = v.name, value = v.value),
+            Value::ExtEnum { base, extra } => {
+                write!(
+                    f,
+                    "extenum({base}, extras: {{{extras}}})",
+                    base = base,
+                    extras = extra
+                        .iter()
+                        .map(|f| format!("{}: {}", f.name, f.value))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Value::Option(Some(v)) => write!(f, "Some({v})"),
             Value::Option(None) => write!(f, "None"),
             Value::Tuple(elements) => write!(
@@ -2232,6 +2303,48 @@ impl<'a> ConditionsBuilder<'a> {
                     .collect::<Result<_>>()?;
                 Ok(self.new_enum(e.id, discriminant, variants)?)
             }
+            Compound::ExtEnum { base, extra } => {
+                // Build the SymbolicEnum exactly like the `Enum` arm does.
+
+                // 1) discriminator variable for the enum
+                let discriminant = self.alloc_variable(
+                    Type::Int,
+                    Variable::component_name(&name, "discriminant"),
+                );
+
+                // 2) per-variant payloads
+                let variants = base
+                    .variants
+                    .iter()
+                    .map(|v| self.alloc_variant(v, name.clone()))
+                    .collect::<Result<_>>()?;
+
+                // 3) assemble a SymbolicEnum (same fields your `Enum` arm uses)
+                let sym_enum = SymbolicEnum {
+                    ty: base.id,
+                    discriminant,
+                    variants,
+                };
+
+                // Now allocate the extra struct-like fields.
+                let extra_syms = extra
+                    .iter()
+                    .map(|f| {
+                        Ok(SymbolicField {
+                            name: f.name.0.clone(),
+                            value: self.alloc_value(
+                                &f.ty,
+                                Variable::component_name(&name, &f.name.0),
+                            )?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                // `Symbolic::ExtEnum` is a *tuple* variant: (SymbolicEnum, Vec<SymbolicField>)
+                Ok(Symbolic::ExtEnum(sym_enum, extra_syms))
+            }
+
+
             Compound::Named(_) => {
                 let ty = self.prog.specenv.resolve_type(ty, &self.prog.tyenv)?;
                 self.alloc_value(&ty, name)
