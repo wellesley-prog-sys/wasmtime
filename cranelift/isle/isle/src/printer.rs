@@ -781,15 +781,6 @@ impl ToSExpr for ModelField {
     }
 }
 
-impl ToSExpr for FieldInit {
-    fn to_sexpr(&self) -> SExpr {
-        SExpr::List(vec![
-            self.name.to_sexpr(),
-            self.value.to_sexpr(),
-        ])
-    }
-}
-
 impl ToSExpr for Arm {
     fn to_sexpr(&self) -> SExpr {
         let mut head = vec![self.variant.to_sexpr()];
