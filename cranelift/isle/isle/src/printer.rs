@@ -520,43 +520,7 @@ impl ToSExpr for SpecExpr {
                     SExpr::List(defs), 
                     body.to_sexpr(), 
                 ])}
-            SpecExpr::With {decls, body, pos: _ } => {
-                let decls = decls.iter().map(ToSExpr::to_sexpr).collect::<Vec<_>>();
-                SExpr::List(vec![
-                    SExpr::atom("with"),
-                    SExpr::List(decls),
-                    body.to_sexpr(),
-                ])
-            }
-            SpecExpr::Macro {params, body, pos: _ } => {
-                let params = params.iter().map(ToSExpr::to_sexpr).collect::<Vec<_>>();
-                SExpr::List(vec![
-                    SExpr::atom("macro"),
-                    SExpr::List(params),
-                    body.to_sexpr(),
-                ])
-            }
-            SpecExpr::Expand {name, args, pos: _ } => {
-                let mut parts = vec![SExpr::atom(format!("{}!", name.0))];
-                parts.extend(args.iter().map(ToSExpr::to_sexpr));
-                SExpr::List(parts)
-            }
-            SpecExpr::Pair {l, r, pos: _ } => {
-                SExpr::List(vec![
-                    l.to_sexpr(),
-                    r.to_sexpr(),
-                ])
-            }
-            SpecExpr::Enum {name, variant, args, pos: _ } => {
-                let mut parts = vec![SExpr::atom(format!("{}.{}", name.0, variant.0))];
-                parts.extend(args.iter().map(ToSExpr::to_sexpr));
-                SExpr::List(parts)
-            }
-            SpecExpr::Struct {fields, pos: _ } => {
-                let mut parts = vec![SExpr::atom("struct")];
-                parts.extend(fields.iter().map(ToSExpr::to_sexpr));
-                SExpr::List(parts)
-            }
+            _ => todo!(),
         }
     }
 }
