@@ -3138,7 +3138,29 @@
 (decl load_constant_full (Type ImmExtend OperandSize u64) Reg)
 (extern constructor load_constant_full load_constant_full)
 (spec (load_constant_full ty imm size const)
-      (provide (= result const)))
+      (provide (= result 
+                  (switch ty
+                        (8 
+                              (if (= ext #b1)
+                                    (zero_ext 64 (extract 7 0 const))
+                                    (if (= size 32)
+                                          (zero_ext 64 (sign_ext 32 (extract 7 0 const)))
+                                          (sign_ext 64 (extract 7 0 const)))))
+                        (16
+                              (if (= ext #b1)
+                                    (zero_ext 64 (extract 15 0 const))
+                                    (if (= size 32)
+                                          (zero_ext 64 (sign_ext 32 (extract 15 0 const)))
+                                          (sign_ext 64 (extract 15 0 const)))))
+                        (32
+                              (if (= ext #b1)
+                                    (zero_ext 64 (extract 31 0 const))
+                                    (if (= size 32)
+                                          (zero_ext 64 (extract 31 0 const))
+                                          (sign_ext 64 (extract 31 0 const)))))
+                        (64
+                              const))))
+      (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
 
 ;; Fallback for integral 32-bit constants
 (rule (imm (fits_in_32 (integral_ty ty)) extend n)
