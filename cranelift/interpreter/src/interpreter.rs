@@ -577,7 +577,8 @@ mod tests {
             v0 = iconst.i32 1
             v5 = iconst.i32 1
             v1 = iadd v0, v5
-            v2 = irsub_imm v1, 44  ; 44 - 2 == 42 (see irsub_imm's semantics)
+            v6 = iconst.i32 44
+            v2 = isub v6, v1  ; 44 - 2 == 42
             v4 = iconst.i32 42
             v3 = icmp eq v2, v4
             return v3
@@ -723,10 +724,14 @@ mod tests {
             ss1 = explicit_slot 8
 
         block0(v0: i64, v1: i64):
-            stack_store.i64 v0, ss0
-            stack_store.i64 v1, ss1
-            v2 = stack_load.i64 ss0
-            v3 = stack_load.i64 ss1
+            v5 = stack_addr.i64 ss0
+            store.i64 v0, v5
+            v6 = stack_addr.i64 ss1
+            store.i64 v1, v6
+            v7 = stack_addr.i64 ss0
+            v2 = load.i64 v7
+            v8 = stack_addr.i64 ss1
+            v3 = load.i64 v8
             v4 = iadd.i64 v2, v3
             return v4
         }
@@ -737,13 +742,17 @@ mod tests {
             ss1 = explicit_slot 8
 
         block0(v0: i64, v1: i64, v2: i64, v3: i64):
-            stack_store.i64 v0, ss0
-            stack_store.i64 v1, ss1
+            v9 = stack_addr.i64 ss0
+            store.i64 v0, v9
+            v10 = stack_addr.i64 ss1
+            store.i64 v1, v10
 
             v4 = call fn0(v2, v3)
 
-            v5 = stack_load.i64 ss0
-            v6 = stack_load.i64 ss1
+            v11 = stack_addr.i64 ss0
+            v5 = load.i64 v11
+            v12 = stack_addr.i64 ss1
+            v6 = load.i64 v12
 
             v7 = iadd.i64 v4, v5
             v8 = iadd.i64 v7, v6
@@ -779,7 +788,8 @@ mod tests {
 
         block0:
             v0 = iconst.i64 10
-            stack_store.i64 v0, ss0+8
+            v1 = stack_addr.i64 ss0+8
+            store.i64 v0, v1
             return
         }";
 
@@ -805,7 +815,8 @@ mod tests {
 
         block0:
             v0 = iconst.i64 10
-            stack_store.i64 v0, ss0+4
+            v1 = stack_addr.i64 ss0+4
+            store.i64 v0, v1
             return
         }";
 
@@ -830,7 +841,8 @@ mod tests {
             ss0 = explicit_slot 8
 
         block0:
-            v0 = stack_load.i64 ss0+8
+            v1 = stack_addr.i64 ss0+8
+            v0 = load.i64 v1
             return
         }";
 
@@ -855,7 +867,8 @@ mod tests {
             ss0 = explicit_slot 8
 
         block0:
-            v0 = stack_load.i64 ss0+4
+            v1 = stack_addr.i64 ss0+4
+            v0 = load.i64 v1
             return
         }";
 

@@ -417,13 +417,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         } => write!(w, " {constant_handle}"),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm8 { arg, imm, .. } => write!(w, " {arg}, {imm}"),
-        BinaryImm64 { arg, imm, .. } => write!(w, " {}, {}", arg, {
-            let mut imm = imm;
-            if ctrl_ty.bits() != 0 {
-                imm = imm.sign_extend_from_width(ctrl_ty.bits());
-            }
-            imm
-        }),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         MultiAry { ref args, .. } => {
             if args.is_empty() {
@@ -507,23 +500,12 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             write_user_stack_map_entries(w, dfg, inst)
         }
         FuncAddr { func_ref, .. } => write!(w, " {func_ref}"),
-        StackLoad {
+        StackAddr {
             stack_slot, offset, ..
         } => write!(w, " {stack_slot}{offset}"),
-        StackStore {
-            arg,
-            stack_slot,
-            offset,
-            ..
-        } => write!(w, " {arg}, {stack_slot}{offset}"),
-        DynamicStackLoad {
+        DynamicStackAddr {
             dynamic_stack_slot, ..
         } => write!(w, " {dynamic_stack_slot}"),
-        DynamicStackStore {
-            arg,
-            dynamic_stack_slot,
-            ..
-        } => write!(w, " {arg}, {dynamic_stack_slot}"),
         Load {
             flags, arg, offset, ..
         } => write!(w, "{} {arg}{offset}", dfg.mem_flags[flags]),

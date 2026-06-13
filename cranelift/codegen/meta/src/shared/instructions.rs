@@ -1189,52 +1189,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "stack_load",
-            r#"
-        Load a value from a stack slot at the constant offset.
-
-        This is a polymorphic instruction that can load any value type which
-        has a memory representation.
-
-        The offset is an immediate constant, not an SSA value. The memory
-        access cannot go out of bounds, i.e.
-        `sizeof(a) + Offset <= sizeof(SS)`.
-        "#,
-            &formats.stack_load,
-        )
-        .operands_in(vec![
-            Operand::new("SS", &entities.stack_slot),
-            Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot"),
-        ])
-        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")])
-        .can_load(),
-    );
-
-    ig.push(
-        Inst::new(
-            "stack_store",
-            r#"
-        Store a value to a stack slot at a constant offset.
-
-        This is a polymorphic instruction that can store any value type with a
-        memory representation.
-
-        The offset is an immediate constant, not an SSA value. The memory
-        access cannot go out of bounds, i.e.
-        `sizeof(a) + Offset <= sizeof(SS)`.
-        "#,
-            &formats.stack_store,
-        )
-        .operands_in(vec![
-            Operand::new("x", Mem).with_doc("Value to be stored"),
-            Operand::new("SS", &entities.stack_slot),
-            Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot"),
-        ])
-        .can_store(),
-    );
-
-    ig.push(
-        Inst::new(
             "stack_addr",
             r#"
         Get the address of a stack slot.
@@ -1243,7 +1197,7 @@ pub(crate) fn define(
         refer to a byte inside the stack slot:
         `0 <= Offset < sizeof(SS)`.
         "#,
-            &formats.stack_load,
+            &formats.stack_addr,
         )
         .operands_in(vec![
             Operand::new("SS", &entities.stack_slot),
@@ -1254,47 +1208,13 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "dynamic_stack_load",
-            r#"
-        Load a value from a dynamic stack slot.
-
-        This is a polymorphic instruction that can load any value type which
-        has a memory representation.
-        "#,
-            &formats.dynamic_stack_load,
-        )
-        .operands_in(vec![Operand::new("DSS", &entities.dynamic_stack_slot)])
-        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")])
-        .can_load(),
-    );
-
-    ig.push(
-        Inst::new(
-            "dynamic_stack_store",
-            r#"
-        Store a value to a dynamic stack slot.
-
-        This is a polymorphic instruction that can store any dynamic value type with a
-        memory representation.
-        "#,
-            &formats.dynamic_stack_store,
-        )
-        .operands_in(vec![
-            Operand::new("x", Mem).with_doc("Value to be stored"),
-            Operand::new("DSS", &entities.dynamic_stack_slot),
-        ])
-        .can_store(),
-    );
-
-    ig.push(
-        Inst::new(
             "dynamic_stack_addr",
             r#"
         Get the address of a dynamic stack slot.
 
         Compute the absolute address of the first byte of a dynamic stack slot.
         "#,
-            &formats.dynamic_stack_load,
+            &formats.dynamic_stack_addr,
         )
         .operands_in(vec![Operand::new("DSS", &entities.dynamic_stack_slot)])
         .operands_out(vec![Operand::new("addr", iAddr)]),
@@ -1964,7 +1884,8 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
-        .side_effects_idempotent(),
+        .side_effects_idempotent()
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -1980,60 +1901,8 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
-        .side_effects_idempotent(),
-    );
-
-    ig.push(
-        Inst::new(
-            "urem_imm",
-            r#"
-        Unsigned integer remainder with immediate divisor.
-
-        Same as `urem`, but one operand is a zero extended 64 bit immediate constant.
-
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "srem_imm",
-            r#"
-        Signed integer remainder with immediate divisor.
-
-        Same as `srem`, but one operand is a sign extended 64 bit immediate constant.
-
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "irsub_imm",
-            r#"
-        Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
-
-        The immediate operand is a sign extended 64 bit constant.
-
-        Also works as integer negation when `Y = 0`. Use `iadd_imm`
-        with a negative immediate operand for the reverse immediate
-        subtraction.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
+        .side_effects_idempotent()
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2291,7 +2160,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
+        .operands_out(vec![Operand::new("a", bits)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2303,7 +2173,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
+        .operands_out(vec![Operand::new("a", bits)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2315,7 +2186,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
+        .operands_out(vec![Operand::new("a", bits)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2332,99 +2204,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "band_not",
-            r#"
-        Bitwise and not.
-
-        Computes `x & ~y`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bor_not",
-            r#"
-        Bitwise or not.
-
-        Computes `x | ~y`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bxor_not",
-            r#"
-        Bitwise xor not.
-
-        Computes `x ^ ~y`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "band_imm",
-            r#"
-        Bitwise and with immediate.
-
-        Same as `band`, but one operand is a zero extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bor_imm",
-            r#"
-        Bitwise or with immediate.
-
-        Same as `bor`, but one operand is a zero extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bxor_imm",
-            r#"
-        Bitwise xor with immediate.
-
-        Same as `bxor`, but one operand is a zero extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
             "rotl",
             r#"
         Rotate left.
@@ -2437,7 +2216,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2454,41 +2234,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "rotl_imm",
-            r#"
-        Rotate left by immediate.
-
-        Same as `rotl`, but one operand is a zero extended 64 bit immediate constant.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "rotr_imm",
-            r#"
-        Rotate right by immediate.
-
-        Same as `rotr`, but one operand is a zero extended 64 bit immediate constant.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2513,7 +2260,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2539,7 +2287,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2558,58 +2307,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ishl_imm",
-            r#"
-        Integer shift left by immediate.
-
-        The shift amount is masked to the size of ``x``.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ushr_imm",
-            r#"
-        Unsigned shift right by immediate.
-
-        The shift amount is masked to the size of ``x``.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "sshr_imm",
-            r#"
-        Signed shift right by immediate.
-
-        The shift amount is masked to the size of ``x``.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(

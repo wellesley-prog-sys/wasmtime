@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::alias_region_key::AliasRegionKey;
+use crate::alias_region_key::{AliasRegionKey, VmType};
 use crate::func_environ::BuiltinFunctions;
 use crate::trap::TranslateTrap;
 use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
@@ -1228,7 +1228,7 @@ impl<'a> TrampolineCompiler<'a> {
         // Conditionally emit destructor-execution code based on whether we
         // statically know that a destructor exists or not.
         if has_destructor {
-            let rep = self.builder.ins().ushr_imm(should_run_destructor, 1);
+            let rep = self.builder.ins().ushr_imm_u(should_run_destructor, 1);
             let rep = self.builder.ins().ireduce(ir::types::I32, rep);
             let index = self.types[resource].unwrap_concrete_ty();
             // NB: despite the vmcontext storing nullable funcrefs for function
@@ -1514,7 +1514,7 @@ impl<'a> TrampolineCompiler<'a> {
         let may_leave_bit = self
             .builder
             .ins()
-            .band_imm(flags, i64::from(FLAG_MAY_LEAVE));
+            .band_imm_u(flags, i64::from(FLAG_MAY_LEAVE));
         let (mut traps, builder) = self.traps();
         traps.trapz(builder, may_leave_bit, TRAP_CANNOT_LEAVE_COMPONENT);
     }
@@ -1541,31 +1541,29 @@ impl<'a> TrampolineCompiler<'a> {
     /// `VMComponentContext` if it's otherwise unused.
     fn load_vm_store_context(&mut self) -> ir::Value {
         let caller_vmctx = self.abi_load_params()[1];
-        let vmctx_region = self
-            .builder
-            .func
-            .dfg
-            .alias_regions
-            .insert(ir::AliasRegionData {
-                user_id: 2,
-                description: "vmctx".into(),
-            });
+        let offset = self.offsets.ptr.vmctx_store_context();
+        let region = self.builder.func.dfg.alias_regions.insert(
+            AliasRegionKey::Vm {
+                ty: VmType::VMContext,
+                offset: offset.into(),
+            }
+            .into(),
+        );
         self.builder.ins().load(
             self.isa.pointer_type(),
             ir::MemFlagsData::trusted()
                 .with_readonly()
-                .with_alias_region(Some(vmctx_region))
+                .with_alias_region(Some(region))
                 .with_can_move(),
             caller_vmctx,
-            i32::from(self.offsets.ptr.vmctx_store_context()),
+            i32::from(offset),
         )
     }
 }
 
-// Helper structure to implement `TranslateTrap`. This isn't possible to do
-// natively for `TrampolineCompiler` because it stores `FunctionBuilder`
-// internally. This differs from `FuncEnvironment` for core wasm which stores it
-// externally, hence the slightly different idioms to bridge here.
+// XXX: we can't implement this for `TrampolineCompiler` directly because it
+// stores `FunctionBuilder` internally, but this needs to take the builder as an
+// argument.
 struct TrapTranslator<'a> {
     compiler: &'a Compiler,
     vmctx: ir::Value,
@@ -1576,9 +1574,11 @@ impl TranslateTrap for TrapTranslator<'_> {
     fn compiler(&self) -> &Compiler {
         self.compiler
     }
+
     fn vmctx_val(&mut self, _: &mut FuncCursor<'_>) -> ir::Value {
         self.vmctx
     }
+
     fn builtin_funcref(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -1586,6 +1586,58 @@ impl TranslateTrap for TrapTranslator<'_> {
     ) -> ir::FuncRef {
         self.builtins.load_builtin(builder.func, index)
     }
+}
+
+fn checked_native_addr<T: TranslateTrap>(
+    traps: &mut T,
+    builder: &mut FunctionBuilder<'_>,
+    isa: &(dyn TargetIsa + 'static),
+    base_address: ir::Value,
+    offset: ir::Value,
+    length: ir::Value,
+    size: u32,
+) -> Result<ir::Value> {
+    debug_assert_eq!(builder.func.dfg.value_type(base_address), ir::types::I64);
+    debug_assert_eq!(builder.func.dfg.value_type(offset), ir::types::I64);
+    debug_assert_eq!(builder.func.dfg.value_type(length), ir::types::I64);
+
+    // Compute `offset + size`, trapping if it either overflows or is greater
+    // than `length`.
+    let size = builder.ins().iconst(ir::types::I64, i64::from(size));
+    let (end, overflow) = builder.ins().uadd_overflow(offset, size);
+    let too_big = builder.ins().icmp(IntCC::UnsignedGreaterThan, end, length);
+    let oob = builder.ins().bor(overflow, too_big);
+
+    // Compute the native address `base_address + offset`, truncating to the
+    // target's pointer width on 32-bit architectures.
+    let addr = builder.ins().iadd(base_address, offset);
+    let addr = match isa.pointer_bits() {
+        32 => builder.ins().ireduce(ir::types::I32, addr),
+        64 => addr,
+        p => bail!("unsupported architecture: no support for {p}-bit pointers"),
+    };
+
+    let addr =
+        // When Spectre mitigations are enabled, replace the address with NULL
+        // on the out-of-bounds path. The subsequent access only happens on the
+        // in-bounds path (we will have trapped otherwise), but this guards
+        // against the bounds-check branch being mispredicted and the access
+        // being performed speculatively against an out-of-bounds address.
+        if isa.flags().enable_heap_access_spectre_mitigation() {
+            let pointer_type = isa.pointer_type();
+            let null = builder.ins().iconst(pointer_type, 0);
+            let addr = builder.ins().select_spectre_guard(oob, null, addr);
+            traps.trapz(builder, addr, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+            addr
+        }
+        // Otherwise, when Spectre mitigations are disabled, just conditionally
+        // trap on the out-of-bounds condition directly.
+        else {
+            traps.trapnz(builder, oob, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+            addr
+        };
+
+    Ok(addr)
 }
 
 impl ComponentCompiler for Compiler {
@@ -1650,7 +1702,7 @@ impl ComponentCompiler for Compiler {
         );
 
         c.translate(&component.trampolines[trampoline_index]);
-        c.builder.finalize();
+        c.builder.finalize(c.isa.frontend_config());
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {
@@ -1709,71 +1761,28 @@ impl ComponentCompiler for Compiler {
             &wasm_func_ty,
         );
 
-        match intrinsic {
-            UnsafeIntrinsic::U8NativeLoad
-            | UnsafeIntrinsic::U16NativeLoad
-            | UnsafeIntrinsic::U32NativeLoad
-            | UnsafeIntrinsic::U64NativeLoad => c.translate_load_intrinsic(intrinsic)?,
-            UnsafeIntrinsic::U8NativeStore
-            | UnsafeIntrinsic::U16NativeStore
-            | UnsafeIntrinsic::U32NativeStore
-            | UnsafeIntrinsic::U64NativeStore => c.translate_store_intrinsic(intrinsic)?,
-            UnsafeIntrinsic::StoreDataAddress => {
-                let [callee_vmctx, _caller_vmctx] = *c.abi_load_params() else {
-                    unreachable!()
-                };
-                let pointer_type = self.isa.pointer_type();
-
-                // Load the `*mut VMStoreContext` out of our vmctx.
-                let vmctx_region = c.builder.func.dfg.alias_regions.insert(
-                    AliasRegionKey::VMContext {
-                        offset: c.offsets.vm_store_context(),
-                    }
-                    .into(),
-                );
-                let store_ctx_region = c.builder.func.dfg.alias_regions.insert(
-                    AliasRegionKey::VMStoreContext {
-                        offset: u32::from(c.offsets.ptr.vmstore_context_store_data()),
-                    }
-                    .into(),
-                );
-                let store_ctx = c.builder.ins().load(
-                    pointer_type,
-                    ir::MemFlagsData::trusted()
-                        .with_readonly()
-                        .with_alias_region(Some(vmctx_region))
-                        .with_can_move(),
-                    callee_vmctx,
-                    i32::try_from(c.offsets.vm_store_context()).unwrap(),
-                );
-
-                // Load the `*mut T` out of the `VMStoreContext`.
-                let data_address = c.builder.ins().load(
-                    pointer_type,
-                    ir::MemFlagsData::trusted()
-                        .with_readonly()
-                        .with_alias_region(Some(store_ctx_region))
-                        .with_can_move(),
-                    store_ctx,
-                    i32::from(c.offsets.ptr.vmstore_context_store_data()),
-                );
-
-                // Zero-extend the address if we are on a 32-bit architecture.
-                let data_address = match pointer_type.bits() {
-                    32 => c.builder.ins().uextend(ir::types::I64, data_address),
-                    64 => data_address,
-                    p => bail!("unsupported architecture: no support for {p}-bit pointers"),
-                };
-
-                c.abi_store_results(&[data_address]);
-            }
-            UnsafeIntrinsic::ContextGetI32_0
-            | UnsafeIntrinsic::ContextGetI32_1
-            | UnsafeIntrinsic::ContextSetI32_0
-            | UnsafeIntrinsic::ContextSetI32_1 => c.translate_context_intrinsic(intrinsic)?,
+        // Translate the intrinsic by reusing the very same
+        // `UnsafeIntrinsicCompiler` that is used when intrinsics are inlined
+        // directly into their callers. The only difference is that here we drive
+        // it over this standalone trampoline's body: we load the trampoline's
+        // parameters, hand them to the intrinsic compiler, and return whatever
+        // value (if any) it produces.
+        let params = c.abi_load_params();
+        let isa = c.isa;
+        let ptr = c.offsets.ptr;
+        let (mut traps, builder) = c.traps();
+        let mut intrinsic_compiler = UnsafeIntrinsicCompiler {
+            isa,
+            builder,
+            ptr,
+            traps: &mut traps,
+        };
+        match intrinsic_compiler.translate(intrinsic, &params)? {
+            Some(value) => c.abi_store_results(&[value]),
+            None => c.abi_store_results(&[]),
         }
 
-        c.builder.finalize();
+        c.builder.finalize(c.isa.frontend_config());
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {
@@ -1999,116 +2008,6 @@ impl TrampolineCompiler<'_> {
             i32::from(self.offsets.ptr.vmmemory_definition_base()),
         )
     }
-
-    fn translate_load_intrinsic(&mut self, intrinsic: UnsafeIntrinsic) -> Result<()> {
-        debug_assert_eq!(intrinsic.core_params(), &[WasmValType::I64]);
-        debug_assert_eq!(intrinsic.core_results().len(), 1);
-
-        let wasm_ty = intrinsic.core_results()[0];
-        let clif_ty = unsafe_intrinsic_clif_results(intrinsic)[0];
-
-        let [_callee_vmctx, _caller_vmctx, pointer] = *self.abi_load_params() else {
-            unreachable!()
-        };
-
-        debug_assert_eq!(self.builder.func.dfg.value_type(pointer), ir::types::I64);
-        let pointer = match self.isa.pointer_bits() {
-            32 => self.builder.ins().ireduce(ir::types::I32, pointer),
-            64 => pointer,
-            p => bail!("unsupported architecture: no support for {p}-bit pointers"),
-        };
-
-        let mut value = self
-            .builder
-            .ins()
-            .load(clif_ty, ir::MemFlagsData::trusted(), pointer, 0);
-
-        let wasm_clif_ty = crate::value_type(self.isa, wasm_ty);
-        if clif_ty != wasm_clif_ty {
-            assert!(clif_ty.bytes() < wasm_clif_ty.bytes());
-            value = self.builder.ins().uextend(wasm_clif_ty, value);
-        }
-
-        self.abi_store_results(&[value]);
-        Ok(())
-    }
-
-    fn translate_store_intrinsic(&mut self, intrinsic: UnsafeIntrinsic) -> Result<()> {
-        debug_assert!(intrinsic.core_results().is_empty());
-        debug_assert!(matches!(intrinsic.core_params(), [WasmValType::I64, _]));
-
-        let wasm_ty = intrinsic.core_params()[1];
-        let clif_ty = unsafe_intrinsic_clif_params(intrinsic)[1];
-
-        let [_callee_vmctx, _caller_vmctx, pointer, mut value] = *self.abi_load_params() else {
-            unreachable!()
-        };
-
-        debug_assert_eq!(self.builder.func.dfg.value_type(pointer), ir::types::I64);
-        let pointer = match self.isa.pointer_bits() {
-            32 => self.builder.ins().ireduce(ir::types::I32, pointer),
-            64 => pointer,
-            p => bail!("unsupported architecture: no support for {p}-bit pointers"),
-        };
-
-        let wasm_ty = crate::value_type(self.isa, wasm_ty);
-        if clif_ty != wasm_ty {
-            assert!(clif_ty.bytes() < wasm_ty.bytes());
-            value = self.builder.ins().ireduce(clif_ty, value);
-        }
-
-        self.builder
-            .ins()
-            .store(ir::MemFlagsData::trusted(), value, pointer, 0);
-
-        self.abi_store_results(&[]);
-        Ok(())
-    }
-
-    fn translate_context_intrinsic(&mut self, intrinsic: UnsafeIntrinsic) -> Result<()> {
-        let ty = match intrinsic {
-            UnsafeIntrinsic::ContextGetI32_0
-            | UnsafeIntrinsic::ContextSetI32_0
-            | UnsafeIntrinsic::ContextGetI32_1
-            | UnsafeIntrinsic::ContextSetI32_1 => ir::types::I32,
-            _ => unreachable!(),
-        };
-        let slot = match intrinsic {
-            UnsafeIntrinsic::ContextGetI32_0 | UnsafeIntrinsic::ContextSetI32_0 => 0,
-            UnsafeIntrinsic::ContextGetI32_1 | UnsafeIntrinsic::ContextSetI32_1 => 1,
-            _ => unreachable!(),
-        };
-        let offset = self
-            .offsets
-            .ptr
-            .vmstore_context_component_context_slot(slot);
-        let vmstore_context = self.load_vm_store_context();
-        match intrinsic {
-            UnsafeIntrinsic::ContextGetI32_0 | UnsafeIntrinsic::ContextGetI32_1 => {
-                let context = self.builder.ins().load(
-                    ty,
-                    ir::MemFlagsData::trusted(),
-                    vmstore_context,
-                    i32::from(offset),
-                );
-                self.abi_store_results(&[context]);
-            }
-            UnsafeIntrinsic::ContextSetI32_0 | UnsafeIntrinsic::ContextSetI32_1 => {
-                let [_callee_vmctx, _caller_vmctx, new_context] = *self.abi_load_params() else {
-                    unreachable!()
-                };
-                self.builder.ins().store(
-                    ir::MemFlagsData::trusted(),
-                    new_context,
-                    vmstore_context,
-                    i32::from(offset),
-                );
-                self.abi_store_results(&[]);
-            }
-            _ => unreachable!(),
-        }
-        Ok(())
-    }
 }
 
 /// A helper structure to translate an `UnsafeIntrinsic`.
@@ -2120,13 +2019,14 @@ impl TrampolineCompiler<'_> {
 /// This type itself is more of a context type of sorts where it maintains
 /// little-to-no state and instead just weaves together all that's necessary for
 /// translating an intrinsic.
-pub struct UnsafeIntrinsicCompiler<'a> {
+pub struct UnsafeIntrinsicCompiler<'a, 'b, T: TranslateTrap> {
     pub isa: &'a (dyn TargetIsa + 'static),
-    pub cursor: FuncCursor<'a>,
-    pub ptr: &'a (dyn PtrSize + 'static),
+    pub builder: &'a mut FunctionBuilder<'b>,
+    pub ptr: u8,
+    pub traps: &'a mut T,
 }
 
-impl<'a> UnsafeIntrinsicCompiler<'a> {
+impl<T: TranslateTrap> UnsafeIntrinsicCompiler<'_, '_, T> {
     /// Translates the `intrinsic` provided which is provided `params` as
     /// arguments.
     ///
@@ -2156,35 +2056,50 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
                 self.translate_store_intrinsic(intrinsic, params)?;
                 None
             }
+
+            UnsafeIntrinsic::U8CheckedNativeLoad
+            | UnsafeIntrinsic::U16CheckedNativeLoad
+            | UnsafeIntrinsic::U32CheckedNativeLoad
+            | UnsafeIntrinsic::U64CheckedNativeLoad => {
+                Some(self.translate_checked_load_intrinsic(intrinsic, params)?)
+            }
+
+            UnsafeIntrinsic::U8CheckedNativeStore
+            | UnsafeIntrinsic::U16CheckedNativeStore
+            | UnsafeIntrinsic::U32CheckedNativeStore
+            | UnsafeIntrinsic::U64CheckedNativeStore => {
+                self.translate_checked_store_intrinsic(intrinsic, params)?;
+                None
+            }
+
             UnsafeIntrinsic::StoreDataAddress => {
                 let pointer_type = self.isa.pointer_type();
 
                 // Load the `*mut VMStoreContext` out of our vmctx.
                 let store_ctx = self.load_vm_store_context(params);
 
-                let vmctx_region = self
-                    .cursor
-                    .func
-                    .dfg
-                    .alias_regions
-                    .insert(ir::AliasRegionData {
-                        user_id: 2,
-                        description: "vmctx".into(),
-                    });
                 // Load the `*mut T` out of the `VMStoreContext`.
-                let data_address = self.cursor.ins().load(
+                let offset = self.ptr.vmstore_context_store_data();
+                let region = self.builder.func.dfg.alias_regions.insert(
+                    AliasRegionKey::Vm {
+                        ty: VmType::VMStoreContext,
+                        offset: offset.into(),
+                    }
+                    .into(),
+                );
+                let data_address = self.builder.ins().load(
                     pointer_type,
                     ir::MemFlagsData::trusted()
                         .with_readonly()
-                        .with_alias_region(Some(vmctx_region))
+                        .with_alias_region(Some(region))
                         .with_can_move(),
                     store_ctx,
-                    i32::from(self.ptr.vmstore_context_store_data()),
+                    i32::from(offset),
                 );
 
                 // Zero-extend the address if we are on a 32-bit architecture.
                 let data_address = match pointer_type.bits() {
-                    32 => self.cursor.ins().uextend(ir::types::I64, data_address),
+                    32 => self.builder.ins().uextend(ir::types::I64, data_address),
                     64 => data_address,
                     p => bail!("unsupported architecture: no support for {p}-bit pointers"),
                 };
@@ -2218,16 +2133,16 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
         };
 
         // Truncate the pointer, if necessary.
-        debug_assert_eq!(self.cursor.func.dfg.value_type(pointer), ir::types::I64);
+        debug_assert_eq!(self.builder.func.dfg.value_type(pointer), ir::types::I64);
         let pointer = match self.isa.pointer_bits() {
-            32 => self.cursor.ins().ireduce(ir::types::I32, pointer),
+            32 => self.builder.ins().ireduce(ir::types::I32, pointer),
             64 => pointer,
             p => bail!("unsupported architecture: no support for {p}-bit pointers"),
         };
 
         // Do the load!
         let mut value = self
-            .cursor
+            .builder
             .ins()
             .load(clif_ty, ir::MemFlagsData::trusted(), pointer, 0);
 
@@ -2240,7 +2155,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
             assert!(clif_ty.bytes() < wasm_clif_ty.bytes());
             // NB: all of our unsafe intrinsics for native loads are
             // unsigned, so we always zero-extend.
-            value = self.cursor.ins().uextend(wasm_clif_ty, value);
+            value = self.builder.ins().uextend(wasm_clif_ty, value);
         }
 
         Ok(value)
@@ -2262,9 +2177,9 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
         };
 
         // Truncate the pointer, if necessary.
-        debug_assert_eq!(self.cursor.func.dfg.value_type(pointer), ir::types::I64);
+        debug_assert_eq!(self.builder.func.dfg.value_type(pointer), ir::types::I64);
         let pointer = match self.isa.pointer_bits() {
-            32 => self.cursor.ins().ireduce(ir::types::I32, pointer),
+            32 => self.builder.ins().ireduce(ir::types::I32, pointer),
             64 => pointer,
             p => bail!("unsupported architecture: no support for {p}-bit pointers"),
         };
@@ -2276,13 +2191,117 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
         let wasm_ty = crate::value_type(self.isa, wasm_ty);
         if clif_ty != wasm_ty {
             assert!(clif_ty.bytes() < wasm_ty.bytes());
-            value = self.cursor.ins().ireduce(clif_ty, value);
+            value = self.builder.ins().ireduce(clif_ty, value);
         }
 
         // Do the store!
-        self.cursor
+        self.builder
             .ins()
             .store(ir::MemFlagsData::trusted(), value, pointer, 0);
+
+        Ok(())
+    }
+
+    fn translate_checked_load_intrinsic(
+        &mut self,
+        intrinsic: UnsafeIntrinsic,
+        params: &[ir::Value],
+    ) -> Result<ir::Value> {
+        debug_assert_eq!(
+            intrinsic.core_params(),
+            &[WasmValType::I64, WasmValType::I64, WasmValType::I64]
+        );
+        debug_assert_eq!(intrinsic.core_results().len(), 1);
+
+        let wasm_ty = intrinsic.core_results()[0];
+        let clif_ty = unsafe_intrinsic_clif_results(intrinsic)[0];
+
+        let [_callee_vmctx, _caller_vmctx, base_address, offset, length] = *params else {
+            unreachable!()
+        };
+
+        // Bounds-check the access and compute its native address, trapping if
+        // it is out of bounds.
+        let addr = checked_native_addr(
+            self.traps,
+            self.builder,
+            self.isa,
+            base_address,
+            offset,
+            length,
+            clif_ty.bytes(),
+        )?;
+
+        // Do the load!
+        let mut value = self
+            .builder
+            .ins()
+            .load(clif_ty, ir::MemFlagsData::trusted(), addr, 0);
+
+        // Zero-extend the loaded value to the Wasm result type, if necessary.
+        let wasm_clif_ty = crate::value_type(self.isa, wasm_ty);
+        if clif_ty != wasm_clif_ty {
+            assert!(clif_ty.bytes() < wasm_clif_ty.bytes());
+            value = self.builder.ins().uextend(wasm_clif_ty, value);
+        }
+
+        Ok(value)
+    }
+
+    fn translate_checked_store_intrinsic(
+        &mut self,
+        intrinsic: UnsafeIntrinsic,
+        params: &[ir::Value],
+    ) -> Result<()> {
+        debug_assert!(intrinsic.core_results().is_empty());
+        debug_assert!(matches!(
+            intrinsic.core_params(),
+            [
+                WasmValType::I64,
+                WasmValType::I64,
+                WasmValType::I64,
+                _value_ty
+            ]
+        ));
+
+        let wasm_ty = intrinsic.core_params()[3];
+        let clif_ty = unsafe_intrinsic_clif_params(intrinsic)[3];
+
+        let [
+            _callee_vmctx,
+            _caller_vmctx,
+            base_address,
+            offset,
+            length,
+            mut value,
+        ] = *params
+        else {
+            unreachable!()
+        };
+
+        // Bounds-check the access and compute its native address, trapping if
+        // it is out of bounds.
+        let addr = checked_native_addr(
+            self.traps,
+            self.builder,
+            self.isa,
+            base_address,
+            offset,
+            length,
+            clif_ty.bytes(),
+        )?;
+
+        // Truncate the value to the access type, if necessary.
+        let wasm_ty = crate::value_type(self.isa, wasm_ty);
+        if clif_ty != wasm_ty {
+            assert!(clif_ty.bytes() < wasm_ty.bytes());
+            value = self.builder.ins().ireduce(clif_ty, value);
+        }
+
+        // Do the store!
+        self.builder
+            .ins()
+            .store(ir::MemFlagsData::trusted(), value, addr, 0);
 
         Ok(())
     }
@@ -2311,7 +2330,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
         let vmstore_context = self.load_vm_store_context(params);
         match intrinsic {
             UnsafeIntrinsic::ContextGetI32_0 | UnsafeIntrinsic::ContextGetI32_1 => {
-                let context = self.cursor.ins().load(
+                let context = self.builder.ins().load(
                     ty,
                     MemFlagsData::trusted(),
                     vmstore_context,
@@ -2321,7 +2340,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
             }
             UnsafeIntrinsic::ContextSetI32_0 | UnsafeIntrinsic::ContextSetI32_1 => {
                 let new_context = params[2];
-                self.cursor.ins().store(
+                self.builder.ins().store(
                     MemFlagsData::trusted(),
                     new_context,
                     vmstore_context,
@@ -2344,23 +2363,22 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
     /// `VMComponentContext` if it's otherwise unused.
     fn load_vm_store_context(&mut self, params: &[ir::Value]) -> ir::Value {
         let caller_vmctx = params[1];
-        let vmctx_region = self
-            .cursor
-            .func
-            .dfg
-            .alias_regions
-            .insert(ir::AliasRegionData {
-                user_id: 2,
-                description: "vmctx".into(),
-            });
-        self.cursor.ins().load(
+        let offset = self.ptr.vmctx_store_context();
+        let region = self.builder.func.dfg.alias_regions.insert(
+            AliasRegionKey::Vm {
+                ty: VmType::VMContext,
+                offset: offset.into(),
+            }
+            .into(),
+        );
+        self.builder.ins().load(
             self.isa.pointer_type(),
             ir::MemFlagsData::trusted()
                 .with_readonly()
-                .with_alias_region(Some(vmctx_region))
+                .with_alias_region(Some(region))
                 .with_can_move(),
             caller_vmctx,
-            i32::from(self.ptr.vmctx_store_context()),
+            i32::from(offset),
         )
     }
 }

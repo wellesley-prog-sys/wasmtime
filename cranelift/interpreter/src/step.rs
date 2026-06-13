@@ -9,7 +9,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef, Function,
-    InstructionData, MemFlagsData, Opcode, TrapCode, Type, Value as ValueRef, types,
+    InstructionData, Opcode, TrapCode, Type, Value as ValueRef, types,
 };
 use log::trace;
 use smallvec::{SmallVec, smallvec};
@@ -151,12 +151,9 @@ where
             InstructionData::UnaryIeee32 { imm, .. } => DataValue::from(imm),
             InstructionData::Load { offset, .. }
             | InstructionData::Store { offset, .. }
-            | InstructionData::StackLoad { offset, .. }
-            | InstructionData::StackStore { offset, .. } => DataValue::from(offset),
+            | InstructionData::StackAddr { offset, .. } => DataValue::from(offset),
             // 64-bit.
-            InstructionData::UnaryImm { imm, .. } | InstructionData::BinaryImm64 { imm, .. } => {
-                DataValue::from(imm.bits())
-            }
+            InstructionData::UnaryImm { imm, .. } => DataValue::from(imm.bits()),
             InstructionData::UnaryIeee64 { imm, .. } => DataValue::from(imm),
             _ => unreachable!(),
         }
@@ -167,13 +164,6 @@ where
         inst.memflags()
             .map(|flags| state.get_current_function().dfg.mem_flags[flags])
             .expect("instruction to have memory flags")
-    };
-
-    // Retrieve the immediate value for an instruction and convert it to the controlling type of the
-    // instruction. For example, since `InstructionData` stores all integer immediates in a 64-bit
-    // size, this will attempt to convert `iconst.i8 ...` to an 8-bit size.
-    let imm_as_ctrl_ty = || -> Result<DataValue, ValueError> {
-        DataValue::convert(imm(), ValueConversionKind::Exact(ctrl_ty))
     };
 
     // Indicate that the result of a step is to assign a single value to an instruction's results.
@@ -541,28 +531,6 @@ where
                     .and_then(|addr| state.checked_store(addr, reduced, mem_flags)),
             )
         }
-        Opcode::StackLoad => {
-            let load_ty = inst_context.controlling_type().unwrap();
-            let slot = inst.stack_slot().unwrap();
-            let offset = sum_unsigned(imm(), args())? as u64;
-            let mem_flags = MemFlagsData::new();
-            assign_or_memtrap({
-                state
-                    .stack_address(AddressSize::_64, slot, offset)
-                    .and_then(|addr| state.checked_load(addr, load_ty, mem_flags))
-            })
-        }
-        Opcode::StackStore => {
-            let arg = arg(0);
-            let slot = inst.stack_slot().unwrap();
-            let offset = sum_unsigned(imm(), args_range(1..)?)? as u64;
-            let mem_flags = MemFlagsData::new();
-            continue_or_memtrap({
-                state
-                    .stack_address(AddressSize::_64, slot, offset)
-                    .and_then(|addr| state.checked_store(addr, arg, mem_flags))
-            })
-        }
         Opcode::StackAddr => {
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
@@ -576,8 +544,6 @@ where
             })
         }
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackSlot"),
-        Opcode::DynamicStackLoad => unimplemented!("DynamicStackLoad"),
-        Opcode::DynamicStackStore => unimplemented!("DynamicStackStore"),
         Opcode::GlobalValue | Opcode::SymbolValue | Opcode::TlsValue => {
             if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
                 assign_or_memtrap(state.resolve_global_value(global_value))
@@ -718,9 +684,6 @@ where
         Opcode::Sdiv => binary_can_trap(DataValueExt::sdiv, arg(0), arg(1))?,
         Opcode::Urem => binary_can_trap(DataValueExt::urem, arg(0), arg(1))?,
         Opcode::Srem => binary_can_trap(DataValueExt::srem, arg(0), arg(1))?,
-        Opcode::UremImm => binary_can_trap(DataValueExt::urem, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::SremImm => binary_can_trap(DataValueExt::srem, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::IrsubImm => binary(DataValueExt::sub, imm_as_ctrl_ty()?, arg(0))?,
         Opcode::UaddOverflow => {
             let (sum, carry) = arg(0).uadd_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
@@ -800,22 +763,11 @@ where
         Opcode::Bor => binary(DataValueExt::or, arg(0), arg(1))?,
         Opcode::Bxor => binary(DataValueExt::xor, arg(0), arg(1))?,
         Opcode::Bnot => unary(DataValueExt::not, arg(0))?,
-        Opcode::BandNot => binary(DataValueExt::and, arg(0), DataValueExt::not(arg(1))?)?,
-        Opcode::BorNot => binary(DataValueExt::or, arg(0), DataValueExt::not(arg(1))?)?,
-        Opcode::BxorNot => binary(DataValueExt::xor, arg(0), DataValueExt::not(arg(1))?)?,
-        Opcode::BandImm => binary(DataValueExt::and, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::BorImm => binary(DataValueExt::or, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::BxorImm => binary(DataValueExt::xor, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::Rotl => binary(DataValueExt::rotl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Rotr => binary(DataValueExt::rotr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
-        Opcode::RotlImm => binary(DataValueExt::rotl, arg(0), shift_amt(ctrl_ty, imm())?)?,
-        Opcode::RotrImm => binary(DataValueExt::rotr, arg(0), shift_amt(ctrl_ty, imm())?)?,
         Opcode::Ishl => binary(DataValueExt::shl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Ushr => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Sshr => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
-        Opcode::IshlImm => binary(DataValueExt::shl, arg(0), shift_amt(ctrl_ty, imm())?)?,
-        Opcode::UshrImm => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, imm())?)?,
-        Opcode::SshrImm => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, imm())?)?,
         Opcode::Bitrev => unary(DataValueExt::reverse_bits, arg(0))?,
         Opcode::Bswap => unary(DataValueExt::swap_bytes, arg(0))?,
         Opcode::Clz => unary(DataValueExt::leading_zeros, arg(0))?,
